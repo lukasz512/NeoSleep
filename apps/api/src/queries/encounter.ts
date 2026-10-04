@@ -5,7 +5,9 @@ import {
   type GetEncounterFilters,
   type Encounter,
   type EncounterStatus,
+  type EncounterVisibilityScope,
 } from "../db.js";
+import { getAllowedScopePaths } from "../middleware/requireScope.js";
 
 /**
  * QUERIES — the "serving counter" of the CQRS kitchen.
@@ -67,6 +69,62 @@ function toDto(e: Encounter): EncounterDto {
 }
 
 // ---------------------------------------------------------------------------
+// VISIBILITY (CORE-106) — the Planificador leak
+//
+// Before this: GetEncounterListQuery only restricted `rep`; every other role
+// (kam/msl/manager/admin) got every encounter in the tenant back, and
+// UpdateEncounterCommand had no ownership/scope check at all — anyone could
+// edit anyone's encounter by id.
+//
+// The rule, in ONE place so list/by-id/update (and the upcoming unified
+// Calendar endpoint, CORE-117) all agree:
+//   rep / kam / msl / doctor   only their own encounters (user_id = self)
+//   manager / admin            their own encounters PLUS anything inside
+//                               their allowed territory scope
+//                               (middleware/requireScope.ts getAllowedScopePaths),
+//                               checked via encounter.territory_id — same
+//                               ltree pattern practitioner/organization/lead
+//                               already use.
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolves `ctx.user`'s encounter visibility scope. Exported so CORE-117's
+ * unified Calendar endpoint can reuse the exact same rule this file applies
+ * to list/by-id/update, instead of re-deriving it.
+ */
+export async function encounterVisibilityScope(ctx: TenantContext): Promise<EncounterVisibilityScope> {
+  const widensByScope = ctx.user.role === "manager" || ctx.user.role === "admin";
+  return {
+    ownerId: ctx.user.id,
+    scopePaths: widensByScope ? await getAllowedScopePaths(ctx.client, ctx.user.roles) : undefined,
+  };
+}
+
+/**
+ * True when `encounter` is visible to `ctx.user` under encounterVisibilityScope().
+ * Call after fetching a single row (GetEncounterByIdQuery / UpdateEncounterCommand).
+ * A false result must become a 404, never a 403 — another user's encounter
+ * must not be distinguishable from one that doesn't exist (same as PATCH).
+ */
+export async function isEncounterVisible(
+  ctx: TenantContext,
+  encounter: Pick<Encounter, "user_id" | "territory_id">
+): Promise<boolean> {
+  const scope = await encounterVisibilityScope(ctx);
+  if (encounter.user_id === scope.ownerId) return true;
+  if (scope.scopePaths === undefined) return false; // owner-only role, not the owner
+  if (scope.scopePaths === null) return true;        // manager/admin, global role scope
+  if (scope.scopePaths.length === 0) return false;
+  if (!encounter.territory_id) return true;           // unassigned — rollout-safety fallback
+
+  const { rows } = await ctx.client.query<{ ok: boolean }>(
+    `SELECT (path <@ ANY($2::extensions.ltree[])) AS ok FROM territory WHERE id = $1`,
+    [encounter.territory_id, scope.scopePaths]
+  );
+  return !!rows[0]?.ok;
+}
+
+// ---------------------------------------------------------------------------
 // QUERY: GET LIST
 // ---------------------------------------------------------------------------
 
@@ -85,23 +143,28 @@ export interface GetEncounterListResult {
 }
 
 /**
- * Returns a filtered list of encounters for the current user/tenant.
- * The userId filter ensures reps only see their own encounters by default.
- * Managers can pass a different userId or omit it to see the full team.
+ * Returns a filtered list of encounters for the current user/tenant, scoped
+ * by encounterVisibilityScope() (CORE-106): rep/kam/msl/doctor see only
+ * their own; manager/admin additionally see anything in their territory
+ * scope. input.userId narrows manager/admin to one team member — ignored
+ * for owner-only roles, whose own-only restriction is already absolute.
  */
 export async function GetEncounterListQuery(
   ctx: TenantContext,
   input: GetEncounterListInput
 ): Promise<GetEncounterListResult> {
+  const visibility = await encounterVisibilityScope(ctx);
+
   const filters: GetEncounterFilters = {
     start:        input.start,
     end:          input.end,
     region:       input.region,
     territory_id: input.territory_id,
-    // Reps can only see their own encounters (enforced here, not in SQL)
-    // Managers/admins can see all by passing userId or leaving it empty
-    userId: ctx.user.role === "rep" ? ctx.user.id : (input.userId ?? undefined),
-    status: input.status as EncounterStatus | undefined,
+    status:       input.status as EncounterStatus | undefined,
+    // Only meaningful for manager/admin (own-only roles are already fully
+    // restricted by `visibility` below, regardless of what the client sent).
+    userId: visibility.scopePaths !== undefined ? input.userId : undefined,
+    visibility,
   };
 
   const { rows } = await getEncounters(ctx.client, filters);
@@ -116,8 +179,10 @@ export async function GetEncounterListQuery(
 // ---------------------------------------------------------------------------
 
 /**
- * Returns a single encounter by ID, or null if not found / deleted.
- * Reps can only view their own encounters (role-scoped check).
+ * Returns a single encounter by ID, or null if not found / deleted / not
+ * visible to ctx.user under encounterVisibilityScope() (CORE-106) — a
+ * encounter outside the caller's scope 404s exactly like a missing one,
+ * never a 403, so its existence isn't leaked.
  */
 export async function GetEncounterByIdQuery(
   ctx: TenantContext,
@@ -126,8 +191,7 @@ export async function GetEncounterByIdQuery(
   const encounter = await getEncounterById(ctx.client, id);
   if (!encounter) return null;
 
-  // Reps can only view encounters they own
-  if (ctx.user.role === "rep" && encounter.user_id !== ctx.user.id) return null;
+  if (!(await isEncounterVisible(ctx, encounter))) return null;
 
   return toDto(encounter);
 }

@@ -7,7 +7,7 @@
  * to nothing first and come back in the header; the name no longer flies (its
  * box growing from 14 to 24 px read as the font scaling), it just fades in at
  * its full size. This module only tags elements with view-transition-names;
- * the motion lives in assets/page-transitions.css.
+ * the motion lives in styles/page-transitions.css.
  *
  * The two ends are found through markers the shared components already carry:
  * - list row:      [data-page-hero-key="<record id>"] (AppEntityList, table

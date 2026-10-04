@@ -36,14 +36,27 @@ export interface NotificationEventDefinition {
   entityType: string;
 }
 
-const appointmentLink = (): string => "/appointments";
+/** CORE-117: Citas merged into the Calendario screen — /appointments still redirects there, but new links point straight at it. */
+const appointmentLink = (): string => "/calendar";
 const patientLink = (p: NotificationLinkParams): string | null => (p.patientId ? `/patients/${p.patientId}` : null);
+/** NEO-195: the patient's sleep-study tab, where a submitted questionnaire shows up. */
+const patientStudiesLink = (p: NotificationLinkParams): string | null => (p.patientId ? `/patients/${p.patientId}?tab=studies` : null);
+/** NEO-196: the doctor's own HCP record. */
+const practitionerLink = (p: NotificationLinkParams): string | null => (p.practitionerId ? `/hcp/${p.practitionerId}` : null);
+/** NEO-197: the patient's OrthoApnea tab, where the placed order shows up. */
+const patientOrthoapneaLink = (p: NotificationLinkParams): string | null => (p.patientId ? `/patients/${p.patientId}?tab=orthoapnea` : null);
 
 export const NOTIFICATION_TYPES = [
   "appointment_booked",
   "appointment_rescheduled",
   "appointment_cancelled",
+  "appointment_patient_cannot_attend",
+  "appointment_patient_no_email",
+  "appointment_patient_unconfirmed",
   "partner_order_status_changed",
+  "questionnaire_submitted",
+  "practitioner_invite_accepted",
+  "device_order_placed",
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -73,12 +86,63 @@ export const NOTIFICATION_CATALOG: Readonly<Record<NotificationType, Notificatio
     link: appointmentLink,
     entityType: "Appointment",
   },
+  /** The patient pressed "I can't come" in the appointment email (CORE-25) — the clinic finds a new time. */
+  appointment_patient_cannot_attend: {
+    category: "operational",
+    priority: "normal",
+    channels: ["in_app", "push"],
+    escalateAfterMin: 30,
+    link: appointmentLink,
+    entityType: "Appointment",
+  },
+  /** CORE-116: the day before the visit the patient still hasn't confirmed (asked again) — the clinic calls or frees the slot. */
+  appointment_patient_unconfirmed: {
+    category: "operational",
+    priority: "normal",
+    channels: ["in_app", "push"],
+    escalateAfterMin: null,
+    link: appointmentLink,
+    entityType: "Appointment",
+  },
+  /** Booked, but the patient has no email on file — whoever booked tells them another way (CORE-25). */
+  appointment_patient_no_email: {
+    category: "operational",
+    priority: "normal",
+    channels: ["in_app"],
+    escalateAfterMin: null,
+    link: appointmentLink,
+    entityType: "Appointment",
+  },
   partner_order_status_changed: {
     category: "operational",
     priority: "normal",
     channels: ["in_app", "push"],
     escalateAfterMin: null,
     link: patientLink,
+    entityType: "TreatmentPlan",
+  },
+  questionnaire_submitted: {
+    category: "operational",
+    priority: "normal",
+    channels: ["in_app", "push"],
+    escalateAfterMin: null,
+    link: patientStudiesLink,
+    entityType: "QuestionnaireRequest",
+  },
+  practitioner_invite_accepted: {
+    category: "operational",
+    priority: "normal",
+    channels: ["in_app", "push"],
+    escalateAfterMin: null,
+    link: practitionerLink,
+    entityType: "Practitioner",
+  },
+  device_order_placed: {
+    category: "operational",
+    priority: "normal",
+    channels: ["in_app", "push"],
+    escalateAfterMin: null,
+    link: patientOrthoapneaLink,
     entityType: "TreatmentPlan",
   },
 };

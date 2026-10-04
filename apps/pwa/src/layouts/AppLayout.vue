@@ -77,6 +77,11 @@
            that avatar on both (NEO-154 replaced the phone bottom sheet). -->
       <template #app-bar-actions>
         <div ref="barActions" class="layout-bar-actions">
+          <!-- CORE-4: the notification bell, for every logged-in role, on
+               both breakpoints — directly left of the account button. Its
+               own polling lifecycle is owned by this layout (useNotificationCenter
+               below), not by this component, which only renders the UI. -->
+          <AppNotificationCenter />
           <!-- NEO-122 / NEO-154 / NEO-161: the avatar button turns into the
                menu — the avatar stays put and grows, the glass card springs
                out of it (same on desktop and phone); see AppAccountMenu. -->
@@ -260,10 +265,11 @@ import {
 } from "./components";
 import AppButton from "../components/AppButton.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
+import AppNotificationCenter from "../components/AppNotificationCenter.vue";
 import { useNotificationCenter } from "../composables/useNotificationCenter";
 import { onAppReady, markAppReady } from "../composables/useAppReady";
 import { usePartnerResources } from "../composables/usePartnerResources";
-import { SIDEBAR_COLLAPSE_ENABLED } from "../constants";
+import { SIDEBAR_COLLAPSE_ENABLED } from "../config/layout";
 
 const route = useRoute();
 const router = useRouter();
@@ -623,10 +629,13 @@ const moduleIcon = computed(() => {
   margin-inline-end: 10px;
 }
 
-/* Account slot wrapper: useBarLogoFit measures where the bar's icons start. */
+/* Account slot wrapper: useBarLogoFit measures where the bar's icons start.
+   CORE-4: the gap also separates the notification bell from the account
+   button, on the 4 px grid. */
 .layout-bar-actions {
   display: flex;
   align-items: center;
+  gap: var(--space-2, 8px);
 }
 
 /* Page header: first row of the content card (desktop; phones too since NEO-108). min-height matches the

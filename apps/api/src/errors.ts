@@ -93,6 +93,34 @@ export class ConflictError extends AppError {
 }
 
 /**
+ * 409 PARTNER_ORDER_ALREADY_SUBMITTED: the partner already holds an order for
+ * this plan. `externalId` (the partner's order id) is sent with the 409 body so
+ * the client can point at the order that exists.
+ */
+export class PartnerOrderAlreadySubmittedError extends ConflictError {
+  constructor(
+    message: string,
+    readonly externalId: string
+  ) {
+    super(message, "PARTNER_ORDER_ALREADY_SUBMITTED");
+  }
+}
+
+/**
+ * 409 LAB_ORDERS_DISABLED (NEO-210): the tenant's per-tenant kill switch
+ * (app_config.integrations.labOrders.sendEnabled) is off, so the three
+ * choke points that write to the lab partner (order submit, "ensure lab
+ * patient", notify-the-lab email) refuse before any network call reaches
+ * it. Thrown before the partner adapter is even touched — see
+ * routes/deviceOrders.ts and routes/partners/orthoapnea-treatments.ts.
+ */
+export class LabOrdersDisabledError extends ConflictError {
+  constructor() {
+    super("Sending orders to the lab is currently disabled for this tenant.", "LAB_ORDERS_DISABLED");
+  }
+}
+
+/**
  * NEO-111: identities.email is unique among everyone except patients (users,
  * doctors, leads — migration 037), so saving one of those with an email
  * another of them already has would otherwise surface as an opaque 23505

@@ -4,6 +4,7 @@ import {
   updateOrganization,
   getOrganizationById,
   getOrganizationIdByName,
+  getTerritoryCountry,
   softDeleteOrganization,
   type InsertOrganizationInput,
   type UpdateOrganizationInput,
@@ -82,10 +83,42 @@ export interface CreateOrganizationInput {
   email?: string | null;
   website?: string | null;
   google_link?: string | null;
+  /** “What to bring” in the patient's appointment email (CORE-25). */
+  visit_instructions?: string | null;
+  /** The clinic's own aviso de privacidad (https URL), CORE-113. */
+  privacy_notice_url?: string | null;
   specialties?: string[];
   /** Admin-only (NEO-79) — ignored for any other role, see publicMapFlagFor(). */
   show_on_public_map?: boolean;
   metadata?: Record<string, unknown> | null;
+}
+
+/** Plain text the patient reads in the appointment email — trimmed, empty = none, at most 500 characters. */
+export const VISIT_INSTRUCTIONS_MAX = 500;
+function normalizeVisitInstructions(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  const text = value?.trim() ?? "";
+  if (text.length > VISIT_INSTRUCTIONS_MAX) {
+    throw new ValidationError(`Visit instructions can be at most ${VISIT_INSTRUCTIONS_MAX} characters`, "visit_instructions");
+  }
+  return text || null;
+}
+
+/** The clinic's aviso de privacidad — a public https page patients open before signing; empty = none. */
+function normalizePrivacyNoticeUrl(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  const text = value?.trim() ?? "";
+  if (!text) return null;
+  let url: URL;
+  try {
+    url = new URL(/^https?:\/\//i.test(text) ? text : `https://${text}`);
+  } catch {
+    throw new ValidationError("The privacy notice must be a web address", "privacy_notice_url");
+  }
+  if (url.protocol !== "https:" || !url.hostname.includes(".")) {
+    throw new ValidationError("The privacy notice must be an https web address", "privacy_notice_url");
+  }
+  return url.toString();
 }
 
 /**
@@ -121,10 +154,13 @@ export async function CreateOrganizationCommand(
   const city = input.city?.trim() ?? null;
   const state = input.state?.trim() ?? null;
   const postal_code = input.postal_code?.trim() ?? null;
-  const country_code = input.country_code?.trim() ?? null;
+  const territory_id = input.territory_id ?? null;
 
-  // Best-effort — never blocks the save (see services/geocoding.ts).
-  const coordinates = await geocodeAddress({ address_line1, city, state, postal_code, country_code });
+  // Best-effort — never blocks the save (see services/geocoding.ts). The
+  // address decides the country (NEO-210 D1); the territory only biases it.
+  const region_hint = territory_id ? await getTerritoryCountry(ctx.client, territory_id) : null;
+  const coordinates = await geocodeAddress({ address_line1, city, state, postal_code, region_hint });
+  const addressCountry = coordinates?.countryCode ?? null;
 
   const insertInput: InsertOrganizationInput = {
     name,
@@ -134,13 +170,17 @@ export async function CreateOrganizationCommand(
     city,
     state,
     postal_code,
-    country_code,
+    // Address country first; else the db layer falls back to the territory's, else what was sent.
+    country_code:  addressCountry ?? input.country_code?.trim() ?? null,
+    country_from_address: addressCountry !== null,
     region:        input.region?.trim() ?? "",
     territory_id:  input.territory_id ?? null,
     phone,
     email,
     website:       input.website?.trim() ?? null,
     google_link:   input.google_link?.trim() ?? null,
+    visit_instructions: normalizeVisitInstructions(input.visit_instructions) ?? null,
+    privacy_notice_url: normalizePrivacyNoticeUrl(input.privacy_notice_url) ?? null,
     latitude:      coordinates?.lat ?? null,
     longitude:     coordinates?.lng ?? null,
     specialties:   input.specialties,
@@ -188,6 +228,10 @@ export interface UpdateOrganizationPayload {
   email?: string | null;
   website?: string | null;
   google_link?: string | null;
+  /** “What to bring” in the patient's appointment email (CORE-25). */
+  visit_instructions?: string | null;
+  /** The clinic's own aviso de privacidad (https URL), CORE-113. */
+  privacy_notice_url?: string | null;
   specialties?: string[];
   /** Admin-only (NEO-79) — ignored for any other role, see publicMapFlagFor(). */
   show_on_public_map?: boolean;
@@ -238,15 +282,18 @@ export async function UpdateOrganizationCommand(
     input.postal_code !== undefined ||
     input.country_code !== undefined;
 
+  const territoryId = input.territory_id !== undefined ? input.territory_id : before.territory_id;
   const coordinates = addressChanged
     ? await geocodeAddress({
         address_line1: input.address_line1 !== undefined ? input.address_line1 : before.address_line1,
         city:          input.city !== undefined ? input.city : before.city,
         state:         input.state !== undefined ? input.state : before.state,
         postal_code:   input.postal_code !== undefined ? input.postal_code : before.postal_code,
-        country_code:  input.country_code !== undefined ? input.country_code : before.country_code,
+        region_hint:   territoryId ? await getTerritoryCountry(ctx.client, territoryId) : null,
       })
     : undefined;
+  // The address decides the country (NEO-210 D1); without one the db layer falls back to the territory's.
+  const addressCountry = coordinates?.countryCode ?? null;
 
   const updateInput: UpdateOrganizationInput = {
     name,
@@ -256,13 +303,16 @@ export async function UpdateOrganizationCommand(
     city:          input.city,
     state:         input.state,
     postal_code:   input.postal_code,
-    country_code:  input.country_code,
+    country_code:  addressCountry ?? input.country_code,
+    country_from_address: addressCountry !== null,
     region:        input.region,
     territory_id:  input.territory_id,
     phone:         input.phone,
     email:         input.email,
     website:       input.website,
     google_link:   input.google_link,
+    visit_instructions: normalizeVisitInstructions(input.visit_instructions),
+    privacy_notice_url: normalizePrivacyNoticeUrl(input.privacy_notice_url),
     // A failed/unconfigured geocode leaves the existing coordinates untouched
     // (undefined) rather than nulling them out — a transient API hiccup on an
     // unrelated address tweak shouldn't erase a pin that already worked.

@@ -23,6 +23,7 @@ import { notify } from "../notifications/notify.js";
 import { timezoneForCountry } from "../utils/timezones.js";
 import { assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
 import { getAppointmentViewer, assertCanSeeAppointment, redactForViewer, type AppointmentViewer, type AppointmentView } from "../queries/appointment.js";
+import { planAppointmentPatientEmail, type AppointmentEffects } from "./appointmentPatient.js";
 
 /**
  * COMMANDS — Appointment domain (NEO-27, ADR-026).
@@ -35,6 +36,8 @@ import { getAppointmentViewer, assertCanSeeAppointment, redactForViewer, type Ap
  *   - default length 60 minutes; clinic's time zone
  *   - completed / no_show: the doctor of the appointment, manager, admin
  *   - reschedule / cancel: those three plus whoever booked it
+ *   - the patient is emailed on book / reschedule / cancel (CORE-25): pass
+ *     `effects` and the route sends what it collects after the commit
  */
 
 export const DEFAULT_DURATION_MINUTES = 60;
@@ -109,7 +112,7 @@ export interface CreateAppointmentInput {
   treatment_plan_id?: string;
 }
 
-export async function CreateAppointmentCommand(ctx: TenantContext, input: CreateAppointmentInput): Promise<AppointmentView> {
+export async function CreateAppointmentCommand(ctx: TenantContext, input: CreateAppointmentInput, effects?: AppointmentEffects): Promise<AppointmentView> {
   if (!input.patient_id) throw new ValidationError("patient_id is required");
   if (!input.start_at) throw new ValidationError("start_at is required");
   const start = parseInstant(input.start_at, "start_at");
@@ -171,6 +174,7 @@ export async function CreateAppointmentCommand(ctx: TenantContext, input: Create
     request_id: ctx.requestId,
   });
   if (viewer.practitionerId !== appointment.practitioner_id) await notifyDoctor(ctx, appointment, "appointment_booked");
+  if (effects) effects.patientEmails.push(await planAppointmentPatientEmail(ctx.client, appointment, "booked", ctx.user.id));
 
   return redactForViewer(viewer, appointment);
 }
@@ -185,7 +189,7 @@ export interface UpdateAppointmentInput {
   treatment_plan_id?: string | null;
 }
 
-export async function UpdateAppointmentCommand(ctx: TenantContext, id: string, input: UpdateAppointmentInput): Promise<AppointmentView> {
+export async function UpdateAppointmentCommand(ctx: TenantContext, id: string, input: UpdateAppointmentInput, effects?: AppointmentEffects): Promise<AppointmentView> {
   const before = await getAppointmentById(ctx.client, id);
   if (!before) throw new NotFoundError("Appointment", id);
   const viewer = await getAppointmentViewer(ctx);
@@ -228,12 +232,19 @@ export async function UpdateAppointmentCommand(ctx: TenantContext, id: string, i
     request_id: ctx.requestId,
   });
 
-  if (viewer.practitionerId !== after.practitioner_id) {
-    if (after.status === "cancelled" && before.status !== "cancelled") await notifyDoctor(ctx, after, "appointment_cancelled");
-    else if (after.start_at !== before.start_at || after.end_at !== before.end_at) await notifyDoctor(ctx, after, "appointment_rescheduled");
+  const change = after.status === "cancelled" && before.status !== "cancelled"
+    ? "cancelled"
+    : after.start_at !== before.start_at || after.end_at !== before.end_at ? "rescheduled" : null;
+  if (change && viewer.practitionerId !== after.practitioner_id) {
+    await notifyDoctor(ctx, after, change === "cancelled" ? "appointment_cancelled" : "appointment_rescheduled");
+  }
+  // A reschedule of a cancelled appointment tells the patient nothing new.
+  if (change && effects && (change === "cancelled" || after.status === "scheduled")) {
+    effects.patientEmails.push(await planAppointmentPatientEmail(ctx.client, after, change, ctx.user.id));
   }
 
-  return redactForViewer(viewer, after);
+  const latest = change && effects ? await getAppointmentById(ctx.client, id) : after;
+  return redactForViewer(viewer, latest ?? after);
 }
 
 /** Soft delete for correcting mistakes (wrong patient, test data) — admin-only, enforced at the route. Cancelling is a status change. */

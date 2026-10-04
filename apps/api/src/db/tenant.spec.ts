@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { getActiveTenantSlugs } from "./tenant.js";
+import { getActiveTenantSlugs, withTenant, withPlatform, isPostgresError, isConnectionError } from "./tenant.js";
+import { AppError, DatabaseError, NotFoundError } from "../errors.js";
 
 /**
  * getActiveTenantSlugs() is a plain platform-schema read (no tenant
@@ -23,5 +24,45 @@ describe("getActiveTenantSlugs", () => {
     expect(slugs).toContain("neosleep");
     expect(slugs).not.toContain("fourseasons");
     slugs.forEach((slug) => expect(typeof slug).toBe("string"));
+  });
+});
+
+/**
+ * NEO-202: "Database error: withTenant" must mean the database. A rejected
+ * email or a bug in a command used to be relabelled as one (7 of 8 such
+ * toasts on dev in two weeks); now only Postgres/connection errors are.
+ */
+describe("withTenant / withPlatform error labels", () => {
+  const TENANT_SLUG = process.env.DEFAULT_TENANT_SLUG ?? "test";
+
+  it("keeps a non-database error as it is — not DB_ERROR", async () => {
+    const boom = new Error("mail provider said no");
+    const caught = await withTenant(TENANT_SLUG, async () => {
+      throw boom;
+    }).catch((err: unknown) => err);
+    expect(caught).toBe(boom);
+    expect(caught).not.toBeInstanceOf(DatabaseError);
+  });
+
+  it("passes AppErrors through unchanged", async () => {
+    await expect(withPlatform(async () => { throw new NotFoundError("Patient", "x"); })).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("still labels a real Postgres error DB_ERROR, and rolls the transaction back", async () => {
+    const caught = await withTenant(TENANT_SLUG, async (client) => {
+      await client.query("SELECT * FROM table_that_does_not_exist_neo202");
+    }).catch((err: unknown) => err);
+    expect(caught).toBeInstanceOf(DatabaseError);
+    expect((caught as AppError).code).toBe("DB_ERROR");
+    expect(String((caught as AppError).cause)).toContain("table_that_does_not_exist_neo202");
+  });
+
+  it("recognises Postgres and connection failures, nothing else", () => {
+    expect(isPostgresError(Object.assign(new Error("relation does not exist"), { code: "42P01" }))).toBe(true);
+    expect(isPostgresError(Object.assign(new Error("read ECONNRESET"), { code: "ECONNRESET" }))).toBe(true);
+    expect(isConnectionError(new Error("Connection terminated unexpectedly"))).toBe(true);
+    expect(isPostgresError(new Error("validation_error: Invalid `to` field"))).toBe(false);
+    expect(isPostgresError(new Error("Node.js detected but native WebSocket not found."))).toBe(false);
+    expect(isPostgresError("not an error")).toBe(false);
   });
 });

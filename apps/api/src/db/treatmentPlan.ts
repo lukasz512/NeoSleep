@@ -1,4 +1,5 @@
 import type { PoolClient } from "pg";
+import { patientScopeCondition, type PatientScope } from "./patientScope.js";
 import { AppError, DatabaseError } from "../errors.js";
 import { isoDate } from "../routes/utils.js";
 import { formatOptionalDisplayName } from "../utils/personName.js";
@@ -58,6 +59,10 @@ export interface TreatmentPlan {
   notes: string | null;
   status: string;
   metadata: Record<string, unknown> | null;
+  /** NEO-217: the partner order behind this plan (partner_link, migration 018) — null until it was ever sent. Partner-neutral on purpose. */
+  order_number: string | null;
+  order_sync_status: "pending" | "synced" | "failed" | null;
+  order_sent_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -68,6 +73,8 @@ export interface GetTreatmentPlansFilters {
   status?: string;
   /** Matches against the patient's name — the sidebar cross-patient list's only searchable field. */
   search?: string;
+  /** Viewer's patient access (CORE-104, db/patientScope.ts); undefined = unrestricted. */
+  patientScope?: PatientScope;
 }
 
 export interface TreatmentPlanInsert {
@@ -127,6 +134,9 @@ type TreatmentPlanRow = {
   notes: string | null;
   status: string;
   metadata: Record<string, unknown> | null;
+  order_number: string | null;
+  order_sync_status: "pending" | "synced" | "failed" | null;
+  order_sent_at: Date | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -142,7 +152,8 @@ const TREATMENT_PLAN_SELECT_COLS = `
   t.recommended_by, t.notes, t.status, t.metadata, t.created_at, t.updated_at,
   pi.title AS patient_salutation, pi.first_name AS patient_first_name, pi.last_name AS patient_last_name,
   di.title AS dentist_salutation, di.first_name AS dentist_first_name, di.last_name AS dentist_last_name,
-  den.primary_specialty AS dentist_specialty, den.specialties AS dentist_specialties`.trim();
+  den.primary_specialty AS dentist_specialty, den.specialties AS dentist_specialties,
+  ord.external_id AS order_number, ord.sync_status AS order_sync_status, ord.created_at AS order_sent_at`.trim();
 
 const TREATMENT_PLAN_JOIN = `
   FROM treatment_plan t
@@ -151,7 +162,14 @@ const TREATMENT_PLAN_JOIN = `
   LEFT JOIN practitioner den ON t.dentist_id = den.id
   LEFT JOIN identities di ON den.identity_id = di.id
   LEFT JOIN supplier scansup ON t.scan_supplier_id = scansup.id
-  LEFT JOIN supplier applsup ON t.appliance_supplier_id = applsup.id`.trim();
+  LEFT JOIN supplier applsup ON t.appliance_supplier_id = applsup.id
+  LEFT JOIN LATERAL (
+    SELECT pl.external_id, pl.sync_status, pl.created_at
+      FROM partner_link pl
+     WHERE pl.entity_type = 'treatment_plan' AND pl.entity_id = t.id
+     ORDER BY pl.updated_at DESC
+     LIMIT 1
+  ) ord ON true`.trim();
 
 function serialize(row: TreatmentPlanRow): TreatmentPlan {
   return {
@@ -194,6 +212,9 @@ function serialize(row: TreatmentPlanRow): TreatmentPlan {
     notes: row.notes,
     status: row.status,
     metadata: row.metadata,
+    order_number: row.order_number,
+    order_sync_status: row.order_sync_status,
+    order_sent_at: row.order_sent_at ? isoDate(row.order_sent_at) : null,
     created_at: isoDate(row.created_at),
     updated_at: isoDate(row.updated_at),
   };
@@ -230,6 +251,8 @@ export async function getTreatmentPlansPaginated(
     params.push(`%${filters.search.trim().toLowerCase()}%`);
     conditions.push(`LOWER(pi.first_name || ' ' || pi.last_name) LIKE $${params.length}`);
   }
+  const scoped = patientScopeCondition(filters.patientScope, params, "t.patient_id");
+  if (scoped) conditions.push(scoped);
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
@@ -396,5 +419,78 @@ export async function restoreTreatmentPlan(client: PoolClient, id: string): Prom
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new DatabaseError("restoreTreatmentPlan", err);
+  }
+}
+
+/** NEO-223: the latest device order of each patient — just the fields the PWA's deviceOrderState() reads. */
+export interface PatientDeviceOrder {
+  status: string;
+  metadata: { orthoapneaDraft: true } | null;
+  order_sync_status: "pending" | "synced" | "failed" | null;
+  appliance_delivered_at: string | null;
+}
+
+export async function getLatestDeviceOrderByPatient(
+  client: PoolClient,
+  patientIds: string[],
+): Promise<Map<string, PatientDeviceOrder>> {
+  const byPatient = new Map<string, PatientDeviceOrder>();
+  if (patientIds.length === 0) return byPatient;
+  try {
+    const result = await client.query<{
+      patient_id: string;
+      status: string;
+      is_draft: boolean;
+      order_sync_status: PatientDeviceOrder["order_sync_status"];
+      appliance_delivered_at: Date | null;
+    }>(
+      `SELECT DISTINCT ON (t.patient_id)
+              t.patient_id, t.status,
+              (COALESCE(t.metadata, '{}'::jsonb) ? 'orthoapneaDraft') AS is_draft,
+              ord.sync_status AS order_sync_status, t.appliance_delivered_at
+         FROM treatment_plan t
+         LEFT JOIN LATERAL (
+           SELECT pl.sync_status
+             FROM partner_link pl
+            WHERE pl.entity_type = 'treatment_plan' AND pl.entity_id = t.id
+            ORDER BY pl.updated_at DESC
+            LIMIT 1
+         ) ord ON true
+        WHERE t.deleted_at IS NULL AND t.patient_id = ANY($1::uuid[])
+        ORDER BY t.patient_id, t.created_at DESC`,
+      [patientIds],
+    );
+    for (const row of result.rows) {
+      byPatient.set(row.patient_id, {
+        status: row.status,
+        metadata: row.is_draft ? { orthoapneaDraft: true } : null,
+        order_sync_status: row.order_sync_status,
+        appliance_delivered_at: row.appliance_delivered_at ? isoDate(row.appliance_delivered_at) : null,
+      });
+    }
+    return byPatient;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getLatestDeviceOrderByPatient", err);
+  }
+}
+
+/**
+ * NEO-223: whether the patient already has an open plan of this type — not deleted, not
+ * completed/cancelled, no appliance delivered. Drafts count (the clinic continues that one).
+ */
+export async function hasActiveTreatmentPlan(client: PoolClient, patientId: string, type: string): Promise<boolean> {
+  try {
+    const result = await client.query(
+      `SELECT 1 FROM treatment_plan
+        WHERE patient_id = $1 AND type = $2 AND deleted_at IS NULL
+          AND status NOT IN ('completed', 'cancelled') AND appliance_delivered_at IS NULL
+        LIMIT 1`,
+      [patientId, type],
+    );
+    return (result.rowCount ?? 0) > 0;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("hasActiveTreatmentPlan", err);
   }
 }

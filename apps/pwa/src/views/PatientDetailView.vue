@@ -87,71 +87,21 @@
       <template v-if="patient" #sections>
         <DetailViewTabs v-model="activeTab" :tabs="patientTabs">
           <template #details>
-            <div class="view-item__row">
-              <dt class="view-item__label">{{ t("app.patients.detail.email") }}</dt>
-              <dd class="view-item__value">
-                <a v-if="patient.email" :href="`mailto:${patient.email}`" class="view-item__link">{{ patient.email }}</a>
-                <span v-else class="view-item__empty">—</span>
-              </dd>
-            </div>
-            <div class="view-item__row">
-              <dt class="view-item__label">{{ t("app.patients.detail.phone") }}</dt>
-              <dd class="view-item__value">
-                <a v-if="patient.phone" :href="`tel:${patient.phone}`" class="view-item__link">{{ patient.phone }}</a>
-                <span v-else class="view-item__empty">—</span>
-              </dd>
-            </div>
-            <div class="view-item__row">
-              <dt class="view-item__label">{{ t("app.patients.detail.practitioner") }}</dt>
-              <dd class="view-item__value">
-                <EntityLink
-                  :to="patient.practitioner_id ? { name: 'hcp-detail', params: { id: patient.practitioner_id } } : null"
-                  :label="patient.practitioner_name"
-                  entity-type="hcp"
-                  :specialty="patient.practitioner_specialty"
-                  :details="specialtySet(patient.practitioner_specialty, patient.practitioner_specialties).details"
-                  :more-details="specialtySet(patient.practitioner_specialty, patient.practitioner_specialties).more"
-                  :avatar-size="32"
-                />
-              </dd>
-            </div>
-            <div class="view-item__row">
-              <dt class="view-item__label">{{ t("app.patients.detail.status") }}</dt>
-              <dd class="view-item__value">
-                <VChip :color="patientStatusColor(patient.status)" size="small" variant="tonal">
-                  {{ patientStatusLabel(t, patient.status) }}
-                </VChip>
-              </dd>
-            </div>
-            <div class="view-item__row">
-              <dt class="view-item__label">{{ t("app.patients.detail.region") }}</dt>
-              <dd class="view-item__value">{{ regionBreadcrumb }}</dd>
-            </div>
-            <div class="view-item__row">
-              <dt class="view-item__label">{{ t("app.patients.detail.ahiBaseline") }}</dt>
-              <dd class="view-item__value">{{ patient.ahi_baseline ?? "—" }}</dd>
-            </div>
-            <div class="view-item__row">
-              <dt class="view-item__label">{{ t("app.patients.detail.cpapDevice") }}</dt>
-              <dd class="view-item__value">{{ patient.cpap_device ? t("app.common.yes") : t("app.common.no") }}</dd>
-            </div>
-            <div class="view-item__row">
-              <dt class="view-item__label">{{ t("app.patients.detail.medicalRecord") }}</dt>
-              <dd class="view-item__value">{{ patient.medical_record || "—" }}</dd>
-            </div>
-            <PatientStudiesSummary v-if="canSeeStudies" :patient-id="patient.id" @open="openStudy" />
+            <!-- NEO-206: summary strip + grouped rows; the documents checklist lives in the side panel and on Documentos. -->
+            <PatientDetailsTab :patient="patient" :can-see-studies="canSeeStudies" @open-tab="(tab: string) => (activeTab = tab)" />
           </template>
           <template #notes>
             <PatientNotesPanel entity-type="patient" :entity-id="patient.id" />
           </template>
           <template #studies>
-            <PatientStudiesPanel :patient-id="patient.id" :focus-item="studyItem" :date-of-birth="patient.date_of_birth" :gender="patient.gender" :qr-request-nonce="qrRequestNonce" />
+            <PatientChecklistPanel category="study" :patient-id="patient.id" :focus-item="studyItem" :focus-study="focusStudy" :date-of-birth="patient.date_of_birth" :gender="patient.gender" />
           </template>
           <template #orthoapnea>
             <PatientOrthoApneaPanel :patient-id="patient.id" />
           </template>
           <template #documents>
-            <EntityDocumentsPanel :endpoint="`/api/v1/patient/${patient.id}/documents`" />
+            <!-- NEO-193: consent + the Historia Clínica parts; the patient QR lives here. -->
+            <PatientChecklistPanel category="document" :patient-id="patient.id" :focus-item="studyItem" :date-of-birth="patient.date_of_birth" :gender="patient.gender" :qr-request-nonce="qrRequestNonce" :hide-qr-button="asideShown" />
           </template>
           <template #history>
             <EntityHistoryPanel :endpoint="`/api/v1/patient/${patient.id}/history`" />
@@ -193,6 +143,7 @@ import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { usePermissions } from "../composables/usePermissions";
+import { useDetailAsideShown } from "../composables/useDetailAside";
 import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
 import { useEntitySubmit } from "../composables/useEntitySubmit";
@@ -202,22 +153,20 @@ import AppButton from "../components/AppButton.vue";
 import AppConfirmDialog from "../components/AppConfirmDialog.vue";
 import AppIcon from "../components/AppIcon.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
-import EntityLink from "../components/EntityLink.vue";
 import { useIdentity } from "../composables/useIdentity";
 import AppAvatar from "../components/AppAvatar.vue";
 import IdentityDetails from "../components/IdentityDetails.vue";
 import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
 import PatientAsidePanel from "../components/patient/PatientAsidePanel.vue";
-import PatientStudiesPanel from "../components/patient/PatientStudiesPanel.vue";
-import PatientStudiesSummary from "../components/patient/PatientStudiesSummary.vue";
+import PatientChecklistPanel from "../components/patient/PatientChecklistPanel.vue";
+import PatientDetailsTab from "../components/patient/PatientDetailsTab.vue";
 import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
-import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
 import { patientFormFields, patientFormDerive } from "../config/forms/patientForm";
 import { STUDY_ROLES } from "../config/questionnaires";
+import { CHECKLIST_TAB, type ChecklistCategory } from "../composables/usePatientChecklist";
 import { useAuthStore } from "../stores/auth";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
-import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 const AppointmentDialog = defineAsyncComponent(() => import("../components/AppointmentDialog.vue"));
@@ -251,29 +200,17 @@ interface PatientDetail {
   medical_record?: string | null;
   /** ICD-10 JSONB — nothing writes it yet; the side panel shows it when present (NEO-153). */
   diagnosis_code?: Record<string, unknown> | null;
+  created_at?: string;
 }
 
 const { t } = useI18n();
-const { patientDetails, specialtySet } = useIdentity();
+const { patientDetails } = useIdentity();
 const route = useRoute();
 const router = useRouter();
 const notifications = useNotifications();
 const { submit } = useEntitySubmit();
 
 const patient = ref<PatientDetail | null>(null);
-
-
-/** territory_path (when set) as "mx/cdmx/polanco" — each ancestor's own short
- *  `code`, root-first, lowercased. Falls back to the flat identities.region
- *  text for patients with no territory assigned yet (the common case until
- *  this gets populated — see PatientDetailView's Region row). */
-const regionBreadcrumb = computed(() => {
-  const path = patient.value?.territory_path;
-  if (path && path.length > 0) {
-    return path.map((node) => (node.code || node.name).toLowerCase()).join("/");
-  }
-  return patient.value?.region || "—";
-});
 
 const loading = ref(true);
 /** True when loadPatient() failed for a reason other than a genuine 404 (network/server) — see loadPatient(). */
@@ -291,9 +228,9 @@ const showDeleteConfirm = ref(false);
 const ALL_PATIENT_TABS = [
   { value: "details", labelKey: "app.patients.detail.tabs.details" },
   { value: "notes", labelKey: "app.patients.detail.tabs.notes" },
+  { value: "documents", labelKey: "app.patients.detail.tabs.documents", roles: STUDY_ROLES },
   { value: "studies", labelKey: "app.patients.detail.tabs.studies", roles: STUDY_ROLES },
   { value: "orthoapnea", labelKey: "app.patients.detail.tabs.orthoapnea" },
-  { value: "documents", labelKey: "app.patients.detail.tabs.documents", roles: STUDY_ROLES },
   { value: "history", labelKey: "app.patients.detail.tabs.history" },
 ];
 /** Studies and Documents hold health data — admin, doctor and manager only (NEO-83); the API enforces the same. */
@@ -302,25 +239,37 @@ const canSeeStudies = computed(() => STUDY_ROLES.includes(userRole.value));
 const patientTabs = computed(() => ALL_PATIENT_TABS.filter((tab) => !tab.roles || tab.roles.includes(userRole.value)));
 /** Deep-linkable via ?tab= — see SleepStudiesView/TreatmentPlansView row clicks. */
 const activeTab = ref((route.query.tab as string) || "details");
-/** Details → Estudios card click: open that item in the Estudios tab (?tab=studies&item=…). */
+/** Details → checklist card click: open that item in its tab (?tab=documents|studies&item=…, NEO-193). */
 const studyItem = ref<string | null>((route.query.item as string) || null);
+/** Estudios list row click: open that sleep study on the Estudios tab (?tab=studies&study=<id>, NEO-222). */
+const focusStudy = ref<string | null>((route.query.study as string) || null);
 function syncQuery() {
-  const item = activeTab.value === "studies" ? studyItem.value ?? undefined : undefined;
-  router.replace({ query: { ...route.query, tab: activeTab.value, item } });
+  const item = activeTab.value === "studies" || activeTab.value === "documents" ? studyItem.value ?? undefined : undefined;
+  if (activeTab.value !== "studies") focusStudy.value = null;
+  // qr is a one-shot request (NEO-221) — never left in the URL, so a reload doesn't create another link.
+  router.replace({ query: { ...route.query, tab: activeTab.value, item, study: focusStudy.value ?? undefined, qr: undefined } });
 }
 watch(activeTab, syncQuery);
-function openStudy(itemKey: string) {
+function openStudy(itemKey: string, category: ChecklistCategory) {
   studyItem.value = itemKey;
-  if (activeTab.value === "studies") syncQuery();
-  else activeTab.value = "studies";
+  const tab = CHECKLIST_TAB[category];
+  if (activeTab.value === tab) syncQuery();
+  else activeTab.value = tab;
 }
 
-/** Side panel "QR for the patient" (NEO-153): the Estudios tab owns the QR flow (status button, polling), so open it there. */
+/** Side panel "QR for the patient" (NEO-153): the Documentos tab owns the QR flow (status button, polling) since NEO-193, so open it there. */
 const qrRequestNonce = ref(0);
+/** NEO-203: while the side panel shows (desktop), its QR is the only one — the Documentos tab drops its own. */
+const asideShown = useDetailAsideShown();
 function onAsideQr() {
   studyItem.value = null;
-  activeTab.value = "studies";
+  activeTab.value = CHECKLIST_TAB.document;
   qrRequestNonce.value += 1;
+}
+/** Patients list "Next step" QR (NEO-221) opens the record with ?qr=1 — same as pressing the side panel's QR. */
+if (route.query.qr === "1" && canSeeStudies.value) {
+  onAsideQr();
+  syncQuery();
 }
 
 function onEdit() {

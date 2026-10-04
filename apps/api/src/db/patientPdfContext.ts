@@ -16,6 +16,8 @@ export interface PatientPdfContext {
   /** Street + city and phone — the issuer line in the PDF footer (document system, 2026-09-26: the clinic, not NeoSleep). */
   organization_address: string | null;
   organization_phone: string | null;
+  /** The clinic's own aviso de privacidad (organization.privacy_notice_url, CORE-113) — the clinic is the data controller. */
+  organization_privacy_notice_url: string | null;
   /** Where the questionnaire link email goes (never printed on a form). */
   patient_email: string | null;
   /** identities.language / region — pick the email's language. */
@@ -56,6 +58,7 @@ export async function getPatientPdfContext(
       organization_address_line1: string | null;
       organization_city: string | null;
       organization_phone: string | null;
+      organization_privacy_notice_url: string | null;
       patient_email: string | null;
       patient_language: string | null;
       patient_region: string | null;
@@ -66,7 +69,8 @@ export async function getPatientPdfContext(
          pi.email AS patient_email, pi.language AS patient_language, pi.region AS patient_region,
          pri.title AS practitioner_salutation, pri.first_name AS practitioner_first_name, pri.last_name AS practitioner_last_name,
          o.name AS organization_name, o.email AS organization_email,
-         o.address_line1 AS organization_address_line1, o.city AS organization_city, o.phone AS organization_phone
+         o.address_line1 AS organization_address_line1, o.city AS organization_city, o.phone AS organization_phone,
+         o.privacy_notice_url AS organization_privacy_notice_url
        FROM patient p
        JOIN identities pi ON p.identity_id = pi.id
        LEFT JOIN practitioner pr ON pr.id = COALESCE(
@@ -77,7 +81,17 @@ export async function getPatientPdfContext(
           LIMIT 1)
        )
        LEFT JOIN identities pri ON pr.identity_id = pri.id
-       LEFT JOIN organization o ON pr.organization_id = o.id
+       -- The doctor's clinic: the legacy practitioner.organization_id when set, otherwise their
+       -- primary affiliation, otherwise the first by name — doctors added via affiliations
+       -- (practitioner_organization) often have no organization_id (NEO-178).
+       LEFT JOIN organization o ON o.id = COALESCE(
+         pr.organization_id,
+         (SELECT po.organization_id FROM practitioner_organization po
+            JOIN organization ao ON ao.id = po.organization_id
+          WHERE po.practitioner_id = pr.id
+          ORDER BY po.is_primary DESC, ao.name ASC
+          LIMIT 1)
+       )
        WHERE p.id = $1 AND p.deleted_at IS NULL`,
       [patientId, fallbackUserId]
     );
@@ -101,6 +115,7 @@ export async function getPatientPdfContext(
       organization_email: row.organization_email,
       organization_address: [row.organization_address_line1, row.organization_city].filter(Boolean).join(", ") || null,
       organization_phone: row.organization_phone,
+      organization_privacy_notice_url: row.organization_privacy_notice_url?.trim() || null,
       patient_email: row.patient_email,
       patient_language: row.patient_language,
       patient_region: row.patient_region,

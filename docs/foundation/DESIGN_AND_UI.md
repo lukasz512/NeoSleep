@@ -1,6 +1,6 @@
 # Design & UI — NeoCRM Visual Language
 
-> Referenced from `apps/pwa/src/assets/theme.scss`. This is the source of truth for design
+> Referenced from `apps/pwa/src/styles/theme.scss`. This is the source of truth for design
 > tokens and the direction we're rolling them out toward. Update whenever a token changes or
 > a new surface adopts the system described here.
 
@@ -217,7 +217,7 @@ whether it's a table cell, a mobile card line, a detail panel or a note author. 
   - Page changes (NEO-85, picked from a live proposal): list → record slides the record in
     from the right over the list (which dims and drifts left), Back slides it off again, and
     every other move (menu / bottom nav) is a 90/210ms M3 fade-through. Built on the View
-    Transitions API (`router/pageTransitions.ts` + `assets/page-transitions.css`) with only the
+    Transitions API (`router/pageTransitions.ts` + `styles/page-transitions.css`) with only the
     content sheet named, so the bar and menu never move; browsers without it keep the old
     `view-fade-lift`. Don't wrap the routed view in a CSS-less `<Transition>` where View
     Transitions run: the synchronous swap made Vue throw and the list stayed empty after Back.

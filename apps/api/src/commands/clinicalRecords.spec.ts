@@ -172,4 +172,15 @@ describe("STOP-Bang measurements (migration 034)", () => {
       await expect(CompleteStopBangCommand(ctx, patient.id, partial.id, { ...ALL_BANG, neck_cm: "abc" })).rejects.toThrow(ValidationError);
     });
   });
+
+  // NEO-193: height 100 + weight 100 = BMI 100 overflowed NUMERIC(3,1) and surfaced as "Database error: completeStopBang".
+  it("rejects a height/weight pair whose BMI is outside 5-99.9 with a validation error", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await newPatient(client);
+      const partial = await RecordClinicalQuestionnaireCommand(ctx, patient.id, "stop_bang", ALL_STOP);
+      await expect(CompleteStopBangCommand(ctx, patient.id, partial.id, { ...ALL_BANG, height_cm: 100, weight_kg: 100 })).rejects.toThrow(ValidationError);
+      await expect(CompleteStopBangCommand(ctx, patient.id, partial.id, { ...ALL_BANG, height_cm: 230, weight_kg: 25 })).rejects.toThrow(ValidationError);
+    });
+  });
 });

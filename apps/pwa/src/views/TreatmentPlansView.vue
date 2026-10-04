@@ -1,5 +1,6 @@
 <template>
   <div class="treatment-plans-view">
+    <DeviceOrderReconciliationCard v-if="isManager" mode="counter" />
     <AppEntityList
       view-id="treatment-plans"
       api-endpoint="/api/v1/treatment-plan"
@@ -9,7 +10,7 @@
       :i18n="listI18n"
       detail-route-name="patient-detail"
       detail-route-param="patient_id"
-      :detail-route-query="detailRouteQuery"
+      :detail-route-query="treatmentPlanDetailQuery"
       :filter-param-keys="['status', 'type']"
     >
       <template #item.patient_name="{ item }">
@@ -81,6 +82,9 @@ import AppAvatar from "../components/AppAvatar.vue";
 import type { FilterDefinition } from "../composables/useFilters";
 import { treatmentPlanCardMeta as treatmentPlanCardMetaFormatter } from "../utils/mobileCardMeta";
 import { hcpDetailLink } from "../utils/entityLinks";
+import { treatmentPlanDetailQuery } from "../utils/clinicalListLinks";
+import DeviceOrderReconciliationCard from "../components/DeviceOrderReconciliationCard.vue";
+import { useAuthStore } from "../stores/auth";
 
 interface TreatmentPlanRow {
   patient_name?: string | null;
@@ -97,6 +101,9 @@ interface TreatmentPlanRow {
 
 const { t } = useI18n();
 const { specialtySet } = useIdentity();
+const authStore = useAuthStore();
+// Managers see whether device orders match the lab, as a counter only (NEO-218, Łukasz Q3); admins see the full card on the dashboard.
+const isManager = computed(() => authStore.user?.role === "manager");
 function doctorOf(row: TreatmentPlanRow) {
   return specialtySet(row.dentist_specialty, row.dentist_specialties);
 }
@@ -147,11 +154,6 @@ function typeLabel(type?: string): string {
  *  repeated here — NEO-19). */
 function treatmentPlanCardMeta(plan: TreatmentPlanRow): string {
   return treatmentPlanCardMetaFormatter(plan, typeLabel);
-}
-
-/** Only dental_appliance plans have their own tab today — everything else lands on Details. */
-function detailRouteQuery(item: Record<string, unknown>): Record<string, string> {
-  return { tab: item.type === "dental_appliance" ? "orthoapnea" : "details" };
 }
 
 const tableHeaders = computed(() => [

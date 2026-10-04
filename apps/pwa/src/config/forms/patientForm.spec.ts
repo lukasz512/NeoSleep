@@ -9,6 +9,7 @@ vi.mock("../../composables/useApi", async (importOriginal) => ({
 import { createPinia, setActivePinia } from "pinia";
 import { patientFormFields, patientFormDerive } from "./patientForm";
 import { useConfigStore } from "../../stores/config";
+import { useAuthStore } from "../../stores/auth";
 import type { FormFieldOption } from "../../types/formField";
 
 function jsonResponse(ok: boolean, body: unknown) {
@@ -27,6 +28,31 @@ describe("patientFormFields", () => {
     const practitioner = patientFormFields.find((f) => f.key === "practitioner_id")!;
     expect(practitioner.type).toBe("autocomplete");
     expect(typeof practitioner.options).toBe("function");
+  });
+
+  it("the doctor picker is hidden for a doctor (their patient is always their own, NEO-223), shown for admin", () => {
+    setActivePinia(createPinia());
+    const practitioner = patientFormFields.find((f) => f.key === "practitioner_id")!;
+    const hidden = () => (typeof practitioner.hidden === "function" ? practitioner.hidden({}) : !!practitioner.hidden);
+    type AuthUser = NonNullable<ReturnType<typeof useAuthStore>["user"]>;
+    useAuthStore().user = { role: "doctor" } as AuthUser;
+    expect(hidden()).toBe(true);
+    useAuthStore().user = { role: "admin" } as AuthUser;
+    expect(hidden()).toBe(false);
+  });
+
+  it("Estado, Región and Territorio are hidden for a doctor (NEO-226), shown for admin", () => {
+    setActivePinia(createPinia());
+    type AuthUser = NonNullable<ReturnType<typeof useAuthStore>["user"]>;
+    const hiddenKeys = () =>
+      patientFormFields
+        .filter((f) => ["status", "region", "territory_id"].includes(f.key))
+        .filter((f) => (typeof f.hidden === "function" ? f.hidden({}) : !!f.hidden))
+        .map((f) => f.key);
+    useAuthStore().user = { role: "doctor" } as AuthUser;
+    expect(hiddenKeys()).toEqual(["status", "region", "territory_id"]);
+    useAuthStore().user = { role: "admin" } as AuthUser;
+    expect(hiddenKeys()).toEqual([]);
   });
 
   it("status defaults to active; ahi_baseline is a number field", () => {

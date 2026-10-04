@@ -128,7 +128,7 @@ describe("patient QR link — one link for everything the patient has to do", ()
       await expect(GetPublicQuestionnaireQuery(client, tokenOf(url))).resolves.toBeTruthy();
 
       const before = uploadMock.mock.calls.length;
-      const last = await SubmitPublicQuestionnaireCommand(inTx(client), tokenOf(url), { step: "informedConsent", signatureDataUrl: SIGNATURE, locale: "mx", readToEnd: true }, META);
+      const last = await SubmitPublicQuestionnaireCommand(inTx(client), tokenOf(url), { step: "informedConsent", signatureDataUrl: SIGNATURE, privacyNoticeAccepted: true, locale: "mx", readToEnd: true }, META);
       expect(last.completed).toBe(true);
       // The signer gets the signed PDF back once, to download (NEO-126).
       expect(last.signed_copy!.filename).toMatch(/^informedConsent-\d{4}-\d{2}-\d{2}\.pdf$/);
@@ -170,10 +170,10 @@ describe("patient QR link — one link for everything the patient has to do", ()
         SubmitPublicQuestionnaireCommand(inTx(client), tokenOf(url), { step: "stopBang", consent: true, answers: STOP }, META)
       ).rejects.toThrow(QuestionnaireLinkInvalidError);
 
-      await SubmitPublicQuestionnaireCommand(inTx(client), tokenOf(url), { step: "informedConsent", signatureDataUrl: SIGNATURE }, META);
+      await SubmitPublicQuestionnaireCommand(inTx(client), tokenOf(url), { step: "informedConsent", signatureDataUrl: SIGNATURE, privacyNoticeAccepted: true }, META);
       const deletesBefore = deleteMock.mock.calls.length;
       await expect(
-        SubmitPublicQuestionnaireCommand(inTx(client), tokenOf(url), { step: "informedConsent", signatureDataUrl: SIGNATURE }, META)
+        SubmitPublicQuestionnaireCommand(inTx(client), tokenOf(url), { step: "informedConsent", signatureDataUrl: SIGNATURE, privacyNoticeAccepted: true }, META)
       ).rejects.toThrow(QuestionnaireLinkInvalidError);
       expect(deleteMock.mock.calls.length).toBe(deletesBefore); // rejected before rendering — nothing uploaded, nothing to undo
     });
@@ -194,11 +194,37 @@ describe("patient QR link — one link for everything the patient has to do", ()
       };
       const deletesBefore = deleteMock.mock.calls.length;
       await expect(
-        SubmitPublicQuestionnaireCommand(racingRunner, tokenOf(url), { step: "informedConsent", signatureDataUrl: SIGNATURE }, META)
+        SubmitPublicQuestionnaireCommand(racingRunner, tokenOf(url), { step: "informedConsent", signatureDataUrl: SIGNATURE, privacyNoticeAccepted: true }, META)
       ).rejects.toThrow(QuestionnaireLinkInvalidError);
       expect(deleteMock.mock.calls.length).toBe(deletesBefore + 1);
     });
   }, 60000);
+
+  it("CORE-113: a consent is signed only after accepting the clinic's privacy notice, which is stored with the signature (platform notice when the clinic has none)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await insertPatient(client, { first_name: "Ana", last_name: `Aviso-${uniqueSuffix()}` });
+      const { url } = await CreateQuestionnaireRequestCommand(ctx, patient.id, { items: ["informedConsent"] }, ORIGIN);
+      const token = tokenOf(url);
+
+      const page = await GetPublicQuestionnaireQuery(client, token);
+      expect(page.clinic_privacy_notice_own).toBe(false);
+      expect(page.clinic_privacy_notice_url).toBe(page.privacy_notice_url);
+
+      await expect(
+        SubmitPublicQuestionnaireCommand(inTx(client), token, { step: "informedConsent", signatureDataUrl: SIGNATURE, locale: "mx", readToEnd: true }, META)
+      ).rejects.toThrow(ValidationError);
+
+      await SubmitPublicQuestionnaireCommand(inTx(client), token, { step: "informedConsent", signatureDataUrl: SIGNATURE, privacyNoticeAccepted: true, locale: "mx", readToEnd: true }, META);
+      const { rows } = await client.query<{ notice: { url: string; own: boolean; accepted_at: string } }>(
+        `SELECT metadata->'privacy_notice' AS notice FROM consent WHERE entity_id = $1 AND purpose = 'informedConsent'`,
+        [patient.id]
+      );
+      expect(rows[0]!.notice.url).toBe(page.privacy_notice_url);
+      expect(rows[0]!.notice.own).toBe(false);
+      expect(rows[0]!.notice.accepted_at).toBeTruthy();
+    });
+  }, 30000);
 
   it("rejects a missing/foreign signature, missing health consent and incomplete answers", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
@@ -225,7 +251,7 @@ describe("patient QR link — one link for everything the patient has to do", ()
       expect(view.copy_email).toBe(`q***@example.test`); // masked, never the full address
 
       copyEmailMock.mockClear();
-      const result = await SubmitPublicQuestionnaireCommand(inTx(client), tokenOf(url), { step: "informedConsent", signatureDataUrl: SIGNATURE, sendCopy: true }, META);
+      const result = await SubmitPublicQuestionnaireCommand(inTx(client), tokenOf(url), { step: "informedConsent", signatureDataUrl: SIGNATURE, privacyNoticeAccepted: true, sendCopy: true }, META);
       expect(result.copy_emailed).toBe(true);
       expect(copyEmailMock).toHaveBeenCalledTimes(1);
       const [to, , , document] = copyEmailMock.mock.calls[0] as unknown as [string, unknown, unknown, { filename: string; content: Buffer }];
@@ -245,7 +271,7 @@ describe("patient QR link — one link for everything the patient has to do", ()
       const second = await CreateQuestionnaireRequestCommand(ctx, sibling.id, { items: ["informedConsent"] }, ORIGIN);
       expect((await GetPublicQuestionnaireQuery(client, tokenOf(second.url))).copy_email).toBeNull();
       copyEmailMock.mockClear();
-      const shared = await SubmitPublicQuestionnaireCommand(inTx(client), tokenOf(second.url), { step: "informedConsent", signatureDataUrl: SIGNATURE, sendCopy: true }, META);
+      const shared = await SubmitPublicQuestionnaireCommand(inTx(client), tokenOf(second.url), { step: "informedConsent", signatureDataUrl: SIGNATURE, privacyNoticeAccepted: true, sendCopy: true }, META);
       expect(shared.copy_emailed).toBeUndefined();
       expect(copyEmailMock).not.toHaveBeenCalled();
     });

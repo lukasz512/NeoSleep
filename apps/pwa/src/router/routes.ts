@@ -8,7 +8,7 @@ export { PublicLayout, AppLayout };
 const ALL_STAFF_ROLES: UserRole[] = ["rep", "doctor", "manager", "admin", "kam", "msl"];
 
 /** App starts at login; root and unknown paths send unauthenticated users to /login. */
-// Nav order: dashboard, leads, hcp, hco, patients, appointments, planner, presentations
+// Nav order: dashboard, leads, hcp, hco, patients, calendar, presentations
 // (hidden — see `hidden` meta below), resources, users, documents,
 // territories — the mobile bottom
 // bar (AppShell) shows exactly the first 4 of
@@ -41,6 +41,8 @@ export const routes: RouteRecordRaw[] = [
   // Patient self-fill questionnaire from a doctor's QR code (NEO-36) — no account; the token is the
   // credential and lives in the URL #fragment (/q#<token>), which browsers never send to any server.
   { path: "/q", name: "patient-questionnaire", component: () => import("../views/PatientQuestionnaireView.vue"), meta: { layout: "public", public: true } },
+  // Patient's appointment page from the appointment email (CORE-25): confirm, "I can't come", stop emails. Same /a#<token> rule as /q.
+  { path: "/a", name: "patient-appointment", component: () => import("../views/PatientAppointmentView.vue"), meta: { layout: "public", public: true } },
   { path: "/dev", name: "dev", component: () => import("../views/DevView.vue"), meta: { layout: "app", devOnly: true } },
   { path: "/dashboard", name: "dashboard", component: () => import("../views/DashboardView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin"] } }, // admin-only for now (2026-09-26); everyone else lands on homePathForRole()
   { path: "/leads", name: "leads", component: () => import("../views/LeadsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
@@ -51,13 +53,18 @@ export const routes: RouteRecordRaw[] = [
   { path: "/hco/:id", name: "hco-detail", component: () => import("../views/HCODetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
   { path: "/patients", name: "patients", component: () => import("../views/PatientsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
   { path: "/patients/:id", name: "patient-detail", component: () => import("../views/PatientDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
-  // Patient↔doctor appointments (NEO-34) — right after patients so a doctor has it in the phone bottom bar.
-  // Every staff role; what each one sees (own / territory / redacted) is decided by the API.
-  { path: "/appointments", name: "appointments", component: () => import("../views/AppointmentsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
+  // Calendario (CORE-117) — right after patients so a doctor has it in the phone bottom bar. Replaces
+  // the separate Planificador (encounters) and Citas (appointments) screens/calendars with one union
+  // list; what each role sees within it (own / territory / redacted) is still decided by the API
+  // (queries/encounter.ts + queries/appointment.ts, merged in queries/calendar.ts).
+  { path: "/calendar", name: "calendar", component: () => import("../views/CalendarView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
+  // Old routes, kept so bookmarks/links still work — no `layout: "app"` meta, so appNavRoutes (below)
+  // never lists them in the sidebar/bottom bar.
+  { path: "/planner", redirect: "/calendar" },
+  { path: "/appointments", redirect: "/calendar" },
   // Cross-patient clinical aggregates — rep excluded (sees studies/orders only inside their own patient's tabs, not this tenant-wide list).
   { path: "/sleep-studies", name: "sleep-studies", component: () => import("../views/SleepStudiesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["doctor", "manager", "admin"] } }, // health data: admin + doctor (2026-09-25) + manager (NEO-83)
   { path: "/treatment-plans", name: "treatment-plans", component: () => import("../views/TreatmentPlansView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["doctor", "manager", "admin"] } },
-  { path: "/planner", name: "planner", component: () => import("../views/PlannerView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
   // Hidden from nav while the OrthoApnea resources module ships (not deleted — see the `hidden` filter in appNavRoutes below).
   { path: "/presentations", name: "presentations", component: () => import("../views/PresentationsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES, hidden: true } },
   { path: "/resources", name: "resources", component: () => import("../views/ResourcesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES, partner: "orthoapnea" } },
@@ -66,7 +73,7 @@ export const routes: RouteRecordRaw[] = [
   // Admin/manager-only WYSIWYG editor for generated-document body content
   // (GDPR/informed-consent prose) — see docs/stories/document-content-editor.md.
   // Documents are identified by a (templateKey, locale) pair, not a single id.
-  // Route names deliberately avoid the bare "documents" name — App.spec.ts's
+  // Route names deliberately avoid the bare "documents" name — router/app.spec.ts's
   // "pwa app has only rep view routes (no portal-only views)" test already
   // reserves that exact name for a future, separate HCP/patient-portal
   // "my documents" view (a doctor/patient seeing their OWN signed PDFs) —

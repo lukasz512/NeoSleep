@@ -23,6 +23,10 @@ export interface Organization {
   email: string | null;
   website: string | null;
   google_link: string | null;
+  /** Shown to patients in appointment emails under “what to bring” (CORE-25); plain text, ≤ 500 chars. */
+  visit_instructions: string | null;
+  /** The clinic's own aviso de privacidad (CORE-113) — shown to patients before they sign a consent. */
+  privacy_notice_url: string | null;
   /** Geocoded from the address fields — see services/geocoding.ts. Null until geocoded (unconfigured key, geocode failure, or no address yet). */
   latitude: number | null;
   longitude: number | null;
@@ -58,6 +62,10 @@ export interface InsertOrganizationInput {
   email?: string | null;
   website?: string | null;
   google_link?: string | null;
+  visit_instructions?: string | null;
+  privacy_notice_url?: string | null;
+  /** True when country_code came from geocoding the address (NEO-210 D1): the territory must not override it. */
+  country_from_address?: boolean;
   /** Set by the command layer after geocoding the address fields above — not user input. */
   latitude?: number | null;
   longitude?: number | null;
@@ -81,6 +89,10 @@ export interface UpdateOrganizationInput {
   email?: string | null;
   website?: string | null;
   google_link?: string | null;
+  visit_instructions?: string | null;
+  privacy_notice_url?: string | null;
+  /** True when country_code came from geocoding the address (NEO-210 D1): the territory must not override it. */
+  country_from_address?: boolean;
   /** Set by the command layer after geocoding the address fields above — not user input. */
   latitude?: number | null;
   longitude?: number | null;
@@ -98,7 +110,7 @@ function isOrgSortColumn(s: string): s is (typeof ORG_SORT_COLUMNS)[number] {
 
 const ORG_SELECT_COLS = `
   o.id, o.name, o.type, o.identifiers, o.address_line1, o.city, o.state, o.postal_code,
-  o.country_code, o.region, o.territory_id, t.name AS territory_name, o.phone, o.email, o.website, o.google_link,
+  o.country_code, o.region, o.territory_id, t.name AS territory_name, o.phone, o.email, o.website, o.google_link, o.visit_instructions, o.privacy_notice_url,
   o.latitude, o.longitude, o.specialties, o.status, o.show_on_public_map, o.metadata, o.created_at, o.updated_at`.trim();
 
 export async function getOrganizationPaginated(
@@ -215,6 +227,42 @@ export async function getOrganizationIdByName(
   }
 }
 
+/** The nearest territory (itself or an ancestor) country that is set — SQL shared by the two helpers below. */
+const TERRITORY_COUNTRY_SQL = `
+  SELECT a.country_code
+    FROM territory t
+    JOIN territory a ON t.path <@ a.path
+   WHERE t.id = $1
+     AND NULLIF(a.country_code, '') IS NOT NULL
+   ORDER BY extensions.nlevel(a.path) DESC
+   LIMIT 1`;
+
+/** Country of a territory (its own or its nearest ancestor's), or null. */
+export async function getTerritoryCountry(client: PoolClient, territoryId: string): Promise<string | null> {
+  try {
+    const { rows } = await client.query<{ country_code: string }>(TERRITORY_COUNTRY_SQL, [territoryId]);
+    return rows[0]?.country_code ?? null;
+  } catch (err) {
+    throw new DatabaseError("getTerritoryCountry", err);
+  }
+}
+
+/**
+ * A clinic's country is a fact of its address, not of who typed it in
+ * (NEO-210 D1): the command layer sets it from the geocoded address
+ * (`country_from_address`), and this is the fallback when the address gave
+ * none — the country of the clinic's territory. Without either, the stored
+ * value stays as sent. Fixes MX clinics saved as PL by a PL-based user.
+ */
+async function syncCountryFromTerritory(client: PoolClient, id: string): Promise<void> {
+  await client.query(
+    `UPDATE organization o
+        SET country_code = COALESCE((${TERRITORY_COUNTRY_SQL.replace("$1", "o.territory_id")}), o.country_code)
+      WHERE o.id = $1 AND o.territory_id IS NOT NULL`,
+    [id]
+  );
+}
+
 /**
  * Inserts an organization record using the provided client.
  * The client must already be in a transaction (withTenant handles this).
@@ -227,8 +275,8 @@ export async function insertOrganization(client: PoolClient, input: InsertOrgani
   try {
     const result = await client.query<{ id: string }>(
       `INSERT INTO organization
-         (name, type, address_line1, city, state, postal_code, country_code, region, territory_id, phone, email, website, google_link, latitude, longitude, specialties, status, metadata, show_on_public_map)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+         (name, type, address_line1, city, state, postal_code, country_code, region, territory_id, phone, email, website, google_link, latitude, longitude, specialties, status, metadata, show_on_public_map, visit_instructions, privacy_notice_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
        RETURNING id`,
       [
         name,
@@ -250,9 +298,12 @@ export async function insertOrganization(client: PoolClient, input: InsertOrgani
         trimOrEmpty(input.status) || "active",
         input.metadata ? JSON.stringify(input.metadata) : null,
         input.show_on_public_map ?? true,
+        trimOrNull(input.visit_instructions),
+        trimOrNull(input.privacy_notice_url),
       ]
     );
     const id = result.rows[0]!.id;
+    if (!input.country_from_address) await syncCountryFromTerritory(client, id);
 
     const org = await getOrganizationById(client, id);
     if (!org) throw new DatabaseError("insertOrganization", new Error("Insert returned no rows"));
@@ -328,6 +379,14 @@ export async function updateOrganization(client: PoolClient, id: string, input: 
       params.push(trimOrNull(input.google_link));
       sets.push(`google_link = $${idx++}`);
     }
+    if (input.visit_instructions !== undefined) {
+      params.push(trimOrNull(input.visit_instructions));
+      sets.push(`visit_instructions = $${idx++}`);
+    }
+    if (input.privacy_notice_url !== undefined) {
+      params.push(trimOrNull(input.privacy_notice_url));
+      sets.push(`privacy_notice_url = $${idx++}`);
+    }
     if (input.latitude !== undefined) {
       params.push(input.latitude);
       sets.push(`latitude = $${idx++}`);
@@ -355,6 +414,7 @@ export async function updateOrganization(client: PoolClient, id: string, input: 
 
     params.push(id);
     await client.query(`UPDATE organization SET ${sets.join(", ")} WHERE id = $${idx}`, params);
+    if (!input.country_from_address) await syncCountryFromTerritory(client, id);
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new DatabaseError("updateOrganization", err);

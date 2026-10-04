@@ -66,7 +66,7 @@
  * unlayered app CSS on the card silently beats Vuetify's own
  * `overflow-y: auto` — which is exactly how all form dialogs lost scrolling
  * after the Vuetify 4 upgrade. The scroll model is now owned here plus the
- * `.pwa-form-dialog*` rules in assets/theme.scss, and nowhere else.
+ * `.pwa-form-dialog*` rules in styles/theme.scss, and nowhere else.
  * Guarded by AppFormDialog.spec.ts (no raw VDialog outside the shells) and
  * e2e/dialog-scroll.spec.ts (real-browser scrolling, all engines).
  *

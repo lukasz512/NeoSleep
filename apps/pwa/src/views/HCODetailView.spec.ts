@@ -138,3 +138,31 @@ describe("HCODetailView — avatar icon per org type (NEO-18)", () => {
     await flushPromises();
   });
 });
+
+describe("HCODetailView — 'No privacy notice' badge for admins (CORE-113 A1)", () => {
+  async function mountAs(role: string, hco: Record<string, unknown>) {
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, hco));
+    const { wrapper } = await mountHCODetail();
+    const { useAuthStore } = await import("../stores/auth");
+    useAuthStore().$patch({ user: { id: "u1", email: "a@b.c", name: "A", role } as never });
+    await vi.waitFor(() => expect(wrapper.text()).toContain("Acme Clinic"));
+    await flushPromises();
+    return wrapper;
+  }
+
+  it("shows the badge to an admin when the clinic has no aviso de privacidad link", async () => {
+    const wrapper = await mountAs("admin", { ...HCO, privacy_notice_url: "" });
+    expect(wrapper.find("[data-testid='hco-no-privacy-notice']").exists()).toBe(true);
+    expect(wrapper.text()).toContain(en["user.hco.detail.noPrivacyNotice"]);
+  });
+
+  it("hides the badge once the clinic has its own aviso", async () => {
+    const wrapper = await mountAs("admin", { ...HCO, privacy_notice_url: "https://acme.mx/aviso" });
+    expect(wrapper.find("[data-testid='hco-no-privacy-notice']").exists()).toBe(false);
+  });
+
+  it("never shows the badge to a non-admin", async () => {
+    const wrapper = await mountAs("rep", { ...HCO, privacy_notice_url: "" });
+    expect(wrapper.find("[data-testid='hco-no-privacy-notice']").exists()).toBe(false);
+  });
+});

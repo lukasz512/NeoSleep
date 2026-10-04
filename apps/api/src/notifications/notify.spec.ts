@@ -38,7 +38,7 @@ describe("notify()", () => {
         category: "operational",
         priority: "normal",
         group_count: 1,
-        action_url: "/appointments",
+        action_url: "/calendar",
         entity_type: "Appointment",
       });
 

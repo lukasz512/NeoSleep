@@ -1,0 +1,423 @@
+<template>
+  <div class="patient-details">
+    <p v-if="consentWithdrawnAt" class="patient-details__banner" role="alert" data-testid="consent-withdrawn">
+      <AppIcon name="info-circle" class="patient-details__banner-icon" />
+      {{ t("app.patients.detail.consentWithdrawn", { date: formatDate(consentWithdrawnAt) }) }}
+    </p>
+
+    <!-- A: what you read in five seconds. Each tile shows only when it has something to say. -->
+    <section v-if="tiles.length" class="patient-details__tiles" :aria-label="t('app.patients.detail.summaryLabel')" data-testid="summary-strip">
+      <template v-for="tile in tiles" :key="tile.key">
+        <component
+          :is="tile.tab ? 'button' : 'div'"
+          :type="tile.tab ? 'button' : undefined"
+          class="patient-details__tile"
+          :class="{ 'patient-details__tile--link': tile.tab }"
+          :data-testid="`tile-${tile.key}`"
+          @click="tile.tab && emit('open-tab', tile.tab)"
+        >
+          <span class="patient-details__tile-key">{{ tile.label }}</span>
+          <span class="patient-details__tile-value" :title="tile.value">{{ tile.value }}</span>
+          <AhiScaleBar v-if="tile.ahi != null" :ahi="tile.ahi" thin class="patient-details__tile-scale" />
+          <span v-if="tile.sub" class="patient-details__tile-sub">{{ tile.sub }}</span>
+        </component>
+      </template>
+    </section>
+
+    <!-- C: every field in a named group of label · value rows. -->
+    <div class="patient-details__groups">
+      <section class="patient-details__group" aria-labelledby="pd-clinical">
+        <h3 id="pd-clinical" class="patient-details__group-title">{{ t("app.patients.detail.groups.clinical") }}</h3>
+        <dl class="patient-details__rows">
+          <div class="patient-details__row">
+            <dt>{{ t("app.patients.detail.ahiBaseline") }}</dt>
+            <dd>{{ patient.ahi_baseline ?? "—" }}</dd>
+          </div>
+          <div class="patient-details__row">
+            <dt>{{ t("app.patients.detail.cpapDevice") }}</dt>
+            <dd>{{ patient.cpap_device ? t("app.common.yes") : t("app.common.no") }}</dd>
+          </div>
+          <div class="patient-details__row">
+            <dt>{{ t("app.patients.detail.medicalRecord") }}</dt>
+            <dd>{{ patient.medical_record || "—" }}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="patient-details__group" aria-labelledby="pd-contact">
+        <h3 id="pd-contact" class="patient-details__group-title">{{ t("app.patients.detail.groups.contact") }}</h3>
+        <dl class="patient-details__rows">
+          <div class="patient-details__row">
+            <dt>{{ t("app.patients.detail.phone") }}</dt>
+            <dd>
+              <a v-if="patient.phone" :href="`tel:${patient.phone}`" class="patient-details__link">{{ patient.phone }}</a>
+              <span v-else>—</span>
+            </dd>
+          </div>
+          <div class="patient-details__row">
+            <dt>{{ t("app.patients.detail.email") }}</dt>
+            <dd>
+              <a v-if="patient.email" :href="`mailto:${patient.email}`" class="patient-details__link">{{ patient.email }}</a>
+              <span v-else>—</span>
+            </dd>
+          </div>
+          <div v-if="summary?.preferred_name" class="patient-details__row">
+            <dt>{{ t("app.patients.detail.preferredName") }}</dt>
+            <dd>{{ summary.preferred_name }}</dd>
+          </div>
+          <div v-if="shippingAddress" class="patient-details__row">
+            <dt>{{ t("app.patients.detail.shippingAddress") }}</dt>
+            <dd>{{ shippingAddress }}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="patient-details__group" aria-labelledby="pd-care">
+        <h3 id="pd-care" class="patient-details__group-title">{{ t("app.patients.detail.groups.care") }}</h3>
+        <dl class="patient-details__rows">
+          <div class="patient-details__row patient-details__row--entity">
+            <dt>{{ t("app.patients.detail.practitioner") }}</dt>
+            <dd>
+              <EntityLink
+                :to="patient.practitioner_id ? { name: 'hcp-detail', params: { id: patient.practitioner_id } } : null"
+                :label="patient.practitioner_name"
+                entity-type="hcp"
+                :specialty="patient.practitioner_specialty"
+                :details="specialtySet(patient.practitioner_specialty, patient.practitioner_specialties).details"
+                :more-details="specialtySet(patient.practitioner_specialty, patient.practitioner_specialties).more"
+                :avatar-size="32"
+              />
+            </dd>
+          </div>
+          <div class="patient-details__row">
+            <dt>{{ t("app.patients.detail.status") }}</dt>
+            <dd>
+              <VChip :color="patientStatusColor(patient.status)" size="small" variant="tonal">
+                {{ patientStatusLabel(t, patient.status) }}
+              </VChip>
+            </dd>
+          </div>
+          <div class="patient-details__row">
+            <dt>{{ t("app.patients.detail.region") }}</dt>
+            <dd>{{ regionBreadcrumb }}</dd>
+          </div>
+          <div v-if="patient.created_at" class="patient-details__row">
+            <dt>{{ t("app.patients.detail.patientSince") }}</dt>
+            <dd>{{ formatDate(patient.created_at) }}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section v-if="summary?.data_consent_at" class="patient-details__group" aria-labelledby="pd-admin">
+        <h3 id="pd-admin" class="patient-details__group-title">{{ t("app.patients.detail.groups.admin") }}</h3>
+        <dl class="patient-details__rows">
+          <div class="patient-details__row">
+            <dt>{{ t("app.patients.detail.dataConsent") }}</dt>
+            <dd>{{ formatDate(summary.data_consent_at) }}</dd>
+          </div>
+        </dl>
+      </section>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { reportCaught, reportFailedResponse } from "@api";
+import { computed, onMounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
+import { VChip } from "vuetify/components";
+import { intlLocale } from "@i18n/language-options";
+import AhiScaleBar from "../AhiScaleBar.vue";
+import AppIcon from "../AppIcon.vue";
+import EntityLink from "../EntityLink.vue";
+import { apiFetch } from "../../composables/useApi";
+import { useIdentity } from "../../composables/useIdentity";
+import { formatDiagnosis } from "../../utils/diagnosis";
+import { deviceOrderState } from "../../utils/treatmentPlanStatus";
+import { patientStatusColor, patientStatusLabel } from "../../utils/patientStatus";
+import type { PatientDetailsTabPatient, PatientSummary } from "./patientSummary";
+
+/**
+ * The patient's Detalles tab (NEO-206, layout decided in NEO-205): a summary
+ * strip (diagnosis, latest PSG, device order, next appointment) over grouped
+ * label · value rows. The documents checklist is not here — it lives in the
+ * side panel and on Documentos. The strip and the extra rows come from
+ * GET /patient/:id/summary; until it answers (or if it fails) the base rows
+ * still show. The PSG comes back only for admin/doctor/manager.
+ */
+interface Tile {
+  key: "diagnosis" | "psg" | "treatment" | "appointment";
+  label: string;
+  value: string;
+  sub?: string;
+  ahi?: number;
+  /** Clicking the tile opens this tab. */
+  tab?: string;
+}
+
+const props = defineProps<{
+  patient: PatientDetailsTabPatient;
+  /** Diagnosis is health data — same roles as Documentos/Estudios (NEO-83). */
+  canSeeStudies: boolean;
+}>();
+const emit = defineEmits<{ "open-tab": [tab: string] }>();
+
+const { t, locale } = useI18n();
+const { specialtySet } = useIdentity();
+
+const summary = ref<PatientSummary | null>(null);
+
+async function load(): Promise<void> {
+  const id = props.patient.id;
+  try {
+    const res = await apiFetch(`/api/v1/patient/${id}/summary`, { handleErrors: false });
+    if (id !== props.patient.id) return;
+    if (res.ok) summary.value = (await res.json()) as PatientSummary;
+    else await reportFailedResponse(res, { where: "PatientDetailsTab.summary", path: "/api/v1/patient/:id/summary" });
+  } catch (err) {
+    reportCaught(err, { where: "PatientDetailsTab.summary" });
+  }
+}
+onMounted(load);
+watch(
+  () => props.patient.id,
+  () => {
+    summary.value = null;
+    void load();
+  },
+);
+
+const numberFormat = computed(() => new Intl.NumberFormat(intlLocale(locale.value), { maximumFractionDigits: 1 }));
+const fmt = (n: number) => numberFormat.value.format(n);
+
+/** A plain YYYY-MM-DD is a calendar day: read it as local noon so no time zone moves it to the day before. */
+function formatDate(value: string, opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short", year: "numeric" }): string {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00`) : new Date(value);
+  return date.toLocaleDateString(intlLocale(locale.value), opts);
+}
+
+const regionBreadcrumb = computed(() => {
+  const path = props.patient.territory_path;
+  if (path && path.length > 0) return path.map((node) => (node.code || node.name).toLowerCase()).join("/");
+  return props.patient.region || "—";
+});
+
+const shippingAddress = computed(() => {
+  const address = summary.value?.shipping_address;
+  if (!address) return null;
+  const parts = [address.line1, address.city, address.postal_code].filter((part): part is string => typeof part === "string" && part.trim() !== "");
+  return parts.length ? parts.join(", ") : null;
+});
+
+const consentWithdrawnAt = computed(() => summary.value?.data_consent_withdrawn_at ?? null);
+
+const tiles = computed<Tile[]>(() => {
+  const out: Tile[] = [];
+  const study = summary.value?.latest_study ?? null;
+
+  const diagnosis = props.canSeeStudies ? formatDiagnosis(props.patient.diagnosis_code ?? study?.diagnosis_code ?? null) : null;
+  if (diagnosis) out.push({ key: "diagnosis", label: t("app.patients.detail.summary.diagnosis"), value: diagnosis });
+
+  if (study?.ahi_score != null) {
+    const sub = [
+      study.spo2_nadir != null ? `SpO₂ ${fmt(study.spo2_nadir)} %` : null,
+      study.odi != null ? `ODI ${fmt(study.odi)}` : null,
+    ].filter(Boolean).join(" · ");
+    out.push({
+      key: "psg",
+      label: study.study_date
+        ? t("app.patients.detail.summary.psg", { date: formatDate(study.study_date, { day: "numeric", month: "short" }) })
+        : t("app.patients.detail.summary.psgNoDate"),
+      value: t("app.patients.detail.summary.perHour", { n: fmt(study.ahi_score) }),
+      ahi: study.ahi_score,
+      sub: sub || undefined,
+      tab: "studies",
+    });
+  }
+
+  const order = summary.value?.device_order ?? null;
+  if (order) {
+    const state = deviceOrderState(order);
+    if (state !== "cancelled") {
+      out.push({
+        key: "treatment",
+        label: t("app.patients.detail.summary.treatment"),
+        value: t("app.patients.detail.summary.oralAppliance"),
+        sub: t(`app.deviceOrder.state.${state}`),
+        tab: "orthoapnea",
+      });
+    }
+  }
+
+  const visit = summary.value?.next_appointment ?? null;
+  if (visit) {
+    const start = new Date(visit.start_at);
+    out.push({
+      key: "appointment",
+      label: t("app.patients.detail.summary.nextAppointment"),
+      value: start.toLocaleDateString(intlLocale(locale.value), { day: "numeric", month: "short" }),
+      sub: start.toLocaleTimeString(intlLocale(locale.value), { hour: "2-digit", minute: "2-digit" }),
+    });
+  }
+  return out;
+});
+</script>
+
+<style scoped>
+/* Container queries, not media queries: the tab column is 720px wide next to
+   the side panel and full width on a tablet — the layout follows the column. */
+.patient-details {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5, 20px);
+}
+
+.patient-details__banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  margin: 0;
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  border-radius: var(--pwa-radius, 12px);
+  background: rgba(var(--v-theme-error), 0.1);
+  color: rgb(var(--v-theme-error));
+  font-size: 0.875rem;
+}
+.patient-details__banner-icon {
+  flex: none;
+}
+
+/* Two tiles per row on a phone, four from 560px of column. */
+.patient-details__tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2, 8px);
+}
+@container (min-width: 560px) {
+  .patient-details__tiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.patient-details__tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--space-3, 12px);
+  border: none;
+  border-radius: var(--pwa-radius, 12px);
+  background: rgba(var(--v-theme-on-surface), 0.04);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.patient-details__tile--link {
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+.patient-details__tile--link:hover {
+  background: rgba(var(--v-theme-on-surface), 0.07);
+}
+/* Inset, like the tabs: never clipped by a parent. */
+.patient-details__tile--link:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgb(var(--v-theme-primary));
+}
+
+.patient-details__tile-key {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.patient-details__tile-value {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  /* A long ICD-10 label stops at three lines; the full text is in the tooltip. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.patient-details__tile-scale {
+  margin: var(--space-1, 4px) 0 2px;
+}
+.patient-details__tile-sub {
+  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+/* One column on a phone, two from 640px of column; a group never splits. */
+.patient-details__groups {
+  columns: 1;
+  column-gap: var(--space-6, 24px);
+}
+@container (min-width: 640px) {
+  .patient-details__groups {
+    columns: 2;
+  }
+}
+
+.patient-details__group {
+  break-inside: avoid;
+  margin-bottom: var(--space-4, 16px);
+}
+.patient-details__group-title {
+  margin: 0 0 var(--space-1, 4px) 2px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.patient-details__rows {
+  margin: 0;
+  border-radius: var(--pwa-radius, 12px);
+  background: rgba(var(--v-theme-on-surface), 0.04);
+}
+.patient-details__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 12px);
+  min-height: 40px;
+  padding: var(--space-2, 8px) var(--space-3, 12px);
+  font-size: 0.875rem;
+}
+.patient-details__row + .patient-details__row {
+  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+.patient-details__row dt {
+  flex: none;
+  max-width: 50%;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.patient-details__row dd {
+  min-width: 0;
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+/* The doctor's avatar + name + specialty: keep it a right-aligned block. */
+.patient-details__row--entity dd {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.patient-details__link {
+  color: rgb(var(--v-theme-primary));
+  text-decoration: none;
+}
+.patient-details__link:hover {
+  text-decoration: underline;
+}
+</style>

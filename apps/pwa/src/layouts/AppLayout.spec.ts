@@ -8,7 +8,7 @@ import { navRoutesForRole } from "../router/routes";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const APP_MODULE_ROUTES = [
-  "dashboard", "leads", "planner", "hcp", "hco", "patients", "appointments", "presentations", "users",
+  "dashboard", "leads", "calendar", "hcp", "hco", "patients", "presentations", "users",
   "sleep-studies", "treatment-plans", "resources", "territories",
 ] as const;
 
@@ -108,35 +108,35 @@ describe("AppLayout", () => {
     // /presentations is meta.hidden (see routes.ts) — excluded from appNavRoutes entirely,
     // superseded by /resources. /dashboard is admin-only (2026-09-26) — every other
     // role's first entry (and home, see homePathForRole) is its first remaining module.
-    it("rep sees every core module (leads, hcp, hco, patients, planner, resources) but not users, sleep-studies, treatment-plans, or territories", () => {
-      const expectedPaths = ["/leads", "/hcp", "/hco", "/patients", "/appointments", "/planner", "/resources"];
+    it("rep sees every core module (leads, hcp, hco, patients, calendar, resources) but not users, sleep-studies, treatment-plans, or territories", () => {
+      const expectedPaths = ["/leads", "/hcp", "/hco", "/patients", "/calendar", "/resources"];
       expect(navRoutesForRole("rep").map((r) => r.path)).toEqual(expectedPaths);
     });
 
     it("manager sees users management, leads, sleep studies (NEO-83), treatment plans and documents — not territories", () => {
       const expectedPaths = [
-        "/leads", "/hcp", "/hco", "/patients", "/appointments", "/sleep-studies",
-        "/treatment-plans", "/planner", "/resources", "/users", "/documents",
+        "/leads", "/hcp", "/hco", "/patients", "/calendar", "/sleep-studies",
+        "/treatment-plans", "/resources", "/users", "/documents",
       ];
       expect(navRoutesForRole("manager").map((r) => r.path)).toEqual(expectedPaths);
     });
 
-    it("kam and msl see leads, hcp, hco, patients, planner, resources but not users (same field-force access as rep)", () => {
-      const expectedPaths = ["/leads", "/hcp", "/hco", "/patients", "/appointments", "/planner", "/resources"];
+    it("kam and msl see leads, hcp, hco, patients, calendar, resources but not users (same field-force access as rep)", () => {
+      const expectedPaths = ["/leads", "/hcp", "/hco", "/patients", "/calendar", "/resources"];
       expect(navRoutesForRole("kam").map((r) => r.path)).toEqual(expectedPaths);
       expect(navRoutesForRole("msl").map((r) => r.path)).toEqual(expectedPaths);
     });
 
     it("admin always sees every nav item, including leads, documents, and territories (isRoleAllowed bypasses role restrictions for admin)", () => {
       const expectedPaths = [
-        "/dashboard", "/leads", "/hcp", "/hco", "/patients", "/appointments", "/sleep-studies",
-        "/treatment-plans", "/planner", "/resources", "/users", "/documents", "/territories",
+        "/dashboard", "/leads", "/hcp", "/hco", "/patients", "/calendar", "/sleep-studies",
+        "/treatment-plans", "/resources", "/users", "/documents", "/territories",
       ];
       expect(navRoutesForRole("admin").map((r) => r.path)).toEqual(expectedPaths);
     });
 
-    it("doctor sees patients, the clinical aggregates, planner, and resources — never leads, hcp, hco, or users", () => {
-      const expectedPaths = ["/patients", "/appointments", "/sleep-studies", "/treatment-plans", "/planner", "/resources"];
+    it("doctor sees patients, the clinical aggregates, calendar, and resources — never leads, hcp, hco, or users", () => {
+      const expectedPaths = ["/patients", "/calendar", "/sleep-studies", "/treatment-plans", "/resources"];
       expect(navRoutesForRole("doctor").map((r) => r.path)).toEqual(expectedPaths);
     });
   });
@@ -243,12 +243,51 @@ describe("AppLayout", () => {
       expect(block).toMatch(/class="layout-user-btn"[\s\S]*?ignore-global-loading/);
     });
 
-    it("no notification bell, role-preview select, or theme panel sneaks into the app bar", () => {
+    it("no role-preview select or theme panel sneaks into the app bar", () => {
       const source = readLayout();
-      expect(source).not.toMatch(/<AppNotificationCenter\b/);
-      expect(source).not.toMatch(/import\s+AppNotificationCenter\b/);
       expect(source).not.toContain("rolePreview");
       expect(source).not.toContain("VSelect");
+    });
+
+    // CORE-4: the bell used to render only on DashboardView (admin-only), so
+    // doctors/managers never saw it. It now lives in the global app bar,
+    // mounted for the whole authenticated session regardless of role.
+    describe("CORE-4 — notification bell in the global app bar", () => {
+      it("the bell renders in the app bar's actions slot, directly left of the account menu", () => {
+        const layout = readLayout();
+        expect(layout).toMatch(/import\s+AppNotificationCenter\s+from\s+"\.\.\/components\/AppNotificationCenter\.vue"/);
+        const block = slotBlock(layout, "app-bar-actions");
+        expect(block).toMatch(/<AppNotificationCenter\s*\/>\s*<!--[\s\S]*?-->\s*<AppAccountMenu/);
+      });
+
+      it("isn't gated behind a role or an admin-only guard — every logged-in role sees it", () => {
+        const block = slotBlock(readLayout(), "app-bar-actions");
+        const bell = block.match(/<AppNotificationCenter\b[^>]*\/>/)?.[0] ?? "";
+        expect(bell).not.toContain("v-if");
+        expect(bell).not.toContain("isAdmin");
+      });
+
+      it("isn't gated behind isMobile — renders on phone and desktop alike", () => {
+        const block = slotBlock(readLayout(), "app-bar-actions");
+        const bell = block.match(/<AppNotificationCenter\b[^>]*\/>/)?.[0] ?? "";
+        expect(bell).not.toContain("isMobile");
+      });
+
+      it("has a 44px touch target, same floor as the account button beside it", () => {
+        const bellSource = readFileSync(path.resolve(__dirname, "../components/AppNotificationCenter.vue"), "utf-8");
+        expect(bellSource).toMatch(/\.notif-center__bell\s*\{[^}]*min-width:\s*44px;[^}]*min-height:\s*44px;/);
+      });
+
+      it("the app-bar-actions wrapper spaces the bell from the account button on the 4px grid", () => {
+        const layout = readLayout();
+        expect(layout).toMatch(/\.layout-bar-actions\s*\{[^}]*gap:\s*var\(--space-2, 8px\);/);
+      });
+
+      it("DashboardView no longer renders its own copy of the bell (CORE-4 moved it to the global app bar)", () => {
+        const dashboardSource = readFileSync(path.resolve(__dirname, "../views/DashboardView.vue"), "utf-8");
+        expect(dashboardSource).not.toMatch(/<AppNotificationCenter\b/);
+        expect(dashboardSource).not.toMatch(/import\s+AppNotificationCenter\b/);
+      });
     });
 
     it("the unread-notification nav dot pulse animation respects prefers-reduced-motion", () => {

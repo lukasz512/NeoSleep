@@ -235,6 +235,12 @@ describe("createOrthoApneaTreatment", () => {
   it("records the request/response and marks partner_link synced with the returned statusId", async () => {
     const { plan } = await setupPatientAndPlan();
 
+    // NEO-217: before any partner call the plan carries no order state.
+    const unsent = await withTenant(TENANT_SLUG, (client) => getTreatmentPlanById(client, plan.id));
+    expect(unsent?.order_sync_status).toBeNull();
+    expect(unsent?.order_number).toBeNull();
+    expect(unsent?.order_sent_at).toBeNull();
+
     stubFetchRoutes({
       [LOGIN_ROUTE[0]]: LOGIN_ROUTE[1],
       "/api/treatments": () => ({ status: 200, body: treatmentDtoFixture }),
@@ -251,6 +257,12 @@ describe("createOrthoApneaTreatment", () => {
     expect(link?.external_status).toBe("1");
     createdPartnerLinkIds.push(link!.id);
 
+    // NEO-217: the plan read (list + detail) carries the order number and state for the device tile.
+    const sent = await withTenant(TENANT_SLUG, (client) => getTreatmentPlanById(client, plan.id));
+    expect(sent?.order_sync_status).toBe("synced");
+    expect(sent?.order_number).toBe("452434");
+    expect(sent?.order_sent_at).not.toBeNull();
+
     const transactions = await query<{
       action: string;
       success: boolean;
@@ -266,6 +278,36 @@ describe("createOrthoApneaTreatment", () => {
     expect(transactions[0]!.request_payload).toEqual(wizardPayload);
     // create_treatment's expected-fields baseline is a deliberate subset — no REQUIRED field should be missing.
     expect(transactions[0]!.validation_report.missingFields).toEqual([]);
+  });
+
+  it("sends the DTO as OA's portal does: multipart/form-data with one `treatmentDTO` JSON-string field (rules §3.2)", async () => {
+    const { plan } = await setupPatientAndPlan();
+    const inits: RequestInit[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit = {}) => {
+        if (url.includes("/api/login")) return { ok: true, status: 200, json: async () => ({ token: fakeJwt(1800) }) } as Response;
+        if (url.includes("/api/treatments")) {
+          inits.push(init);
+          return { ok: true, status: 200, json: async () => treatmentDtoFixture } as Response;
+        }
+        throw new Error(`Unmocked fetch call in test: ${url}`);
+      })
+    );
+
+    const dto = { patientId: 44171, retrusionMax: -4, protrusionMax: 6, sequence: { seq1: 0 } };
+    await createOrthoApneaTreatment(TENANT_SLUG, plan.id, dto);
+    const link = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", plan.id));
+    createdPartnerLinkIds.push(link!.id);
+
+    expect(inits).toHaveLength(1);
+    const body = inits[0]!.body;
+    expect(body).toBeInstanceOf(FormData);
+    const form = body as FormData;
+    expect([...form.keys()]).toEqual(["treatmentDTO"]);
+    expect(JSON.parse(form.get("treatmentDTO") as string)).toEqual(dto);
+    // No hand-set Content-Type: fetch must write the multipart boundary itself.
+    expect(new Headers(inits[0]!.headers).has("Content-Type")).toBe(false);
   });
 
   it("marks partner_link failed and logs a failed transaction when OrthoApnea returns an error status", async () => {
@@ -296,6 +338,9 @@ describe("createOrthoApneaTreatment", () => {
     const localPlan = await withTenant(TENANT_SLUG, (client) => getTreatmentPlanById(client, plan.id));
     expect(localPlan).not.toBeNull();
     expect(localPlan?.status).toBe(plan.status);
+    // NEO-217: …but the tile must show it as "Requiere atención".
+    expect(localPlan?.order_sync_status).toBe("failed");
+    expect(localPlan?.order_number).toBeNull();
   });
 
   it("marks partner_link failed (distinct from an HTTP error) when OrthoApnea is unreachable", async () => {
@@ -305,17 +350,17 @@ describe("createOrthoApneaTreatment", () => {
       "fetch",
       vi.fn(async (url: string) => {
         if (url.includes("/api/login")) return { ok: true, status: 200, json: async () => ({ token: fakeJwt(1800) }) } as Response;
-        if (url.includes("/api/treatments")) throw new Error("network down");
+        if (url.includes("/api/treatments")) throw new TypeError("fetch failed", { cause: Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" }) });
         throw new Error(`Unmocked fetch call in test: ${url}`);
       })
     );
 
-    await expect(createOrthoApneaTreatment(TENANT_SLUG, plan.id, {})).rejects.toThrow("network down");
+    await expect(createOrthoApneaTreatment(TENANT_SLUG, plan.id, {})).rejects.toThrow("could not connect");
 
     const link = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", plan.id));
     expect(link?.sync_status).toBe("failed");
     expect(link?.external_id).toBeNull();
-    expect(link?.last_error).toContain("network down");
+    expect(link?.last_error).toContain("could not connect");
     createdPartnerLinkIds.push(link!.id);
 
     const transactions = await query<{
@@ -331,7 +376,28 @@ describe("createOrthoApneaTreatment", () => {
     expect(transactions[0]!.success).toBe(false);
     expect(transactions[0]!.http_status).toBeNull(); // never got an HTTP response at all — distinct from a 500
     expect(transactions[0]!.response_payload).toBeNull();
-    expect(transactions[0]!.error_message).toContain("network down");
+    expect(transactions[0]!.error_message).toContain("could not connect");
+  });
+
+  it("keeps partner_link pending (ambiguous, like a timeout) when the connection drops mid-request (NEO-210)", async () => {
+    const { plan } = await setupPatientAndPlan();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.includes("/api/login")) return { ok: true, status: 200, json: async () => ({ token: fakeJwt(1800) }) } as Response;
+        if (url.includes("/api/treatments")) throw new TypeError("fetch failed", { cause: Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }) });
+        throw new Error(`Unmocked fetch call in test: ${url}`);
+      })
+    );
+
+    await expect(createOrthoApneaTreatment(TENANT_SLUG, plan.id, {})).rejects.toThrow("lost its connection");
+
+    // The lab may have created the order before the socket dropped: never
+    // "failed" (which would allow a blind resend), always "pending".
+    const link = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", plan.id));
+    expect(link?.sync_status).toBe("pending");
+    createdPartnerLinkIds.push(link!.id);
   });
 
   it("rejects a duplicate submission for a treatment_plan already synced to OrthoApnea", async () => {
@@ -476,6 +542,81 @@ describe("SyncOrthoApneaTreatmentStatusesCommand", () => {
     // Running again with the same (now-current) status should not double-notify.
     const secondResult = await SyncOrthoApneaTreatmentStatusesCommand(TENANT_SLUG, ctx.requestId);
     expect(secondResult.changed).toBe(0);
+  });
+});
+
+describe("SyncOrthoApneaTreatmentStatusesCommand — status mapping gap (NEO-210)", () => {
+  /**
+   * There is NO statusId → named-status mapping table anywhere in this
+   * codebase (ORTHOAPNEA_TERMINAL_STATUSES is deliberately an empty list per
+   * its own doc comment, and fetchOrthoApneaTreatmentStatus just String()s
+   * whatever statusId OrthoApnea returns). That is itself the finding this
+   * test documents: "for each status the code maps" has no table to
+   * enumerate, because none exists — the only behaviour to verify is that an
+   * arbitrary/unrecognised statusId is passed through safely rather than
+   * crashing or being silently coerced into some other value.
+   */
+  it("an unmapped/arbitrary statusId doesn't crash the sync, updates the link verbatim, and fires exactly one notification per change (no duplicate on repeat polls)", async () => {
+    const { ctx, plan, dentist } = await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const patient = await CreatePatientCommand(ctx, { gender: "female", date_of_birth: "1980-01-01", first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
+      const dentist = await CreatePractitionerCommand(ctx, {
+        first_name: "Test",
+        last_name: `Dentist-${uniqueSuffix()}`,
+        email: `qa-dentist-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
+      });
+      const study = await CreateSleepStudyCommand(ctx, { patient_id: patient.id });
+      const plan = await CreateTreatmentPlanCommand(ctx, {
+        patient_id: patient.id,
+        sleep_study_id: study.id,
+        type: "dental_appliance",
+        dentist_id: dentist.id,
+      });
+      return { ctx, dentist, plan };
+    });
+
+    stubFetchRoutes({
+      [LOGIN_ROUTE[0]]: LOGIN_ROUTE[1],
+      "/api/treatments": () => ({ status: 200, body: treatmentDtoFixture }), // statusId 1
+    });
+    await createOrthoApneaTreatment(TENANT_SLUG, plan.id, {});
+    const createdLink = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", plan.id));
+    createdPartnerLinkIds.push(createdLink!.id);
+
+    // An arbitrary statusId no table anywhere maps — bigger than any real OA
+    // status observed so far (only 1 has ever been confirmed, per
+    // ORTHOAPNEA_TERMINAL_STATUSES's own comment).
+    const UNMAPPED_STATUS_ID = 987654321;
+    stubFetchRoutes({
+      [LOGIN_ROUTE[0]]: LOGIN_ROUTE[1],
+      "/api/treatments/DTO": () => ({ status: 200, body: { ...treatmentDtoFixture, statusId: UNMAPPED_STATUS_ID } }),
+    });
+
+    const result = await SyncOrthoApneaTreatmentStatusesCommand(TENANT_SLUG, ctx.requestId);
+    expect(result.failed).toBe(0); // no crash
+    expect(result.changed).toBeGreaterThanOrEqual(1);
+
+    const link = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", plan.id));
+    expect(link?.external_status).toBe(String(UNMAPPED_STATUS_ID)); // passed through verbatim, not dropped/coerced/zeroed
+
+    const notificationsAfterFirst = await query<{ id: string }>(
+      `SELECT n.id FROM notification n JOIN practitioner p ON p.identity_id = n.identity_id
+       WHERE p.id = $1 AND n.entity_id = $2 AND n.type = 'partner_order_status_changed'`,
+      [dentist.id, plan.id]
+    );
+    expect(notificationsAfterFirst).toHaveLength(1); // exactly one, not zero (crash-safe) and not more than one
+
+    // Polling again with the SAME (now current, still unmapped) status must not double-notify.
+    const second = await SyncOrthoApneaTreatmentStatusesCommand(TENANT_SLUG, ctx.requestId);
+    expect(second.changed).toBe(0);
+
+    const notificationsAfterSecond = await query<{ id: string }>(
+      `SELECT n.id FROM notification n JOIN practitioner p ON p.identity_id = n.identity_id
+       WHERE p.id = $1 AND n.entity_id = $2 AND n.type = 'partner_order_status_changed'`,
+      [dentist.id, plan.id]
+    );
+    expect(notificationsAfterSecond).toHaveLength(1); // still just the one — no duplicate
   });
 });
 

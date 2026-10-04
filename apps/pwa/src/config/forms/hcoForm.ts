@@ -10,7 +10,9 @@ import { PHONE_MIN_DIGITS, phoneDigitCount } from "../../utils/phone";
  * block here — an organization has no person. `status` is hidden for
  * everyone except admin (pending_approval is the record's real default,
  * non-admins never see/set it); `country_code` is always hidden, defaulted
- * to the creating user's own country. `email` reuses identityFields'
+ * to the creating user's own country — only a fallback: when the clinic has a
+ * territory, the API overwrites it with that territory's country (NEO-210).
+ * `email` reuses identityFields'
  * emailField() (not required here — an org's email is optional) so there is
  * exactly one email input style across the whole PWA.
  */
@@ -25,6 +27,13 @@ const STATUS_OPTIONS = [
   { title: "user.hco.filters.statusActive", value: "active" },
   { title: "user.hco.filters.statusInactive", value: "inactive" },
 ];
+
+/** Same limit as the API (commands/organization.ts VISIT_INSTRUCTIONS_MAX). */
+const VISIT_INSTRUCTIONS_MAX = 500;
+
+function visitInstructionsRule(v: unknown): true | string {
+  return typeof v !== "string" || v.trim().length <= VISIT_INSTRUCTIONS_MAX || "user.hco.form.validation.visitInstructionsTooLong";
+}
 
 function websiteRule(v: unknown): true | string {
   const s = String(v ?? "").trim();
@@ -122,6 +131,30 @@ export const hcoFormFields: FormFieldDef[] = [
     labelKey: "user.hco.form.googleLink",
     icon: "map-pin",
     rules: [websiteRule],
+    cols: 12,
+  },
+  {
+    // CORE-113 (consent-visit-r1 Z3): the clinic's own aviso de privacidad —
+    // patients open and accept it before signing a consent. Empty = the
+    // platform notice is shown instead.
+    key: "privacy_notice_url",
+    section: "contact",
+    type: "text",
+    labelKey: "user.hco.form.privacyNoticeUrl",
+    hint: "user.hco.form.privacyNoticeUrlHint",
+    icon: "shield-check",
+    rules: [websiteRule],
+    cols: 12,
+  },
+  {
+    // CORE-25 (calendar-r1 D4): the clinic's own "what to bring" text, shown in
+    // the patient's appointment email. Empty = the section is left out.
+    key: "visit_instructions",
+    section: "contact",
+    type: "textarea",
+    labelKey: "user.hco.form.visitInstructions",
+    hint: "user.hco.form.visitInstructionsHint",
+    rules: [visitInstructionsRule],
     cols: 12,
   },
   {

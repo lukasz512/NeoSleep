@@ -131,6 +131,28 @@ describe("mailer — configured", () => {
     expect(call.html).not.toMatch(/\/q#|href="https?:\/\/[^"]*pwa/);
   });
 
+  it("a recipient Resend refuses becomes EMAIL_REJECTED (422), not a generic failure (NEO-202)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { sendQuestionnaireLinkEmail, EmailRejectedError } = await importMailer(true);
+    sendMock.mockResolvedValueOnce({ data: null, error: { name: "validation_error", message: "Invalid `to` field. Please use our testing email address instead of domains like `example.com`." } });
+
+    const err = await sendQuestionnaireLinkEmail("q@example.com", "https://x", RECIPIENT, { name: null, email: null }, 1).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(EmailRejectedError);
+    expect(err).toMatchObject({ code: "EMAIL_REJECTED", statusCode: 422 });
+  });
+
+  it("other Resend validation errors stay plain errors — the address isn't blamed for them", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { sendQuestionnaireLinkEmail, EmailRejectedError } = await importMailer(true);
+    sendMock.mockResolvedValueOnce({ data: null, error: { name: "validation_error", message: "Invalid `tags` value" } });
+
+    const err = await sendQuestionnaireLinkEmail("ok@neosleepcare.com", "https://x", RECIPIENT, { name: null, email: null }, 1).catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(EmailRejectedError);
+  });
+
   it("sendContactEmail sends to RESEND_NOTIFY_TO with the given subject and rows rendered in the HTML", async () => {
     const { sendContactEmail } = await importMailer(true);
 
@@ -176,13 +198,13 @@ describe("mailer — configured", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     sendMock.mockResolvedValue({
       data: null,
-      error: { name: "validation_error", message: "Invalid `to` field", statusCode: 422 },
+      error: { name: "rate_limit_exceeded", message: "Too many requests", statusCode: 429 },
     });
     const { sendPasswordResetEmail } = await importMailer(true);
 
     await expect(
       sendPasswordResetEmail("doctor@example.com", "https://pwa.neosleepcare.com/reset-password?token=abc", RECIPIENT)
-    ).rejects.toThrow(/Invalid `to` field/);
+    ).rejects.toThrow(/rate_limit_exceeded: Too many requests/);
 
     expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();
@@ -199,5 +221,139 @@ describe("mailer — configured", () => {
 
     expect(errorSpy).toHaveBeenCalled();
     errorSpy.mockRestore();
+  });
+});
+
+describe("sendAppointmentPatientEmail (CORE-25 / CORE-26)", () => {
+  const appointment = {
+    kind: "booked" as const,
+    startAt: "2031-01-15T15:00:00.000Z",
+    endAt: "2031-01-15T16:00:00.000Z",
+    timezone: "America/Mexico_City",
+    clinicName: "Clínica Sonrisa",
+    clinicAddress: "Av. Reforma 1, 06600 CDMX",
+    doctorName: "Dra. Ana López",
+    onlineUrl: null,
+    contact: { phone: "+52 55 1234 5678", email: "hola@sonrisa.mx" },
+    links: {
+      confirm: "https://pwa.example/a?r=confirm#tok",
+      cannotAttend: "https://pwa.example/a?r=cannot#tok",
+      optOut: "https://pwa.example/a?r=stop#tok",
+      google: "https://calendar.google.com/x",
+      outlook: "https://outlook.live.com/x",
+    },
+    ics: { content: "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", method: "REQUEST" as const },
+  };
+  const patient = { firstName: "Luis", lastName: "Pérez", language: "mx", region: "MX" };
+
+  it("shows the clinic's local time, how to reach the clinic, both buttons and the stop link; attaches the .ics as an invitation; replies go to the clinic", async () => {
+    const { sendAppointmentPatientEmail } = await importMailer(true);
+    await sendAppointmentPatientEmail("luis@example.org", patient, appointment, { tenant: "neosleep", kind: "appointment" });
+
+    const args = sendMock.mock.calls[0]![0];
+    expect(args.subject).toContain("Clínica Sonrisa");
+    expect(args.html).toContain("09:00"); // 15:00 UTC = 09:00 in Mexico City
+    expect(args.html).toContain("tel:+525512345678");
+    expect(args.html).toContain("mailto:hola@sonrisa.mx");
+    expect(args.html).toContain("Confirmo mi asistencia");
+    expect(args.html).toContain("No puedo asistir");
+    expect(args.html).toContain(appointment.links.optOut);
+    expect(args.replyTo).toBe("hola@sonrisa.mx");
+    expect(args.from).toContain("Clínica Sonrisa | NeoSleep");
+    const ics = args.attachments.find((a: { filename: string }) => a.filename.endsWith(".ics"));
+    expect(ics.contentType).toBe("text/calendar; charset=utf-8; method=REQUEST");
+  });
+
+  it("layout A: status banner, date tile, icon rows, directions and the clinic's own 'what to bring' text; icons travel as inline PNGs", async () => {
+    const { sendAppointmentPatientEmail } = await importMailer(true);
+    await sendAppointmentPatientEmail("luis@example.org", patient, {
+      ...appointment,
+      visitInstructions: "Llegue 10 minutos antes.\nTraiga una identificación.",
+      clinicMapsUrl: "maps.app.goo.gl/abc",
+    });
+
+    const args = sendMock.mock.calls[0]![0];
+    expect(args.html).toContain("Su cita está agendada");
+    expect(args.html).toContain("Le esperamos el");
+    expect(args.html).toContain(">15<"); // the date tile's day
+    expect(args.html).toContain("Para su visita");
+    expect(args.html).toContain("Llegue 10 minutos antes.<br>Traiga una identificación.");
+    expect(args.html).toContain('href="https://maps.app.goo.gl/abc"');
+    expect(args.html).toContain("cid:icon-check");
+    const cids = args.attachments.map((a: { contentId?: string }) => a.contentId).filter(Boolean);
+    expect(cids).toEqual(expect.arrayContaining(["icon-check", "icon-pin", "icon-person", "icon-list"]));
+  });
+
+  it("without a clinic maps link, directions search the address; without instructions the section is left out", async () => {
+    const { sendAppointmentPatientEmail } = await importMailer(true);
+    await sendAppointmentPatientEmail("luis@example.org", patient, appointment);
+    const args = sendMock.mock.calls[0]![0];
+    expect(args.html).toContain("https://www.google.com/maps/search/?api=1&amp;query=Av.%20Reforma%201");
+    expect(args.html).not.toContain("Para su visita");
+  });
+
+  it("CORE-113: an unsigned consent shows '1 documento por firmar' with its own button; a shared address says it's signed at the clinic", async () => {
+    const { sendAppointmentPatientEmail } = await importMailer(true);
+    await sendAppointmentPatientEmail("luis@example.org", patient, { ...appointment, consent: { link: "https://pwa.example/q#tok" } });
+    const withLink = sendMock.mock.calls[0]![0];
+    expect(withLink.html).toContain("Antes de su cita: 1 documento por firmar");
+    expect(withLink.html).toContain('href="https://pwa.example/q#tok"');
+    expect(withLink.html).toContain("Leer y firmar");
+    expect(withLink.attachments.map((a: { contentId?: string }) => a.contentId)).toContain("icon-doc");
+
+    await sendAppointmentPatientEmail("luis@example.org", patient, { ...appointment, consent: { link: null } });
+    const shared = sendMock.mock.calls[1]![0];
+    expect(shared.html).toContain("en la clínica, antes de su cita");
+    expect(shared.html).not.toContain("Leer y firmar");
+  });
+
+  it("a cancellation has no buttons and no add-to-calendar links, only how to book again", async () => {
+    const { sendAppointmentPatientEmail } = await importMailer(true);
+    await sendAppointmentPatientEmail("luis@example.org", patient, {
+      ...appointment,
+      kind: "cancelled",
+      links: { ...appointment.links, confirm: null, cannotAttend: null, google: null, outlook: null },
+      ics: { ...appointment.ics, method: "CANCEL" },
+    });
+
+    const args = sendMock.mock.calls[0]![0];
+    expect(args.html).not.toContain("Confirmo mi asistencia");
+    expect(args.html).not.toContain("calendar.google.com");
+    expect(args.html).toContain("Para agendar una nueva cita");
+    expect(args.attachments.find((a: { filename: string }) => a.filename === "cancelled.ics").contentType).toContain("method=CANCEL");
+  });
+
+  it("CORE-116 P2: a booking without buttons says we'll ask to confirm 2 days before", async () => {
+    const { sendAppointmentPatientEmail } = await importMailer(true);
+    await sendAppointmentPatientEmail("luis@example.org", patient, { ...appointment, confirmLater: true, links: { ...appointment.links, confirm: null, cannotAttend: null } });
+    const args = sendMock.mock.calls[0]![0];
+    expect(args.html).toContain("Dos días antes de su cita le pediremos que confirme");
+    expect(args.html).not.toContain("Confirmo mi asistencia");
+  });
+
+  it("CORE-116: the 2-day ask asks 'will you come?' with both buttons; the reminder thanks and has none", async () => {
+    const { sendAppointmentPatientEmail } = await importMailer(true);
+    await sendAppointmentPatientEmail("luis@example.org", patient, { ...appointment, kind: "ask" });
+    const ask = sendMock.mock.calls[0]![0];
+    expect(ask.subject).toContain("Confirme su cita");
+    expect(ask.html).toContain("¿Asistirá a su cita?");
+    expect(ask.html).toContain("Confirmo mi asistencia");
+
+    await sendAppointmentPatientEmail("luis@example.org", patient, { ...appointment, kind: "reminder", links: { ...appointment.links, confirm: null, cannotAttend: null } });
+    const reminder = sendMock.mock.calls[1]![0];
+    expect(reminder.subject).toContain("Le esperamos mañana");
+    expect(reminder.html).toContain("Gracias por confirmar");
+    expect(reminder.html).not.toContain("Confirmo mi asistencia");
+  });
+
+  it("CORE-116 P3: add-to-calendar is a visible box with Google / Outlook buttons and points to the attached .ics", async () => {
+    const { sendAppointmentPatientEmail } = await importMailer(true);
+    await sendAppointmentPatientEmail("luis@example.org", patient, appointment);
+    const args = sendMock.mock.calls[0]![0];
+    expect(args.html).toContain("Agréguela a su calendario");
+    expect(args.html).toContain("abra el archivo adjunto appointment.ics");
+    expect(args.html).toContain('href="https://calendar.google.com/x"');
+    expect(args.html).toContain('href="https://outlook.live.com/x"');
+    expect(args.attachments.map((a: { contentId?: string }) => a.contentId)).toContain("icon-calendar");
   });
 });

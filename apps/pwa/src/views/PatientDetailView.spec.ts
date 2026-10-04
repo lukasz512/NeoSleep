@@ -87,21 +87,25 @@ describe("PatientDetailView — health-data tabs", () => {
 });
 
 describe("PatientDetailView — Documents tab", () => {
-  it("lists 'Documents' among the tabs and wires it to the patient's /documents endpoint", async () => {
-    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, PATIENT));
+  // NEO-193: Documents = consent + the Historia Clínica parts, from the same checklist as Studies (no duplicate file list).
+  it("shows Documents before Studies; Documents lists only the document items, Studies only the results", async () => {
+    routeApi();
     const { wrapper } = await mountPatientDetail();
-
     await vi.waitFor(() => expect(wrapper.text()).toContain("Jan Kowalski"));
 
-    const documentsTab = wrapper.findAll('[role="tab"]').find((t) => t.text() === "Documents");
-    expect(documentsTab?.exists()).toBe(true);
+    const tabs = wrapper.findAll('[role="tab"]');
+    const labels = tabs.map((t) => t.text());
+    expect(labels.indexOf("Documents")).toBeLessThan(labels.indexOf("Studies"));
 
-    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, []));
-    await documentsTab?.trigger("click");
+    await tabs.find((t) => t.text() === "Documents")!.trigger("click");
+    await vi.waitFor(() => expect(wrapper.find(".studies__item").exists()).toBe(true));
+    expect(wrapper.findAll(".studies__item-title").map((r) => r.text())).toEqual(["Informed consent"]);
+    expect(apiFetch.mock.calls.some(([path]) => String(path).endsWith("/documents"))).toBe(false);
 
-    await vi.waitFor(() =>
-      expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/documents", { handleErrors: false })
-    );
+    await tabs.find((t) => t.text() === "Studies")!.trigger("click");
+    // Visited tabs stay mounted — each panel holds only its own items.
+    const panelTitles = () => wrapper.findAll(".studies").map((panel) => panel.findAll(".studies__item-title").map((r) => r.text()));
+    await vi.waitFor(() => expect(panelTitles()).toEqual([["Informed consent"], ["Polysomnography"]]));
 
     // See HCPDetailView.spec.ts's own comment: flushes FormRenderer/EventForm's
     // in-flight dynamic import before afterEach() unmounts.
@@ -111,12 +115,22 @@ describe("PatientDetailView — Documents tab", () => {
 
 const CHECKLIST = {
   items: [
-    { key: "informedConsent", templateKey: "informedConsent", label: "informedConsent", fillMode: "consent", group: "consent", status: "done", completed_at: null, history: [], pending_request_id: null, actions: {} },
-    { key: "polysomnography", templateKey: null, label: "polysomnography", fillMode: "external", group: "results", status: "missing", completed_at: null, history: [], pending_request_id: null, actions: {} },
+    { key: "informedConsent", templateKey: "informedConsent", label: "informedConsent", fillMode: "consent", group: "consent", category: "document", status: "done", completed_at: null, history: [], pending_request_id: null, actions: {} },
+    { key: "polysomnography", templateKey: null, label: "polysomnography", fillMode: "external", group: "results", category: "study", status: "missing", completed_at: null, history: [], pending_request_id: null, actions: {} },
   ],
   other_uploads: [],
   pending_requests: [],
   summary: { done: 1, total: 2 },
+};
+
+const SUMMARY = {
+  preferred_name: null,
+  shipping_address: null,
+  data_consent_at: null,
+  data_consent_withdrawn_at: null,
+  latest_study: { id: "s-1", study_date: "2026-09-12", ahi_score: 22.4, spo2_nadir: 84, odi: 19, diagnosis_code: null },
+  device_order: null,
+  next_appointment: null,
 };
 
 // jsdom has no scrollIntoView (the Studies tab scrolls the opened item into view).
@@ -126,27 +140,32 @@ function routeApi() {
   apiFetch.mockImplementation(async (path: string) => {
     if (path === "/api/v1/patient/patient-1") return jsonResponse(true, 200, PATIENT);
     if (path.endsWith("/checklist")) return jsonResponse(true, 200, CHECKLIST);
+    if (path.endsWith("/summary")) return jsonResponse(true, 200, SUMMARY);
     return jsonResponse(true, 200, { items: [] });
   });
 }
 
-describe("PatientDetailView — Estudios checklist (NEO-36)", () => {
-  it("the Details tab shows one status icon per study; a click opens that item in the Studies tab", async () => {
+describe("PatientDetailView — Details tab (NEO-206)", () => {
+  it("Details has no documents checklist and loads the summary strip instead", async () => {
     routeApi();
-    const { wrapper, router } = await mountPatientDetail();
-    await vi.waitFor(() => expect(wrapper.find(".studies-summary__item").exists()).toBe(true));
-
-    const icons = wrapper.findAll(".studies-summary__item");
-    expect(icons.map((b) => b.text())).toEqual(["Informed consent", "Polysomnography"]);
-    expect(icons[0]!.classes()).toContain("studies-summary__item--done");
-    expect(wrapper.text()).toContain("1 of 2 done");
-
-    await icons[1]!.trigger("click");
-    await vi.waitFor(() => expect(router.currentRoute.value.query).toMatchObject({ tab: "studies", item: "polysomnography" }));
-    await vi.waitFor(() => expect(wrapper.find(".studies__item").exists()).toBe(true));
+    const { wrapper } = await mountPatientDetail();
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="summary-strip"]').exists()).toBe(true));
+    expect(wrapper.find(".studies-summary").exists()).toBe(false);
+    expect(apiFetch.mock.calls.some(([path]) => String(path).endsWith("/checklist"))).toBe(false);
     await flushPromises();
   });
 
+  it("the PSG tile opens the Studies tab", async () => {
+    routeApi();
+    const { wrapper, router } = await mountPatientDetail();
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="tile-psg"]').exists()).toBe(true));
+    await wrapper.find('[data-testid="tile-psg"]').trigger("click");
+    await vi.waitFor(() => expect(router.currentRoute.value.query).toMatchObject({ tab: "studies" }));
+    await flushPromises();
+  });
+});
+
+describe("PatientDetailView — Estudios checklist (NEO-36)", () => {
   it("a rep gets no Estudios card and never requests the checklist", async () => {
     routeApi();
     const { wrapper } = await mountPatientDetail("rep");

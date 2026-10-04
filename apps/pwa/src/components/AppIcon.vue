@@ -270,6 +270,16 @@ const ICONS = {
             <line x1="8" y1="2" x2="8" y2="6" />
             <line x1="3" y1="10" x2="21" y2="10" />`,
   },
+  // CORE-117: the Calendario nav entry — same plain calendar as nav-planner (kept separately so
+  // nav-planner/nav-appointments can go on meaning what they already mean elsewhere, e.g.
+  // notification icons, without being tied to this one route's icon).
+  "nav-calendar": {
+    strokeWidth: 2,
+    paths: `<rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />`,
+  },
   // Patient↔doctor appointments (NEO-34) — the planner's calendar with a tick, so the two don't read as the same module.
   "nav-appointments": {
     strokeWidth: 2,
@@ -544,6 +554,10 @@ const ICONS = {
     strokeWidth: 2,
     paths: `<rect x="2" y="4" width="20" height="16" rx="2" />
             <polyline points="2 6 12 13 22 6" />`,
+  },
+  "message": {
+    strokeWidth: 2,
+    paths: `<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />`,
   },
   "phone": {
     strokeWidth: 2,

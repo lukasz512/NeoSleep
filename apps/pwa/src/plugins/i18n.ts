@@ -1,7 +1,7 @@
 import { createI18n } from "vue-i18n";
 import { vuetifyLocales } from "@vuetify";
 import { loadLocaleMessages, type SupportedLocale } from "@i18n/loadLocale";
-import { APP_STORAGE_KEYS } from "../constants";
+import { APP_STORAGE_KEYS } from "../config/storageKeys";
 
 /** Detect browser preferred locale, mapped to our supported locales. */
 function detectBrowserLocale(): "en" | "pl" | "mx" {

@@ -266,6 +266,27 @@ export async function getNotificationDeliveries(client: PoolClient, notification
   }
 }
 
+/**
+ * Active admins' and managers' identity ids — the tenant-wide audience for
+ * events like NEO-196/197 (an invite accepted, a device order placed), on
+ * top of whichever doctor is also notified. Mirrors
+ * db/deviceOrderReconciliation.ts's listActiveAdminEmails, but by identity_id
+ * (for the in-app inbox) and role IN ('admin', 'manager').
+ */
+export async function getActiveAdminManagerIdentityIds(client: PoolClient): Promise<string[]> {
+  try {
+    const { rows } = await client.query<{ identity_id: string }>(
+      `SELECT DISTINCT u.identity_id
+         FROM users u
+         JOIN user_roles ur ON ur.user_id = u.id AND ur.role IN ('admin', 'manager')
+        WHERE u.deleted_at IS NULL AND u.status = 'active'`
+    );
+    return rows.map((r) => r.identity_id);
+  } catch (err) {
+    throw new DatabaseError("getActiveAdminManagerIdentityIds", err);
+  }
+}
+
 /** The recipient's UI language (identities.language), for rendering copy. */
 export async function getIdentityLanguage(client: PoolClient, identityId: string): Promise<string | null> {
   try {

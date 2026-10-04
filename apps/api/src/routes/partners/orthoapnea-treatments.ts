@@ -2,12 +2,12 @@ import { Router, type Router as RouterType, type Request, type Response } from "
 import { asyncHandler } from "../../middleware/errorHandler.js";
 import { requireAuth } from "../../middleware/requireAuth.js";
 import { requireRole } from "../../middleware/requireRole.js";
+import { requireStudyRole, STUDY_ROLES } from "../../middleware/requireClinicalRole.js";
 import { requireInternalJobSecret } from "../../middleware/requireInternalJobSecret.js";
 import { withTenant, tenantSlugFromHost, insertAuditLog, getPartnerTransactionHistory } from "../../db.js";
 import { buildContext } from "../../context/TenantContext.js";
 import {
   ensureOrthoApneaPatient,
-  createOrthoApneaTreatment,
   addOrthoApneaComment,
   fetchOrthoApneaProducts,
   fetchOrthoApneaClinics,
@@ -15,7 +15,9 @@ import {
 } from "../../services/partners/orthoapnea.js";
 import { SyncOrthoApneaTreatmentStatusesAllTenantsCommand } from "../../commands/orthoapneaSync.js";
 import { CreateNoteCommand } from "../../commands/note.js";
-import { ValidationError } from "../../errors.js";
+import { ForbiddenError, LabOrdersDisabledError, ValidationError } from "../../errors.js";
+import { getLabOrdersSendConfig } from "../../db/config.js";
+import { requirePatientInScope } from "../../queries/entityAccess.js";
 import { routeParam } from "../utils.js";
 
 /**
@@ -30,10 +32,12 @@ export const orthoapneaTreatmentsRouter: RouterType = Router();
 // POST /api/v1/partners/orthoapnea/patients/:patientId/ensure
 // Called when the order wizard opens — creates the OrthoApnea-side patient
 // if one doesn't already exist yet for this local patient. Idempotent.
+// Admin / doctor / manager only (NEO-199): it pushes the patient's PII to the
+// partner, so it gets the same gate as POST /device-orders.
 // ---------------------------------------------------------------------------
 orthoapneaTreatmentsRouter.post(
   "/partners/orthoapnea/patients/:patientId/ensure",
-  requireAuth,
+  requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
     const patientId = routeParam(req, "patientId")?.trim();
     if (!patientId) throw new ValidationError("Missing patient id");
@@ -43,7 +47,14 @@ orthoapneaTreatmentsRouter.post(
     // touching the partner API — ensureOrthoApneaPatient manages its own
     // (separate, short) transactions around the OrthoApnea HTTP call itself
     // (see ADR-017 / that function's own doc comment for why).
-    await withTenant(slug, (client) => buildContext(req, client, slug));
+    // CORE-104: only a patient the caller may see — this pushes their PII to the partner.
+    await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      await requirePatientInScope(ctx, patientId);
+    });
+    // Kill switch (NEO-210): before the write, never after.
+    const { sendEnabled } = await getLabOrdersSendConfig();
+    if (!sendEnabled) throw new LabOrdersDisabledError();
     const externalId = await ensureOrthoApneaPatient(slug, patientId);
 
     res.json({ externalId });
@@ -87,39 +98,19 @@ orthoapneaTreatmentsRouter.get(
 );
 
 // ---------------------------------------------------------------------------
-// POST /api/v1/partners/orthoapnea/treatments
-// body: { treatment_plan_id, ...wizardPayload } — wizardPayload keys are
-// OrthoApnea's own field names verbatim (see the implementation plan).
+// POST /api/v1/partners/orthoapnea/treatments — 410 Gone (CORE-95).
+// It passed the client's body to OrthoApnea unvalidated, in OA's own field
+// names. Orders now go through POST /api/v1/device-orders, which validates
+// our DeviceOrder with the shared rules first and builds OA's DTO itself, so
+// an arbitrary body can never reach OrthoApnea again.
 // ---------------------------------------------------------------------------
-orthoapneaTreatmentsRouter.post(
-  "/partners/orthoapnea/treatments",
-  requireAuth,
-  asyncHandler(async (req: Request, res: Response) => {
-    const { treatment_plan_id, ...wizardPayload } = req.body as { treatment_plan_id?: string; [key: string]: unknown };
-    const treatmentPlanId = treatment_plan_id?.trim();
-    if (!treatmentPlanId) throw new ValidationError("Missing treatment_plan_id");
-
-    const slug = tenantSlugFromHost(req.hostname);
-    const ctx = await withTenant(slug, (client) => buildContext(req, client, slug));
-    const outcome = await createOrthoApneaTreatment(slug, treatmentPlanId, wizardPayload);
-
-    // Separate short transaction for the audit-log write — createOrthoApneaTreatment
-    // already committed its own transactions around the OrthoApnea HTTP call
-    // (see ADR-017), so this is deliberately not part of that call.
-    await withTenant(slug, (client) =>
-      insertAuditLog(client, {
-        user_id: ctx.user.id,
-        action: "create",
-        entity_type: "PartnerOrder",
-        entity_id: treatmentPlanId,
-        entity_after: outcome.responsePayload,
-        request_id: ctx.requestId,
-      })
-    );
-
-    res.status(201).json(outcome);
-  })
-);
+orthoapneaTreatmentsRouter.post("/partners/orthoapnea/treatments", requireAuth, (_req: Request, res: Response) => {
+  res.status(410).json({
+    error: "This endpoint was removed. Submit device orders to POST /api/v1/device-orders.",
+    code: "GONE",
+    replacement: "/api/v1/device-orders",
+  });
+});
 
 // ---------------------------------------------------------------------------
 // POST /api/v1/partners/orthoapnea/treatments/:treatmentPlanId/comments
@@ -130,7 +121,8 @@ orthoapneaTreatmentsRouter.post(
 // addOrthoApneaComment — which sends a real email to OrthoApnea's technical
 // team (see that function's own doc comment). This must never be the
 // default; the frontend gates it behind its own explicit, clearly-labeled
-// opt-in — this route trusts that gate, it does not re-decide it.
+// opt-in. Notifying OrthoApnea is admin / doctor / manager only (NEO-199):
+// any other role gets 403 before even the local note is saved.
 // ---------------------------------------------------------------------------
 orthoapneaTreatmentsRouter.post(
   "/partners/orthoapnea/treatments/:treatmentPlanId/comments",
@@ -143,6 +135,9 @@ orthoapneaTreatmentsRouter.post(
     const text = typeof body.body === "string" ? body.body.trim() : "";
     if (!text) throw new ValidationError("body is required");
     const notifyOrthoApnea = body.notifyOrthoApnea === true;
+    if (notifyOrthoApnea && !(req.user && STUDY_ROLES.includes(req.user.role))) {
+      throw new ForbiddenError("Only an admin, doctor or manager can notify OrthoApnea");
+    }
 
     const slug = tenantSlugFromHost(req.hostname);
     const { ctx, note } = await withTenant(slug, async (client) => {
@@ -160,6 +155,10 @@ orthoapneaTreatmentsRouter.post(
     // below is deliberately its own short transaction too, not part of it.
     let orthoApneaResult: { notificationId: string; emailed: boolean } | null = null;
     if (notifyOrthoApnea) {
+      // Kill switch (NEO-210): the local note above is always saved; only the
+      // email to the lab is gated, and gated before it's sent.
+      const { sendEnabled } = await getLabOrdersSendConfig();
+      if (!sendEnabled) throw new LabOrdersDisabledError();
       orthoApneaResult = await addOrthoApneaComment(slug, treatmentPlanId, text);
       await withTenant(slug, (client) =>
         insertAuditLog(client, {

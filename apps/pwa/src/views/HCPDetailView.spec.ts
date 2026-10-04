@@ -97,11 +97,17 @@ async function mountHCPDetail(status: string, role: "admin" | "rep" = "admin"): 
 }
 
 describe("HCPDetailView — Details tab clinics panel (NEO-17)", () => {
-  // Panel is temporarily hidden (SHOW_CLINICS_PANEL = false) until newly
-  // added clinics stop disappearing. When restoring it, bring back the
-  // positive assertion: title present + "QA Clinic" rendered.
-  it("hides the clinics panel for now", async () => {
-    const wrapper = await mountHCPDetail("active");
+  // NEO-210: admin needs the affiliations to pick the doctor's primary clinic
+  // (the device delivery address). Other roles keep it hidden for now.
+  it("shows the clinics panel to an admin", async () => {
+    const wrapper = await mountHCPDetail("active", "admin");
+
+    expect(wrapper.find(".hcp-detail__clinics-title").exists()).toBe(true);
+    expect(wrapper.text()).toContain("QA Clinic");
+  });
+
+  it("keeps the clinics panel hidden for other roles", async () => {
+    const wrapper = await mountHCPDetail("active", "rep");
 
     expect(wrapper.find(".hcp-detail__clinics-title").exists()).toBe(false);
     expect(wrapper.text()).not.toContain("QA Clinic");

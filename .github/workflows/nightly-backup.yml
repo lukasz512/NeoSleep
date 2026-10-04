@@ -31,6 +31,7 @@ concurrency:
 permissions:
   contents: read
   id-token: write # Workload Identity Federation (keyless GCP auth)
+  issues: write # open an issue for Łukasz when a night fails (CORE-71)
 
 jobs:
   backup:
@@ -127,3 +128,21 @@ jobs:
       - name: Remove local copies
         if: always()
         run: rm -rf "$RUNNER_TEMP/backup"
+
+      # 3 nights failed silently in 2026-09 (CORE-71). A failed run opens one issue
+      # assigned to the repo owner (GitHub emails the assignee); later failures add a
+      # comment to that same open issue instead of opening new ones.
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          TITLE="Nightly backup failed"
+          BODY="The nightly backup failed on $(date -u +%Y-%m-%d). No new backup reached GCS for this night. Run: $RUN_URL — runbook: docs/RUNBOOK_BACKUP_RESTORE.md"
+          OPEN="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number')"
+          if [ -n "$OPEN" ]; then
+            gh issue comment "$OPEN" --repo "$GITHUB_REPOSITORY" --body "$BODY"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY" --assignee "$GITHUB_REPOSITORY_OWNER"
+          fi

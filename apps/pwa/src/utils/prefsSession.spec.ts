@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { nextTick } from "vue";
 import { prefsKey, readPref } from "@prefs";
-import { APP_STORAGE_KEYS } from "../constants";
+import { APP_STORAGE_KEYS } from "../config/storageKeys";
 import type * as SessionModule from "./prefsSession";
 
 const alice = { tenant: "acme", userId: "u-1" };

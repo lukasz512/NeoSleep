@@ -6,7 +6,8 @@
  * floats over scrolling content, "Close" sits exactly where "More" was, and
  * the capsule/card land where they should.
  *
- * `?theme=dark` · `?open=account` (opens the account menu once the router is ready).
+ * `?theme=dark` · `?open=account` (opens the account menu once the router is ready)
+ * · `?labels=long` (CORE-91: the longest real module names in the pill's row).
  */
 import { createApp, defineComponent, h, nextTick, onMounted, ref } from "vue";
 import { createPinia } from "pinia";
@@ -14,9 +15,9 @@ import { createRouter, createMemoryHistory } from "vue-router";
 import { VApp, VAvatar } from "vuetify/components";
 import vuetify, { darkTheme, lightTheme } from "../../src/plugins/vuetify";
 import { i18n } from "../../src/plugins/i18n";
-import "../../src/assets/theme.scss";
-import "../../src/assets/app-responsive.scss";
-import "../../src/assets/page-transitions.css";
+import "../../src/styles/theme.scss";
+import "../../src/styles/app-responsive.scss";
+import "../../src/styles/page-transitions.css";
 import { AppShell } from "@neo/ui";
 import AppIcon, { type AppIconName } from "../../src/components/AppIcon.vue";
 import AppAccountMenu from "../../src/layouts/components/AppAccountMenu.vue";
@@ -41,7 +42,10 @@ const NAV = [
   ["resources", "Resources"],
   ["territories", "Territories"],
 ] as const;
-const navItems = NAV.map(([name, label]) => ({ path: `/${name}`, label, name }));
+// CORE-91: the old EN "Appointments" wrapped mid-word in the pill's row; MX "Tratamientos" is as long.
+const LONG_LABELS: Record<string, string> = { appointments: "Appointments", hcp: "Tratamientos" };
+const longLabels = params.get("labels") === "long";
+const navItems = NAV.map(([name, label]) => ({ path: `/${name}`, label: (longLabels && LONG_LABELS[name]) || label, name }));
 
 const Stub = { render: () => null };
 const router = createRouter({

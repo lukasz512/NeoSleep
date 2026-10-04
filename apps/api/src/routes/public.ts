@@ -5,6 +5,8 @@ import {
   publicSpecialistsLimiter,
   publicQuestionnaireReadLimiter,
   publicQuestionnaireSubmitLimiter,
+  publicAppointmentReadLimiter,
+  publicAppointmentWriteLimiter,
 } from "../middleware/rateLimiter.js";
 import type { RequestWithId } from "../middleware/requestId.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
@@ -15,6 +17,12 @@ import {
   SubmitPublicQuestionnaireCommand,
   MarkPublicQuestionnaireOpenedCommand,
 } from "../commands/questionnaireRequest.js";
+import {
+  GetPublicAppointmentQuery,
+  RespondPublicAppointmentCommand,
+  OptOutPublicAppointmentCommand,
+  type PublicAppointmentMeta,
+} from "../commands/appointmentPatient.js";
 import { ValidationError } from "../errors.js";
 import { routeParam } from "./utils.js";
 
@@ -125,5 +133,47 @@ publicRouter.post(
       }
     );
     res.status(201).json(result);
+  })
+);
+
+/**
+ * The patient's appointment page (apps/pwa /a#<token>, CORE-25), opened from
+ * the appointment email. Same rules as the questionnaire link: the token
+ * travels in the POST body, any unusable link → 410 {code:"LINK_INVALID"}.
+ */
+function publicAppointmentMeta(req: Request): PublicAppointmentMeta {
+  const requestId = (req as RequestWithId).requestId;
+  return {
+    ip: req.ip ?? null,
+    userAgent: req.get("user-agent")?.slice(0, 512) ?? null,
+    requestId: requestId && UUID_RE.test(requestId) ? requestId : null,
+  };
+}
+
+publicRouter.post(
+  "/public/appointment/lookup",
+  publicAppointmentReadLimiter,
+  asyncHandler(async (req: Request, res: Response) => {
+    const slug = tenantSlugFromHost(req.hostname);
+    res.json(await withTenant(slug, (client) => GetPublicAppointmentQuery(client, bodyToken(req))));
+  })
+);
+
+publicRouter.post(
+  "/public/appointment/respond",
+  publicAppointmentWriteLimiter,
+  asyncHandler(async (req: Request, res: Response) => {
+    const response = (req.body as { response?: unknown } | undefined)?.response;
+    const slug = tenantSlugFromHost(req.hostname);
+    res.json(await withTenant(slug, (client) => RespondPublicAppointmentCommand(client, bodyToken(req), typeof response === "string" ? response : "", publicAppointmentMeta(req))));
+  })
+);
+
+publicRouter.post(
+  "/public/appointment/opt-out",
+  publicAppointmentWriteLimiter,
+  asyncHandler(async (req: Request, res: Response) => {
+    const slug = tenantSlugFromHost(req.hostname);
+    res.json(await withTenant(slug, (client) => OptOutPublicAppointmentCommand(client, bodyToken(req), publicAppointmentMeta(req))));
   })
 );

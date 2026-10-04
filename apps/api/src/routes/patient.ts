@@ -16,6 +16,7 @@ import multer from "multer";
 import { isClinicalRecordKind, type ClinicalRecordKind } from "../commands/clinicalRecordFields.js";
 import { ListClinicalRecordsQuery } from "../queries/clinicalRecords.js";
 import { GetLatestSleepStudyRefQuery } from "../queries/sleepStudy.js";
+import { GetPatientSummaryQuery } from "../queries/patientSummary.js";
 import {
   CreateQuestionnaireRequestCommand,
   CancelQuestionnaireRequestCommand,
@@ -110,6 +111,31 @@ patientRouter.get(
     });
 
     res.json(history);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/patient/:id/summary — Detalles strip + extra rows (NEO-206).
+// Any staff role; the latest study comes back only for STUDY_ROLES and that
+// read is audited like every other clinical read.
+// ---------------------------------------------------------------------------
+patientRouter.get(
+  "/patient/:id/summary",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = routeParam(req, "id")?.trim();
+    if (!id) throw new ValidationError("Missing patient id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const summary = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      const result = await GetPatientSummaryQuery(ctx, id);
+      if (result.latest_study) {
+        await AuditHealthDataReadCommand(ctx, { entity_type: "SleepStudy", entity_id: result.latest_study.id, patient_id: id, view: "patient-summary" });
+      }
+      return result;
+    });
+    res.json(summary);
   })
 );
 

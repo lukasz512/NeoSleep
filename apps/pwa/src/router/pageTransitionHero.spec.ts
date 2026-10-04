@@ -112,7 +112,7 @@ describe("pageTransitionHero (NEO-97 row → record, NEO-152 the drop)", () => {
 });
 
 describe("page-transitions.css (NEO-152)", () => {
-  const css = readFileSync(path.resolve(__dirname, "../assets/page-transitions.css"), "utf-8");
+  const css = readFileSync(path.resolve(__dirname, "../styles/page-transitions.css"), "utf-8");
 
   it("the avatar travels as a drop: stretched along its angle, settling into a circle", () => {
     expect(css).toMatch(/::view-transition-image-pair\(pwa-hero-avatar\) \{\s*animation: pwa-hero-drop 520ms/);

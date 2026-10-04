@@ -1,0 +1,40 @@
+[
+  {
+    "id": 34352,
+    "customerId": 20796,
+    "name": "SHARED ACCOUNT DOCTOR",
+    "postalCode": "00000",
+    "city": "CIUDAD DE MEXICO",
+    "province": "",
+    "country": {
+      "id": 29,
+      "code": "MX",
+      "es": "México",
+      "en": "Mexico",
+      "de": "Mexiko",
+      "fr": "Mexique",
+      "locale": "es"
+    },
+    "address": "AV. SHARED CLINIC 1",
+    "addressNumber": "",
+    "addressRest": "",
+    "addressObservations": "",
+    "contact": "",
+    "phone": "+520000000000",
+    "sendSms": false,
+    "sms": "",
+    "sendEmail": false,
+    "email": "redacted@example.com",
+    "fsClinicId": 30357,
+    "scannerList": "",
+    "from1": "",
+    "until1": "",
+    "from2": "",
+    "until2": "",
+    "deliveryFrom": null,
+    "userId": 15682,
+    "deleted": false,
+    "billingOptions": null,
+    "totalAddress": "AV. SHARED CLINIC 1"
+  }
+]

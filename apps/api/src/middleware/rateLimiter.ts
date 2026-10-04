@@ -119,6 +119,24 @@ export const diagnosticsLimiter = rateLimit({
  * instance lives longer and users started getting 429s. Brute-force-sensitive routes keep
  * their own much tighter limiters (login, invite accept, public forms).
  */
+/** The patient's appointment page (/a, CORE-25): lookup on every visit. */
+export const publicAppointmentReadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
+/** Confirm / can't come / stop emails — a handful per visit at most. */
+export const publicAppointmentWriteLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 1000,

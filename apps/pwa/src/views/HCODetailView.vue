@@ -41,6 +41,22 @@
       <VChip :color="hcoStatusColor(hco.status)" size="small" variant="tonal">
         {{ hcoStatusLabel(hco.status) }}
       </VChip>
+      <!-- CORE-113 A1: the clinic is the data controller and should publish its own aviso. -->
+      <VTooltip v-if="isAdmin && !hco.privacy_notice_url" location="bottom" max-width="280">
+        <template #activator="{ props: tooltipProps }">
+          <VChip
+            v-bind="tooltipProps"
+            data-testid="hco-no-privacy-notice"
+            color="warning"
+            size="small"
+            variant="tonal"
+          >
+            <AppIcon name="alert-triangle" class="mr-1" />
+            {{ t("user.hco.detail.noPrivacyNotice") }}
+          </VChip>
+        </template>
+        <span>{{ t("user.hco.detail.noPrivacyNoticeHint") }}</span>
+      </VTooltip>
     </template>
     <template v-if="hco" #record-details>
       <IdentityDetails :details="orgDetails(hco, { withCity: true }).details" />
@@ -266,6 +282,7 @@ interface HCO {
   latitude?: number | null;
   longitude?: number | null;
   specialties?: string[];
+  privacy_notice_url?: string;
 }
 
 const { t } = useI18n();

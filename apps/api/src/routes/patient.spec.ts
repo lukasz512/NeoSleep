@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import request from "supertest";
 import bcrypt from "bcrypt";
 import { app } from "../server.js";
-import { withTenant, insertStaffUser, insertPatient } from "../db.js";
+import { withTenant, insertStaffUser, insertPatient, insertPractitioner } from "../db.js";
 import { signAuthToken } from "../utils/jwt.js";
 import type { StaffRole } from "../db/users.js";
 import { MEDICAL_HISTORY_QUESTIONS } from "../commands/clinicalRecordFields.js";
@@ -34,12 +34,24 @@ async function insertTestUser(client: Parameters<typeof insertStaffUser>[0], rol
   return { id: user!.id, email };
 }
 
-async function authAndPatient(role: StaffRole = "doctor"): Promise<{ auth: string; patientId: string }> {
-  const user = await withTenant(TENANT_SLUG, (client) => insertTestUser(client, role));
+/**
+ * A login plus a patient it may reach. A doctor is linked to a practitioner
+ * (shared identity, ADR-014) and the patient is assigned to them — a doctor
+ * sees only their own patients (CORE-104).
+ */
+async function authAndPatient(role: StaffRole = "doctor"): Promise<{ auth: string; patientId: string; practitionerId?: string }> {
+  const { user, practitionerId } = await withTenant(TENANT_SLUG, async (client) => {
+    if (role !== "doctor") return { user: await insertTestUser(client, role), practitionerId: undefined };
+    const email = `qa-patient-route-doctor-${uniqueSuffix()}@neosleepcare.com`;
+    const practitioner = await insertPractitioner(client, { first_name: "Route", last_name: `Doc-${uniqueSuffix()}`, email });
+    const hash = await bcrypt.hash("irrelevant-not-logged-in-with", 4);
+    const created = await insertStaffUser(client, email, "Route", "Doc", "doctor", hash, false);
+    return { user: { id: created!.id, email }, practitionerId: practitioner.id };
+  });
   const patient = await withTenant(TENANT_SLUG, (client) =>
-    insertPatient(client, { first_name: "Route", last_name: `Test-${uniqueSuffix()}` })
+    insertPatient(client, { first_name: "Route", last_name: `Test-${uniqueSuffix()}`, practitioner_id: practitionerId })
   );
-  return { auth: `Bearer ${signAuthToken({ id: user.id, email: user.email, role, token_version: 0 })}`, patientId: patient.id };
+  return { auth: `Bearer ${signAuthToken({ id: user.id, email: user.email, role, token_version: 0 })}`, patientId: patient.id, practitionerId };
 }
 
 describe("/api/v1/patient/:id/clinical-records", () => {
@@ -350,6 +362,63 @@ describe("patient self-fill: doctor → QR link → patient (public) → doctor"
   });
 });
 
+describe("NEO-195: questionnaire_submitted notification", () => {
+  /** This doctor's unread `questionnaire_submitted` rows for this questionnaire request. */
+  async function doctorNotifications(practitionerId: string, requestId: string) {
+    const { rows } = await withTenant(TENANT_SLUG, (client) =>
+      client.query<{ type: string; action_url: string | null }>(
+        `SELECT n.type, n.action_url FROM notification n JOIN practitioner p ON p.identity_id = n.identity_id
+          WHERE p.id = $1 AND n.entity_id = $2 AND n.type = 'questionnaire_submitted' AND n.read_at IS NULL`,
+        [practitionerId, requestId]
+      )
+    );
+    return rows;
+  }
+
+  it("notifies only the patient's own doctor, linking to the Estudios tab — a different doctor sees nothing", async () => {
+    const { auth, patientId, practitionerId } = await authAndPatient();
+    const other = await authAndPatient();
+
+    const created = await request(app)
+      .post(`/api/v1/patient/${patientId}/questionnaire-requests`)
+      .set("Authorization", auth)
+      .send({ kind: "stop_bang" });
+    expect(created.status).toBe(201);
+    const token = String(created.body.url).split("/q#")[1];
+
+    const submit = await request(app)
+      .post("/api/v1/public/questionnaire/submit")
+      .send({ token, step: "stopBang", consent: true, answers: { snoring: true, tiredness: true, observed_apnea: false, pressure: false } });
+    expect(submit.status).toBe(201);
+
+    const mine = await doctorNotifications(practitionerId!, created.body.id);
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toMatchObject({ type: "questionnaire_submitted", action_url: `/patients/${patientId}?tab=studies` });
+
+    expect(await doctorNotifications(other.practitionerId!, created.body.id)).toEqual([]);
+  });
+
+  it("a patient with no assigned doctor notifies nobody", async () => {
+    const { auth, patientId } = await authAndPatient("admin");
+    const created = await request(app)
+      .post(`/api/v1/patient/${patientId}/questionnaire-requests`)
+      .set("Authorization", auth)
+      .send({ kind: "stop_bang" });
+    expect(created.status).toBe(201);
+    const token = String(created.body.url).split("/q#")[1];
+
+    const submit = await request(app)
+      .post("/api/v1/public/questionnaire/submit")
+      .send({ token, step: "stopBang", consent: true, answers: { snoring: true, tiredness: true, observed_apnea: false, pressure: false } });
+    expect(submit.status).toBe(201);
+
+    const { rows } = await withTenant(TENANT_SLUG, (client) =>
+      client.query(`SELECT 1 FROM notification WHERE entity_id = $1 AND type = 'questionnaire_submitted'`, [created.body.id])
+    );
+    expect(rows).toHaveLength(0);
+  });
+});
+
 describe("/api/v1/patient/:id/checklist + print + uploads (Estudios, ADR-024)", () => {
   it("403s the commercial roles; a doctor gets the ordered checklist", async () => {
     const rep = await authAndPatient("rep");
@@ -514,5 +583,86 @@ describe("Estudios live refresh + Nuevo (NEO-173)", () => {
     const repVersion = await request(app).get(`/api/v1/patient/${patientId}/checklist/version`).set("Authorization", rep.auth);
     const repOpened = await request(app).post(`/api/v1/patient/${patientId}/checklist/entries/${exam.body.id}/opened`).set("Authorization", rep.auth);
     expect([repVersion.status, repOpened.status]).toEqual([403, 403]);
+  });
+});
+
+describe("GET /api/v1/patient/:id/summary (Detalles strip, NEO-206)", () => {
+  it("returns profile extras, the latest study with results, the next scheduled visit; audits the study read", async () => {
+    const { auth, patientId } = await authAndPatient("doctor");
+    const ids = await withTenant(TENANT_SLUG, async (client) => {
+      const { rows: [p] } = await client.query<{ practitioner_id: string; identity_id: string }>(`SELECT practitioner_id, identity_id FROM patient WHERE id = $1`, [patientId]);
+      const { rows: [u] } = await client.query<{ id: string }>(`SELECT id FROM users LIMIT 1`);
+      await client.query(`UPDATE identities SET preferred_name = 'Mafer' WHERE id = $1`, [p.identity_id]);
+      await client.query(
+        `UPDATE patient SET shipping_address = '{"line1":"Masaryk 111","city":"CDMX"}', data_consent_at = '2026-09-03T10:00:00Z' WHERE id = $1`,
+        [patientId],
+      );
+      const study = async (date: string, ahi: number | null, status = "interpreted") =>
+        (await client.query<{ id: string }>(
+          `INSERT INTO sleep_study (patient_id, study_date, ahi_score, spo2_nadir, odi, status) VALUES ($1, $2, $3, 84, 19, $4) RETURNING id`,
+          [patientId, date, ahi, status],
+        )).rows[0].id;
+      const withResults = await study("2026-09-12", 22.4);
+      await study("2026-08-01", 30);
+      await study("2026-09-20", 40, "cancelled"); // newer but cancelled
+      await study("2026-09-25", null, "ordered"); // newer but no results yet
+      const visit = async (startOffsetDays: number, status = "scheduled") =>
+        (await client.query<{ id: string }>(
+          `INSERT INTO appointment (patient_id, practitioner_id, created_by_user_id, status, start_at, end_at)
+           VALUES ($1, $2, $3, $4, now() + make_interval(days => $5::int), now() + make_interval(days => $5::int, mins => 30)) RETURNING id`,
+          [patientId, p.practitioner_id, u.id, status, startOffsetDays],
+        )).rows[0].id;
+      await visit(-3); // past
+      await visit(2, "cancelled");
+      const next = await visit(5);
+      await visit(9);
+      return { withResults, next };
+    });
+
+    const res = await request(app).get(`/api/v1/patient/${patientId}/summary`).set("Authorization", auth);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      preferred_name: "Mafer",
+      shipping_address: { line1: "Masaryk 111", city: "CDMX" },
+      data_consent_at: "2026-09-03T10:00:00.000Z",
+      data_consent_withdrawn_at: null,
+      latest_study: { id: ids.withResults, study_date: "2026-09-12", ahi_score: 22.4, spo2_nadir: 84, odi: 19 },
+      device_order: null,
+      next_appointment: { id: ids.next },
+    });
+
+    const reads = await withTenant(TENANT_SLUG, (client) =>
+      client.query<{ entity_id: string }>(
+        `SELECT entity_id FROM audit_log WHERE action = 'read' AND entity_type = 'SleepStudy' AND metadata->>'view' = 'patient-summary' AND metadata->>'patient_id' = $1`,
+        [patientId],
+      ),
+    );
+    expect(reads.rows.map((r) => r.entity_id)).toEqual([ids.withResults]);
+  });
+
+  it("never sends the study to the commercial field force; empty patient → all nulls", async () => {
+    const { auth, patientId } = await authAndPatient("rep");
+    await withTenant(TENANT_SLUG, (client) =>
+      client.query(`INSERT INTO sleep_study (patient_id, study_date, ahi_score, status) VALUES ($1, '2026-09-12', 22.4, 'interpreted')`, [patientId]),
+    );
+    const res = await request(app).get(`/api/v1/patient/${patientId}/summary`).set("Authorization", auth);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      preferred_name: null,
+      shipping_address: null,
+      data_consent_at: null,
+      data_consent_withdrawn_at: null,
+      latest_study: null,
+      device_order: null,
+      next_appointment: null,
+    });
+  });
+
+  it("401 without a token, 404 for an unknown patient", async () => {
+    const anon = await request(app).get(`/api/v1/patient/${crypto.randomUUID()}/summary`);
+    expect(anon.status).toBe(401);
+    const { auth } = await authAndPatient("admin");
+    const missing = await request(app).get(`/api/v1/patient/${crypto.randomUUID()}/summary`).set("Authorization", auth);
+    expect(missing.status).toBe(404);
   });
 });

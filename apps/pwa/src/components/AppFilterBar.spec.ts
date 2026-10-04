@@ -87,6 +87,16 @@ describe("AppFilterBar", () => {
     expect(badgeEl.text()).toBe("12");
   });
 
+  // The list toolbar clips anything more than 4 px outside its row; the
+  // default badge position stuck out 6 px and cut the count's top off.
+  it("tucks the badge inside the button so the toolbar's overflow can't clip it", () => {
+    const wrapper = mountFilterBar({ activeFilterCount: 1 });
+    const badgeEl = wrapper.find(".v-badge__badge");
+    // Vuetify places it at calc(100% - (12 + offset)px); 20 px puts the
+    // 18 px badge's top edge 2 px inside the button.
+    expect(badgeEl.attributes("style")).toContain("calc(100% - 20px)");
+  });
+
   it("opens the menu on click and emits an updated filter value from a select field", async () => {
     const wrapper = mountFilterBar();
     await wrapper.find(".app-filter-bar__btn").trigger("click");

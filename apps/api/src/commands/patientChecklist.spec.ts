@@ -43,12 +43,13 @@ function uniqueSuffix(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+/** A global admin: these patients have no assigned doctor, and a doctor only reaches their own (CORE-104). */
 async function buildContext(client: Client): Promise<TenantContext> {
   const email = `qa-checklist-${uniqueSuffix()}@neosleepcare.com`;
   const hash = await bcrypt.hash("irrelevant-not-logged-in-with", 4);
   const territory = await getGlobalTerritoryId(client);
-  const user = await insertStaffUser(client, email, "QA", "Doctor", "doctor", hash, false, null, null, territory);
-  return { slug: TENANT_SLUG, client, user: { id: user!.id, email, role: "doctor", roles: [{ role: "doctor", territory_id: territory }] }, requestId: `test-${uniqueSuffix()}` };
+  const user = await insertStaffUser(client, email, "QA", "Doctor", "admin", hash, false, null, null, territory);
+  return { slug: TENANT_SLUG, client, user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", territory_id: territory }] }, requestId: `test-${uniqueSuffix()}` };
 }
 
 const newPatient = (client: Client) => insertPatient(client, { first_name: "Ana", last_name: `Checklist-${uniqueSuffix()}` });
@@ -80,6 +81,24 @@ describe("GetPatientChecklistQuery", () => {
       expect(checklist.summary).toEqual({ done: 0, total: 6 });
       expect(checklist.items.find((i) => i.key === "oralExam")!.actions).toMatchObject({ qr: false, fill: "questionnaire", print: true });
       expect(checklist.items.find((i) => i.key === "informedConsent")!.actions).toMatchObject({ qr: true, fill: null, print: true });
+    });
+  }, 20000);
+
+  // NEO-193 (Dra. Lorena + legal, NOM-004): consent and the Historia Clínica parts are Documentos; lab/device results are Estudios.
+  it("puts every item in one tab: consent, questionnaires, exploration and Historia Clínica are documents, results are studies", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await newPatient(client);
+      const checklist = await GetPatientChecklistQuery(ctx, patient.id);
+
+      expect(Object.fromEntries(checklist.items.map((i) => [i.key, i.category]))).toEqual({
+        informedConsent: "document",
+        medicalHistory: "document",
+        stopBang: "document",
+        oralExam: "document",
+        historiaEndo: "document",
+        polysomnography: "study",
+      });
     });
   }, 20000);
 
@@ -204,7 +223,7 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
     });
   }, 120000);
 
-  it("a patient without a linked doctor prints the doctor who prints it; a non-doctor leaves the line blank", async () => {
+  it("a patient without a linked doctor prints the practitioner who prints it; someone with no practitioner leaves the line blank", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildContext(client);
       await insertPractitioner(client, { first_name: "QA", last_name: "Doctor", email: ctx.user.email }); // same identity as the printing user (ADR-014)

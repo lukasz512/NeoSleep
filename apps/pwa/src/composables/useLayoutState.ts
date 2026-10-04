@@ -4,7 +4,7 @@ import { useI18n } from "vue-i18n";
 import { useTheme } from "vuetify";
 import { useDebounceFn } from "@vueuse/core";
 import { useThemeStore, type ThemePreference } from "@stores";
-import { SIDEBAR_DEFAULT_COLLAPSED, SIDEBAR_COLLAPSE_ENABLED, MOBILE_BREAKPOINT } from "../constants";
+import { SIDEBAR_DEFAULT_COLLAPSED, SIDEBAR_COLLAPSE_ENABLED, MOBILE_BREAKPOINT } from "../config/layout";
 import { getUserSettings, setUserSettings } from "../utils/user-settings";
 import { getInitials } from "../utils/initials";
 import { lightTheme, darkTheme } from "../plugins/vuetify";

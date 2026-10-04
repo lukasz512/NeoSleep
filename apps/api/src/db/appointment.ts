@@ -8,6 +8,8 @@ export const APPOINTMENT_STATUSES = ["scheduled", "completed", "cancelled", "no_
 export type AppointmentStatus = (typeof APPOINTMENT_STATUSES)[number];
 export const APPOINTMENT_TYPES = ["visit"] as const;
 export const APPOINTMENT_LOCATION_TYPES = ["clinic", "online"] as const;
+export const APPOINTMENT_PATIENT_RESPONSES = ["confirmed", "cannot_attend"] as const;
+export type AppointmentPatientResponse = (typeof APPOINTMENT_PATIENT_RESPONSES)[number];
 
 /** A range query never returns more than this — an agenda shows a day or a week. */
 export const APPOINTMENT_LIST_MAX = 500;
@@ -36,6 +38,15 @@ export interface Appointment {
   location_type: string;
   online_url: string | null;
   notes: string | null;
+  /** The patient's answer from the email link (CORE-25); cleared on reschedule. */
+  patient_response: AppointmentPatientResponse | null;
+  patient_responded_at: string | null;
+  /** CORE-116: when the "please confirm" email went out (booking email or the 2-day ask). */
+  confirm_request_sent_at: string | null;
+  /** CORE-116: when the day-before email (reminder or second ask) went out. */
+  day_before_sent_at: string | null;
+  /** CORE-113 part 2: when the "Su cita es hoy" (2 hours before) email went out. */
+  today_reminder_sent_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -75,7 +86,11 @@ export interface AppointmentFilters {
   scope_paths: string[] | null;
 }
 
-type AppointmentRow = Omit<Appointment, "patient_name" | "practitioner_name" | "start_at" | "end_at" | "created_at" | "updated_at"> & {
+type AppointmentRow = Omit<Appointment, "patient_name" | "practitioner_name" | "start_at" | "end_at" | "created_at" | "updated_at" | "patient_responded_at" | "confirm_request_sent_at" | "day_before_sent_at" | "today_reminder_sent_at"> & {
+  patient_responded_at: Date | null;
+  confirm_request_sent_at: Date | null;
+  day_before_sent_at: Date | null;
+  today_reminder_sent_at: Date | null;
   patient_salutation: string | null;
   practitioner_salutation: string | null;
   start_at: Date;
@@ -87,7 +102,7 @@ type AppointmentRow = Omit<Appointment, "patient_name" | "practitioner_name" | "
 const SELECT_COLS = `
   a.id, a.patient_id, a.practitioner_id, a.organization_id, a.territory_id, a.sleep_study_id,
   a.treatment_plan_id, a.created_by_user_id, a.type, a.status, a.start_at, a.end_at, a.timezone,
-  a.location_type, a.online_url, a.notes, a.created_at, a.updated_at,
+  a.location_type, a.online_url, a.notes, a.patient_response, a.patient_responded_at, a.confirm_request_sent_at, a.day_before_sent_at, a.today_reminder_sent_at, a.created_at, a.updated_at,
   pi.title AS patient_salutation, pi.first_name AS patient_first_name, pi.last_name AS patient_last_name,
   di.title AS practitioner_salutation, di.first_name AS practitioner_first_name, di.last_name AS practitioner_last_name,
   o.name AS organization_name`.trim();
@@ -126,6 +141,11 @@ function serialize(row: AppointmentRow): Appointment {
     location_type: row.location_type,
     online_url: row.online_url,
     notes: row.notes,
+    patient_response: row.patient_response,
+    patient_responded_at: row.patient_responded_at ? isoDate(row.patient_responded_at) : null,
+    confirm_request_sent_at: row.confirm_request_sent_at ? isoDate(row.confirm_request_sent_at) : null,
+    day_before_sent_at: row.day_before_sent_at ? isoDate(row.day_before_sent_at) : null,
+    today_reminder_sent_at: row.today_reminder_sent_at ? isoDate(row.today_reminder_sent_at) : null,
     created_at: isoDate(row.created_at),
     updated_at: isoDate(row.updated_at),
   };

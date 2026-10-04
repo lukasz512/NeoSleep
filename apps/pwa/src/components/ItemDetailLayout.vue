@@ -135,6 +135,7 @@ import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
 import AppAvatar from "./AppAvatar.vue";
 import { recordPreviewFor } from "../composables/useRecordPreview";
+import { useDetailAsideShown } from "../composables/useDetailAside";
 import AppLoadingState from "./AppLoadingState.vue";
 import AppRecordSkeleton from "./AppRecordSkeleton.vue";
 import AppBreadcrumbs from "./AppBreadcrumbs.vue";
@@ -231,10 +232,8 @@ const showRecordHeader = computed(
 
 // While the record header is shown it replaces AppLayout's desktop
 // "← <Module>" page-header row (NEO-55) — the eyebrow link is the way back.
-/** NEO-153: the #aside panel needs room for the 720px column plus itself, so
- *  it follows the breakpoint only — a large landscape tablet gets it too. */
 const slots = useSlots();
-const isWide = useMediaQuery("(min-width: 1280px)");
+const isWide = useDetailAsideShown();
 const showAside = computed(() => !!slots.aside && isWide.value);
 
 // NEO-158: the name on one line, the identity line under it wrapping between
@@ -575,10 +574,13 @@ defineEmits<{
 }
 
 /* NEO-153: 720px content column (DetailViewTabs caps itself there) + a 320px
-   side panel that stays in view while the column scrolls. */
+   side panel that stays in view while the column scrolls. CORE-96: on a wide
+   screen the spare width goes between them, so the panel ends on the right
+   content edge, under the header actions. */
 .view-item__card--with-aside {
   display: grid;
   grid-template-columns: minmax(0, 720px) 320px;
+  justify-content: space-between;
   gap: var(--space-8, 32px);
   align-items: start;
 }

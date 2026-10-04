@@ -8,7 +8,7 @@ export default defineConfig({
     passWithNoTests: false,
     environment: "jsdom",
     pool: "threads",
-    setupFiles: ["./src/vitest.setup.ts"],
+    setupFiles: ["./src/test/setup.ts"],
     // e2e/ is the Playwright suite (playwright.config.ts) — different test
     // runner, different `test`/`expect` globals. Vitest's default include
     // glob would otherwise also try to run those files as unit tests.

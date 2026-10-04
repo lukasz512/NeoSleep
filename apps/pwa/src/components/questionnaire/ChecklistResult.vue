@@ -36,15 +36,7 @@
       <span v-if="study.odi != null" class="checklist-result__metric"><b>{{ formatNumber(study.odi) }}</b><span>{{ t("app.clinical.result.odi") }}</span></span>
       <span class="checklist-result__pill" :class="`checklist-result__pill--${SEVERITY_TONE[severity]}`">{{ t(`app.clinical.result.severity.${severity}`) }}</span>
     </div>
-    <div class="checklist-result__ahi" role="img" :aria-label="t('app.clinical.result.ahiScale', { value: formatNumber(study.ahi_score) })">
-      <div class="checklist-result__ahi-bar" aria-hidden="true">
-        <i /><i /><i /><i />
-        <span class="checklist-result__ahi-mark" :style="{ left: `${(Math.min(study.ahi_score, AHI_MAX) / AHI_MAX) * 100}%` }" />
-      </div>
-      <div class="checklist-result__ahi-scale" aria-hidden="true">
-        <span>&lt;5</span><span>{{ t("app.clinical.result.scale.mild") }}</span><span>{{ t("app.clinical.result.scale.moderate") }}</span><span>{{ t("app.clinical.result.scale.severe") }}</span>
-      </div>
-    </div>
+    <AhiScaleBar :ahi="study.ahi_score" />
   </div>
 
   <!-- A consent signed on the phone. -->
@@ -70,6 +62,8 @@ import AppIcon from "../AppIcon.vue";
 import { intlLocale } from "@i18n/language-options";
 import type { ChecklistHistoryEntry } from "../../composables/usePatientChecklist";
 import { BANG_QUESTIONS, MEDICAL_HISTORY_QUESTIONS, ORAL_EXAM_QUESTIONS, STOP_QUESTIONS, stopBangRisk } from "../../config/questionnaires";
+import { ahiSeverity } from "../../utils/ahiSeverity";
+import AhiScaleBar from "../AhiScaleBar.vue";
 
 /**
  * What a finished (or half-finished) Estudios item shows in place of its
@@ -111,15 +105,7 @@ const lettersYes = computed(() => letters.value.filter((l) => l.state.startsWith
 const stopYes = computed(() => STOP_QUESTIONS.filter((q) => record.value?.[q.key] === true).length);
 const risk = computed(() => stopBangRisk(record.value?.score ?? 0));
 
-/** AASM adult OSA severity by AHI (events/h): <5 none, 5–15 mild, 15–30 moderate, ≥30 severe. */
-const AHI_MAX = 45;
-const severity = computed(() => {
-  const ahi = study.value?.ahi_score ?? 0;
-  if (ahi >= 30) return "severe";
-  if (ahi >= 15) return "moderate";
-  if (ahi >= 5) return "mild";
-  return "normal";
-});
+const severity = computed(() => ahiSeverity(study.value?.ahi_score ?? 0));
 const SEVERITY_TONE = { normal: "low", mild: "intermediate", moderate: "intermediate", severe: "high" } as const;
 
 const formatNumber = (value: number) => value.toLocaleString(intlLocale(locale.value), { maximumFractionDigits: 1 });
@@ -246,46 +232,6 @@ const formatNumber = (value: number) => value.toLocaleString(intlLocale(locale.v
 }
 .checklist-result__letters span.gap {
   margin-left: 8px;
-}
-.checklist-result__ahi {
-  max-width: 380px;
-}
-.checklist-result__ahi-bar {
-  position: relative;
-  display: grid;
-  grid-template-columns: 5fr 10fr 15fr 15fr;
-  height: 8px;
-  border-radius: 999px;
-}
-.checklist-result__ahi-bar i:nth-child(1) {
-  background: #7cc59a;
-  border-radius: 999px 0 0 999px;
-}
-.checklist-result__ahi-bar i:nth-child(2) {
-  background: #e8c55a;
-}
-.checklist-result__ahi-bar i:nth-child(3) {
-  background: #ec9a47;
-}
-.checklist-result__ahi-bar i:nth-child(4) {
-  background: #d9594c;
-  border-radius: 0 999px 999px 0;
-}
-.checklist-result__ahi-mark {
-  position: absolute;
-  top: -4px;
-  width: 3px;
-  height: 16px;
-  border-radius: 2px;
-  background: rgb(var(--v-theme-on-surface));
-  transform: translateX(-50%);
-}
-.checklist-result__ahi-scale {
-  display: grid;
-  grid-template-columns: 5fr 10fr 15fr 15fr;
-  margin-top: 4px;
-  font-size: 0.6875rem;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 .checklist-result__link {
   border: none;
