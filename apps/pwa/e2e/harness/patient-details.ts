@@ -55,6 +55,9 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   if (url.includes("/summary")) return json(SUMMARY);
   if (url.includes("/care-team")) return json(CARE_TEAM);
   if (url.includes("/api/v1/practitioner")) return json({ items: [{ id: "h-4", name: "Dr. Pablo Ortiz" }] });
+  if (url.includes("/clinical-records")) return json({ records: [] });
+  // Any other API call answers empty: a real request gets 401, and a 401 signs the harness user out (role gone).
+  if (url.includes("/api/")) return json({ items: [] });
   return realFetch(input, init);
 };
 
