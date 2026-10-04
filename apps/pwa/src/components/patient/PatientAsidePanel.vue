@@ -1,5 +1,5 @@
 <template>
-  <div class="patient-aside">
+  <div class="patient-aside" :class="{ 'patient-aside--inline': inline }">
     <section v-if="canSeeStudies && checklist" class="patient-aside__next" :aria-label="t('app.patients.detail.aside.nextStep')">
       <h2 class="patient-aside__heading">{{ t("app.patients.detail.aside.nextStep") }}</h2>
       <p class="patient-aside__next-title">
@@ -96,8 +96,8 @@
  * 2. the key facts on one line;
  * 3. documents and studies, unfinished first, at most DOC_ROWS rows;
  * 4. the latest note with a quick-add box — it takes what height is left.
- * Below 1280px ItemDetailLayout does not mount it; the Details, Documentos,
- * Estudios and Notes tabs carry the same content. A note added here reloads
+ * Below 1280px ItemDetailLayout does not mount it; the detail view shows it
+ * as the "Next step" tab instead, right after Details (NEO-235, `inline`). A note added here reloads
  * an open Notes tab (and vice versa) through useNotes' change event. The QR
  * itself runs in the Documentos tab (its status button and polling live
  * there), so the button asks the parent to open it. The OrthoApnea card is
@@ -137,6 +137,8 @@ const props = defineProps<{
   canSeeStudies: boolean;
   /** The detail view's open tab — the checklist is reloaded on every switch, so it catches up with what was done there. */
   activeTab: string;
+  /** Shown as the "Next step" tab below 1280px (NEO-235) — flows with the page instead of fitting the window. */
+  inline?: boolean;
 }>();
 
 defineEmits<{
@@ -222,6 +224,20 @@ watch(() => props.activeTab, loadStudies);
   flex-direction: column;
   gap: var(--space-3, 12px);
   max-height: calc(100dvh - var(--space-8, 32px));
+}
+
+.patient-aside--inline {
+  max-height: none;
+}
+
+/* A tab has no fixed height to share — the facts may wrap and the note card shows in full. */
+.patient-aside--inline .patient-aside__facts {
+  flex-wrap: wrap;
+  white-space: normal;
+}
+
+.patient-aside--inline .patient-aside__last-note {
+  overflow: visible;
 }
 
 .patient-aside__card {

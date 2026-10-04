@@ -158,6 +158,7 @@
       @pdf="onPrintRecord"
     />
     <QuestionnaireQrDialog
+      v-if="!sharedQrDialog"
       v-model="qrDialog.open"
       :title="qrDialog.title"
       :url="qrDialog.url"
@@ -370,7 +371,7 @@
 
 <script setup lang="ts">
 import { createReusableTemplate } from "@vueuse/core";
-import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type ComponentPublicInstance } from "vue";
+import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type ComponentPublicInstance } from "vue";
 import { useI18n } from "vue-i18n";
 import { intlLocale } from "@i18n/language-options";
 import AppButton from "../AppButton.vue";
@@ -404,6 +405,7 @@ import {
   checklistEntries,
 } from "../../composables/usePatientChecklist";
 import { useVisiblePolling } from "../../composables/useVisiblePolling";
+import { PATIENT_QR_DIALOG, createQrDialogState, openQrLoader } from "../../composables/usePatientQrDialog";
 import { sleepStudyFormFields } from "../../config/forms/sleepStudyForm";
 import {
   MEDICAL_HISTORY_QUESTIONS,
@@ -686,13 +688,10 @@ function onPrintRecord() {
   if (record) void onPrint(PRINT_KEY_FOR_FORM[record.kind], record.id);
 }
 
-// QR — one link for everything, or one item.
-const qrDialog = reactive<{ open: boolean; title: string; url: string | null; requestId: string | null }>({
-  open: false,
-  title: "",
-  url: null,
-  requestId: null,
-});
+// QR — one link for everything, or one item. On Documentos the dialog is the
+// detail view's (NEO-235): it already shows a loader from the first tap.
+const sharedQrDialog = showsPatientActions.value ? inject(PATIENT_QR_DIALOG, null) : null;
+const qrDialog = sharedQrDialog ?? createQrDialogState();
 const qrRequest = computed(() => checklist.value?.pending_requests.find((r) => r.id === qrDialog.requestId) ?? null);
 /**
  * The patient opened the link (or already saved a step, or finished and the
@@ -799,6 +798,7 @@ const qrFailed = ref(false);
 async function openQr(items?: string[]) {
   qrCreating.value = true;
   qrFailed.value = false;
+  openQrLoader(qrDialog);
   let created: Awaited<ReturnType<typeof checklistApi.createRequest>> = null;
   try {
     created = await checklistApi.createRequest(items);
@@ -806,7 +806,12 @@ async function openQr(items?: string[]) {
     qrCreating.value = false;
   }
   qrFailed.value = !created?.url;
-  if (!created?.url) return;
+  if (!created?.url) {
+    qrDialog.open = false;
+    return;
+  }
+  // Closed while loading: the link exists (the status button shows it), just don't pop the QR back up.
+  if (!qrDialog.open) return;
   const title =
     created.items.length === 1 ? itemTitleByKey(created.items[0]!) : created.items.map((key) => itemTitleByKey(key)).join(" · ");
   Object.assign(qrDialog, { open: true, title, url: created.url, requestId: created.id });
