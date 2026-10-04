@@ -134,6 +134,27 @@
         </dl>
       </section>
 
+      <!-- CORE-137: events (Evento) made for this patient, next to their appointments. -->
+      <section v-if="events.length" class="patient-details__group" aria-labelledby="pd-events" data-testid="patient-events">
+        <h3 id="pd-events" class="patient-details__group-title">{{ t("app.patients.detail.groups.events") }}</h3>
+        <dl class="patient-details__rows">
+          <div
+            v-for="e in events"
+            :key="e.id"
+            class="patient-details__row"
+            :class="{ 'patient-details__row--muted': e.status === 'cancelled' }"
+            data-testid="patient-event"
+            :data-id="e.id"
+          >
+            <dt>{{ formatDate(e.start_at) }}</dt>
+            <dd>
+              {{ formatEventTime(e.start_at) }} · {{ e.title || t("user.planner.form.fieldTitle") }} · {{ t(e.type === "video" ? "user.planner.form.typeVideo" : "user.planner.form.typeF2f") }}
+              <VChip v-if="e.status !== 'scheduled'" size="x-small" variant="tonal" class="ml-1">{{ t(`user.appointments.status.${e.status}`) }}</VChip>
+            </dd>
+          </div>
+        </dl>
+      </section>
+
       <!-- CORE-132: every other HCP with access — specialty says who does what; when and how they got it (D1). -->
       <section v-if="teamMembers.length || careTeam.canAdd.value" class="patient-details__group" aria-labelledby="pd-team" data-testid="care-team">
         <h3 id="pd-team" class="patient-details__group-title">{{ t("app.patients.detail.groups.careTeam") }}</h3>
@@ -249,6 +270,7 @@ import { useIdentity } from "../../composables/useIdentity";
 import { formatDiagnosis } from "../../utils/diagnosis";
 import { deviceOrderState } from "../../utils/treatmentPlanStatus";
 import { patientStatusColor, patientStatusLabel } from "../../utils/patientStatus";
+import { fromEncounter, type PlannerEvent } from "../../utils/encounterMapping";
 import { formatDayLabel, formatTimeRange } from "../../utils/appointmentTime";
 import type { PatientDetailsTabPatient, PatientSummary } from "./patientSummary";
 
@@ -291,6 +313,7 @@ interface PatientAppointment {
   practitioner_name?: string | null;
 }
 const appointmentItems = ref<PatientAppointment[]>([]);
+const eventItems = ref<PlannerEvent[]>([]);
 
 async function load(): Promise<void> {
   const id = props.patient.id;
@@ -313,6 +336,19 @@ async function loadAppointments(): Promise<void> {
     appointmentItems.value = ((await res.json()) as { items?: PatientAppointment[] }).items ?? [];
   } catch (err) {
     reportCaught(err, { where: "PatientDetailsTab.appointments" });
+  }
+}
+
+/** Events (encounters) made for the patient (CORE-137). */
+async function loadEvents(): Promise<void> {
+  const id = props.patient.id;
+  try {
+    const res = await apiFetch(`/api/v1/encounter?patient_id=${id}`, { handleErrors: false });
+    if (id !== props.patient.id || !res.ok) return;
+    const rows = ((await res.json()) as { items?: Parameters<typeof fromEncounter>[0][] }).items ?? [];
+    eventItems.value = rows.map(fromEncounter);
+  } catch (err) {
+    reportCaught(err, { where: "PatientDetailsTab.events" });
   }
 }
 
@@ -370,6 +406,7 @@ async function onRemove(): Promise<void> {
 onMounted(() => {
   void load();
   void loadAppointments();
+  void loadEvents();
   void careTeam.load();
 });
 watch(
@@ -377,10 +414,12 @@ watch(
   () => {
     summary.value = null;
     appointmentItems.value = [];
+    eventItems.value = [];
     careTeam.members.value = [];
     adding.value = false;
     void load();
     void loadAppointments();
+    void loadEvents();
     void careTeam.load();
   },
 );
@@ -393,6 +432,18 @@ const appointments = computed(() => {
   const past = appointmentItems.value.filter((a) => at(a) < now).sort((a, b) => at(b) - at(a));
   return [...upcoming, ...past];
 });
+
+/** Upcoming soonest first, then past most recent first (same order as appointments). */
+const events = computed(() => {
+  const now = Date.now();
+  const at = (e: PlannerEvent) => new Date(e.start_at).getTime();
+  const upcoming = eventItems.value.filter((e) => at(e) >= now).sort((a, b) => at(a) - at(b));
+  const past = eventItems.value.filter((e) => at(e) < now).sort((a, b) => at(b) - at(a));
+  return [...upcoming, ...past];
+});
+function formatEventTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString(intlLocale(locale.value), { hour: "numeric", minute: "2-digit" });
+}
 
 const numberFormat = computed(() => new Intl.NumberFormat(intlLocale(locale.value), { maximumFractionDigits: 1 }));
 const fmt = (n: number) => numberFormat.value.format(n);

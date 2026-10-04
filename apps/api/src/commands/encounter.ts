@@ -13,6 +13,7 @@ import {
 import { insertAuditLog } from "../db.js";
 import { ValidationError } from "../errors.js";
 import { isEncounterVisible } from "../queries/encounter.js";
+import { requirePatientInScope } from "../queries/entityAccess.js";
 
 /**
  * COMMANDS — the "cooks" of the CQRS kitchen.
@@ -42,6 +43,7 @@ export interface CreateEncounterInput {
   notes?: string | null;
   practitioner_id?: string | null;
   organization_id?: string | null;
+  patient_id?: string | null;
   region?: string | null;
   territory_id?: string | null;
   attendees?: string[];
@@ -67,6 +69,9 @@ export async function CreateEncounterCommand(
     throw new ValidationError(`Invalid encounter status: "${input.status}"`);
   }
 
+  // CORE-137: a linked patient must be one the user may see (403 otherwise, 404 if unknown).
+  if (input.patient_id) await requirePatientInScope(ctx, input.patient_id);
+
   const insertInput: InsertEncounterInput = {
     user_id:           ctx.user.id,
     start_at:          input.start_at.trim(),
@@ -76,6 +81,7 @@ export async function CreateEncounterCommand(
     notes:             input.notes ?? null,
     practitioner_id:   input.practitioner_id ?? null,
     organization_id:   input.organization_id ?? null,
+    patient_id:        input.patient_id ?? null,
     region:            input.region ?? null,
     territory_id:      input.territory_id ?? null,
     attendees:         input.attendees ?? [],
@@ -91,7 +97,7 @@ export async function CreateEncounterCommand(
     action:       "create",
     entity_type:  "Encounter",
     entity_id:    encounter.id,
-    entity_after: { id: encounter.id, type: encounter.type, status: encounter.status, start_at: encounter.start_at },
+    entity_after: { id: encounter.id, type: encounter.type, status: encounter.status, start_at: encounter.start_at, patient_id: encounter.patient_id },
     request_id:   ctx.requestId,
   });
 
@@ -110,6 +116,7 @@ export interface UpdateEncounterPayload {
   notes?: string | null;
   practitioner_id?: string | null;
   organization_id?: string | null;
+  patient_id?: string | null;
   region?: string | null;
   territory_id?: string | null;
   attendees?: string[];
@@ -142,6 +149,9 @@ export async function UpdateEncounterCommand(
   if (!before) return null;
   if (!(await isEncounterVisible(ctx, before))) return null;
 
+  // CORE-137: only a changed link is re-checked, so editing an old event never fails over its patient.
+  if (input.patient_id && input.patient_id !== before.patient_id) await requirePatientInScope(ctx, input.patient_id);
+
   const updateInput: UpdateEncounterInput = {
     start_at:          input.start_at,
     end_at:            input.end_at,
@@ -150,6 +160,7 @@ export async function UpdateEncounterCommand(
     notes:             input.notes,
     practitioner_id:   input.practitioner_id,
     organization_id:   input.organization_id,
+    patient_id:        input.patient_id,
     region:            input.region,
     territory_id:      input.territory_id,
     attendees:         input.attendees,
@@ -166,8 +177,8 @@ export async function UpdateEncounterCommand(
     action:        "update",
     entity_type:   "Encounter",
     entity_id:     id,
-    entity_before: { status: before.status, type: before.type, start_at: before.start_at },
-    entity_after:  { status: after.status,  type: after.type,  start_at: after.start_at },
+    entity_before: { status: before.status, type: before.type, start_at: before.start_at, patient_id: before.patient_id },
+    entity_after:  { status: after.status,  type: after.type,  start_at: after.start_at,  patient_id: after.patient_id },
     request_id:    ctx.requestId,
   });
 

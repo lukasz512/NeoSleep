@@ -51,4 +51,11 @@ describe("encounterMapping (NEO-112)", () => {
     const event = fromEncounter({ id: "e2", start_at: "2026-10-01T10:00:00Z", type: "congress", attendees: ["not-typed"] });
     expect(event).toMatchObject({ title: "", type: "f2f", status: "scheduled", attendees: [] });
   });
+
+  it("carries the patient the event is for, both ways (CORE-137)", () => {
+    expect(toEncounterBody({ ...payload, patient_id: "p-1" }).patient_id).toBe("p-1");
+    expect(toEncounterBody(payload).patient_id).toBeNull();
+    expect(fromEncounter({ id: "e3", start_at: "2026-10-01T10:00:00Z", patient_id: "p-1" }).patient_id).toBe("p-1");
+    expect(fromEncounter({ id: "e4", start_at: "2026-10-01T10:00:00Z", patient_id: null }).patient_id).toBeUndefined();
+  });
 });

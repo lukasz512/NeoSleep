@@ -35,6 +35,8 @@ export interface Encounter {
   user_id: string;
   practitioner_id: string | null;
   organization_id: string | null;
+  /** CORE-137: optional patient the event is for (FHIR Encounter.subject). */
+  patient_id: string | null;
   type: EncounterType;
   status: EncounterStatus;
   class: EncounterClass;
@@ -58,6 +60,8 @@ export interface GetEncounterFilters {
   territory_id?: string;
   userId?: string | null;
   status?: EncounterStatus;
+  /** CORE-137: only events linked to this patient. */
+  patient_id?: string;
   /** CORE-106 row-level visibility — the one filter queries/encounter.ts's
    *  encounterVisibilityScope() produces and getEncounters() applies. Every
    *  role sees its own encounters (ownerId); manager/admin additionally see
@@ -83,6 +87,7 @@ export interface InsertEncounterInput {
   notes?: string | null;
   practitioner_id?: string | null;
   organization_id?: string | null;
+  patient_id?: string | null;
   region?: string | null;
   territory_id?: string | null;
   attendees?: string[];
@@ -98,6 +103,7 @@ export interface UpdateEncounterInput {
   notes?: string | null;
   practitioner_id?: string | null;
   organization_id?: string | null;
+  patient_id?: string | null;
   region?: string | null;
   territory_id?: string | null;
   attendees?: string[];
@@ -111,7 +117,7 @@ export interface UpdateEncounterInput {
 // ---------------------------------------------------------------------------
 
 const ENCOUNTER_COLUMNS = [
-  "id", "user_id", "practitioner_id", "organization_id",
+  "id", "user_id", "practitioner_id", "organization_id", "patient_id",
   "type", "status", "class", "start_at", "end_at", "notes", "region", "territory_id",
   "attendees", "transfer_of_value", "disclosed_at",
   "metadata", "created_at", "updated_at",
@@ -166,6 +172,10 @@ export async function getEncounters(
   if (filters.userId?.trim()) {
     conditions.push(`e.user_id = $${i}`);
     params.push(filters.userId.trim()); i++;
+  }
+  if (filters.patient_id?.trim()) {
+    conditions.push(`e.patient_id = $${i}`);
+    params.push(filters.patient_id.trim()); i++;
   }
   if (filters.status) {
     conditions.push(`e.status = $${i}`);
@@ -232,8 +242,8 @@ export async function insertEncounter(
       `INSERT INTO encounter
          (user_id, practitioner_id, organization_id,
           type, status, class, start_at, end_at, notes,
-          region, territory_id, attendees, transfer_of_value, metadata)
-       VALUES ($1,$2,$3,$4,$5,$6,$7::timestamptz,$8::timestamptz,$9,$10,$11,$12,$13,$14)
+          region, territory_id, attendees, transfer_of_value, metadata, patient_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7::timestamptz,$8::timestamptz,$9,$10,$11,$12,$13,$14,$15)
        RETURNING ${ENCOUNTER_SELECT_COLS}`,
       [
         input.user_id,
@@ -250,6 +260,7 @@ export async function insertEncounter(
         input.attendees        ?? [],
         JSON.stringify(input.transfer_of_value ?? {}),
         input.metadata ? JSON.stringify(input.metadata) : null,
+        input.patient_id       ?? null,
       ]
     );
     const row = result.rows[0];
@@ -291,6 +302,7 @@ export async function updateEncounter(
     if (input.territory_id !== undefined)    push("territory_id = ?",        input.territory_id);
     if (input.practitioner_id !== undefined) push("practitioner_id = ?",     input.practitioner_id);
     if (input.organization_id !== undefined) push("organization_id = ?",     input.organization_id);
+    if (input.patient_id !== undefined)      push("patient_id = ?",          input.patient_id);
     if (input.attendees !== undefined)       push("attendees = ?",           input.attendees);
     if (input.transfer_of_value !== undefined) push("transfer_of_value = ?", JSON.stringify(input.transfer_of_value));
     if (input.disclosed_at !== undefined)    push("disclosed_at = ?::timestamptz", input.disclosed_at);

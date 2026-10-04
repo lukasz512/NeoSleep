@@ -42,6 +42,7 @@ encounterRouter.get(
         territory_id: typeof req.query.territory_id === "string" ? req.query.territory_id.trim() : undefined,
         status:       typeof req.query.status      === "string" ? req.query.status.trim()      : undefined,
         userId:       typeof req.query.user_id     === "string" ? req.query.user_id.trim()     : undefined,
+        patient_id:   typeof req.query.patient_id  === "string" ? req.query.patient_id.trim()  : undefined,
       });
     });
     res.json(result);
@@ -89,6 +90,7 @@ encounterRouter.post(
         notes:             typeof body.notes             === "string" ? body.notes.trim()              : null,
         practitioner_id:   typeof body.practitioner_id  === "string" ? body.practitioner_id.trim()    : null,
         organization_id:   typeof body.organization_id  === "string" ? body.organization_id.trim()    : null,
+        patient_id:        typeof body.patient_id        === "string" ? body.patient_id.trim()         : null,
         region:            typeof body.region            === "string" ? body.region.trim()             : null,
         territory_id:      typeof body.territory_id     === "string" ? body.territory_id.trim()       : null,
         attendees:         Array.isArray(body.attendees) ? body.attendees as string[]                 : [],
@@ -126,6 +128,7 @@ encounterRouter.patch(
         notes:             body.notes             !== undefined ? (body.notes ? String(body.notes) : null) : undefined,
         practitioner_id:   body.practitioner_id   !== undefined ? (body.practitioner_id ? String(body.practitioner_id) : null) : undefined,
         organization_id:   body.organization_id   !== undefined ? (body.organization_id ? String(body.organization_id) : null) : undefined,
+        patient_id:        body.patient_id        !== undefined ? (body.patient_id ? String(body.patient_id).trim() : null) : undefined,
         region:            body.region            !== undefined ? String(body.region).trim()            : undefined,
         territory_id:      body.territory_id      !== undefined ? (body.territory_id ? String(body.territory_id) : null) : undefined,
         attendees:         Array.isArray(body.attendees) ? body.attendees as string[] : undefined,

@@ -10,6 +10,7 @@ import type { EventSubmitPayload } from "../components/EventForm.types";
  *
  * - type: f2f ↔ visit (FHIR class AMB), video ↔ call (VR); webinar also reads as video.
  * - title, location, video_link → encounter.metadata.
+ * - patient_id → encounter.patient_id (the optional patient the event is for, CORE-137).
  * - attendees → "hco:<id>" / "doctor:<id>" / "patient:<id>" / "lead:<id>" strings.
  */
 
@@ -25,6 +26,7 @@ export function toEncounterBody(payload: EventSubmitPayload): Record<string, unk
     status: payload.status,
     notes: payload.notes ?? null,
     region: payload.region || null,
+    patient_id: payload.patient_id || null,
     attendees: payload.attendees.map((a) => `${a.attendee_type}:${a.attendee_id}`),
     metadata: {
       title: payload.title,
@@ -46,6 +48,7 @@ export interface PlannerEvent {
   video_link?: string;
   notes?: string;
   region?: string;
+  patient_id?: string;
   attendees: { attendee_type: AttendeeType; attendee_id: string }[];
 }
 
@@ -57,6 +60,7 @@ interface EncounterRow {
   status?: string;
   notes?: string | null;
   region?: string | null;
+  patient_id?: string | null;
   attendees?: unknown;
   metadata?: Record<string, unknown> | null;
 }
@@ -81,6 +85,7 @@ export function fromEncounter(row: EncounterRow): PlannerEvent {
     video_link: text(meta.video_link),
     notes: text(row.notes),
     region: text(row.region),
+    patient_id: text(row.patient_id),
     attendees,
   };
 }

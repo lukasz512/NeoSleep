@@ -27,7 +27,7 @@ afterEach(() => {
 });
 
 /** Mounts the dialog open with a valid event; `reply` is what the host's save handler answers. */
-async function openWith(reply: (done: SubmitDone) => void) {
+async function openWith(reply: (done: SubmitDone) => void, extra: Record<string, unknown> = {}, onPayload?: (payload: EventSubmitPayload) => void) {
   setActivePinia(createPinia());
   apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({ items: [] }) } as Response);
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
@@ -35,7 +35,7 @@ async function openWith(reply: (done: SubmitDone) => void) {
   const wrapper = mount(EventForm, {
     props: {
       modelValue: false,
-      onSubmit: (_payload: EventSubmitPayload, done: SubmitDone) => reply(done),
+      onSubmit: (payload: EventSubmitPayload, done: SubmitDone) => { onPayload?.(payload); reply(done); },
     },
     global: { plugins: [i18n, vuetify] },
     attachTo: document.body,
@@ -44,7 +44,7 @@ async function openWith(reply: (done: SubmitDone) => void) {
   // The form seeds itself on the closed → open transition.
   await wrapper.setProps({
     modelValue: true,
-    initialData: { title: "Visit", start_at: "2031-09-10T16:00:00.000Z", end_at: "2031-09-10T17:00:00.000Z" },
+    initialData: { title: "Visit", start_at: "2031-09-10T16:00:00.000Z", end_at: "2031-09-10T17:00:00.000Z", ...extra },
   });
   await flushPromises();
   return wrapper;
@@ -93,5 +93,37 @@ describe("EventForm errors (NEO-109)", () => {
     expect(document.body.querySelector('[data-testid="form-error-summary"]')).toBeNull();
     expect(notify).not.toHaveBeenCalled();
     expect(wrapper.emitted("update:modelValue")).toBeUndefined();
+  });
+});
+
+describe("EventForm patient link (CORE-137)", () => {
+  it("shows an optional single-patient picker", async () => {
+    await openWith((done) => done(true));
+    const field = document.body.querySelector('[data-testid="event-patient"]');
+    expect(field).not.toBeNull();
+    expect(field?.textContent).toContain("For patient");
+  });
+
+  it("sends the chosen patient as patient_id when saving", async () => {
+    let sent: EventSubmitPayload | undefined;
+    await openWith((done) => done(true), { patient_id: "p-1" }, (p) => { sent = p; });
+    clickSave();
+    await flushPromises();
+    expect(sent?.patient_id).toBe("p-1");
+  });
+
+  it("an event without a patient sends patient_id null", async () => {
+    let sent: EventSubmitPayload | undefined;
+    await openWith((done) => done(true), {}, (p) => { sent = p; });
+    clickSave();
+    await flushPromises();
+    expect(sent?.patient_id).toBeNull();
+  });
+
+  it("a 400 naming patient_id marks the picker", async () => {
+    await openWith((done) => done(false, { patient_id: "invalid" }));
+    clickSave();
+    await flushPromises();
+    expect(document.body.querySelector('[data-testid="form-error-summary"]')?.textContent).toContain("For patient");
   });
 });

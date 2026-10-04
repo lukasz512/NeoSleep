@@ -165,7 +165,7 @@ const TIMELINE_SELECT = `SELECT a.id, a.created_at, a.user_id, a.action, a.entit
 /**
  * CORE-133: everything that happened to a patient — their own record plus
  * every row about something linked to them (appointments incl. emails sent
- * about them, sleep studies, treatment plans, questionnaire links; deleted
+ * about them, events (CORE-137), sleep studies, treatment plans, questionnaire links; deleted
  * ones too, so a deletion still shows), and any row that names the patient
  * in entity_before/entity_after/metadata (partner orders, uploads). Reads
  * stay out (NEO-83). The caller redacts fields per entity type.
@@ -181,6 +181,7 @@ export async function getPatientTimeline(client: PoolClient, patientId: string):
            || ARRAY(SELECT id::text FROM sleep_study WHERE patient_id = $1::uuid)
            || ARRAY(SELECT id::text FROM treatment_plan WHERE patient_id = $1::uuid)
            || ARRAY(SELECT id::text FROM questionnaire_request WHERE patient_id = $1::uuid)
+           || ARRAY(SELECT id::text FROM encounter WHERE patient_id = $1::uuid)
          )
          OR a.entity_after->>'patient_id' = $1::text
          OR a.entity_before->>'patient_id' = $1::text

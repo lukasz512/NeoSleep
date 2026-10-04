@@ -25,6 +25,7 @@ export const EVENT_API_TO_FORM_KEY: Record<string, keyof EventFormData> = {
   video_link: "videoLink",
   notes: "notes",
   region: "region",
+  patient_id: "patientId",
 };
 
 /** Map API status → UI status. */
@@ -55,7 +56,7 @@ export function useEventForm(
 
   const form = ref<EventFormData>({
     title: "", start: "", end: "", type: "f2f", status: "planned",
-    hcoIds: [], hcpIds: [], patientIds: [], location: "", videoLink: "", notes: "", region: "",
+    hcoIds: [], hcpIds: [], patientIds: [], patientId: null, location: "", videoLink: "", notes: "", region: "",
   });
 
   const typeItems = computed(() => [
@@ -103,6 +104,7 @@ export function useEventForm(
       { key: "end", label: t("user.planner.form.fieldEnd"), value: f.end, rules: endRules.value },
       { key: "type", label: t("user.planner.form.fieldType"), value: f.type },
       { key: "status", label: t("user.planner.form.fieldStatus"), value: f.status },
+      { key: "patientId", label: t("user.planner.form.fieldEventPatient"), value: f.patientId ?? "" },
     ];
     if (f.type === "f2f") fields.push({ key: "location", label: t("user.planner.form.fieldLocation"), value: f.location });
     if (f.type === "video") fields.push({ key: "videoLink", label: t("user.planner.form.fieldVideoLink"), value: f.videoLink });
@@ -220,6 +222,7 @@ export function useEventForm(
     return (
       !eq(f.title, snap.title) || !eq(f.start, snap.start) || !eq(f.end, snap.end) ||
       f.type !== snap.type || f.status !== snap.status ||
+      (f.patientId ?? null) !== (snap.patientId ?? null) ||
       JSON.stringify([...f.hcoIds].sort()) !== JSON.stringify([...snap.hcoIds].sort()) ||
       JSON.stringify([...f.hcpIds].sort()) !== JSON.stringify([...snap.hcpIds].sort()) ||
       JSON.stringify([...f.patientIds].sort()) !== JSON.stringify([...snap.patientIds].sort()) ||
@@ -276,6 +279,7 @@ export function useEventForm(
         video_link: form.value.videoLink.trim() || null,
         notes: form.value.notes.trim() || null,
         region: form.value.region.trim(),
+        patient_id: form.value.patientId || null,
         attendees,
       };
       const result = await new Promise<{ ok: boolean; fieldErrors?: FieldErrors }>((resolve) =>
@@ -310,6 +314,7 @@ export function useEventForm(
             hcoIds:    [...hcoIds],
             hcpIds:    [...hcpIds],
             patientIds: [...patientIds],
+            patientId: initial.patientId ?? initial.patient_id ?? null,
             location:  (initial.location ?? "").trim(),
             videoLink: (initial.videoLink ?? initial.video_link ?? "").trim(),
             notes:     (initial.notes ?? "").trim(),
@@ -318,7 +323,7 @@ export function useEventForm(
         } else {
           form.value = {
             title: "", start: "", end: "", type: "f2f", status: "planned",
-            hcoIds: [], hcpIds: [], patientIds: [], location: "", videoLink: "", notes: "", region: "",
+            hcoIds: [], hcpIds: [], patientIds: [], patientId: null, location: "", videoLink: "", notes: "", region: "",
           };
         }
         initialFormSnapshot.value = { ...form.value };

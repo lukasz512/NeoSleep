@@ -68,6 +68,31 @@
           class="pwa-form-row-item"
         />
       </div>
+      <!-- CORE-137: the one patient this event is for — it then shows on their card and History. -->
+      <VAutocomplete
+        :ref="(el) => setFieldEl('patientId', el)"
+        v-model="form.patientId"
+        :error-messages="serverError('patientId')"
+        :label="t('user.planner.form.fieldEventPatient')"
+        :items="patientOptions"
+        item-title="name"
+        item-value="id"
+        variant="outlined"
+        density="comfortable"
+        class="mb-3"
+        clearable
+        :loading="loadingPatient"
+        :placeholder="t('user.planner.form.fieldEventPatientPlaceholder')"
+        data-testid="event-patient"
+      >
+        <template #item="{ internalItem: item, props: itemProps }">
+          <VListItem v-if="item.value" v-bind="itemProps" :title="item.raw.name">
+            <template #prepend>
+              <AppAvatar :name="item.raw.name" entity-type="patient" :size="28" />
+            </template>
+          </VListItem>
+        </template>
+      </VAutocomplete>
       <VAutocomplete
         v-model="form.hcoIds"
         :label="t('user.planner.form.fieldHco')"
@@ -258,6 +283,8 @@ export interface EventFormData {
   hcoIds: string[];
   hcpIds: string[];
   patientIds: string[];
+  /** The one patient the event is for (encounter.patient_id, CORE-137) — shows on their card and History. */
+  patientId: string | null;
   location: string;
   videoLink: string;
   notes: string;
@@ -276,6 +303,8 @@ export interface EventFormInitialData {
   hcoIds?: string[];
   hcpIds?: string[];
   patientIds?: string[];
+  patientId?: string | null;
+  patient_id?: string | null;
   attendees?: { attendee_type: string; attendee_id: string }[];
   location?: string;
   video_link?: string;
@@ -295,6 +324,7 @@ export interface EventSubmitPayload {
   video_link?: string | null;
   notes?: string | null;
   region: string;
+  patient_id?: string | null;
   attendees: { attendee_type: "doctor" | "hco" | "lead" | "patient"; attendee_id: string; is_primary?: boolean }[];
 }
 
