@@ -34,6 +34,7 @@ import { intlLocale } from "@i18n/language-options";
 import TmjSkull from "../questionnaire/TmjSkull.vue";
 import { apiFetch } from "../../composables/useApi";
 import { tmjSideCounts } from "../../config/questionnaires";
+import { onPatientChecklistUpdated } from "../../composables/usePatientChecklist";
 
 /**
  * The patient's latest ATM evaluation on Detalles → Clínico (NEO-237 D1):
@@ -75,6 +76,8 @@ async function load(): Promise<void> {
   }
 }
 onMounted(load);
+// A saved ATM evaluation shows here without a reload (NEO-240).
+onPatientChecklistUpdated(() => props.patientId, () => void load());
 watch(
   () => props.patientId,
   () => {

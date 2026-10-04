@@ -145,10 +145,23 @@ export function checklistSegments(items: ChecklistItem[]): Array<(typeof SEGMENT
   return items.map((item) => SEGMENT_BY_STATUS[item.status]);
 }
 
-const CHECKLIST_UPDATED = "patient-checklist-updated";
+export const CHECKLIST_UPDATED = "patient-checklist-updated";
 interface ChecklistUpdated {
   patientId: string;
   version: string;
+}
+
+/**
+ * Runs `refresh` whenever this patient's checklist moved (a record saved,
+ * uploaded or deleted anywhere on screen) — for views that read the records
+ * themselves, like the ATM card on Detalles (NEO-240).
+ */
+export function onPatientChecklistUpdated(patientId: () => string, refresh: () => void): void {
+  const listener = (event: Event) => {
+    if ((event as CustomEvent<ChecklistUpdated>).detail.patientId === patientId()) refresh();
+  };
+  onMounted(() => window.addEventListener(CHECKLIST_UPDATED, listener));
+  onBeforeUnmount(() => window.removeEventListener(CHECKLIST_UPDATED, listener));
 }
 
 export function usePatientChecklist(patientId: () => string) {
