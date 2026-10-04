@@ -74,6 +74,8 @@ export interface DeviceOrderContext {
   deliveryIssues: OrderIssue[];
   minDesiredDate: string | null;
   rulesVersion: string;
+  /** Per-tenant kill switch (NEO-210): false means Confirm will 409 — shown before the doctor fills anything. */
+  sendEnabled: boolean;
 }
 
 /**
@@ -179,6 +181,8 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
   const submitLoading = ref(false);
   /** Issues the API returned on the last save/confirm (same paths as the local validator); cleared field by field as they're edited. */
   const serverIssues = ref<OrderIssue[]>([]);
+  /** Set when a send 409'd with LAB_ORDERS_DISABLED (NEO-210) — shown as an inline message, not a generic failure toast. */
+  const labOrdersDisabled = ref(false);
 
   /** The shared validator over the live order — the wizard filters it per step. */
   const validation = computed<OrderValidation>(() =>
@@ -298,6 +302,7 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
   function resetForOpen(draftPlan: OrthoApneaDraftPlan | null | undefined) {
     currentDraftPlanId.value = draftPlan?.id ?? null;
     serverIssues.value = [];
+    labOrdersDisabled.value = false;
     context.value = null;
     contextFailed.value = false;
     deliveryOrganizationId.value = null;
@@ -384,6 +389,8 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
         deliveryIssues: parseIssues(body.deliveryIssues),
         minDesiredDate: typeof body.minDesiredDate === "string" ? body.minDesiredDate : null,
         rulesVersion: typeof body.rulesVersion === "string" ? body.rulesVersion : "",
+        // Missing on an older API response reads as enabled — the 409 on Confirm is the authority either way.
+        sendEnabled: (body as Partial<DeviceOrderContext>).sendEnabled !== false,
       };
       applyDesiredDate();
     } catch (err) {
@@ -456,6 +463,8 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
     | { kind: "sent" }
     | { kind: "rejected"; issues: OrderIssue[] }
     | { kind: "conflict"; code: ConflictCode }
+    /** The tenant's kill switch is off (NEO-210) — never retried as a generic failure. */
+    | { kind: "disabled" }
     | { kind: "failed" };
 
   async function sendOrder(unsent: UnsentOrder): Promise<SendResult> {
@@ -470,6 +479,7 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
       if (res.status === 409) {
         // benign: a 409 without a JSON code still means "don't retry" — it falls back to SUBMISSION_PENDING.
         const body = (await res.json().catch(() => null)) as { code?: unknown } | null;
+        if (body?.code === "LAB_ORDERS_DISABLED") return { kind: "disabled" };
         const code: ConflictCode =
           body?.code === "PARTNER_ORDER_ALREADY_SUBMITTED" ? "PARTNER_ORDER_ALREADY_SUBMITTED" : "PARTNER_ORDER_SUBMISSION_PENDING";
         return { kind: "conflict", code };
@@ -504,6 +514,7 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
     const result = await sendOrder(unsent);
     if (result.kind === "sent") notifications.show(t("app.orthoApneaOrder.success"), "success", undefined, ORDER_TOAST);
     else if (result.kind === "conflict") showConflict(result.code);
+    else if (result.kind === "disabled") labOrdersDisabled.value = true;
     else showOrderFailure(result.kind === "failed" ? unsent : null);
   }
 
@@ -521,6 +532,7 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
   async function confirmOrder(patientId: string, sleepStudyId: string): Promise<boolean> {
     if (submitLoading.value) return false;
     serverIssues.value = [];
+    labOrdersDisabled.value = false;
     submitLoading.value = true;
     try {
       const dentist = order.dentistId || undefined;
@@ -563,6 +575,12 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
         showConflict(result.code);
         return true;
       }
+      if (result.kind === "disabled") {
+        // The plan is already saved as a draft; keep the dialog open so the
+        // doctor sees why — no toast, the inline message is the message (NEO-210).
+        labOrdersDisabled.value = true;
+        return false;
+      }
       showOrderFailure(result.kind === "failed" ? unsent : null);
       return true;
     } catch (err) {
@@ -588,6 +606,7 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
     currentDraftPlanId,
     submitLoading,
     serverIssues,
+    labOrdersDisabled,
     validation,
     deliveryIssues,
     setSequenceType,

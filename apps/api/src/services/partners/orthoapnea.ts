@@ -295,6 +295,18 @@ const FETCH_TIMEOUT_MS = 20_000;
 /** The request was sent and OA did not answer in time — it may or may not have acted on it. */
 class OrthoApneaTimeoutError extends PartnerServiceError {}
 
+/** Connection never opened, so the lab cannot have received the request. */
+const NOT_SENT_CODES = new Set(["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "EHOSTUNREACH", "ENETUNREACH", "BAD_PORT"]);
+
+/** undici's fetch wraps the socket error: TypeError("fetch failed") with `cause.code`. */
+function networkErrorCode(err: unknown): string {
+  const cause = err instanceof Error && err.cause instanceof Error ? err.cause : err;
+  const code = cause instanceof Error ? (cause as Error & { code?: unknown }).code : undefined;
+  if (typeof code === "string") return code;
+  // fetch refuses a blocked port before opening any socket, with no code.
+  return cause instanceof Error && cause.message === "bad port" ? "BAD_PORT" : "";
+}
+
 async function authedFetch(path: string, init: RequestInit = {}, isRetry = false): Promise<Response> {
   const { token } = await ensureSession();
   const controller = new AbortController();
@@ -310,7 +322,14 @@ async function authedFetch(path: string, init: RequestInit = {}, isRetry = false
     if (controller.signal.aborted) {
       throw new OrthoApneaTimeoutError("orthoapnea", `request to ${path} timed out after ${FETCH_TIMEOUT_MS}ms`, cause);
     }
-    throw cause;
+    // NEO-210: a raw network failure used to escape as a generic 500. When the
+    // connection never opened, the lab never saw the request → a plain 502.
+    // Anything else (reset mid-request) may have reached the lab, so it's as
+    // ambiguous as a timeout and must keep the order pending, not "failed".
+    if (NOT_SENT_CODES.has(networkErrorCode(cause))) {
+      throw new PartnerServiceError("orthoapnea", `request to ${path} could not connect`, cause);
+    }
+    throw new OrthoApneaTimeoutError("orthoapnea", `request to ${path} lost its connection`, cause);
   } finally {
     clearTimeout(timeout);
   }

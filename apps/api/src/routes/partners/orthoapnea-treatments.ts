@@ -15,7 +15,8 @@ import {
 } from "../../services/partners/orthoapnea.js";
 import { SyncOrthoApneaTreatmentStatusesAllTenantsCommand } from "../../commands/orthoapneaSync.js";
 import { CreateNoteCommand } from "../../commands/note.js";
-import { ForbiddenError, ValidationError } from "../../errors.js";
+import { ForbiddenError, LabOrdersDisabledError, ValidationError } from "../../errors.js";
+import { getLabOrdersSendConfig } from "../../db/config.js";
 import { requirePatientInScope } from "../../queries/entityAccess.js";
 import { routeParam } from "../utils.js";
 
@@ -51,6 +52,9 @@ orthoapneaTreatmentsRouter.post(
       const ctx = await buildContext(req, client, slug);
       await requirePatientInScope(ctx, patientId);
     });
+    // Kill switch (NEO-210): before the write, never after.
+    const { sendEnabled } = await getLabOrdersSendConfig();
+    if (!sendEnabled) throw new LabOrdersDisabledError();
     const externalId = await ensureOrthoApneaPatient(slug, patientId);
 
     res.json({ externalId });
@@ -151,6 +155,10 @@ orthoapneaTreatmentsRouter.post(
     // below is deliberately its own short transaction too, not part of it.
     let orthoApneaResult: { notificationId: string; emailed: boolean } | null = null;
     if (notifyOrthoApnea) {
+      // Kill switch (NEO-210): the local note above is always saved; only the
+      // email to the lab is gated, and gated before it's sent.
+      const { sendEnabled } = await getLabOrdersSendConfig();
+      if (!sendEnabled) throw new LabOrdersDisabledError();
       orthoApneaResult = await addOrthoApneaComment(slug, treatmentPlanId, text);
       await withTenant(slug, (client) =>
         insertAuditLog(client, {

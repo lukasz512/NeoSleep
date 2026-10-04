@@ -106,7 +106,7 @@ async function prewarmOaCallGraph(s: Setup, productCode = "002"): Promise<void> 
 }
 
 describe("audit reconstruction release gate (NEO-210)", () => {
-  it("audit_log + partner_transaction reconstruct the exact sent JSON, the acting user id, and the timestamp — but NOT the acting user's role, and request_log contributes nothing", async () => {
+  it("audit_log + partner_transaction reconstruct the exact sent JSON, the acting user id + role, client and timestamp; request_log contributes nothing", async () => {
     const s = await setup();
     const res = await submit(s);
     expect(res.status).toBe(201);
@@ -162,20 +162,11 @@ describe("audit reconstruction release gate (NEO-210)", () => {
     expect(link.entity_id).toBe(s.planId); // the only place this link exists
     expect(transactions[0]).not.toHaveProperty("entity_id");
 
-    // --- FINDING 3: the acting user's ROLE at the time of the action is not
-    // captured anywhere — not on audit_log (no role column), not in its
-    // metadata (actingUserId only, no role), not on partner_transaction (no
-    // user reference at all). Reconstructing "who did this, as what role"
-    // from the audit trail alone is only half-possible: id yes, role no.
-    expect(auditRow).not.toHaveProperty("role");
-    expect(auditRow.metadata).not.toHaveProperty("role");
-    expect(auditRow.entity_after).not.toHaveProperty("role");
-
-    // --- FINDING 4: audit_log HAS user_ip/user_agent columns (schema
-    // supports it) but this call site (routes/deviceOrders.ts) never passes
-    // them to insertAuditLog — they're always null for this action.
-    expect(auditRow.user_ip).toBeNull();
-    expect(auditRow.user_agent).toBeNull();
+    // --- Fixed in NEO-210 (were findings 3 + 4): the acting user's role and
+    // client are now on the audit row, so "who did this, as what role, from
+    // where" is reconstructable from audit_log alone.
+    expect(auditRow.metadata).toMatchObject({ actingUserRole: expect.any(String) });
+    expect(auditRow.user_ip).toBeTruthy();
   });
 });
 
@@ -224,7 +215,7 @@ describe("ambiguous timeout (orthoapnea.ts ~1441/1455, CORE-95 D3)", () => {
 });
 
 describe("lab fully unreachable after a session is already established", () => {
-  it("surfaces as a generic 500 (not the 502 used for an HTTP-level lab failure) but still leaves no misleading 'sent' state — FINDING: inconsistent status code for a real outage", async () => {
+  it("a refused connection is a 502 PARTNER_SERVICE_ERROR like any lab failure, and leaves no misleading 'sent' state", async () => {
     const s = await setup();
     await prewarmOaCallGraph(s); // establishes + caches a valid session against the replica
 
@@ -237,16 +228,10 @@ describe("lab fully unreachable after a session is already established", () => {
     }
     await trackLink(s.planId);
 
-    // FINDING: every HTTP-level OrthoApnea failure in this file (502 tests
-    // above/elsewhere) is wrapped as PartnerServiceError → 502. A raw network
-    // failure on the create_treatment call is re-thrown unwrapped (see
-    // orthoapnea.ts's authedFetch: `if (controller.signal.aborted) throw
-    // OrthoApneaTimeoutError...; throw cause;`), so it falls through to the
-    // generic errorHandler branch → 500 "Internal server error", giving the
-    // rep/doctor no actionable signal that this was OrthoApnea being down
-    // rather than a NeoSleep bug.
-    expect(res.status).toBe(500);
-    expect(res.body.error).toBe("Internal server error");
+    // NEO-210: the connection never opened, so the lab never saw the request —
+    // same 502 as an HTTP-level lab failure, not a generic 500.
+    expect(res.status).toBe(502);
+    expect(res.body.code).toBe("PARTNER_SERVICE_ERROR");
 
     // What correctness actually requires DOES hold: no row is left looking
     // "sent" — the link is unambiguously 'failed' (this was a hard failure,

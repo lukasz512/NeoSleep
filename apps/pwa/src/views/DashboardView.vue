@@ -4,6 +4,7 @@
       <p class="dashboard-view__placeholder">{{ t("user.dashboard.title") }}</p>
     </div>
     <DeviceOrderReconciliationCard mode="full" />
+    <LabOrdersSwitchCard v-if="isAdmin" />
     <DeviceOrderCommentsCard v-if="isAdmin" />
   </div>
 </template>
@@ -13,6 +14,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import DeviceOrderReconciliationCard from "../components/DeviceOrderReconciliationCard.vue";
 import DeviceOrderCommentsCard from "../components/dashboard/DeviceOrderCommentsCard.vue";
+import LabOrdersSwitchCard from "../components/dashboard/LabOrdersSwitchCard.vue";
 import { useAuthStore } from "../stores/auth";
 
 const { t } = useI18n();
