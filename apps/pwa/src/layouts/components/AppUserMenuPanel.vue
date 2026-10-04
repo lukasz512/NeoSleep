@@ -10,7 +10,7 @@
   >
     <!-- NEO-154 / NEO-161: text left, avatar right — the app bar's avatar
          flies in and grows into the card's top-right corner, inset like the
-         rest of the card's content (data-motion marks what AppAccountMenu's
+         rest of the card's content (data-motion marks what AppGlassPopover's
          CSS motion moves). -->
     <div class="user-menu__identity">
       <div class="user-menu__who">
@@ -185,19 +185,19 @@ function onLocaleChange(value: string) {
 </script>
 
 <style scoped>
-/* The surrounding card (AppAccountMenu) paints the surface, border and corners. */
+/* The surrounding card (AppGlassPopover) paints the surface, border and corners. */
 .user-menu {
   display: flex;
   flex-direction: column;
 }
 
-/* The avatar lands on the app bar's avatar: useAccountMenuMotion's placeCard
+/* The avatar lands on the app bar's avatar: useGlassPopoverMotion's placeCard
    sets how far it sits from the card's top and end edge. */
 .user-menu__identity {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: var(--account-menu-avatar-top, 16px) var(--account-menu-avatar-end, 16px) 14px 16px;
+  padding: var(--glass-popover-anchor-top, 16px) var(--glass-popover-anchor-end, 16px) 14px 16px;
 }
 
 .user-menu__avatar {
