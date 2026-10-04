@@ -107,12 +107,13 @@ export async function planAppointmentPatientEmail(
   appointment: Appointment,
   kind: AppointmentEmailKind,
   sentBy: string | null,
-  scheduled?: { stamp: { confirmRequest?: boolean; dayBefore?: boolean } },
+  scheduled?: { stamp: { confirmRequest?: boolean; dayBefore?: boolean; todayReminder?: boolean } },
   now: Date = new Date()
 ): Promise<AppointmentPatientEmailPlan> {
   const token = generateToken();
   const expiresAt = new Date(new Date(appointment.end_at).getTime() + LINK_TTL_AFTER_VISIT_MS);
-  let ask = kind !== "cancelled" && kind !== "reminder";
+  // CORE-113 part 2: "today" is a plain day-of reminder — no confirm / can't-come buttons, same as "reminder".
+  let ask = kind !== "cancelled" && kind !== "reminder" && kind !== "today";
   let confirmLater = false;
   let stamp = scheduled?.stamp;
   if (!scheduled && (kind === "booked" || kind === "rescheduled") && appointmentRemindersEnabled()) {
@@ -189,7 +190,12 @@ export async function deliverAppointmentPatientEmail(tenantSlug: string, plan: A
         }
         return { outcome: "no_email" as const };
       }
-      const consent = plan.kind !== "booked" && plan.kind !== "rescheduled" ? null : await consentToSign(client, appointment, context.patient_email, plan, frontendOrigin);
+      const consent =
+        plan.kind === "booked" || plan.kind === "rescheduled"
+          ? await consentToSign(client, appointment, context.patient_email, plan, frontendOrigin)
+          : plan.kind === "today"
+            ? await todayConsentToSign(client, appointment, context.patient_email, frontendOrigin)
+            : null;
       return { outcome: "ready" as const, appointment, context, email: context.patient_email, consent };
     });
     if (prepared.outcome !== "ready") return prepared.outcome;
@@ -295,6 +301,39 @@ async function consentToSign(
     entity_type: "QuestionnaireRequest",
     entity_id: request.id,
     entity_after: { patient_id: appointment.patient_id, items: [INFORMED_CONSENT_KEY], expires_at: appointment.end_at, via: "appointment_email" },
+  });
+  return { link: `${frontendOrigin}/q#${token}` };
+}
+
+/**
+ * CORE-113 part 2: the same consent-link decision as consentToSign() above,
+ * for the day-of "Su cita es hoy" reminder — sent by the scheduled job with
+ * no human actor, so (unlike consentToSign()) it never bails out for a null
+ * sentBy; created_by is just left null, same as this job's other system
+ * emails. Shared address → no link; already signed → no link; either way
+ * the reminder itself still goes out.
+ */
+async function todayConsentToSign(client: PoolClient, appointment: Appointment, email: string, frontendOrigin: string): Promise<{ link: string | null } | null> {
+  const context = await getAppointmentEmailContext(client, appointment.id);
+  const locale = patientEmailLocale(context?.patient_language ?? null, context?.patient_region ?? null);
+  const state = await getInformedConsentState(client, appointment.patient_id, locale);
+  if (!state.applicable || state.signed) return null;
+  if (await isPatientEmailHeldByAnother(client, appointment.patient_id, email)) return { link: null };
+
+  const token = generateToken();
+  const request = await insertQuestionnaireRequest(client, {
+    patient_id: appointment.patient_id,
+    items: [INFORMED_CONSENT_KEY],
+    token_hash: hashToken(token),
+    expires_at: new Date(appointment.end_at),
+    created_by: null,
+  });
+  await insertAuditLog(client, {
+    user_id: null,
+    action: "create",
+    entity_type: "QuestionnaireRequest",
+    entity_id: request.id,
+    entity_after: { patient_id: appointment.patient_id, items: [INFORMED_CONSENT_KEY], expires_at: appointment.end_at, via: "appointment_today_reminder" },
   });
   return { link: `${frontendOrigin}/q#${token}` };
 }

@@ -455,8 +455,12 @@ export async function sendPatientSignedCopyEmail(
   return id;
 }
 
-/** booked / rescheduled / cancelled follow a staff action; ask (the 2-day / day-before ask) and reminder come from the CORE-116 schedule. */
-export type AppointmentEmailKind = "booked" | "rescheduled" | "cancelled" | "ask" | "reminder";
+/**
+ * booked / rescheduled / cancelled follow a staff action; ask (the 2-day /
+ * day-before ask) and reminder come from the CORE-116 schedule; today is the
+ * CORE-113 part 2 "Su cita es hoy" email, 2 hours before the visit.
+ */
+export type AppointmentEmailKind = "booked" | "rescheduled" | "cancelled" | "ask" | "reminder" | "today";
 
 export interface AppointmentEmail {
   kind: AppointmentEmailKind;
@@ -525,6 +529,7 @@ const APPOINTMENT_STATUS: Record<AppointmentEmailKind, { icon: EmailIconName; co
   cancelled: { icon: "x", color: "#B3261E", bg: "#FDECEA" },
   ask: { icon: "calendar", color: APPT.teal, bg: APPT.soft },
   reminder: { icon: "check", color: APPT.teal, bg: APPT.soft },
+  today: { icon: "check", color: APPT.teal, bg: APPT.soft },
 };
 
 const iconImg = (name: EmailIconName, size = 20): string =>

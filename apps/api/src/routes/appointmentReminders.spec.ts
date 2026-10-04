@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import bcrypt from "bcrypt";
 import type { AppointmentEmail } from "../mailer.js";
@@ -19,10 +19,11 @@ vi.mock("../mailer.js", async (importActual) => ({
 }));
 
 const { app } = await import("../server.js");
-const { withTenant, insertStaffUser, insertPatient, insertPractitioner, insertOrganization } = await import("../db.js");
+const { withTenant, withPlatform, insertStaffUser, insertPatient, insertPractitioner, insertOrganization } = await import("../db.js");
+const { insertDocumentContentVersion, getCurrentDocumentContentVersion } = await import("../db/documentContent.js");
 const { signAuthToken } = await import("../utils/jwt.js");
-const { RunAppointmentRemindersForTenant } = await import("../commands/appointmentReminders.js");
-const { localHourDaysBefore } = await import("../utils/appointmentSchedule.js");
+const { RunAppointmentRemindersForTenant, RunAppointmentRemindersAllTenants } = await import("../commands/appointmentReminders.js");
+const { localHourDaysBefore, todayReminderDueAt } = await import("../utils/appointmentSchedule.js");
 
 const TENANT_SLUG = process.env.DEFAULT_TENANT_SLUG ?? "test";
 const ORIGIN = "https://pwa.example.test";
@@ -37,6 +38,18 @@ let slot = 0;
 function visitStart(): string {
   slot += 1;
   return new Date(Date.UTC(2033, 2, 1, 15) + slot * 7 * 86_400_000 + Math.floor(Math.random() * 500) * 3_600_000).toISOString();
+}
+
+/**
+ * Always mid-afternoon clinic (MX) time, so the 2-hour-before mark sits
+ * safely inside the 08:00–20:00 window — visitStart()'s broad random hour
+ * range can otherwise land the clamp right on the visit's own start (that
+ * edge case is covered on its own by appointmentSchedule.spec.ts).
+ */
+let todaySlot = 0;
+function visitStartAfternoon(): string {
+  todaySlot += 1;
+  return new Date(Date.UTC(2034, 5, 1, 20) + todaySlot * 11 * 86_400_000).toISOString(); // 20:00 UTC = 14:00 Mexico City
 }
 
 async function admin(): Promise<{ id: string; auth: string }> {
@@ -194,5 +207,140 @@ describe("scheduled appointment emails (CORE-116)", () => {
     const [booking] = emailsFor(id);
     expect(booking?.links.confirm).toMatch(/\/a\?r=confirm#/);
     expect(booking?.confirmLater).toBe(false);
+  });
+});
+
+/**
+ * CORE-113 part 2 (decision form consent-visit-r1): on top of the CORE-116
+ * schedule, a last "Su cita es hoy" email goes out 2 hours before the visit
+ * with the patient's still-unsigned informed consent — same rules as the
+ * booking email's consentToSign(): no link to a shared address, no link once
+ * signed (the reminder itself still goes out either way). Stamped so a
+ * retried tick never sends it twice.
+ */
+describe("the 2-hour 'today' reminder with the unsigned consent link (CORE-113 part 2)", () => {
+  let seeded: { id: string; previousId: string | null } | null = null;
+  beforeAll(async () => {
+    seeded = await withPlatform(async (client) => {
+      const previous = await getCurrentDocumentContentVersion(client, "informedConsent", "mx");
+      const version = await insertDocumentContentVersion(client, {
+        templateKey: "informedConsent",
+        locale: "mx",
+        contentHtml: "<p>Autorizo el tratamiento. {legalEntityName}</p>",
+        createdByUserId: "00000000-0000-0000-0000-000000000000",
+        createdByName: "QA",
+        createdByEmail: "qa@neosleepcare.com",
+        createdByTenantSlug: TENANT_SLUG,
+        changeNote: "seeded by routes/appointmentReminders.spec.ts (CORE-113 part 2)",
+      });
+      return { id: version.id, previousId: previous?.id ?? null };
+    });
+  }, 15000);
+
+  afterAll(async () => {
+    if (!seeded) return;
+    const { id, previousId } = seeded;
+    await withPlatform(async (client) => {
+      await client.query(`DELETE FROM platform.document_content_version WHERE id = $1`, [id]);
+      if (previousId) await client.query(`UPDATE platform.document_content_version SET is_current = true WHERE id = $1`, [previousId]);
+    });
+  });
+
+  beforeEach(() => {
+    sendMock.mockClear();
+    process.env.APPOINTMENT_REMINDERS = "on";
+  });
+  afterEach(() => {
+    delete process.env.APPOINTMENT_REMINDERS;
+  });
+
+  /** Settles the 2-day ask (confirmed) and the day-before reminder, so only the 2-hour step is left open; returns the moment it becomes due. */
+  async function stepToTwoHoursBefore(id: string, start: string): Promise<Date> {
+    await RunAppointmentRemindersForTenant(TENANT_SLUG, ORIGIN, localHourDaysBefore(start, MX, 2, 10));
+    await respond(id, "confirmed");
+    await RunAppointmentRemindersForTenant(TENANT_SLUG, ORIGIN, localHourDaysBefore(start, MX, 1, 10));
+    return todayReminderDueAt(start, MX); // the 2-hours-before mark, clamped to 08:00–20:00 clinic time (CORE-113 Done-when)
+  }
+
+  it("due within 2 hours, unsigned, own address: a 'today' email with the consent link; a later tick never resends it", async () => {
+    const a = await admin();
+    const s = await setup();
+    const start = visitStartAfternoon();
+    const id = await book(a.auth, s, start);
+    const dueAt = await stepToTwoHoursBefore(id, start);
+
+    await RunAppointmentRemindersForTenant(TENANT_SLUG, ORIGIN, new Date(dueAt.getTime() - 3_600_000));
+    expect(emailsFor(id).map((e) => e.kind)).toEqual(["booked", "ask", "reminder"]); // more than 2h away: nothing yet
+
+    await RunAppointmentRemindersForTenant(TENANT_SLUG, ORIGIN, dueAt);
+    const today = emailsFor(id).at(-1);
+    expect(today?.kind).toBe("today");
+    expect(today?.consent?.link).toMatch(/\/q#[A-Za-z0-9_-]{43}$/);
+    expect(today?.links.confirm).toBeNull();
+    expect(today?.links.cannotAttend).toBeNull();
+
+    await RunAppointmentRemindersForTenant(TENANT_SLUG, ORIGIN, new Date(dueAt.getTime() + 5 * 60_000));
+    expect(emailsFor(id).map((e) => e.kind)).toEqual(["booked", "ask", "reminder", "today"]); // idempotent — no resend
+  });
+
+  it("an address shared with another identity: the 'today' email still goes out, without a link", async () => {
+    const a = await admin();
+    const s = await setup();
+    const sharedEmail = `qa-rem-shared-${uniqueSuffix()}@example.org`;
+    await withTenant(TENANT_SLUG, (client) =>
+      client.query(`UPDATE identities SET email = $2 WHERE id = (SELECT identity_id FROM patient WHERE id = $1)`, [s.patientId, sharedEmail])
+    );
+    await withTenant(TENANT_SLUG, async (client) => {
+      const otherDoc = await insertPractitioner(client, { first_name: "Ana", last_name: `Doc2-${uniqueSuffix()}`, email: `qa-rem-doc2-${uniqueSuffix()}@neosleepcare.com` });
+      await insertPatient(client, { first_name: "Otro", last_name: `Pac2-${uniqueSuffix()}`, practitioner_id: otherDoc.id, email: sharedEmail, region: "MX" });
+    });
+    const start = visitStartAfternoon();
+    const id = await book(a.auth, s, start);
+    const dueAt = await stepToTwoHoursBefore(id, start);
+
+    await RunAppointmentRemindersForTenant(TENANT_SLUG, ORIGIN, dueAt);
+    const today = emailsFor(id).at(-1);
+    expect(today?.kind).toBe("today");
+    expect(today?.consent).toEqual({ link: null });
+  });
+
+  it("an already-signed consent: the 'today' reminder still goes out, without a link", async () => {
+    const a = await admin();
+    const s = await setup();
+    await withTenant(TENANT_SLUG, (client) =>
+      client.query(
+        `INSERT INTO consent (entity_type, entity_id, legal_basis, jurisdiction, purpose, granted_at, metadata)
+         VALUES ('patient', $1, 'consent', 'MX', 'informedConsent', now(), jsonb_build_object('content_version_id', $2::text))`,
+        [s.patientId, seeded!.id]
+      )
+    );
+    const start = visitStartAfternoon();
+    const id = await book(a.auth, s, start);
+    const dueAt = await stepToTwoHoursBefore(id, start);
+
+    await RunAppointmentRemindersForTenant(TENANT_SLUG, ORIGIN, dueAt);
+    const today = emailsFor(id).at(-1);
+    expect(today?.kind).toBe("today");
+    expect(today?.consent).toBeNull();
+  });
+
+  it("a cancelled appointment: nothing is sent at the 2-hour mark", async () => {
+    const a = await admin();
+    const s = await setup();
+    const start = visitStartAfternoon();
+    const id = await book(a.auth, s, start);
+    const dueAt = await stepToTwoHoursBefore(id, start);
+    await request(app).patch(`/api/v1/appointments/${id}`).set("Authorization", a.auth).send({ status: "cancelled" });
+    sendMock.mockClear();
+
+    await RunAppointmentRemindersForTenant(TENANT_SLUG, ORIGIN, dueAt);
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it("the flag off: the scheduled job (all tenants) does nothing", async () => {
+    delete process.env.APPOINTMENT_REMINDERS;
+    const result = await RunAppointmentRemindersAllTenants(new Date());
+    expect(result).toEqual({ enabled: false, tenants: {}, tenantsFailed: 0 });
+    expect(sendMock).not.toHaveBeenCalled();
   });
 });

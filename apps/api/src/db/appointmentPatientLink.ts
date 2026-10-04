@@ -20,12 +20,14 @@ export async function setAppointmentPatientToken(
   appointmentId: string,
   tokenHash: string,
   expiresAt: Date,
-  opts: { clearResponse: boolean; stamp?: { confirmRequest?: boolean; dayBefore?: boolean } }
+  opts: { clearResponse: boolean; stamp?: { confirmRequest?: boolean; dayBefore?: boolean; todayReminder?: boolean } }
 ): Promise<void> {
   const sets = ["patient_token_hash = $2", "patient_token_expires_at = $3"];
-  if (opts.clearResponse) sets.push("patient_response = NULL", "patient_responded_at = NULL", "confirm_request_sent_at = NULL", "day_before_sent_at = NULL");
+  // CORE-113 part 2: a reschedule clears today_reminder_sent_at too — the new time gets its own 2-hour reminder.
+  if (opts.clearResponse) sets.push("patient_response = NULL", "patient_responded_at = NULL", "confirm_request_sent_at = NULL", "day_before_sent_at = NULL", "today_reminder_sent_at = NULL");
   if (opts.stamp?.confirmRequest) sets.push("confirm_request_sent_at = now()");
   if (opts.stamp?.dayBefore) sets.push("day_before_sent_at = now()");
+  if (opts.stamp?.todayReminder) sets.push("today_reminder_sent_at = now()");
   try {
     await client.query(`UPDATE appointment SET ${sets.join(", ")} WHERE id = $1`, [appointmentId, tokenHash, expiresAt]);
   } catch (err) {
@@ -55,24 +57,28 @@ export interface AppointmentScheduleRow {
   patient_response: AppointmentPatientResponse | null;
   confirm_request_sent_at: string | null;
   day_before_sent_at: string | null;
+  /** CORE-113 part 2: when the 2-hour "Su cita es hoy" reminder went out. */
+  today_reminder_sent_at: string | null;
 }
 
 /**
- * CORE-116: visits in the next 3 days with a scheduled step still open, locked
+ * CORE-116 / CORE-113 part 2: visits in the next 3 days with a scheduled step
+ * still open — confirm / day-before (CORE-116) or the 2-hour reminder — locked
  * for this transaction (SKIP LOCKED — two overlapping ticks never take the same row).
  */
 export async function lockAppointmentsWithOpenSchedule(client: PoolClient, now: Date): Promise<AppointmentScheduleRow[]> {
   try {
-    const { rows } = await client.query<Omit<AppointmentScheduleRow, "start_at" | "confirm_request_sent_at" | "day_before_sent_at"> & {
+    const { rows } = await client.query<Omit<AppointmentScheduleRow, "start_at" | "confirm_request_sent_at" | "day_before_sent_at" | "today_reminder_sent_at"> & {
       start_at: Date;
       confirm_request_sent_at: Date | null;
       day_before_sent_at: Date | null;
+      today_reminder_sent_at: Date | null;
     }>(
-      `SELECT id, start_at, timezone, status, patient_response, confirm_request_sent_at, day_before_sent_at
+      `SELECT id, start_at, timezone, status, patient_response, confirm_request_sent_at, day_before_sent_at, today_reminder_sent_at
          FROM appointment
         WHERE status = 'scheduled' AND deleted_at IS NULL
           AND start_at > $1 AND start_at < $1 + interval '3 days'
-          AND (confirm_request_sent_at IS NULL OR day_before_sent_at IS NULL)
+          AND (confirm_request_sent_at IS NULL OR day_before_sent_at IS NULL OR today_reminder_sent_at IS NULL)
         ORDER BY start_at
         FOR UPDATE SKIP LOCKED`,
       [now]
@@ -82,6 +88,7 @@ export async function lockAppointmentsWithOpenSchedule(client: PoolClient, now: 
       start_at: r.start_at.toISOString(),
       confirm_request_sent_at: r.confirm_request_sent_at?.toISOString() ?? null,
       day_before_sent_at: r.day_before_sent_at?.toISOString() ?? null,
+      today_reminder_sent_at: r.today_reminder_sent_at?.toISOString() ?? null,
     }));
   } catch (err) {
     throw new DatabaseError("lockAppointmentsWithOpenSchedule", err);
