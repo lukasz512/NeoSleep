@@ -54,6 +54,8 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   if (url.includes("/summary")) return json(SUMMARY);
   if (url.includes("/care-team")) return json(CARE_TEAM);
+  // NEO-237's ATM card: unstubbed, its 401 signs the harness user out and the care team loses its actions.
+  if (url.includes("/clinical-records")) return json({ records: [] });
   if (url.includes("/api/v1/practitioner")) return json({ items: [{ id: "h-4", name: "Dr. Pablo Ortiz" }] });
   return realFetch(input, init);
 };
