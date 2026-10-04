@@ -5,7 +5,7 @@
       <span class="ahi-scale__mark" :style="{ left: `${ahiScalePercent(ahi)}%` }" />
     </div>
     <div v-if="!thin" class="ahi-scale__labels" aria-hidden="true">
-      <span>&lt;5</span><span>{{ t("app.clinical.result.scale.mild") }}</span><span>{{ t("app.clinical.result.scale.moderate") }}</span><span>{{ t("app.clinical.result.scale.severe") }}</span>
+      <span v-for="band in bands" :key="band.id" :class="{ 'is-active': highlight && band.id === severity }">{{ band.label }}</span>
     </div>
   </div>
 </template>
@@ -14,15 +14,23 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { intlLocale } from "@i18n/language-options";
-import { ahiScalePercent } from "../utils/ahiSeverity";
+import { ahiScalePercent, ahiSeverity } from "../utils/ahiSeverity";
 
 /**
  * The AASM severity scale (<5 · mild · moderate · severe) with a mark at the
  * patient's AHI — the PSG result on Estudios and, `thin` (no labels), the
- * PSG tile of the Detalles summary strip (NEO-206).
+ * PSG tile of the Detalles summary strip (NEO-206). `highlight` bolds the
+ * band the AHI falls in — the live scale under the patient form's AHI field (NEO-228).
  */
-const props = defineProps<{ ahi: number; thin?: boolean }>();
+const props = defineProps<{ ahi: number; thin?: boolean; highlight?: boolean }>();
 const { t, locale } = useI18n();
+const severity = computed(() => ahiSeverity(props.ahi));
+const bands = computed(() => [
+  { id: "normal", label: "<5" },
+  { id: "mild", label: t("app.clinical.result.scale.mild") },
+  { id: "moderate", label: t("app.clinical.result.scale.moderate") },
+  { id: "severe", label: t("app.clinical.result.scale.severe") },
+]);
 const label = computed(() => props.ahi.toLocaleString(intlLocale(locale.value), { maximumFractionDigits: 1 }));
 </script>
 
@@ -68,6 +76,10 @@ const label = computed(() => props.ahi.toLocaleString(intlLocale(locale.value), 
   top: -3px;
   width: 2px;
   height: 10px;
+}
+.ahi-scale__labels .is-active {
+  font-weight: 600;
+  color: rgb(var(--v-theme-on-surface));
 }
 .ahi-scale__labels {
   display: grid;

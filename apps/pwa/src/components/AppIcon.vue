@@ -353,6 +353,22 @@ const ICONS = {
             <line x1="8" y1="17" x2="16" y2="17" />
             <line x1="8" y1="9" x2="10" y2="9" />`,
   },
+  // ── CPAP therapy tiles on the patient form (NEO-228): nasal mask + hose ──
+  "cpap-mask": {
+    strokeWidth: 1.75,
+    paths: `<path d="M12 4c-3 0-5.5 4.5-5.5 8.5 0 2.5 2.4 4 5.5 4s5.5-1.5 5.5-4C17.5 8.5 15 4 12 4z" />
+            <path d="M6.6 11H3M17.4 11H21" />
+            <path d="M12 16.5v2.5a2 2 0 0 0 2 2h2" />
+            <circle cx="12" cy="11.5" r="1.6" />`,
+  },
+  "cpap-mask-off": {
+    strokeWidth: 1.75,
+    paths: `<path d="M12 4c-3 0-5.5 4.5-5.5 8.5 0 2.5 2.4 4 5.5 4s5.5-1.5 5.5-4C17.5 8.5 15 4 12 4z" />
+            <path d="M6.6 11H3M17.4 11H21" />
+            <path d="M12 16.5v2.5a2 2 0 0 0 2 2h2" />
+            <circle cx="12" cy="11.5" r="1.6" />
+            <path d="M4 4l16 16" />`,
+  },
   // ── Patient intake form icons (NEO-54, see config/patientIntakeForms.ts) ──
   "form-consent": {
     strokeWidth: 2,

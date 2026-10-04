@@ -25,6 +25,12 @@ const STATUS_OPTIONS: FormFieldOption[] = [
   { title: "app.patients.filters.statusDischarged", value: "discharged", color: "default" },
 ];
 
+// patient.cpap_device is TEXT: "CPAP" when the patient uses it, "" when not (NEO-228 tiles).
+const CPAP_OPTIONS: FormFieldOption[] = [
+  { title: "app.patients.form.cpapYes", value: "CPAP", icon: "cpap-mask" },
+  { title: "app.patients.form.cpapNo", value: "", icon: "cpap-mask-off" },
+];
+
 async function loadRegionOptions() {
   const configStore = useConfigStore();
   if (configStore.options.regions.length === 0) {
@@ -252,11 +258,12 @@ export const patientFormFields: FormFieldDef[] = [
     default: () => useAuthStore().user?.country_code ?? "",
   },
   {
+    // NEO-228: typed large, with the live AASM severity scale under it.
     key: "ahi_baseline",
     section: "clinical",
-    type: "number",
+    type: "ahi",
     labelKey: "app.patients.form.ahiBaseline",
-    cols: 6,
+    cols: 12,
   },
   {
     // NEO-231 D1 (Dra. Lorena): entered once here — STOP-BANG asks only the
@@ -269,22 +276,23 @@ export const patientFormFields: FormFieldDef[] = [
     cols: 6,
   },
   {
-    // TEXT column presented as a yes/no switch (see FormFieldDef.trueValue/
-    // falseValue) — a rep just needs to record whether the patient has CPAP,
-    // not the specific device model.
+    // TEXT column presented as two tiles (NEO-228; was a switch): "CPAP" or ""
+    // — whether the patient uses CPAP, not the device model. null = not asked.
     key: "cpap_device",
     section: "clinical",
-    type: "boolean",
-    labelKey: "app.patients.form.cpapDevice",
-    trueValue: "CPAP",
-    falseValue: "",
-    cols: 6,
+    type: "choice",
+    labelKey: "app.patients.form.cpapTherapy",
+    options: CPAP_OPTIONS,
+    default: null,
+    cols: 12,
   },
   {
     key: "medical_record",
     section: "clinical",
-    type: "text",
+    type: "textarea",
     labelKey: "app.patients.form.medicalRecord",
+    placeholder: "app.patients.form.medicalRecordPlaceholder",
+    icon: "nav-document-content",
     cols: 12,
   },
 ];

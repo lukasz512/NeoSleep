@@ -213,6 +213,7 @@ import AppConfirmDialog from "./AppConfirmDialog.vue";
 import PhoneField from "./PhoneField.vue";
 import EmailField from "./EmailField.vue";
 import ChoiceChipsField from "./ChoiceChipsField.vue";
+import AhiField from "./AhiField.vue";
 import AppDateField from "./AppDateField.vue";
 import { useNotifications } from "../composables/useNotifications";
 import type { SubmitDone } from "../composables/useEntitySubmit";
@@ -572,6 +573,7 @@ function componentFor(type: FormFieldType) {
     case "email": return EmailField;
     case "boolean": return VSwitch;
     case "choice": return ChoiceChipsField;
+    case "ahi": return AhiField;
     case "date": return AppDateField;
     default: return VTextField;
   }
@@ -609,6 +611,9 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
       return { ...common, autoGrow: true, rows: 3 };
     case "number":
       return { ...common, type: "number" };
+    case "ahi":
+      // AhiField sets its own number type, unit and icon.
+      return common;
     case "select":
       // No menu-icon: at this width (often cols: 2/6, paired with another
       // field) the whole field is already the click target for its own menu —

@@ -9,7 +9,7 @@
   >
     <div
       class="choice-chips-field__row"
-      :class="{ 'has-secondary-value': selectedSecondary }"
+      :class="{ 'has-secondary-value': selectedSecondary, 'is-tiles': hasIcons }"
       role="radiogroup"
       :aria-label="label"
     >
@@ -26,7 +26,8 @@
         :class="{ 'is-selected': o.value === modelValue }"
         @click="emit('update:modelValue', o.value)"
       >
-        <span v-if="o.symbol" class="choice-chips-field__symbol" aria-hidden="true">{{ o.symbol }}</span>
+        <AppIcon v-if="o.icon" :name="o.icon" class="choice-chips-field__icon" />
+        <span v-else-if="o.symbol" class="choice-chips-field__symbol" aria-hidden="true">{{ o.symbol }}</span>
         <span class="choice-chips-field__text">{{ o.title }}</span>
       </button>
 
@@ -102,6 +103,8 @@ const { t } = useI18n();
 const primary = computed(() => props.items.filter((o) => !o.secondary));
 const secondary = computed(() => props.items.filter((o) => o.secondary));
 const selectedSecondary = computed(() => secondary.value.find((o) => o.value === props.modelValue));
+/** Options with an icon (e.g. CPAP, NEO-228) make the row taller tiles: icon above the label. */
+const hasIcons = computed(() => primary.value.some((o) => o.icon));
 </script>
 
 <style scoped>
@@ -236,6 +239,30 @@ const selectedSecondary = computed(() => secondary.value.find((o) => o.value ===
 .choice-chips-field__more:focus-visible {
   outline: 2px solid rgb(var(--v-theme-primary));
   outline-offset: -2px;
+}
+
+/* Tiles (NEO-228): same outlined row, taller, icon above the label. */
+.choice-chips-field__row.is-tiles {
+  height: 80px;
+}
+
+.is-tiles .choice-chips-field__chip {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.is-tiles .choice-chips-field__text {
+  margin-left: 0;
+}
+
+.choice-chips-field__icon {
+  width: 26px;
+  height: 26px;
+  opacity: 0.7;
+}
+
+.choice-chips-field__chip.is-selected .choice-chips-field__icon {
+  opacity: 1;
 }
 
 .choice-chips-field__chip:disabled,

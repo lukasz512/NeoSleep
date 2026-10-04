@@ -22,11 +22,11 @@ const ITEMS: FormFieldOption[] = [
   { title: "Prefer not to say", value: "prefer_not_to_say", secondary: true },
 ];
 
-function mountField(modelValue: unknown = null) {
+function mountField(modelValue: unknown = null, items: FormFieldOption[] = ITEMS) {
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const wrapper = mount(ChoiceChipsField, {
-    props: { label: "Sex", items: ITEMS, modelValue },
+    props: { label: "Sex", items, modelValue },
     global: { plugins: [vuetify, i18n] },
     attachTo: document.body,
   });
@@ -63,5 +63,29 @@ describe("ChoiceChipsField", () => {
     expect(checked).toHaveLength(1);
     expect(checked[0].text()).toBe("Prefer not to say");
     expect(w.find(".choice-chips-field__row").classes()).toContain("has-secondary-value");
+  });
+});
+
+describe("ChoiceChipsField with icons (NEO-228 CPAP tiles)", () => {
+  const CPAP: FormFieldOption[] = [
+    { title: "Uses CPAP", value: "CPAP", icon: "cpap-mask" },
+    { title: "No CPAP", value: "", icon: "cpap-mask-off" },
+  ];
+
+  it("options with an icon render as tall tiles, the icon above the label", () => {
+    const w = mountField(null, CPAP);
+    expect(w.find(".choice-chips-field__row").classes()).toContain("is-tiles");
+    expect(w.findAll(".choice-chips-field__chip .choice-chips-field__icon")).toHaveLength(2);
+  });
+
+  it("an empty-string option is a real answer: '' selects 'No CPAP', null selects nothing", async () => {
+    const w = mountField("", CPAP);
+    expect(w.findAll("[aria-checked=true]").map((c) => c.text())).toEqual(["No CPAP"]);
+    await w.setProps({ modelValue: null });
+    expect(w.findAll("[aria-checked=true]")).toHaveLength(0);
+  });
+
+  it("symbol-only options keep the one-line row", () => {
+    expect(mountField().find(".choice-chips-field__row").classes()).not.toContain("is-tiles");
   });
 });

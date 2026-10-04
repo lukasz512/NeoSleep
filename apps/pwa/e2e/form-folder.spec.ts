@@ -177,3 +177,24 @@ test("a form with one section stays a single sheet", async ({ page }) => {
   await expect(spine(page)).toHaveCount(0);
   await expect(page.locator(".pwa-form-section__title")).toHaveCount(0);
 });
+
+test("Clínico: AHI scale follows the number, CPAP tiles, Expediente is a box (NEO-228)", async ({ page }) => {
+  await open(page, "", LAPTOP);
+  const clinical = body(page).locator("[data-section=clinical]");
+  await clinical.scrollIntoViewIfNeeded();
+  // María's 23.4 sits in the moderate band; typing 31 moves it to severe.
+  await expect(clinical.locator(".ahi-scale__labels .is-active")).toHaveText("15–30 moderate");
+  await clinical.locator(".ahi-field input").fill("31");
+  await expect(clinical.locator(".ahi-scale__labels .is-active")).toHaveText(">30 severe");
+  // CPAP: two tiles side by side, taller than a text field, the saved one picked.
+  const tiles = clinical.locator(".choice-chips-field__row.is-tiles .choice-chips-field__chip");
+  await expect(tiles).toHaveText(["Uses CPAP", "No CPAP"]);
+  await expect(clinical.locator("[aria-checked=true]")).toHaveText("Uses CPAP");
+  const [a, b] = await tiles.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect));
+  expect(Math.abs(a.top - b.top)).toBeLessThan(1);
+  expect(a.height).toBeGreaterThan(64);
+  await tiles.nth(1).click();
+  await expect(clinical.locator("[aria-checked=true]")).toHaveText("No CPAP");
+  // Expediente médico is a multi-line box.
+  await expect(clinical.locator("textarea").first()).toBeVisible();
+});
