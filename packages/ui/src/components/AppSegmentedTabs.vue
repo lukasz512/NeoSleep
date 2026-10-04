@@ -218,12 +218,40 @@ watch(
   height: 2px;
   box-shadow: none;
 }
+/* !important: theme.scss makes every labeled VBtn a pill with !important; an
+   underline tab is a tab-shaped rectangle that sits on the hairline. */
 .app-segmented-tabs--underline .app-segmented-tabs__tab {
   min-height: 44px;
-  border-radius: var(--pwa-radius, 8px) var(--pwa-radius, 8px) 0 0;
+  border-radius: var(--pwa-radius, 8px) var(--pwa-radius, 8px) 0 0 !important;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
 }
 .app-segmented-tabs--underline .app-segmented-tabs__tab--active {
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+}
+.app-segmented-tabs--underline .app-segmented-tabs__tab:hover {
+  background-color: rgba(var(--v-theme-on-surface), 0.04);
+}
+
+/* Keyboard focus is drawn inside the tab, never around it: the fit row
+   scrolls (overflow-x: auto clips vertically too), so the global 2px-offset
+   outline was cut off at the top, and VBtn's own ::after focus border drew a
+   second, grey ring on top of it. One ring, inset, plus a light tint. */
+.app-segmented-tabs__tab:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgb(var(--v-theme-primary));
+}
+.app-segmented-tabs__tab:focus-visible::after {
+  opacity: 0;
+}
+.app-segmented-tabs--underline .app-segmented-tabs__tab:focus-visible {
+  background-color: rgba(var(--v-theme-primary), 0.08);
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+}
+/* On the pill the active tab sits on the teal thumb — a teal ring would vanish. */
+.app-segmented-tabs:not(.app-segmented-tabs--underline) .app-segmented-tabs__tab--active:focus-visible {
+  box-shadow: inset 0 0 0 2px rgb(var(--v-theme-on-primary));
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -528,3 +528,84 @@ describe("Estudios live refresh + Nuevo (NEO-173)", () => {
     expect([repVersion.status, repOpened.status]).toEqual([403, 403]);
   });
 });
+
+describe("GET /api/v1/patient/:id/summary (Detalles strip, NEO-206)", () => {
+  it("returns profile extras, the latest study with results, the next scheduled visit; audits the study read", async () => {
+    const { auth, patientId } = await authAndPatient("doctor");
+    const ids = await withTenant(TENANT_SLUG, async (client) => {
+      const { rows: [p] } = await client.query<{ practitioner_id: string; identity_id: string }>(`SELECT practitioner_id, identity_id FROM patient WHERE id = $1`, [patientId]);
+      const { rows: [u] } = await client.query<{ id: string }>(`SELECT id FROM users LIMIT 1`);
+      await client.query(`UPDATE identities SET preferred_name = 'Mafer' WHERE id = $1`, [p.identity_id]);
+      await client.query(
+        `UPDATE patient SET shipping_address = '{"line1":"Masaryk 111","city":"CDMX"}', data_consent_at = '2026-09-03T10:00:00Z' WHERE id = $1`,
+        [patientId],
+      );
+      const study = async (date: string, ahi: number | null, status = "interpreted") =>
+        (await client.query<{ id: string }>(
+          `INSERT INTO sleep_study (patient_id, study_date, ahi_score, spo2_nadir, odi, status) VALUES ($1, $2, $3, 84, 19, $4) RETURNING id`,
+          [patientId, date, ahi, status],
+        )).rows[0].id;
+      const withResults = await study("2026-09-12", 22.4);
+      await study("2026-08-01", 30);
+      await study("2026-09-20", 40, "cancelled"); // newer but cancelled
+      await study("2026-09-25", null, "ordered"); // newer but no results yet
+      const visit = async (startOffsetDays: number, status = "scheduled") =>
+        (await client.query<{ id: string }>(
+          `INSERT INTO appointment (patient_id, practitioner_id, created_by_user_id, status, start_at, end_at)
+           VALUES ($1, $2, $3, $4, now() + make_interval(days => $5::int), now() + make_interval(days => $5::int, mins => 30)) RETURNING id`,
+          [patientId, p.practitioner_id, u.id, status, startOffsetDays],
+        )).rows[0].id;
+      await visit(-3); // past
+      await visit(2, "cancelled");
+      const next = await visit(5);
+      await visit(9);
+      return { withResults, next };
+    });
+
+    const res = await request(app).get(`/api/v1/patient/${patientId}/summary`).set("Authorization", auth);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      preferred_name: "Mafer",
+      shipping_address: { line1: "Masaryk 111", city: "CDMX" },
+      data_consent_at: "2026-09-03T10:00:00.000Z",
+      data_consent_withdrawn_at: null,
+      latest_study: { id: ids.withResults, study_date: "2026-09-12", ahi_score: 22.4, spo2_nadir: 84, odi: 19 },
+      device_order: null,
+      next_appointment: { id: ids.next },
+    });
+
+    const reads = await withTenant(TENANT_SLUG, (client) =>
+      client.query<{ entity_id: string }>(
+        `SELECT entity_id FROM audit_log WHERE action = 'read' AND entity_type = 'SleepStudy' AND metadata->>'view' = 'patient-summary' AND metadata->>'patient_id' = $1`,
+        [patientId],
+      ),
+    );
+    expect(reads.rows.map((r) => r.entity_id)).toEqual([ids.withResults]);
+  });
+
+  it("never sends the study to the commercial field force; empty patient → all nulls", async () => {
+    const { auth, patientId } = await authAndPatient("rep");
+    await withTenant(TENANT_SLUG, (client) =>
+      client.query(`INSERT INTO sleep_study (patient_id, study_date, ahi_score, status) VALUES ($1, '2026-09-12', 22.4, 'interpreted')`, [patientId]),
+    );
+    const res = await request(app).get(`/api/v1/patient/${patientId}/summary`).set("Authorization", auth);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({
+      preferred_name: null,
+      shipping_address: null,
+      data_consent_at: null,
+      data_consent_withdrawn_at: null,
+      latest_study: null,
+      device_order: null,
+      next_appointment: null,
+    });
+  });
+
+  it("401 without a token, 404 for an unknown patient", async () => {
+    const anon = await request(app).get(`/api/v1/patient/${crypto.randomUUID()}/summary`);
+    expect(anon.status).toBe(401);
+    const { auth } = await authAndPatient("admin");
+    const missing = await request(app).get(`/api/v1/patient/${crypto.randomUUID()}/summary`).set("Authorization", auth);
+    expect(missing.status).toBe(404);
+  });
+});
