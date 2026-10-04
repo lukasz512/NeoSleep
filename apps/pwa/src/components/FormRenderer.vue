@@ -43,7 +43,7 @@
         <div v-if="row.length > 1" class="pwa-form-row mb-3">
           <div v-for="f in row" :key="f.key" class="pwa-form-row-item pwa-form-col" :style="rowItemStyle(f)">
             <component
-              :is="componentFor(f.type)"
+              :is="componentFor(f)"
               :ref="(el: unknown) => setFieldEl(f.key, el)"
               v-bind="fieldAttrs(f)"
             >
@@ -89,7 +89,7 @@
         </div>
         <div v-else class="mb-3">
           <component
-            :is="componentFor(row[0].type)"
+            :is="componentFor(row[0])"
             :ref="(el: unknown) => setFieldEl(row[0].key, el)"
             v-bind="fieldAttrs(row[0])"
           >
@@ -214,11 +214,13 @@ import PhoneField from "./PhoneField.vue";
 import EmailField from "./EmailField.vue";
 import ChoiceChipsField from "./ChoiceChipsField.vue";
 import AhiField from "./AhiField.vue";
+import NumberStepperField from "./NumberStepperField.vue";
+import ToggleTileField from "./ToggleTileField.vue";
 import AppDateField from "./AppDateField.vue";
 import { useNotifications } from "../composables/useNotifications";
 import type { SubmitDone } from "../composables/useEntitySubmit";
 import { useFormErrors, focusFormField, type FieldErrors } from "../composables/useFormErrors";
-import type { FormDerive, FormFieldDef, FormFieldType } from "../types/formField";
+import type { FormDerive, FormFieldDef } from "../types/formField";
 import { AppInlineAlert, FormErrorSummary } from "@ui";
 
 /**
@@ -562,8 +564,10 @@ function normalizeFieldValue(f: FormFieldDef, v: unknown): unknown {
   return v;
 }
 
-function componentFor(type: FormFieldType) {
-  switch (type) {
+function componentFor(f: FormFieldDef) {
+  switch (f.type) {
+    case "number": return f.stepper ? NumberStepperField : VTextField;
+    case "toggle": return ToggleTileField;
     case "select": return VSelect;
     case "autocomplete": return VAutocomplete;
     case "chips": return VCombobox;
@@ -610,6 +614,11 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
     case "textarea":
       return { ...common, autoGrow: true, rows: 3 };
     case "number":
+      if (f.stepper) {
+        // NumberStepperField (NEO-241) sets its own number type and draws − / +.
+        const { unitKey, ...stepper } = f.stepper;
+        return { ...common, ...stepper, unit: unitKey ? t(unitKey) : undefined };
+      }
       return { ...common, type: "number" };
     case "ahi":
       // AhiField sets its own number type, unit and icon.
@@ -685,6 +694,19 @@ function fieldAttrs(f: FormFieldDef): Record<string, unknown> {
         hint: f.hint ? t(f.hint) : undefined,
         persistentHint: !!f.hint,
         disabled: submitting.value || (!!f.immutableOnEdit && isEditMode.value),
+      };
+    case "toggle":
+      // One tile, off by default (ToggleTileField, NEO-241); same value pair as a 'boolean'.
+      return {
+        modelValue: form.value[f.key],
+        "onUpdate:modelValue": (v: unknown) => { setField(f, v); },
+        label: labelFor(f),
+        icon: f.icon,
+        onText: f.toggleText ? t(f.toggleText.on) : "",
+        offText: f.toggleText ? t(f.toggleText.off) : "",
+        trueValue: f.trueValue ?? true,
+        falseValue: f.falseValue ?? false,
+        disabled: common.disabled,
       };
     case "choice":
       // Chips, not an outlined input — only the props ChoiceChipsField takes.

@@ -5,7 +5,11 @@
       <span class="ahi-scale__mark" :style="{ left: `${ahiScalePercent(ahi)}%` }" />
     </div>
     <div v-if="!thin" class="ahi-scale__labels" aria-hidden="true">
-      <span v-for="band in bands" :key="band.id" :class="{ 'is-active': highlight && band.id === severity }">{{ band.label }}</span>
+      <span
+        v-for="band in bands"
+        :key="band.id"
+        :class="[`ahi-scale__label--${band.id}`, { 'is-active': highlight && band.id === severity }]"
+      >{{ band.label }}</span>
     </div>
   </div>
 </template>
@@ -77,9 +81,33 @@ const label = computed(() => props.ahi.toLocaleString(intlLocale(locale.value), 
   width: 2px;
   height: 10px;
 }
+/* The active band is named in a darker shade of its own segment color (NEO-241), readable as text. */
 .ahi-scale__labels .is-active {
   font-weight: 600;
-  color: rgb(var(--v-theme-on-surface));
+}
+.ahi-scale__labels .is-active.ahi-scale__label--normal {
+  color: #2f7d4f;
+}
+.ahi-scale__labels .is-active.ahi-scale__label--mild {
+  color: #8a6a0e;
+}
+.ahi-scale__labels .is-active.ahi-scale__label--moderate {
+  color: #b05a14;
+}
+.ahi-scale__labels .is-active.ahi-scale__label--severe {
+  color: #b23a2e;
+}
+.v-theme--dark .ahi-scale__labels .is-active.ahi-scale__label--normal {
+  color: #7cc59a;
+}
+.v-theme--dark .ahi-scale__labels .is-active.ahi-scale__label--mild {
+  color: #e8c55a;
+}
+.v-theme--dark .ahi-scale__labels .is-active.ahi-scale__label--moderate {
+  color: #ec9a47;
+}
+.v-theme--dark .ahi-scale__labels .is-active.ahi-scale__label--severe {
+  color: #ef7d70;
 }
 .ahi-scale__labels {
   display: grid;

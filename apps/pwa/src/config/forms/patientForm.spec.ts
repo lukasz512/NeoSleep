@@ -62,12 +62,17 @@ describe("patientFormFields", () => {
     expect(ahi.type).toBe("ahi");
   });
 
-  it("CPAP is two icon tiles storing 'CPAP' / '' and starts unanswered (NEO-228)", () => {
+  it("CPAP is one toggle tile storing 'CPAP' / '', off (no CPAP) by default (NEO-241)", () => {
     const cpap = patientFormFields.find((f) => f.key === "cpap_device")!;
-    expect(cpap.type).toBe("choice");
-    expect(cpap.default).toBeNull();
-    const options = cpap.options as FormFieldOption[];
-    expect(options.map((o) => [o.value, o.icon])).toEqual([["CPAP", "cpap-mask"], ["", "cpap-mask-off"]]);
+    expect(cpap).toMatchObject({ type: "toggle", icon: "cpap-mask", trueValue: "CPAP", falseValue: "", default: "" });
+  });
+
+  it("AHI and Talla share one row, half each, Talla with − / + (NEO-241)", () => {
+    const byKey = Object.fromEntries(patientFormFields.map((f) => [f.key, f]));
+    expect([byKey.ahi_baseline.cols, byKey.height_cm.cols]).toEqual([6, 6]);
+    // Estado (just before them in Clínico) takes a full row, so it can't pair with AHI and strand Talla.
+    expect(byKey.status.cols).toBe(12);
+    expect(byKey.height_cm.stepper).toMatchObject({ step: 1, min: 100, max: 230 });
   });
 
   it("Expediente médico is a multi-line field with the document icon (NEO-228)", () => {
@@ -93,7 +98,8 @@ describe("patientFormFields", () => {
 
   describe("patientFormDerive — salutation and sex move together (MX patient)", () => {
     const run = (prev: Record<string, unknown>, form: Record<string, unknown>) =>
-      patientFormDerive({ country_code: "MX", ...form }, { country_code: "MX", ...prev });
+      // A typed height keeps the Talla prefill (tested below) out of these.
+      patientFormDerive({ country_code: "MX", height_cm: 170, ...form }, { country_code: "MX", height_cm: 170, ...prev });
 
     it.each([
       ["Dr.", "male"], ["Dra.", "female"], ["Sr.", "male"], ["Sra.", "female"], ["dra", "female"],
@@ -131,6 +137,30 @@ describe("patientFormFields", () => {
     it("an already-consistent pair, or both changing at once (record just opened), is left alone", () => {
       expect(run({ salutation: "Dr.", gender: null }, { salutation: "Dr.", gender: "male" })).toBeUndefined();
       expect(run({ country_code: "MX" }, { salutation: "Dra.", gender: "male" })).toBeUndefined();
+    });
+  });
+
+  describe("patientFormDerive — Talla prefilled from the sex (NEO-241)", () => {
+    const run = (country: string, prev: Record<string, unknown>, form: Record<string, unknown>) =>
+      patientFormDerive({ country_code: country, ...form }, { country_code: country, ...prev });
+
+    it("MX: picking ♂ fills 165 cm, ♀ fills 155 cm", () => {
+      expect(run("MX", { gender: null, height_cm: null }, { gender: "male", height_cm: null })).toEqual({ height_cm: 165 });
+      expect(run("MX", { gender: null, height_cm: "" }, { gender: "female", height_cm: "" })).toEqual({ height_cm: 155 });
+    });
+
+    it("MX: switching sex moves a still-default height, never a typed one", () => {
+      expect(run("MX", { gender: "male", height_cm: 165 }, { gender: "female", height_cm: 165 })).toEqual({ height_cm: 155 });
+      expect(run("MX", { gender: "male", height_cm: 172 }, { gender: "female", height_cm: 172 })).toBeUndefined();
+    });
+
+    it("MX: a salutation that sets the sex fills the height too", () => {
+      expect(run("MX", { salutation: null, gender: null }, { salutation: "Dra.", gender: null })).toEqual({ gender: "female", height_cm: 155 });
+    });
+
+    it("Otro / Prefiero no decir, and PL patients, get no prefill", () => {
+      expect(run("MX", { gender: null }, { gender: "other" })).toBeUndefined();
+      expect(run("PL", { gender: null }, { gender: "male" })).toBeUndefined();
     });
   });
 

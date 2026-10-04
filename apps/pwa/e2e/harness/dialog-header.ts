@@ -83,10 +83,10 @@ const folderFields: FormFieldDef[] = [
       { title: "app.patients.filters.statusFollowUp", value: "follow_up", color: "warning" },
     ],
     default: "active",
-    cols: 6,
+    cols: 12,
   },
-  // The real Clínico fields (NEO-228: AHI scale, CPAP tiles, Expediente box), not a copy.
-  ...patientFormFields.filter((f) => ["ahi_baseline", "cpap_device", "medical_record"].includes(f.key)),
+  // The real Clínico fields (NEO-228/241: AHI + Talla steppers, CPAP tile, Expediente box), not a copy.
+  ...patientFormFields.filter((f) => ["ahi_baseline", "height_cm", "cpap_device", "medical_record"].includes(f.key)),
   { key: "region", type: "text", labelKey: "app.patients.form.region", section: "territory", cols: 6 },
   { key: "city", type: "text", labelKey: "user.hco.form.city", section: "territory", cols: 6 },
 ];
@@ -112,6 +112,7 @@ const Harness = defineComponent({
                 date_of_birth: "1979-03-14",
                 status: "active",
                 ahi_baseline: 23.4,
+                height_cm: 158,
                 cpap_device: "CPAP",
                 medical_record: "HX-88213",
                 region: "CDMX",
