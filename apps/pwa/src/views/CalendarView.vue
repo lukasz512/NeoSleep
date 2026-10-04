@@ -23,7 +23,7 @@
         <label v-for="kind in KINDS" :key="kind" class="cal__filter" :style="{ '--cal-color': KIND_COLOR[kind] }">
           <input v-model="visibleKinds[kind]" type="checkbox" class="cal__check" :data-testid="`calendar-filter-${kind}`" />
           <span>{{ t(`user.calendar.filter.${kind}`) }}</span>
-          <span class="cal__filter-count">{{ entries.filter((e) => e.kind === kind).length }}</span>
+          <span class="cal__filter-count">{{ shownEntries.filter((e) => e.kind === kind).length }}</span>
         </label>
       </section>
     </aside>
@@ -197,6 +197,8 @@ import {
   calendarMotion,
   capitalizeFirst,
   dateKey,
+  fetchWindow,
+  inWindow,
   monthCells,
   parseWallTime,
   startOfDay,
@@ -405,7 +407,7 @@ function fetchItems(): Promise<void> {
     loading.value = true;
     loadFailed.value = false;
     try {
-      const { start, end } = windowOf();
+      const { start, end } = fetchWindow(calendarType.value, calendarValue.value);
       const res = await apiFetch(`/api/v1/calendar?start=${encodeURIComponent(start.toISOString())}&end=${encodeURIComponent(end.toISOString())}`, {
         handleErrors: false,
       });
@@ -432,9 +434,15 @@ function clockLabel(minutes: number): string {
   return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
 }
 
+/** The fetched entries whose wall-clock day is on screen — the fetch is padded (CORE-139). */
+const shownEntries = computed(() => {
+  const window = windowOf();
+  return entries.value.filter((e) => inWindow(parseWallTime(toZonedCalendarDateTime(e.start_at, e.timezone)).key, window));
+});
+
 const gridEvents = computed<CalendarGridEvent[]>(() => {
   const now = Date.now();
-  return entries.value
+  return shownEntries.value
     .filter((e) => visibleKinds[e.kind])
     .map((e) => {
       const start = parseWallTime(toZonedCalendarDateTime(e.start_at, e.timezone));
