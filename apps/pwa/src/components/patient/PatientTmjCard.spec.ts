@@ -36,6 +36,8 @@ describe("PatientTmjCard", () => {
     expect(wrapper.text()).toContain("1 finding");
     expect(wrapper.text()).toContain("38 mm");
     expect(wrapper.find("[data-joint='right']").attributes("data-level")).toBe("2");
+    // D2 (more): pencil on the patient card, ink stays in the ATM tab.
+    expect(wrapper.find("svg").classes()).toContain("tmj-skull__svg--pencil");
   });
 
   it("no ATM record shows the empty state", async () => {

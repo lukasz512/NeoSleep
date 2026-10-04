@@ -5,7 +5,7 @@
       <span v-if="latest" class="tmj-card__date">{{ formatDate(latest.created_at) }}</span>
     </span>
     <span class="tmj-card__body">
-      <TmjSkull class="tmj-card__skull" :counts="counts" mini />
+      <TmjSkull class="tmj-card__skull" :counts="counts" mini look="pencil" />
       <dl v-if="latest" class="tmj-card__facts">
         <div>
           <dt>{{ t("app.clinical.tmj.right") }}</dt>
