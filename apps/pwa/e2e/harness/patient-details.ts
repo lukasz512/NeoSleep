@@ -56,6 +56,8 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   if (url.includes("/care-team")) return json(CARE_TEAM);
   // NEO-237's ATM card: unstubbed, its 401 signs the harness user out and the care team loses its actions.
   if (url.includes("/clinical-records")) return json({ records: [] });
+  // CORE-133/137 Appointments and Events groups: same 401 sign-out if left unstubbed.
+  if (url.includes("/api/v1/appointments") || url.includes("/api/v1/encounter")) return json({ items: [] });
   if (url.includes("/api/v1/practitioner")) return json({ items: [{ id: "h-4", name: "Dr. Pablo Ortiz" }] });
   return realFetch(input, init);
 };
