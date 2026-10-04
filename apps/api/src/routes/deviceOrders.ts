@@ -278,7 +278,16 @@ deviceOrdersRouter.post(
           dto: receipt.sentPayload,
         },
         request_id: ctx.requestId,
-        metadata: { rulesVersion: RULES_VERSION, provider: provider.name, actingUserId: ctx.user.id, patientId },
+        // NEO-210 audit gate: who sent it must be reconstructable, role and client included.
+        user_ip: req.ip ?? null,
+        user_agent: req.get("user-agent") ?? null,
+        metadata: {
+          rulesVersion: RULES_VERSION,
+          provider: provider.name,
+          actingUserId: ctx.user.id,
+          actingUserRole: ctx.user.role,
+          patientId,
+        },
       })
     );
 

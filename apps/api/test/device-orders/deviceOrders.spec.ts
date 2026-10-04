@@ -170,6 +170,7 @@ describe("POST /api/v1/device-orders", () => {
     const res = await request(app)
       .post("/api/v1/device-orders")
       .set("Authorization", `Bearer ${s.token}`)
+      .set("User-Agent", "neo210-audit-test")
       .send({ treatment_plan_id: s.planId, patient_id: s.patientId, order });
     await trackLink(s.planId);
 
@@ -206,6 +207,16 @@ describe("POST /api/v1/device-orders", () => {
     expect(after.dto).toEqual(dto);
     // The doctor's confirmation is part of the audited order.
     expect(after.order).toMatchObject({ acknowledgedWarnings: ["advanceUnder5"], registration: { method: "scanner", scannerTreatment: "MEDIT" } });
+    // NEO-210 audit gate: the sender's role and client are part of the record.
+    const raw = await withTenant(TENANT_SLUG, (client) =>
+      client.query<{ metadata: Record<string, unknown>; user_ip: string | null; user_agent: string | null }>(
+        `SELECT metadata, user_ip, user_agent FROM audit_log WHERE id = $1`,
+        [created!.id],
+      ),
+    );
+    expect(raw.rows[0].metadata).toMatchObject({ actingUserRole: expect.any(String) });
+    expect(raw.rows[0].user_ip).toBeTruthy();
+    expect(raw.rows[0].user_agent).toBe("neo210-audit-test");
   });
 
   it("an order from an older client (no registration / acknowledgedWarnings) is audited with the defaults", async () => {
