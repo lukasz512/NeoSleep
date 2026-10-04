@@ -26,6 +26,15 @@ test("saving without the confirmation marks it in the error summary", async ({ p
   await expect(page.getByTestId("appointment-grant")).toContainText("required", { ignoreCase: true });
 });
 
+test("CORE-138: team list unavailable — the API's refusal shows the confirmation, not a generic error", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await open(page, "?doctor=unknown");
+  await expect(page.getByTestId("appointment-grant")).toHaveCount(0);
+  await page.getByTestId("appointment-submit").click();
+  await expect(page.getByTestId("appointment-grant")).toBeVisible();
+  await expect(page.getByTestId("appointment-problem")).toHaveCount(0);
+});
+
 test("a doctor already on the team: no notice", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await open(page, "?doctor=team");

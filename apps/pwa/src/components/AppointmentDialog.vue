@@ -237,8 +237,14 @@ const patientDefaultPractitionerId = computed(() => {
  */
 const careTeamIds = ref<Set<string> | null>(null);
 const grantAccess = ref(false);
+/** CORE-138: the API said grant_access is required although the team list didn't (failed or stale) — ask now. */
+const grantRequiredByServer = ref(false);
 const needsGrant = computed(
-  () => !isEdit.value && !isDoctor.value && !!practitionerId.value && !!careTeamIds.value && !careTeamIds.value.has(practitionerId.value),
+  () =>
+    !isEdit.value &&
+    !isDoctor.value &&
+    !!practitionerId.value &&
+    (grantRequiredByServer.value || (!!careTeamIds.value && !careTeamIds.value.has(practitionerId.value))),
 );
 const chosenDoctorName = computed(
   () => fixedPractitioner.value?.name ?? practitionerOptions.value.find((p) => p.id === practitionerId.value)?.name ?? "",
@@ -262,8 +268,10 @@ watch(
 );
 watch(practitionerId, () => {
   grantAccess.value = false;
+  grantRequiredByServer.value = false;
   clearServerError("grantAccess");
 });
+watch(grantAccess, () => clearServerError("grantAccess"));
 
 const durationItems = computed(() =>
   APPOINTMENT_DURATIONS.map((m) => ({ value: m, title: t("user.appointments.form.minutes", { n: m }) })),
@@ -354,6 +362,7 @@ let initialStart: string | null = null;
 
 function reset() {
   problem.value = null;
+  grantRequiredByServer.value = false;
   resetErrors();
   clinicZone.value = null;
   const a = props.appointment;
@@ -496,6 +505,7 @@ async function onSubmit() {
           ...(needsGrant.value && grantAccess.value ? { grant_access: true } : {}),
         });
     if (!result.ok || !result.appointment) {
+      if (result.fieldErrors?.grant_access && !isEdit.value) grantRequiredByServer.value = true;
       if (!(result.fieldErrors && showServerErrors(result.fieldErrors))) problem.value = explain(result);
       return;
     }
