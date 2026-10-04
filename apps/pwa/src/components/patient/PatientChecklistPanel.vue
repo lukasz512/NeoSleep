@@ -304,6 +304,9 @@
                 >
                   <ChecklistStatusIcon :status="section.status" class="studies__hc-tab-icon" />
                   <span :title="itemTitle(section)">{{ t(`app.clinical.hc.tab.${section.key}`) }}</span>
+                  <!-- NEO-237 D1: the ATM tab shows its latest evaluation as a mini skull, lit per side. -->
+                  <TmjSkull v-if="section.key === 'tmjExam'" class="studies__hc-tab-skull" :counts="latestTmjCounts(section)" mini />
+
                   <span v-if="hasNew(section)" class="studies__new">{{ t("app.clinical.new") }}</span>
                 </button>
               </div>
@@ -386,6 +389,7 @@ import StudyUploadDialog from "../questionnaire/StudyUploadDialog.vue";
 import SendEmailDialog from "../questionnaire/SendEmailDialog.vue";
 import ChecklistStatusIcon from "../questionnaire/ChecklistStatusIcon.vue";
 import ChecklistResult from "../questionnaire/ChecklistResult.vue";
+import TmjSkull from "../questionnaire/TmjSkull.vue";
 import AppListItemMenu from "../AppListItemMenu.vue";
 import AppSegmentProgress from "../AppSegmentProgress.vue";
 import { apiFetch, extractErrorMessage } from "../../composables/useApi";
@@ -412,6 +416,7 @@ import {
   ORAL_EXAM_QUESTIONS,
   TMJ_FINDINGS,
   TMJ_SIDES,
+  tmjSideCounts,
   stopBangRisk,
   checklistItemTitle,
   type ClinicalRecordKind,
@@ -738,6 +743,12 @@ watch(checklist, (value) => {
 watch(() => props.patientId, () => (knownEntryIds = null));
 
 const hasNew = (item: ChecklistItem) => item.history.some((entry) => entry.is_new);
+
+/** The latest ATM evaluation's findings per side, for the mini skull on its tab (NEO-237). */
+const latestTmjCounts = (item: ChecklistItem) => {
+  const record = item.history.find((entry) => entry.record)?.record;
+  return record ? tmjSideCounts(record) : { right: 0, left: 0 };
+};
 
 /** "Seen by Dr. A, Dr. B" — colleagues who already opened this result (NEO-173 B2; from the audit trail). */
 function seenBy(entry: ChecklistHistoryEntry | null | undefined): string | null {
@@ -1360,6 +1371,10 @@ watch(() => props.focusItem, (key) => highlightItem(key));
   color: rgb(var(--v-theme-primary));
   border-bottom-color: rgb(var(--v-theme-primary));
   font-weight: 600;
+}
+.studies__hc-tab-skull {
+  width: 22px;
+  margin: -4px 0;
 }
 .studies__hc-tab-icon {
   width: 16px;
