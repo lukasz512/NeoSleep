@@ -63,3 +63,17 @@ test("CORE-129 phone: + alone in the top-right corner, month leaves horizontal s
   const touchAction = await page.locator(".cal__body").evaluate((el) => getComputedStyle(el).touchAction);
   expect(touchAction).toBe("pan-y");
 });
+
+test("CORE-130 phone: no empty strip above the glass bar, it sits 8 px under the sheet's top edge", async ({ page }) => {
+  await open(page, 390, 844);
+  const sheet = (await page.locator(".harness-sheet").boundingBox())!;
+  const bar = (await page.locator(".cal__toolbar").boundingBox())!;
+  expect(Math.abs(bar.y - sheet.y - 8)).toBeLessThan(1.5);
+});
+
+test("CORE-130 desktop: the calendar still starts below the sheet padding", async ({ page }) => {
+  await open(page, 1280, 820);
+  const sheet = (await page.locator(".harness-sheet").boundingBox())!;
+  const cal = (await page.locator(".cal").boundingBox())!;
+  expect(Math.abs(cal.y - sheet.y - 16)).toBeLessThan(1.5);
+});
