@@ -136,6 +136,7 @@ appointmentRouter.post(
       notes: str(body.notes),
       sleep_study_id: uuid(body.sleep_study_id, "sleep_study_id"),
       treatment_plan_id: uuid(body.treatment_plan_id, "treatment_plan_id"),
+      grant_access: body.grant_access === true,
     };
     const slug = tenantSlugFromHost(req.hostname);
     const effects = newAppointmentEffects();
