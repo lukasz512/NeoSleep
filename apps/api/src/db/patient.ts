@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { AppError, DatabaseError } from "../errors.js";
 import { formatDisplayName, formatOptionalDisplayName } from "../utils/personName.js";
+import { careTeamCondition } from "./careTeam.js";
 
 function isoDate(val: Date | string | null | undefined): string {
   if (!val) return "";
@@ -247,8 +248,9 @@ export async function getPatientsPaginated(
     conditions.push(`i.region = $${params.length}`);
   }
   if (filters.practitioner_id?.trim()) {
+    // Primary doctor or care team (CORE-132): a doctor's own list and the staff "by doctor" filter alike.
     params.push(filters.practitioner_id.trim());
-    conditions.push(`p.practitioner_id = $${params.length}`);
+    conditions.push(careTeamCondition("p", `$${params.length}`));
   }
   if (filters.scopePaths !== undefined && filters.scopePaths !== null) {
     params.push(filters.scopePaths);

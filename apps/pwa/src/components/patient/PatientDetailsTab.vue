@@ -46,6 +46,8 @@
             <dd>{{ patient.medical_record || "—" }}</dd>
           </div>
         </dl>
+        <!-- NEO-237 D1: the latest ATM evaluation, read-only; opens its tab in the Historia clínica. -->
+        <PatientTmjCard v-if="canSeeStudies" :patient-id="patient.id" @open="emit('open-study', 'tmjExam', 'document')" />
       </section>
 
       <section class="patient-details__group" aria-labelledby="pd-contact">
@@ -132,6 +134,89 @@
         </dl>
       </section>
 
+      <!-- CORE-132: every other HCP with access — specialty says who does what; when and how they got it (D1). -->
+      <section v-if="teamMembers.length || careTeam.canAdd.value" class="patient-details__group" aria-labelledby="pd-team" data-testid="care-team">
+        <h3 id="pd-team" class="patient-details__group-title">{{ t("app.patients.detail.groups.careTeam") }}</h3>
+        <dl class="patient-details__rows">
+          <div
+            v-for="member in teamMembers"
+            :key="member.practitioner_id"
+            class="patient-details__row patient-details__row--member"
+            :data-testid="`care-team-${member.practitioner_id}`"
+          >
+            <dt>{{ accessLine(member) }}</dt>
+            <dd>
+              <EntityLink
+                :to="{ name: 'hcp-detail', params: { id: member.practitioner_id } }"
+                :label="member.name"
+                entity-type="hcp"
+                :specialty="member.primary_specialty"
+                :details="specialtySet(member.primary_specialty, member.specialties).details"
+                :more-details="specialtySet(member.primary_specialty, member.specialties).more"
+                :avatar-size="32"
+              />
+              <AppButton
+                v-if="careTeam.canRemove.value"
+                variant="text"
+                size="small"
+                icon
+                :aria-label="t('app.patients.detail.careTeam.remove', { name: member.name })"
+                :data-testid="`care-team-remove-${member.practitioner_id}`"
+                @click="removing = member"
+              >
+                <AppIcon name="close" />
+              </AppButton>
+            </dd>
+          </div>
+          <div v-if="!teamMembers.length" class="patient-details__row">
+            <dt>{{ t("app.patients.detail.careTeam.empty") }}</dt>
+          </div>
+          <div v-if="careTeam.canAdd.value" class="patient-details__row patient-details__row--add">
+            <VAutocomplete
+              v-if="adding"
+              v-model="addPractitionerId"
+              :items="addOptions"
+              item-title="name"
+              item-value="id"
+              :label="t('app.patients.detail.careTeam.pickDoctor')"
+              :loading="loadingOptions"
+              variant="outlined"
+              density="compact"
+              hide-details
+              autofocus
+              class="patient-details__add-field"
+              data-testid="care-team-pick"
+            />
+            <AppButton
+              v-if="adding"
+              color="primary"
+              size="small"
+              :disabled="!addPractitionerId"
+              :loading="careTeam.saving.value"
+              data-testid="care-team-add-confirm"
+              @click="onAdd"
+            >
+              {{ t("app.patients.detail.careTeam.addConfirm") }}
+            </AppButton>
+            <AppButton v-else variant="text" size="small" data-testid="care-team-add" @click="openAdd">
+              {{ t("app.patients.detail.careTeam.add") }}
+            </AppButton>
+          </div>
+        </dl>
+        <AppConfirmDialog
+          :model-value="!!removing"
+          :text="removing ? t('app.patients.detail.careTeam.removeConfirm', { name: removing.name }) : ''"
+          :secondary-label="t('app.common.cancel')"
+          :secondary-color="null"
+          :primary-label="t('app.patients.detail.careTeam.removeAction')"
+          primary-color="error"
+          :loading="careTeam.saving.value"
+          @update:model-value="(open: boolean) => { if (!open) removing = null; }"
+          @secondary="removing = null"
+          @primary="onRemove"
+        />
+      </section>
+
       <section v-if="summary?.data_consent_at" class="patient-details__group" aria-labelledby="pd-admin">
         <h3 id="pd-admin" class="patient-details__group-title">{{ t("app.patients.detail.groups.admin") }}</h3>
         <dl class="patient-details__rows">
@@ -147,14 +232,19 @@
 
 <script setup lang="ts">
 import { reportCaught, reportFailedResponse } from "@api";
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, toRef, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { VChip } from "vuetify/components";
+import { VAutocomplete, VChip } from "vuetify/components";
 import { intlLocale } from "@i18n/language-options";
 import AhiScaleBar from "../AhiScaleBar.vue";
+import AppButton from "../AppButton.vue";
+import AppConfirmDialog from "../AppConfirmDialog.vue";
 import AppIcon from "../AppIcon.vue";
+import PatientTmjCard from "./PatientTmjCard.vue";
+import type { ChecklistCategory } from "../../composables/usePatientChecklist";
 import EntityLink from "../EntityLink.vue";
 import { apiFetch } from "../../composables/useApi";
+import { usePatientCareTeam, type CareTeamMember } from "../../composables/usePatientCareTeam";
 import { useIdentity } from "../../composables/useIdentity";
 import { formatDiagnosis } from "../../utils/diagnosis";
 import { deviceOrderState } from "../../utils/treatmentPlanStatus";
@@ -185,7 +275,7 @@ const props = defineProps<{
   /** Diagnosis is health data — same roles as Documentos/Estudios (NEO-83). */
   canSeeStudies: boolean;
 }>();
-const emit = defineEmits<{ "open-tab": [tab: string] }>();
+const emit = defineEmits<{ "open-tab": [tab: string]; "open-study": [itemKey: string, category: ChecklistCategory] }>();
 
 const { t, locale } = useI18n();
 const { specialtySet } = useIdentity();
@@ -226,17 +316,72 @@ async function loadAppointments(): Promise<void> {
   }
 }
 
+const careTeam = usePatientCareTeam(toRef(() => props.patient.id));
+/** The primary doctor has their own row in "care"; this group lists everyone else. */
+const teamMembers = computed(() => careTeam.members.value.filter((m) => !m.primary));
+/** "Via a visit · Since 4 Oct 2026 · Ana" — how, since when and by whom the HCP got access (D1). */
+function accessLine(member: CareTeamMember): string {
+  const how = t(`app.patients.detail.careTeam.source.${member.source ?? "manual"}`);
+  if (!member.added_at) return how;
+  const since = member.added_by_name
+    ? t("app.patients.detail.careTeam.sinceBy", { date: formatDate(member.added_at), name: member.added_by_name })
+    : t("app.patients.detail.careTeam.since", { date: formatDate(member.added_at) });
+  return `${how} · ${since}`;
+}
+const removing = ref<CareTeamMember | null>(null);
+const adding = ref(false);
+const addPractitionerId = ref<string | null>(null);
+const allPractitioners = ref<{ id: string; name: string }[]>([]);
+const loadingOptions = ref(false);
+const addOptions = computed(() => {
+  const taken = new Set(careTeam.members.value.map((m) => m.practitioner_id));
+  if (props.patient.practitioner_id) taken.add(props.patient.practitioner_id);
+  return allPractitioners.value.filter((p) => !taken.has(p.id));
+});
+
+async function openAdd(): Promise<void> {
+  adding.value = true;
+  addPractitionerId.value = null;
+  if (allPractitioners.value.length) return;
+  loadingOptions.value = true;
+  try {
+    const res = await apiFetch("/api/v1/practitioner?limit=-1", { handleErrors: false });
+    if (res.ok) allPractitioners.value = ((await res.json()) as { items?: { id: string; name: string }[] }).items ?? [];
+  } catch (err) {
+    reportCaught(err, { where: "PatientDetailsTab.practitioners" });
+  } finally {
+    loadingOptions.value = false;
+  }
+}
+
+async function onAdd(): Promise<void> {
+  if (!addPractitionerId.value) return;
+  if (await careTeam.add(addPractitionerId.value)) {
+    adding.value = false;
+    addPractitionerId.value = null;
+  }
+}
+
+async function onRemove(): Promise<void> {
+  if (!removing.value) return;
+  if (await careTeam.remove(removing.value.practitioner_id)) removing.value = null;
+}
+
 onMounted(() => {
   void load();
   void loadAppointments();
+  void careTeam.load();
 });
 watch(
   () => props.patient.id,
   () => {
     summary.value = null;
     appointmentItems.value = [];
+    careTeam.members.value = [];
+    adding.value = false;
     void load();
     void loadAppointments();
+    void careTeam.load();
   },
 );
 
@@ -482,6 +627,32 @@ const tiles = computed<Tile[]>(() => {
 .patient-details__row--entity dd {
   display: flex;
   justify-content: flex-end;
+}
+
+/* Care team (CORE-132): the doctor (+ remove) on top, full width; how and since when underneath. */
+.patient-details__row--member {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1, 4px);
+}
+.patient-details__row--member dd {
+  order: -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1, 4px);
+  text-align: left;
+}
+.patient-details__row--member dt {
+  max-width: none;
+  font-size: 0.75rem;
+}
+.patient-details__row--add {
+  justify-content: flex-end;
+}
+.patient-details__add-field {
+  flex: 1;
+  min-width: 0;
 }
 
 .patient-details__link {

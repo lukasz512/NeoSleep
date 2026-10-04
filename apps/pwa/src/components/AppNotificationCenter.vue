@@ -304,6 +304,53 @@ onBeforeUnmount(() => {
 .notif-center__bell {
   min-width: 44px;
   min-height: 44px;
+  /* CORE-134: VBtn clips everything outside the button (overflow: hidden),
+     which cut the unread badge off at the bell's corner. */
+  overflow: visible !important;
+  transition: background-color 160ms ease;
+}
+
+/* Vuetify's hover/focus overlay relied on that clipping for its round
+   shape; give it the button's radius itself. */
+.notif-center__bell :deep(.v-btn__overlay),
+.notif-center__bell :deep(.v-btn__underlay) {
+  border-radius: inherit;
+}
+
+/* CORE-134 focus, same language as the account button (CORE-131 variant C):
+   keyboard focus tints the circle with the brand color and fades in a brand
+   ring on its edge — instead of Vuetify's grey overlay inside the global
+   outline. Mouse clicks and taps never match :focus-visible. */
+.notif-center__bell:focus-visible {
+  outline: none;
+  background-color: rgba(var(--v-theme-primary), 0.12);
+}
+
+.notif-center__bell:focus-visible :deep(> .v-btn__overlay) {
+  opacity: 0;
+}
+
+/* Vuetify's own focus ring (::after, currentColor), recoloured and animated
+   the way the avatar ring is; it sits under the badge. */
+.notif-center__bell::after {
+  z-index: 1;
+  border-color: rgb(var(--v-theme-primary));
+  transform: scale(0.82);
+  transition:
+    opacity 160ms ease,
+    transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.notif-center__bell:focus-visible::after {
+  opacity: 1;
+  transform: scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notif-center__bell,
+  .notif-center__bell::after {
+    transition: none;
+  }
 }
 
 .notif-center__bell-wrap {
@@ -319,6 +366,7 @@ onBeforeUnmount(() => {
 /* The unread count: a small pill on the bell's corner, "9+" past nine. */
 .notif-center__badge {
   position: absolute;
+  z-index: 2;
   top: -6px;
   left: 12px;
   min-width: 18px;
