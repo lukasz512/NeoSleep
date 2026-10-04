@@ -194,6 +194,55 @@ describe("PatientDetailsTab — every appointment (CORE-133)", () => {
   });
 });
 
+describe("PatientDetailsTab — events for the patient (CORE-137)", () => {
+  const EVENTS = [
+    { id: "e-past", type: "visit", status: "completed", start_at: "2026-09-01T16:00:00.000Z", end_at: "2026-09-01T17:00:00.000Z", metadata: { title: "Follow-up at home" } },
+    { id: "e-soon", type: "call", status: "scheduled", start_at: "2031-03-04T21:00:00.000Z", end_at: "2031-03-04T22:00:00.000Z", metadata: { title: "Video check-in" } },
+    { id: "e-off", type: "visit", status: "cancelled", start_at: "2031-03-06T15:00:00.000Z", end_at: null, metadata: null },
+  ];
+
+  async function mountWithEvents(items: unknown[]) {
+    setActivePinia(createPinia());
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path.startsWith("/api/v1/encounter?")) return { ok: true, status: 200, json: async () => ({ items, total: items.length }) };
+      if (path.startsWith("/api/v1/appointments?")) return { ok: true, status: 200, json: async () => ({ items: [] }) };
+      return { ok: true, status: 200, json: async () => EMPTY };
+    });
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { template: "<div />" } }, { path: "/hcp/:id", name: "hcp-detail", component: { template: "<div />" } }] });
+    const wrapper = mount(PatientDetailsTab, {
+      props: { patient: PATIENT, canSeeStudies: true },
+      global: { plugins: [createI18n({ legacy: false, locale: "en", messages: { en } }), createVuetify({ components: vuetifyComponents }), router] },
+    });
+    wrappers.push(wrapper);
+    await flushPromises();
+    return wrapper;
+  }
+
+  it("asks for the patient's events and lists them — upcoming soonest first, then past — with the type label", async () => {
+    const w = await mountWithEvents(EVENTS);
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/encounter?patient_id=p-1", { handleErrors: false });
+    const rows = w.findAll('[data-testid="patient-event"]');
+    expect(rows.map((r) => r.attributes("data-id"))).toEqual(["e-soon", "e-off", "e-past"]);
+    expect(rows[0]!.text()).toContain("Video check-in");
+    expect(rows[0]!.text()).toContain("Video call");
+    expect(rows[2]!.text()).toContain("Face-to-face");
+    expect(rows[1]!.text()).toContain("Cancelled");
+    expect(groupTitles(w)).toContain("Events");
+  });
+
+  it("lists an event that is shared with other patients", async () => {
+    const w = await mountWithEvents([{ ...EVENTS[1]!, id: "e-shared", patient_ids: ["p-1", "p-2"] }]);
+    const rows = w.findAll('[data-testid="patient-event"]');
+    expect(rows.map((r) => r.attributes("data-id"))).toEqual(["e-shared"]);
+  });
+
+  it("shows no Events group for a patient without events", async () => {
+    const w = await mountWithEvents([]);
+    expect(w.findAll('[data-testid="patient-event"]')).toHaveLength(0);
+    expect(groupTitles(w)).not.toContain("Events");
+  });
+});
+
 describe("PatientDetailsTab — care team (CORE-132)", () => {
   const PRIMARY: CareTeamMember = {
     practitioner_id: "pr-1", name: "Dra. Lorena Ruiz", primary_specialty: "sleep_medicine", specialties: [], primary: true,

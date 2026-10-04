@@ -680,6 +680,7 @@ function openEncounter(encounter: PlannerEvent) {
     video_link: encounter.video_link,
     notes: encounter.notes,
     region: encounter.region,
+    patient_ids: encounter.patient_ids,
   };
   showEventForm.value = true;
 }

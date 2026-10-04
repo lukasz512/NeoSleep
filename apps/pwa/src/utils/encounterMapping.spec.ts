@@ -12,6 +12,7 @@ const payload: EventSubmitPayload = {
   video_link: "https://meet.example.com/abc",
   notes: "Traer muestras",
   region: "MX",
+  patient_ids: [],
   attendees: [
     { attendee_type: "hco", attendee_id: "11111111-1111-1111-1111-111111111111", is_primary: false },
     { attendee_type: "doctor", attendee_id: "22222222-2222-2222-2222-222222222222", is_primary: false },
@@ -50,5 +51,18 @@ describe("encounterMapping (NEO-112)", () => {
   it("tolerates rows written before the mapping (no metadata, bare ids)", () => {
     const event = fromEncounter({ id: "e2", start_at: "2026-10-01T10:00:00Z", type: "congress", attendees: ["not-typed"] });
     expect(event).toMatchObject({ title: "", type: "f2f", status: "scheduled", attendees: [] });
+  });
+
+  it("carries the patients the event is for, both ways (CORE-137)", () => {
+    expect(toEncounterBody({ ...payload, patient_ids: ["p-1", "p-2"] }).patient_ids).toEqual(["p-1", "p-2"]);
+    expect(toEncounterBody(payload).patient_ids).toEqual([]);
+    expect(fromEncounter({ id: "e3", start_at: "2026-10-01T10:00:00Z", patient_ids: ["p-1", "p-2"] }).patient_ids).toEqual(["p-1", "p-2"]);
+    expect(fromEncounter({ id: "e4", start_at: "2026-10-01T10:00:00Z" }).patient_ids).toEqual([]);
+  });
+
+  it("no longer writes or reads patients through attendees", () => {
+    expect(toEncounterBody(payload).attendees).not.toContainEqual(expect.stringMatching(/^patient:/));
+    const event = fromEncounter({ id: "e5", start_at: "2026-10-01T10:00:00Z", attendees: ["patient:p-9", "hco:h-1"] });
+    expect(event.attendees).toEqual([{ attendee_type: "hco", attendee_id: "h-1" }]);
   });
 });

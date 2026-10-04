@@ -151,6 +151,11 @@ describe("historyValueLabel", () => {
     const lookups = { dateTime: (iso: string, zone?: string) => new Intl.DateTimeFormat("en-GB", { timeZone: zone, dateStyle: "short", timeStyle: "short" }).format(new Date(iso)) };
     expect(historyValueLabel(tEn, "Appointment", "start_at", "2031-01-02T21:00:00.000Z", lookups, "America/Mexico_City")).toBe("02/01/2031, 15:00");
     expect(historyValueLabel(tEn, "Appointment", "status", "no_show")).toBe("No-show");
+    // CORE-137: an event reads like the planner form, never as a raw FHIR code.
+    expect(historyValueLabel(tEn, "Encounter", "status", "scheduled")).toBe("Scheduled");
+    expect(historyValueLabel(tEn, "Encounter", "type", "visit")).toBe("Face-to-face");
+    expect(historyValueLabel(tEn, "Encounter", "type", "call")).toBe("Video call");
+    expect(historyValueLabel(tEn, "Encounter", "type", "congress")).toBe("congress");
     expect(historyValueLabel(tEn, "Appointment", "kind", "booked")).toBe("booking confirmation");
   });
 

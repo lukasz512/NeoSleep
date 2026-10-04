@@ -1193,6 +1193,7 @@
   "app.patients.detail.groups.care": "Opieka",
   "app.patients.detail.groups.admin": "Administracyjne",
   "app.patients.detail.groups.appointments": "Wizyty",
+  "app.patients.detail.groups.events": "Wydarzenia",
   "app.patients.detail.groups.careTeam": "Zespół leczący",
   "app.patients.detail.careTeam.source.appointment": "Przez wizytę",
   "app.patients.detail.careTeam.source.manual": "Dodano ręcznie",

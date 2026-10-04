@@ -140,12 +140,18 @@ export function historyValueLabel(
       case "Practitioner":  return translateOr(t, `user.hcp.filters.status${camelKey(`_${value}`)}`, value);
       case "SleepStudy":    return translateOr(t, `app.sleepStudies.status.${camelKey(value)}`, value);
       case "TreatmentPlan": return translateOr(t, `app.treatmentPlans.status.${camelKey(value)}`, value);
-      case "Appointment":   return translateOr(t, `user.appointments.status.${value}`, value);
+      case "Appointment":
+      case "Encounter":     return translateOr(t, `user.appointments.status.${value}`, value);
     }
   }
   if (field === "type") {
     if (entityType === "Organization") return hcoTypeLabel(t, value);
     if (entityType === "TreatmentPlan") return translateOr(t, `app.treatmentPlans.type.${camelKey(value)}`, value);
+    // CORE-137: an event's FHIR type reads as the planner's form does (visit = face-to-face, call = video).
+    if (entityType === "Encounter") {
+      const form = value === "visit" ? "typeF2f" : value === "call" || value === "webinar" ? "typeVideo" : null;
+      return form ? t(`user.planner.form.${form}`) : value;
+    }
   }
   if (field === "primary_specialty") return lookups.specialty?.(value) ?? value;
   if (field === "region") return lookups.region?.(value) ?? value;

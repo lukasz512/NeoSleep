@@ -1193,6 +1193,7 @@
   "app.patients.detail.groups.care": "Atención",
   "app.patients.detail.groups.admin": "Administrativo",
   "app.patients.detail.groups.appointments": "Citas",
+  "app.patients.detail.groups.events": "Eventos",
   "app.patients.detail.groups.careTeam": "Equipo de atención",
   "app.patients.detail.careTeam.source.appointment": "Por una cita",
   "app.patients.detail.careTeam.source.manual": "Agregado manualmente",
