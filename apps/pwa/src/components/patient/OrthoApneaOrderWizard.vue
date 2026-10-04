@@ -51,6 +51,20 @@
 
           <div v-if="order.dentistId" class="oa-wizard__ship-to" data-field="delivery" data-testid="ship-to">
             <p class="oa-wizard__field-label">{{ t("app.deviceOrder.delivery.title") }}</p>
+            <!-- Admin only, when the doctor has several clinics: ship to another one than the primary (NEO-210 D2). -->
+            <div v-if="clinicItems.length > 1" data-field="deliveryOrganizationId" class="mb-2">
+              <VSelect
+                :model-value="selectedClinicId"
+                :items="clinicItems"
+                item-title="title"
+                item-value="value"
+                :aria-label="t('app.deviceOrder.delivery.chooseClinic')"
+                variant="outlined"
+                density="comfortable"
+                hide-details
+                @update:model-value="onClinicPicked"
+              />
+            </div>
             <p v-if="contextLoading" class="text-body-medium text-medium-emphasis">{{ t("app.deviceOrder.delivery.loading") }}</p>
             <address v-else-if="context?.delivery" class="oa-wizard__address">
               <strong>{{ context.delivery.name }}</strong><br />
@@ -75,7 +89,8 @@
               <AppButton v-if="contextFailed" variant="text" size="small" color="primary" @click="refreshContext(true)">{{ t("app.deviceOrder.delivery.retry") }}</AppButton>
             </AppInlineAlert>
           </div>
-          <div data-field="productCode">
+          <!-- Only shown when there is a choice: today the wizard orders NOA only. -->
+          <div v-if="productOptions.length > 1" data-field="productCode">
             <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.selectProduct") }}</p>
             <AppSegmentedTabs :model-value="order.productCode" :options="productOptions" fit class="oa-wizard__switch" @update:model-value="onProductPicked" />
           </div>
@@ -160,40 +175,50 @@
           <p class="text-subtitle2 mb-3 text-primary">{{ t("app.orthoApneaOrder.paso2.title") }}</p>
 
           <!-- Starting Point: % or mm, whichever the doctor fills (the other is locked);
-               the order carries that one, the hint shows it in mm. -->
-          <div data-field="startingPoint">
+               the order carries that one, the hint shows it in mm. The ruler sits beside
+               the steppers (under them in a narrow dialog) and can be dragged: a drag writes mm (NEO-225). -->
+          <div data-field="startingPoint" class="oa-wizard__sp">
             <div class="oa-wizard__sp-header">
               <span class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.startingPointHeader") }}</span>
               <FieldTooltip :text="t('app.orthoApneaOrder.tooltip.startingPoint')" />
             </div>
-            <div class="oa-wizard__sp-fields">
-              <div class="oa-wizard__sp-field-row">
-                <span class="oa-wizard__sp-field-label">{{ t("app.orthoApneaOrder.form.unitPercent") }}:</span>
-                <NumberStepperField
-                  :model-value="spInput('%')"
-                  :disabled="spLocked('%')"
-                  :error="!!fieldError('startingPoint')"
-                  class="oa-wizard__sp-field-input"
-                  data-testid="sp-percent"
-                  @update:model-value="(v) => setStartingPoint('%', v)"
-                />
+            <div class="oa-wizard__sp-body">
+              <MandibularRuler
+                class="oa-wizard__sp-ruler"
+                :retrusion-max="order.retrusionMaxMm"
+                :protrusion-max="order.protrusionMaxMm"
+                :starting-point-mm="spMm"
+                :slider-label="t('app.deviceOrder.startingPointRuler')"
+                @update:starting-point-mm="(mm) => setStartingPoint('mm', mm)"
+              />
+              <div class="oa-wizard__sp-fields">
+                <div class="oa-wizard__sp-field-row">
+                  <span class="oa-wizard__sp-field-label">{{ t("app.orthoApneaOrder.form.unitPercent") }}:</span>
+                  <NumberStepperField
+                    :model-value="spInput('%')"
+                    :disabled="spLocked('%')"
+                    :error="!!fieldError('startingPoint')"
+                    class="oa-wizard__sp-field-input"
+                    data-testid="sp-percent"
+                    @update:model-value="(v) => setStartingPoint('%', v)"
+                  />
+                </div>
+                <div class="oa-wizard__sp-field-row">
+                  <span class="oa-wizard__sp-field-label">{{ t("app.orthoApneaOrder.form.unitMm") }}:</span>
+                  <NumberStepperField
+                    :model-value="spInput('mm')"
+                    :disabled="spLocked('mm')"
+                    :error="!!fieldError('startingPoint')"
+                    class="oa-wizard__sp-field-input"
+                    data-testid="sp-mm"
+                    @update:model-value="(v) => setStartingPoint('mm', v)"
+                  />
+                </div>
+                <span v-if="spHint" class="text-body-small text-medium-emphasis" data-testid="sp-hint">{{ spHint }}</span>
+                <span v-if="fieldError('startingPoint')" class="oa-wizard__field-error">{{ fieldError("startingPoint") }}</span>
               </div>
-              <div class="oa-wizard__sp-field-row">
-                <span class="oa-wizard__sp-field-label">{{ t("app.orthoApneaOrder.form.unitMm") }}:</span>
-                <NumberStepperField
-                  :model-value="spInput('mm')"
-                  :disabled="spLocked('mm')"
-                  :error="!!fieldError('startingPoint')"
-                  class="oa-wizard__sp-field-input"
-                  data-testid="sp-mm"
-                  @update:model-value="(v) => setStartingPoint('mm', v)"
-                />
-              </div>
-              <span v-if="spHint" class="text-body-small text-medium-emphasis" data-testid="sp-hint">{{ spHint }}</span>
-              <span v-if="fieldError('startingPoint')" class="oa-wizard__field-error">{{ fieldError("startingPoint") }}</span>
             </div>
           </div>
-          <MandibularRuler :retrusion-max="order.retrusionMaxMm" :protrusion-max="order.protrusionMaxMm" :starting-point-mm="spMm" />
 
           <!-- Sequence type: one choice, same segmented switch as Paso 4's Normal/Aliviar. -->
           <div data-field="sequence" data-testid="sequence">
@@ -267,15 +292,17 @@
             </template>
           </div>
 
-          <!-- Morning Aligner is a flag on this NOA / NOA TMJ order (add-on), never a second order. -->
-          <div class="d-flex align-center mt-2">
-            <VCheckbox v-model="order.morningAligner" color="primary" :label="t('app.orthoApneaOrder.form.morningAligner')" hide-details density="compact" />
-            <FieldTooltip
-              :text="t('app.orthoApneaOrder.tooltip.morningAligner')"
-              :image="TOOLTIP_IMG.morningAligner"
-              :image-alt="t('app.orthoApneaOrder.form.morningAligner')"
-            />
-          </div>
+          <!-- Morning Aligner is a flag on this NOA / NOA TMJ order (add-on), never a second order.
+               Its own photo card under "Add-ons", still in Paso 2 (NEO-225). -->
+          <p class="oa-wizard__subsection mt-6 mb-2">{{ t("app.orthoApneaOrder.form.addonsTitle") }}</p>
+          <AddonCard
+            v-model="order.morningAligner"
+            data-field="morningAligner"
+            :title="t('app.orthoApneaOrder.form.morningAligner')"
+            :description="t('app.orthoApneaOrder.form.morningAlignerShort')"
+            :details="t('app.orthoApneaOrder.tooltip.morningAligner')"
+            :image="TOOLTIP_IMG.morningAligner"
+          />
 
           <VDivider class="my-5" />
 
@@ -435,6 +462,7 @@ import TeethDiagram from "./TeethDiagram.vue";
 import DeviationDiagram from "./DeviationDiagram.vue";
 import MandibularRuler from "./MandibularRuler.vue";
 import FieldTooltip from "./FieldTooltip.vue";
+import AddonCard from "./AddonCard.vue";
 import NumberStepperField from "./NumberStepperField.vue";
 import AppConfirmDialog from "../AppConfirmDialog.vue";
 import AppFormDialog from "../AppFormDialog.vue";
@@ -603,6 +631,7 @@ const {
   context,
   contextLoading,
   contextFailed,
+  deliveryOrganizationId,
   submitLoading,
   serverIssues,
   validation,
@@ -713,19 +742,37 @@ let contextKey: string | null = null;
 /** (Re)loads the doctor's HCO and OA's earliest date — only when the doctor or product actually changed, unless forced. */
 function refreshContext(force = false) {
   // A doctor's context is always their own; the dentistId the API hands back must not trigger a reload.
-  const key = `${isDoctor.value ? "self" : order.dentistId}|${order.productCode}`;
+  const key = `${isDoctor.value ? "self" : order.dentistId}|${order.productCode}|${deliveryOrganizationId.value ?? ""}`;
   if (!force && key === contextKey) return;
   contextKey = key;
   void loadContext();
 }
 
 function onDoctorPicked(value: unknown) {
+  // Another doctor has other clinics: back to their primary.
+  if (value !== order.dentistId) deliveryOrganizationId.value = null;
   order.dentistId = typeof value === "string" ? value : "";
 }
 
-watch(() => [order.dentistId, order.productCode], () => {
+/** The doctor's clinics as an admin's choice (the API sends them to an admin only), primary marked. */
+const clinicItems = computed(() =>
+  (context.value?.deliveryOptions ?? []).map((o) => ({
+    value: o.organizationId,
+    title: [o.name, o.city].filter(Boolean).join(" · ") + (o.isPrimary ? ` (${t("app.deviceOrder.delivery.primary")})` : ""),
+  })),
+);
+const selectedClinicId = computed(
+  () => deliveryOrganizationId.value ?? context.value?.delivery?.organizationId ?? context.value?.deliveryOptions.find((o) => o.isPrimary)?.organizationId ?? null,
+);
+function onClinicPicked(value: unknown) {
+  const primaryId = context.value?.deliveryOptions.find((o) => o.isPrimary)?.organizationId;
+  // Picking the primary again is the default, not a choice.
+  deliveryOrganizationId.value = typeof value === "string" && value !== primaryId ? value : null;
+}
+
+watch(() => [order.dentistId, order.productCode, deliveryOrganizationId.value], () => {
   if (!props.modelValue) return;
-  // A rejected delivery belonged to the previous doctor's HCO.
+  // A rejected delivery belonged to the previous doctor's (or clinic's) HCO.
   serverIssues.value = serverIssues.value.filter((i) => !isDeliveryPath(i.path));
   refreshContext();
 });
@@ -754,7 +801,10 @@ const doctorDeliveryMessage = computed(() => {
   const fields = [...new Set(issues.map((i) => i.path.slice("delivery.".length)))].map((f) =>
     te(`app.deviceOrder.delivery.field.${f}`) ? t(`app.deviceOrder.delivery.field.${f}`) : f,
   );
-  return t("app.deviceOrder.delivery.doctorIncomplete", { fields: fields.join(", ") });
+  const clinic = context.value?.delivery?.name?.trim();
+  return clinic
+    ? t("app.deviceOrder.delivery.doctorIncompleteNamed", { clinic, fields: fields.join(", ") })
+    : t("app.deviceOrder.delivery.doctorIncomplete", { fields: fields.join(", ") });
 });
 
 /** Where to fix the address: the HCO itself when the API names it, else the doctor's record (where the primary HCO is set). */
@@ -1094,12 +1144,54 @@ watch(
   margin-bottom: 8px;
 }
 
+/* NEO-225: ruler beside the steppers, so no empty band above it; a narrow
+   dialog (phone) stacks the steppers first, the ruler full width under them. */
+.oa-wizard__sp {
+  container-type: inline-size;
+}
+
+.oa-wizard__sp-body {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.oa-wizard__sp-ruler {
+  flex: 1;
+  min-width: 0;
+}
+
 .oa-wizard__sp-fields {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  align-items: flex-end;
-  margin-bottom: 12px;
+  flex: none;
+}
+
+@container (max-width: 520px) {
+  .oa-wizard__sp-body {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 4px;
+  }
+}
+
+.oa-wizard__subsection {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.oa-wizard__subsection::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(var(--v-theme-on-surface), 0.12);
 }
 
 .oa-wizard__sp-field-row {
@@ -1116,7 +1208,7 @@ watch(
 }
 
 .oa-wizard__sp-field-input {
-  width: 220px;
+  width: 180px;
 }
 
 /* Izquierda / diagram / Derecha side by side — matches OrthoApnea's own

@@ -3,6 +3,7 @@ import { insertFileAttachment, getFileAttachmentById, deleteFileAttachment, type
 import { insertAuditLog } from "../db.js";
 import { NotFoundError, ValidationError } from "../errors.js";
 import { uploadPartnerDocument } from "../services/partnerDocuments.js";
+import { requireSleepStudyInScope } from "../queries/sleepStudy.js";
 
 /**
  * COMMANDS — sleep_study file attachments (PDF results, manual upload).
@@ -31,6 +32,8 @@ export async function UploadSleepStudyAttachmentCommand(
   if (!input.bytes?.byteLength) {
     throw new ValidationError("Uploaded file is empty");
   }
+  // CORE-104: the study (and so its patient) must be within the caller's reach.
+  await requireSleepStudyInScope(ctx, input.sleepStudyId);
 
   const safeFilename = (input.filename || "results.pdf").trim().slice(0, MAX_FILENAME_LENGTH);
   const path = `sleep-study/${input.sleepStudyId}/${Date.now()}-${safeFilename}`;
@@ -72,6 +75,7 @@ export async function DeleteSleepStudyAttachmentCommand(
   sleepStudyId: string,
   attachmentId: string
 ): Promise<void> {
+  await requireSleepStudyInScope(ctx, sleepStudyId);
   const attachment = await getFileAttachmentById(ctx.client, attachmentId);
   if (!attachment || attachment.entity_type !== "sleep_study" || attachment.entity_id !== sleepStudyId) {
     throw new NotFoundError("Attachment", attachmentId);

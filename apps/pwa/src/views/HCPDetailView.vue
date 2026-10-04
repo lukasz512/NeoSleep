@@ -334,10 +334,11 @@ const activateLabelKey = computed(() =>
 
 const hcpCache = useEntityCacheStore("hcp");
 /**
- * Clinics panel (NEO-17) is hidden until the bug where newly added clinics
- * disappear after being added is fixed. Flip back to true to restore it.
+ * Clinics panel (NEO-17): admin only (NEO-210 — the primary clinic is the
+ * device delivery address, so admin must be able to set it). Other roles stay
+ * hidden until the "newly added clinic disappears" report is re-checked.
  */
-const SHOW_CLINICS_PANEL = false;
+const SHOW_CLINICS_PANEL = computed(() => isAdmin.value);
 
 const hcp = ref<HCP | null>(null);
 const showAppointmentDialog = ref(false);

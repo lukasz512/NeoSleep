@@ -1,6 +1,25 @@
 <template>
-  <div class="mandibular-ruler">
-    <div class="mandibular-ruler__track">
+  <!-- The whole ruler is the SP slider (NEO-225): press or drag anywhere on it
+       to move the lower incisor, snapped to the 1 mm ticks; arrows / Home / End
+       from the keyboard. -->
+  <div
+    ref="root"
+    class="mandibular-ruler"
+    :class="{ 'mandibular-ruler--dragging': dragging }"
+    role="slider"
+    tabindex="0"
+    :aria-label="sliderLabel"
+    :aria-valuemin="-RULER_RANGE_MM"
+    :aria-valuemax="RULER_RANGE_MM"
+    :aria-valuenow="startingPointMm ?? undefined"
+    :aria-valuetext="startingPointMm == null ? undefined : `${startingPointMm} mm`"
+    @pointerdown="onPointerDown"
+    @pointermove="onPointerMove"
+    @pointerup="dragging = false"
+    @pointercancel="dragging = false"
+    @keydown="onKeydown"
+  >
+    <div ref="track" class="mandibular-ruler__track">
       <!-- Both incisors live in the track's own coordinate space (same
            left:% basis as the MR/MP/SP markers). Each image is shifted by
            its own tip offset (INCISOR_TIP), so the incisal TIP — not the
@@ -33,8 +52,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
-import { INCISOR_TIP, incisorStyle, rulerPercent } from "./mandibularRuler";
+import { computed, ref, useTemplateRef } from "vue";
+import { INCISOR_TIP, RULER_RANGE_MM, incisorStyle, mmFromPointer, rulerPercent } from "./mandibularRuler";
 
 /**
  * Replica of OrthoApnea's own "app-mandibular-advancement" ruler: a -2cm/+2cm
@@ -53,7 +72,49 @@ const props = defineProps<{
   protrusionMax: number | null;
   /** SP already converted to mm (startingPointMm from @device-order), or null when not entered. */
   startingPointMm: number | null;
+  /** Accessible name of the slider (the parent owns i18n). */
+  sliderLabel?: string;
 }>();
+
+const emit = defineEmits<{ "update:startingPointMm": [mm: number] }>();
+
+const root = useTemplateRef<HTMLElement>("root");
+const track = useTemplateRef<HTMLElement>("track");
+const dragging = ref(false);
+
+function emitAt(clientX: number) {
+  if (!track.value) return;
+  const mm = mmFromPointer(clientX, track.value.getBoundingClientRect());
+  if (mm !== null && mm !== props.startingPointMm) emit("update:startingPointMm", mm);
+}
+
+function onPointerDown(e: PointerEvent) {
+  dragging.value = true;
+  // Keeps the drag alive when the finger leaves the ruler (jsdom has no setPointerCapture).
+  root.value?.setPointerCapture?.(e.pointerId);
+  emitAt(e.clientX);
+}
+
+function onPointerMove(e: PointerEvent) {
+  if (dragging.value) emitAt(e.clientX);
+}
+
+const KEY_STEPS: Record<string, (mm: number) => number> = {
+  ArrowRight: (mm) => mm + 1,
+  ArrowUp: (mm) => mm + 1,
+  ArrowLeft: (mm) => mm - 1,
+  ArrowDown: (mm) => mm - 1,
+  Home: () => -RULER_RANGE_MM,
+  End: () => RULER_RANGE_MM,
+};
+
+function onKeydown(e: KeyboardEvent) {
+  const step = KEY_STEPS[e.key];
+  if (!step) return;
+  e.preventDefault();
+  const next = Math.max(-RULER_RANGE_MM, Math.min(RULER_RANGE_MM, step(Math.round(props.startingPointMm ?? 0))));
+  if (next !== props.startingPointMm) emit("update:startingPointMm", next);
+}
 
 const incisorSup = new URL("../../assets/orthoapnea/teeth/incisor-sup.png", import.meta.url).href;
 const incisorInf = new URL("../../assets/orthoapnea/teeth/incisor-inf.png", import.meta.url).href;
@@ -67,12 +128,37 @@ const infStyle = computed(() => incisorStyle(spPercent.value, INCISOR_TIP.inf));
 </script>
 
 <style scoped>
+/* Width comes from the parent (the order wizard puts it beside the SP steppers, NEO-225). */
 .mandibular-ruler {
   position: relative;
-  width: 60%;
-  margin: 0 auto 0 0;
+  width: 100%;
   padding-top: 44px;
   padding-bottom: 8px;
+  border-radius: var(--pwa-radius);
+  cursor: ew-resize;
+  /* Horizontal drags move SP; vertical swipes still scroll the form on a phone. */
+  touch-action: pan-y;
+  user-select: none;
+}
+
+.mandibular-ruler:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 4px;
+}
+
+/* Follow the finger 1:1 while dragging; the 0.15s glide is for stepper/keyboard changes. */
+.mandibular-ruler--dragging .mandibular-ruler__incisor,
+.mandibular-ruler--dragging .mandibular-ruler__marker {
+  transition: none;
+}
+
+.mandibular-ruler__incisor--inf {
+  cursor: grab;
+}
+
+.mandibular-ruler--dragging,
+.mandibular-ruler--dragging .mandibular-ruler__incisor--inf {
+  cursor: grabbing;
 }
 
 .mandibular-ruler__track {

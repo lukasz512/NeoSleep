@@ -9,7 +9,7 @@
       :i18n="listI18n"
       detail-route-name="patient-detail"
       detail-route-param="patient_id"
-      :detail-route-query="() => ({ tab: 'studies' })"
+      :detail-route-query="sleepStudyDetailQuery"
       :filter-param-keys="['status']"
     >
       <template #item.patient_name="{ item }">
@@ -89,6 +89,7 @@ import AppAvatar from "../components/AppAvatar.vue";
 import type { FilterDefinition } from "../composables/useFilters";
 import { sleepStudyCardMeta as sleepStudyCardMetaFormatter } from "../utils/mobileCardMeta";
 import { hcpDetailLink } from "../utils/entityLinks";
+import { sleepStudyDetailQuery } from "../utils/clinicalListLinks";
 
 interface SleepStudyRow {
   patient_name?: string | null;

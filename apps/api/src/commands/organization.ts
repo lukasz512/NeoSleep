@@ -4,6 +4,7 @@ import {
   updateOrganization,
   getOrganizationById,
   getOrganizationIdByName,
+  getTerritoryCountry,
   softDeleteOrganization,
   type InsertOrganizationInput,
   type UpdateOrganizationInput,
@@ -153,10 +154,13 @@ export async function CreateOrganizationCommand(
   const city = input.city?.trim() ?? null;
   const state = input.state?.trim() ?? null;
   const postal_code = input.postal_code?.trim() ?? null;
-  const country_code = input.country_code?.trim() ?? null;
+  const territory_id = input.territory_id ?? null;
 
-  // Best-effort — never blocks the save (see services/geocoding.ts).
-  const coordinates = await geocodeAddress({ address_line1, city, state, postal_code, country_code });
+  // Best-effort — never blocks the save (see services/geocoding.ts). The
+  // address decides the country (NEO-210 D1); the territory only biases it.
+  const region_hint = territory_id ? await getTerritoryCountry(ctx.client, territory_id) : null;
+  const coordinates = await geocodeAddress({ address_line1, city, state, postal_code, region_hint });
+  const addressCountry = coordinates?.countryCode ?? null;
 
   const insertInput: InsertOrganizationInput = {
     name,
@@ -166,7 +170,9 @@ export async function CreateOrganizationCommand(
     city,
     state,
     postal_code,
-    country_code,
+    // Address country first; else the db layer falls back to the territory's, else what was sent.
+    country_code:  addressCountry ?? input.country_code?.trim() ?? null,
+    country_from_address: addressCountry !== null,
     region:        input.region?.trim() ?? "",
     territory_id:  input.territory_id ?? null,
     phone,
@@ -276,15 +282,18 @@ export async function UpdateOrganizationCommand(
     input.postal_code !== undefined ||
     input.country_code !== undefined;
 
+  const territoryId = input.territory_id !== undefined ? input.territory_id : before.territory_id;
   const coordinates = addressChanged
     ? await geocodeAddress({
         address_line1: input.address_line1 !== undefined ? input.address_line1 : before.address_line1,
         city:          input.city !== undefined ? input.city : before.city,
         state:         input.state !== undefined ? input.state : before.state,
         postal_code:   input.postal_code !== undefined ? input.postal_code : before.postal_code,
-        country_code:  input.country_code !== undefined ? input.country_code : before.country_code,
+        region_hint:   territoryId ? await getTerritoryCountry(ctx.client, territoryId) : null,
       })
     : undefined;
+  // The address decides the country (NEO-210 D1); without one the db layer falls back to the territory's.
+  const addressCountry = coordinates?.countryCode ?? null;
 
   const updateInput: UpdateOrganizationInput = {
     name,
@@ -294,7 +303,8 @@ export async function UpdateOrganizationCommand(
     city:          input.city,
     state:         input.state,
     postal_code:   input.postal_code,
-    country_code:  input.country_code,
+    country_code:  addressCountry ?? input.country_code,
+    country_from_address: addressCountry !== null,
     region:        input.region,
     territory_id:  input.territory_id,
     phone:         input.phone,

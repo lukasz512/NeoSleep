@@ -24,7 +24,7 @@ afterEach(() => {
 describe("geocodeAddress", () => {
   it("returns null without throwing when the API key isn't configured", async () => {
     const { geocodeAddress } = await importService(false);
-    const result = await geocodeAddress({ address_line1: "123 Main St", city: "Warsaw", country_code: "PL" });
+    const result = await geocodeAddress({ address_line1: "123 Main St", city: "Warsaw", region_hint: "PL" });
     expect(result).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -43,8 +43,35 @@ describe("geocodeAddress", () => {
       json: async () => ({ status: "OK", results: [{ geometry: { location: { lat: 52.2297, lng: 21.0122 } } }] }),
     } as Response);
 
-    const result = await geocodeAddress({ address_line1: "123 Main St", city: "Warsaw", country_code: "PL" });
-    expect(result).toEqual({ lat: 52.2297, lng: 21.0122 });
+    const result = await geocodeAddress({ address_line1: "123 Main St", city: "Warsaw", region_hint: "PL" });
+    expect(result).toEqual({ lat: 52.2297, lng: 21.0122, countryCode: null });
+  });
+
+  // NEO-210 D1: the clinic's country comes from its address, so Google's
+  // answer carries it — and the stored country (which the form used to fill
+  // with the author's country) must not steer the lookup.
+  it("returns the country Google resolves the address to", async () => {
+    const { geocodeAddress } = await importService(true);
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        status: "OK",
+        results: [{
+          geometry: { location: { lat: 19.29, lng: -99.65 } },
+          address_components: [
+            { short_name: "Toluca", types: ["locality", "political"] },
+            { short_name: "Méx.", types: ["administrative_area_level_1", "political"] },
+            { short_name: "MX", types: ["country", "political"] },
+          ],
+        }],
+      }),
+    } as Response);
+
+    const result = await geocodeAddress({ address_line1: "Av. Ejemplo 200", city: "Toluca", state: "Estado de México", region_hint: "MX" });
+    expect(result).toEqual({ lat: 19.29, lng: -99.65, countryCode: "MX" });
+    const url = new URL(String(vi.mocked(fetch).mock.calls[0]![0]));
+    expect(url.searchParams.get("address")).toBe("Av. Ejemplo 200, Toluca, Estado de México");
+    expect(url.searchParams.get("region")).toBe("mx");
   });
 
   it("returns null (not a throw) when Google reports no match", async () => {

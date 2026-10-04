@@ -1,10 +1,11 @@
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireAuth } from "../middleware/requireAuth.js";
+import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
 import { CreateNoteCommand, DeleteNoteCommand } from "../commands/note.js";
-import { GetNotesForEntityQuery } from "../queries/note.js";
+import { GetNotesForEntityQuery, GetRecentDeviceOrderCommentsQuery } from "../queries/note.js";
 import { ValidationError } from "../errors.js";
 import { routeParam } from "./utils.js";
 
@@ -30,6 +31,24 @@ noteRouter.get(
     const items = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
       return GetNotesForEntityQuery(ctx, entityType, entityId);
+    });
+
+    res.json({ items });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/note/device-orders/recent?limit= — latest device-order comments, all patients (admin Panel, NEO-217)
+// ---------------------------------------------------------------------------
+noteRouter.get(
+  "/note/device-orders/recent",
+  requireRole("admin"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const limit = typeof req.query.limit === "string" ? Number.parseInt(req.query.limit, 10) : undefined;
+    const slug = tenantSlugFromHost(req.hostname);
+    const items = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetRecentDeviceOrderCommentsQuery(ctx, { limit: Number.isFinite(limit) ? limit : undefined });
     });
 
     res.json({ items });

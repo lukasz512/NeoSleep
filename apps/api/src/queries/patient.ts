@@ -9,9 +9,10 @@ import {
 } from "../db.js";
 import { withPlatform } from "../db/tenant.js";
 import { listPatientChecklistConfig, type ChecklistFillMode } from "../db/documentTemplateEntityType.js";
-import { getPatientFormCompletion, POLYSOMNOGRAPHY_FORM_KEY, type FormCompletionItem } from "../db/patientFormCompletion.js";
+import { getPatientFormStatus, POLYSOMNOGRAPHY_FORM_KEY, type FormCompletionItem } from "../db/patientFormCompletion.js";
 import { DOCUMENT_MANIFEST } from "@neo/documents";
-import { getAllowedScopePaths, assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
+import { getLatestDeviceOrderByPatient, type PatientDeviceOrder } from "../db/treatmentPlan.js";
+import { getViewer, patientListScope, assertCanSeePatient } from "./entityAccess.js";
 
 /**
  * QUERIES — Patient domain.
@@ -66,9 +67,17 @@ export interface PatientDto {
 export interface PatientIntakeFormStatus {
   key: string;
   done: boolean;
+  /** Which list column it belongs to (NEO-221): "study" = lab/device results (fill_mode external + polysomnography), like the patient's Estudios tab. */
+  category: "document" | "study";
+  /** The patient can still fill it through a QR link — the list's "Next step" (NEO-221). */
+  waiting_on_patient: boolean;
 }
 
-export type PatientListItemDto = PatientDto & { intake_forms: PatientIntakeFormStatus[] };
+export type PatientListItemDto = PatientDto & {
+  intake_forms: PatientIntakeFormStatus[];
+  /** Latest device order (NEO-223) — once one is placed, the list's Next step follows it instead of the QR. */
+  device_order: PatientDeviceOrder | null;
+};
 
 function toDto(p: Patient & { name: string }, territoryPath: TerritoryPathNode[] | null = null): PatientDto {
   return {
@@ -130,8 +139,8 @@ export async function GetPatientListQuery(
     search: input.search,
     status: input.status,
     region: input.region,
-    practitioner_id: input.practitioner_id,
-    scopePaths: await getAllowedScopePaths(ctx.client, ctx.user.roles),
+    // CORE-104: a doctor's list is always their own, whatever practitioner_id was sent.
+    ...patientListScope(await getViewer(ctx), input.practitioner_id),
   };
 
   const page      = input.page ?? 1;
@@ -142,12 +151,20 @@ export async function GetPatientListQuery(
   const { rows, total } = await getPatientsPaginated(ctx.client, filters, page, limit, sortBy, sortOrder);
 
   const forms = await getPatientIntakeForms();
-  const completion = await getPatientFormCompletion(ctx.client, rows.map((row) => row.id), forms);
+  const ids = rows.map((row) => row.id);
+  const status = await getPatientFormStatus(ctx.client, ids, forms);
+  const deviceOrders = await getLatestDeviceOrderByPatient(ctx.client, ids);
   const items = rows.map((row) => {
-    const done = completion.get(row.id);
+    const s = status.get(row.id);
     return {
       ...toDto(row),
-      intake_forms: forms.map(({ key }) => ({ key, done: done?.has(key) ?? false })),
+      intake_forms: forms.map(({ key, fillMode }) => ({
+        key,
+        done: s?.done.has(key) ?? false,
+        category: fillMode === null || fillMode === "external" ? ("study" as const) : ("document" as const),
+        waiting_on_patient: s?.waitingOnPatient.has(key) ?? false,
+      })),
+      device_order: deviceOrders.get(row.id) ?? null,
     };
   });
   return { items, total };
@@ -182,7 +199,7 @@ export async function GetPatientByIdQuery(
 ): Promise<PatientDto | null> {
   const patient = await getPatientById(ctx.client, id);
   if (!patient) return null;
-  await assertTerritoryAccessByTerritoryId(ctx, patient.territory_id);
+  await assertCanSeePatient(ctx, patient);
   const territoryPath = patient.territory_id ? await getTerritoryPath(ctx.client, patient.territory_id) : null;
   return toDto(patient, territoryPath);
 }

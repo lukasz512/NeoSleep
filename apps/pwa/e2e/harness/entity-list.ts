@@ -83,7 +83,19 @@ const Harness = defineComponent({
                 { title: "Name", key: "name" },
                 { title: "Kind", key: "kind" },
               ],
-              filterDefinitions: [],
+              // One real filter so the toolbar's active-count badge can be
+              // exercised (CORE-112: its top was clipped by the toolbar).
+              filterDefinitions: [
+                {
+                  key: "kind",
+                  labelKey: "app.common.filters",
+                  type: "select",
+                  options: [
+                    { title: "Dentist", value: "Dentist" },
+                    { title: "Pulmonologist", value: "Pulmonologist" },
+                  ],
+                },
+              ],
               i18n: listI18n,
               cacheable: false,
             },

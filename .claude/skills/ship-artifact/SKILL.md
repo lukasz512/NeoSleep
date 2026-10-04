@@ -8,7 +8,7 @@ argument-hint: "[content.json path]"
 
 > **Focus**: $ARGUMENTS — a content JSON to render; empty means write one first (Step 1).
 
-Łukasz's standing rule (2026-09-25): after every session the Artifact is **the** deliverable — on the Linear ticket and in the chat. He needs nothing else. This skill makes it the same shape every time, so he learns where to look. Rules behind it: CLAUDE.md "Standing decisions"; `.claude/hooks/quality-gate.sh` enforces the marker.
+Łukasz's standing rule (2026-09-25): after every session the Artifact is **the** deliverable — on the Linear ticket and in the chat. He needs nothing else. This skill makes it the same shape every time, so he learns where to look. Rules behind it: docs/CLAUDE_WORKFLOW.md "Standing decisions"; `.claude/hooks/quality-gate.sh` enforces the marker.
 
 **Before anything: a Linear ticket and a branch named after it (NEO-84).** No ticket → create one in CORE (platform), NEO (NeoSleep-only) or AJM (`## Problem` / `## Change` / `## Done when`, ≤1500 chars — the PreToolUse hook rejects anything else) and rename the branch. `render` refuses a branch without `<key>-<n>` (keys in `.claude/ticket-teams`).
 

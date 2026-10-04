@@ -64,6 +64,8 @@ export interface InsertOrganizationInput {
   google_link?: string | null;
   visit_instructions?: string | null;
   privacy_notice_url?: string | null;
+  /** True when country_code came from geocoding the address (NEO-210 D1): the territory must not override it. */
+  country_from_address?: boolean;
   /** Set by the command layer after geocoding the address fields above — not user input. */
   latitude?: number | null;
   longitude?: number | null;
@@ -89,6 +91,8 @@ export interface UpdateOrganizationInput {
   google_link?: string | null;
   visit_instructions?: string | null;
   privacy_notice_url?: string | null;
+  /** True when country_code came from geocoding the address (NEO-210 D1): the territory must not override it. */
+  country_from_address?: boolean;
   /** Set by the command layer after geocoding the address fields above — not user input. */
   latitude?: number | null;
   longitude?: number | null;
@@ -223,6 +227,42 @@ export async function getOrganizationIdByName(
   }
 }
 
+/** The nearest territory (itself or an ancestor) country that is set — SQL shared by the two helpers below. */
+const TERRITORY_COUNTRY_SQL = `
+  SELECT a.country_code
+    FROM territory t
+    JOIN territory a ON t.path <@ a.path
+   WHERE t.id = $1
+     AND NULLIF(a.country_code, '') IS NOT NULL
+   ORDER BY extensions.nlevel(a.path) DESC
+   LIMIT 1`;
+
+/** Country of a territory (its own or its nearest ancestor's), or null. */
+export async function getTerritoryCountry(client: PoolClient, territoryId: string): Promise<string | null> {
+  try {
+    const { rows } = await client.query<{ country_code: string }>(TERRITORY_COUNTRY_SQL, [territoryId]);
+    return rows[0]?.country_code ?? null;
+  } catch (err) {
+    throw new DatabaseError("getTerritoryCountry", err);
+  }
+}
+
+/**
+ * A clinic's country is a fact of its address, not of who typed it in
+ * (NEO-210 D1): the command layer sets it from the geocoded address
+ * (`country_from_address`), and this is the fallback when the address gave
+ * none — the country of the clinic's territory. Without either, the stored
+ * value stays as sent. Fixes MX clinics saved as PL by a PL-based user.
+ */
+async function syncCountryFromTerritory(client: PoolClient, id: string): Promise<void> {
+  await client.query(
+    `UPDATE organization o
+        SET country_code = COALESCE((${TERRITORY_COUNTRY_SQL.replace("$1", "o.territory_id")}), o.country_code)
+      WHERE o.id = $1 AND o.territory_id IS NOT NULL`,
+    [id]
+  );
+}
+
 /**
  * Inserts an organization record using the provided client.
  * The client must already be in a transaction (withTenant handles this).
@@ -263,6 +303,7 @@ export async function insertOrganization(client: PoolClient, input: InsertOrgani
       ]
     );
     const id = result.rows[0]!.id;
+    if (!input.country_from_address) await syncCountryFromTerritory(client, id);
 
     const org = await getOrganizationById(client, id);
     if (!org) throw new DatabaseError("insertOrganization", new Error("Insert returned no rows"));
@@ -373,6 +414,7 @@ export async function updateOrganization(client: PoolClient, id: string, input: 
 
     params.push(id);
     await client.query(`UPDATE organization SET ${sets.join(", ")} WHERE id = $${idx}`, params);
+    if (!input.country_from_address) await syncCountryFromTerritory(client, id);
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new DatabaseError("updateOrganization", err);

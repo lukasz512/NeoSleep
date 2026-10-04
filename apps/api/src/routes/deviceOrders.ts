@@ -17,13 +17,12 @@ import {
   tenantSlugFromHost,
   insertAuditLog,
   getDeliveryOrganization,
+  listDeliveryOrganizations,
   getTreatmentPlanById,
-  getIdentityIdForUser,
-  getPractitionerIdByIdentityId,
 } from "../db.js";
 import type { DeliveryOrganization } from "../db/practitionerOrganization.js";
 import { buildContext, type TenantContext } from "../context/TenantContext.js";
-import { requirePatientInScope, requirePractitionerInScope } from "../queries/entityAccess.js";
+import { getViewer, requirePatientInScope, requirePractitionerInScope } from "../queries/entityAccess.js";
 import { getDeviceOrderProvider } from "../services/deviceOrders/index.js";
 import { ForbiddenError, NotFoundError } from "../errors.js";
 import { requireRole } from "../middleware/requireRole.js";
@@ -66,16 +65,49 @@ function toDeliveryAddress(org: DeliveryOrganization): DeliveryAddress {
   };
 }
 
-/** The dentist's delivery HCO plus what's missing on it (OA requires every address field). */
+/** One of the doctor's clinics, as the admin's delivery choice in the wizard (NEO-210 D2). */
+interface DeliveryOption {
+  organizationId: string;
+  name: string;
+  city: string | null;
+  isPrimary: boolean;
+}
+
+/**
+ * The dentist's delivery HCO plus what's missing on it (OA requires every
+ * address field). By default the primary clinic; `chosenOrganizationId` (an
+ * admin's choice, NEO-210 D2) must be one of the dentist's own clinics.
+ */
 async function resolveDelivery(
   ctx: TenantContext,
-  dentistId: string
-): Promise<{ delivery: DeliveryAddress | null; organizationId: string | null; issues: OrderIssue[] }> {
+  dentistId: string,
+  chosenOrganizationId: string | null = null
+): Promise<{ delivery: DeliveryAddress | null; organizationId: string | null; issues: OrderIssue[]; options: DeliveryOption[] }> {
   await requirePractitionerInScope(ctx, dentistId);
-  const org = await getDeliveryOrganization(ctx.client, dentistId);
-  if (!org) return { delivery: null, organizationId: null, issues: [{ path: "delivery", code: "required" }] };
+  const all = await listDeliveryOrganizations(ctx.client, dentistId);
+  const options = all.map((o) => ({ organizationId: o.id, name: o.name, city: o.city, isPrimary: o.is_primary }));
+  const org = chosenOrganizationId
+    ? (all.find((o) => o.id === chosenOrganizationId) ?? null)
+    : await getDeliveryOrganization(ctx.client, dentistId);
+  if (!org) {
+    const issue: OrderIssue = chosenOrganizationId ? { path: "delivery_organization_id", code: "invalid" } : { path: "delivery", code: "required" };
+    return { delivery: null, organizationId: null, issues: [issue], options };
+  }
   const delivery = toDeliveryAddress(org);
-  return { delivery, organizationId: org.id, issues: validateDeliveryAddress(delivery) };
+  return { delivery, organizationId: org.id, issues: validateDeliveryAddress(delivery), options };
+}
+
+/**
+ * The clinic an admin picked as the delivery address, or null for the
+ * default (primary). Only an admin may choose (Łukasz, 2026-10-03, NEO-210
+ * D2); anyone else sending one is refused rather than silently ignored.
+ */
+function chosenDeliveryOrganization(ctx: TenantContext, raw: unknown): string | null {
+  const id = typeof raw === "string" ? raw.trim() : "";
+  if (!id) return null;
+  if (ctx.user.role !== "admin") throw new ForbiddenError("Only an admin can choose another delivery clinic");
+  // A malformed id can match no clinic, so it ends as the same "invalid" issue as a stranger's clinic.
+  return UUID_RE.test(id) ? id : "00000000-0000-0000-0000-000000000000";
 }
 
 /**
@@ -84,11 +116,7 @@ async function resolveDelivery(
  * as themselves, so only to their own clinic (Łukasz, 2026-10-03, NEO-210).
  */
 async function ownPractitionerId(ctx: TenantContext): Promise<string | null> {
-  if (ctx.user.role !== "doctor") return null;
-  const identityId = await getIdentityIdForUser(ctx.client, ctx.user.id);
-  const practitionerId = identityId ? await getPractitionerIdByIdentityId(ctx.client, identityId) : null;
-  if (!practitionerId) throw new ForbiddenError("This doctor account is not linked to a practitioner record");
-  return practitionerId;
+  return (await getViewer(ctx)).practitionerId;
 }
 
 /** The 400 every device-order validation failure answers with. */
@@ -118,10 +146,11 @@ deviceOrdersRouter.get(
     }
 
     const slug = tenantSlugFromHost(req.hostname);
-    const { dentistId, delivery, organizationId, issues } = await withTenant(slug, async (client) => {
+    const { dentistId, delivery, organizationId, issues, options, isAdmin } = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
+      const chosen = chosenDeliveryOrganization(ctx, req.query.organization_id);
       const dentistId = (await ownPractitionerId(ctx)) ?? requested;
-      return { dentistId, ...(await resolveDelivery(ctx, dentistId)) };
+      return { dentistId, isAdmin: ctx.user.role === "admin", ...(await resolveDelivery(ctx, dentistId, chosen)) };
     });
     const minDesiredDate = await getDeviceOrderProvider().minDesiredDate(productCode);
 
@@ -131,6 +160,8 @@ deviceOrdersRouter.get(
       // organizationId lets the wizard link to the HCO record to complete it.
       delivery: delivery ? { ...delivery, organizationId } : null,
       deliveryIssues: issues,
+      // The doctor's clinics, primary first — only an admin may ship elsewhere (NEO-210 D2).
+      ...(isAdmin ? { deliveryOptions: options } : {}),
       minDesiredDate,
       rulesVersion: RULES_VERSION,
     });
@@ -150,7 +181,7 @@ deviceOrdersRouter.post(
   "/device-orders",
   requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
-    const body = (req.body ?? {}) as { treatment_plan_id?: unknown; patient_id?: unknown; order?: unknown };
+    const body = (req.body ?? {}) as { treatment_plan_id?: unknown; patient_id?: unknown; delivery_organization_id?: unknown; order?: unknown };
     const treatmentPlanId = typeof body.treatment_plan_id === "string" ? body.treatment_plan_id.trim() : "";
     const patientId = typeof body.patient_id === "string" ? body.patient_id.trim() : "";
     const idIssues: OrderIssue[] = [];
@@ -169,6 +200,7 @@ deviceOrdersRouter.post(
     const slug = tenantSlugFromHost(req.hostname);
     const { ctx, delivery, deliveryIssues, planIssues } = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
+      const chosen = chosenDeliveryOrganization(ctx, body.delivery_organization_id);
       await requirePatientInScope(ctx, patientId);
       const plan = await getTreatmentPlanById(client, treatmentPlanId);
       if (!plan) throw new NotFoundError("TreatmentPlan", treatmentPlanId);
@@ -184,7 +216,7 @@ deviceOrdersRouter.post(
       // A doctor orders only as themselves, hence only to their own clinic (NEO-210).
       const own = await ownPractitionerId(ctx);
       if (own !== null && own !== dentistId) throw new ForbiddenError("A doctor can only order as themselves");
-      const { delivery, issues } = await resolveDelivery(ctx, dentistId);
+      const { delivery, issues } = await resolveDelivery(ctx, dentistId, chosen);
       return { ctx, delivery, deliveryIssues: issues, planIssues };
     });
 
