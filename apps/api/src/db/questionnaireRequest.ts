@@ -57,7 +57,9 @@ function kindFor(items: string[]): QuestionnaireRequestKind {
 
 export function insertQuestionnaireRequest(
   client: PoolClient,
-  input: { patient_id: string; items: string[]; token_hash: string; expires_at: Date; created_by: string }
+  // created_by is null for the CORE-113 part 2 day-of reminder — the scheduled
+  // job sends it with no human actor, same as its other system emails (sentBy null).
+  input: { patient_id: string; items: string[]; token_hash: string; expires_at: Date; created_by: string | null }
 ): Promise<QuestionnaireRequest> {
   return run("insertQuestionnaireRequest", async () => {
     const result = await client.query<QuestionnaireRequest>(

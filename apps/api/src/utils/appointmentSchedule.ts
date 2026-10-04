@@ -15,6 +15,11 @@ import type { AppointmentPatientResponse, AppointmentStatus } from "../db/appoin
 export const SCHEDULE_HOUR = 10;
 export const ASK_DAYS_BEFORE = 2;
 export const REMIND_DAYS_BEFORE = 1;
+/** CORE-113 part 2: how long before the visit the "Su cita es hoy" reminder with the unsigned consent link goes out. */
+export const TODAY_REMINDER_HOURS_BEFORE = 2;
+/** CORE-113 Done-when: "never outside 08–20" clinic time — the natural 2-hours-before instant is clamped into this window. */
+export const TODAY_REMINDER_WINDOW_START_HOUR = 8;
+export const TODAY_REMINDER_WINDOW_END_HOUR = 20;
 
 /** Is the scheduled flow switched on? Off = every booking email asks right away (the CORE-25 behaviour). */
 export function appointmentRemindersEnabled(): boolean {
@@ -85,6 +90,42 @@ export function scheduledAppointmentAction(a: ScheduleState, now: Date): Schedul
     return a.patient_response ? "stamp_confirm_request" : "confirm_request";
   }
   return null;
+}
+
+export interface TodayReminderState {
+  start_at: string;
+  timezone: string;
+  status: AppointmentStatus;
+  today_reminder_sent_at: string | null;
+}
+
+/**
+ * CORE-113 Done-when ("never outside 08–20"): the natural 2-hours-before
+ * instant, clamped into the clinic's 08:00–20:00 local window on the visit's
+ * own calendar date — an early-morning visit gets it at 08:00 instead
+ * (shorter notice, still same-day), a late-evening one at 20:00 (longer
+ * notice, instead of waiting for a window that opens after the visit).
+ */
+export function todayReminderDueAt(startAt: string, timeZone: string): Date {
+  const natural = new Date(new Date(startAt).getTime() - TODAY_REMINDER_HOURS_BEFORE * 3_600_000);
+  const windowStart = localHourDaysBefore(startAt, timeZone, 0, TODAY_REMINDER_WINDOW_START_HOUR);
+  const windowEnd = localHourDaysBefore(startAt, timeZone, 0, TODAY_REMINDER_WINDOW_END_HOUR);
+  if (natural.getTime() < windowStart.getTime()) return windowStart;
+  if (natural.getTime() > windowEnd.getTime()) return windowEnd;
+  return natural;
+}
+
+/**
+ * CORE-113 part 2: is the day-of "Su cita es hoy" reminder due? Independent
+ * of the confirm / day-before steps above (its own stamp column) — a visit
+ * booked too late for those (both already stamped at booking time, CORE-116
+ * P2) still gets this one once its (window-clamped) time has arrived.
+ */
+export function todayReminderDue(a: TodayReminderState, now: Date): boolean {
+  if (a.status !== "scheduled" || a.today_reminder_sent_at) return false;
+  const startMs = new Date(a.start_at).getTime();
+  if (startMs <= now.getTime()) return false;
+  return now.getTime() >= todayReminderDueAt(a.start_at, a.timezone).getTime();
 }
 
 /** For a booking / reschedule made at `now`: does its email ask right away, and which scheduled steps does that replace? */

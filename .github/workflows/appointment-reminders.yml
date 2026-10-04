@@ -1,9 +1,12 @@
 # Scheduled patient appointment emails (CORE-116, decision form confirm-flow-r1):
 # "please confirm" 2 days before at 10:00 clinic time, and the day before at 10:00 a
 # reminder (confirmed) or a second ask + "hasn't confirmed" for the clinic.
+# CORE-113 part 2 adds a third, independent step: "Su cita es hoy" 2 hours
+# before the visit, carrying the still-unsigned informed consent link.
 #
 # Every 10 minutes: each send is stamped before it goes out, so a late or doubled
-# tick never emails twice; a tick that runs late just sends a bit after 10:00.
+# tick never emails twice; a tick that runs late just sends a bit after 10:00 (or,
+# for the 2-hour step, up to ~10 minutes after it opens — well inside the window).
 # GitHub may delay scheduled runs by several minutes under load — fine here.
 #
 # The API does nothing unless APPOINTMENT_REMINDERS=on (dev.env.yaml; prod unset).

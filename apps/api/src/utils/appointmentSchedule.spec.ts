@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { localHourDaysBefore, scheduledAppointmentAction, bookingStamps } from "./appointmentSchedule.js";
+import { localHourDaysBefore, scheduledAppointmentAction, bookingStamps, todayReminderDue, todayReminderDueAt } from "./appointmentSchedule.js";
 
 /**
  * CORE-116 (decision form confirm-flow-r1): the patient is asked to confirm
@@ -87,5 +87,50 @@ describe("bookingStamps (P2: the booking email asks only when the 2-day ask time
 
   it("booked after 10:00 the day before: asks now, no separate day-before email", () => {
     expect(bookingStamps(start, MX, new Date("2031-01-15T20:00:00.000Z"))).toEqual({ askNow: true, confirmRequest: true, dayBefore: true });
+  });
+});
+
+describe("todayReminderDueAt (CORE-113 Done-when: the 2-hour 'today' reminder, clamped to 08:00–20:00 clinic time)", () => {
+  it("a mid-day visit: plain 2 hours before, well inside the window", () => {
+    // Visit 2031-01-16 14:00 Mexico City (20:00 UTC) → natural = 12:00 local, inside 08–20.
+    expect(todayReminderDueAt("2031-01-16T20:00:00.000Z", MX).toISOString()).toBe("2031-01-16T18:00:00.000Z");
+  });
+
+  it("an early-morning visit: clamped up to 08:00 clinic time (shorter notice, still same day)", () => {
+    // Visit 2031-01-16 09:00 Mexico City (15:00 UTC) → natural = 07:00 local, before the window opens.
+    expect(todayReminderDueAt("2031-01-16T15:00:00.000Z", MX).toISOString()).toBe("2031-01-16T14:00:00.000Z"); // 08:00 local
+  });
+
+  it("a late-evening visit: clamped down to 20:00 clinic time (longer notice, same day)", () => {
+    // Visit 2031-01-16 23:30 Mexico City (2031-01-17 05:30 UTC) → natural = 21:30 local, after the window closes.
+    expect(todayReminderDueAt("2031-01-17T05:30:00.000Z", MX).toISOString()).toBe("2031-01-17T02:00:00.000Z"); // 20:00 local the same (visit) day
+  });
+});
+
+describe("todayReminderDue (CORE-113 part 2: 'Su cita es hoy' with the unsigned consent link)", () => {
+  const start = "2031-01-16T20:00:00.000Z"; // 14:00 local Mexico City
+  const dueAt = new Date("2031-01-16T18:00:00.000Z"); // 12:00 local — 2h before, inside the window
+  const fresh = { start_at: start, timezone: MX, status: "scheduled" as const, today_reminder_sent_at: null };
+
+  it("not due before the (window-clamped) 2-hour mark", () => {
+    expect(todayReminderDue(fresh, new Date(dueAt.getTime() - 60_000))).toBe(false);
+  });
+
+  it("due once the mark arrives", () => {
+    expect(todayReminderDue(fresh, dueAt)).toBe(true);
+    expect(todayReminderDue(fresh, new Date(dueAt.getTime() + 5 * 60_000))).toBe(true);
+  });
+
+  it("not due once already sent", () => {
+    expect(todayReminderDue({ ...fresh, today_reminder_sent_at: dueAt.toISOString() }, new Date(dueAt.getTime() + 5 * 60_000))).toBe(false);
+  });
+
+  it("not due once the visit has started or passed", () => {
+    expect(todayReminderDue(fresh, new Date(start))).toBe(false);
+    expect(todayReminderDue(fresh, new Date("2031-01-16T21:00:00.000Z"))).toBe(false);
+  });
+
+  it("not due for a cancelled appointment", () => {
+    expect(todayReminderDue({ ...fresh, status: "cancelled" }, dueAt)).toBe(false);
   });
 });
