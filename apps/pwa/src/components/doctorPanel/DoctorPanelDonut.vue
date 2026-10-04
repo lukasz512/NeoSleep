@@ -14,7 +14,7 @@
             '--seg-color': seg.color,
             strokeDasharray: `${drawn ? seg.length : 0} ${CIRCUMFERENCE}`,
             strokeDashoffset: `${-seg.offset}`,
-            transitionDelay: `${(drawn ? i : segments.length - 1 - i) * STAGGER_MS}ms`,
+            transitionDelay: `${drawn ? SEGMENT_START_MS + i * STAGGER_MS : (segments.length - 1 - i) * 40}ms`,
           }"
           data-testid="doctor-panel-donut-seg"
         />
@@ -28,7 +28,7 @@
       <li
         v-for="(seg, i) in legend"
         :key="seg.key"
-        :style="{ transitionDelay: `${(drawn ? 200 + i * STAGGER_MS : 0)}ms` }"
+        :style="{ transitionDelay: `${drawn ? LEGEND_START_MS + i * 90 : 0}ms` }"
         data-testid="doctor-panel-donut-legend"
       >
         <span class="dp-donut__swatch" :style="{ background: seg.color }" aria-hidden="true" />
@@ -62,10 +62,13 @@ const RADIUS = 48;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 /** Gap between segments along the ring, so neighbours read as separate. */
 const GAP = 3;
-const STAGGER_MS = 90;
+const STAGGER_MS = 140;
+/** NEO-239: the ring spins in for ~1.6 s; segments start once it is turning, the legend after. */
+const SEGMENT_START_MS = 250;
+const LEGEND_START_MS = 900;
 
 const total = computed(() => props.slices.reduce((sum, s) => sum + s.value, 0));
-const shownTotal = useCountUp(total, 1100, toRef(props, "drawn"));
+const shownTotal = useCountUp(total, 1600, toRef(props, "drawn"), 300);
 const legend = computed(() => props.slices);
 
 const segments = computed(() => {
@@ -103,11 +106,11 @@ const segments = computed(() => {
   height: 100%;
   overflow: visible;
   /* The ring swings in from a quarter turn back while it draws; segments start at 12 o'clock. */
-  transform: rotate(-200deg) scale(0.86);
+  transform: rotate(-330deg) scale(0.8);
   opacity: 0.4;
   transition:
-    transform 1.1s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.5s ease;
+    transform 1.6s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.6s ease;
 }
 
 .dp-donut--drawn .dp-donut__chart {
@@ -130,8 +133,8 @@ const segments = computed(() => {
   stroke-linecap: round;
   filter: drop-shadow(0 0 0 transparent);
   transition:
-    stroke-dasharray 0.9s cubic-bezier(0.34, 1.2, 0.64, 1),
-    filter 0.9s ease;
+    stroke-dasharray 1.3s cubic-bezier(0.34, 1.15, 0.64, 1),
+    filter 1.3s ease;
 }
 
 .dp-donut--drawn .dp-donut__seg {

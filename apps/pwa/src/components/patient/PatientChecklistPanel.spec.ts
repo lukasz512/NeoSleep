@@ -198,10 +198,9 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
     expect(result.text()).toContain("Right 1 · Left 0");
     expect(result.text()).toContain("38 mm");
     expect(tmj.text()).not.toContain("of 14 questions");
-    // NEO-237 D1: the ATM tab carries a mini skull lit like the latest evaluation.
-    const mini = wrapper.find("[data-section='tmjExam'] .tmj-skull--mini");
-    expect(mini.exists()).toBe(true);
-    expect(mini.find("[data-joint='right']").attributes("data-level")).toBe("1");
+    // NEO-240: the ATM tab title is text only; the result body keeps its mini skull.
+    expect(wrapper.find("[data-section='tmjExam'] .tmj-skull").exists()).toBe(false);
+    expect(result.find(".tmj-skull--mini [data-joint='right']").attributes("data-level")).toBe("1");
   });
 
   it("hideQrButton (desktop, the side panel has the QR — NEO-203) drops only the QR button; the email button stays", async () => {
