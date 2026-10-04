@@ -139,3 +139,46 @@ describe("PatientDetailsTab (NEO-206)", () => {
     expect(w.text()).toContain("+52 55 1234 5678");
   });
 });
+
+describe("PatientDetailsTab — every appointment (CORE-133)", () => {
+  const APPTS = [
+    { id: "a-past", status: "completed", start_at: "2026-09-01T16:00:00.000Z", end_at: "2026-09-01T17:00:00.000Z", timezone: "America/Mexico_City", practitioner_name: "Dra. Ruiz" },
+    { id: "a-late", status: "scheduled", start_at: "2031-03-05T22:00:00.000Z", end_at: "2031-03-05T23:00:00.000Z", timezone: "America/Mexico_City", practitioner_name: "Dra. Ruiz" },
+    { id: "a-soon", status: "scheduled", start_at: "2031-03-04T21:00:00.000Z", end_at: "2031-03-04T22:00:00.000Z", timezone: "America/Mexico_City", practitioner_name: "Dra. Ruiz" },
+    { id: "a-off", status: "cancelled", start_at: "2031-03-06T15:00:00.000Z", end_at: "2031-03-06T16:00:00.000Z", timezone: "America/Mexico_City", practitioner_name: "Dra. Ruiz" },
+  ];
+
+  async function mountWithAppointments() {
+    setActivePinia(createPinia());
+    apiFetch.mockImplementation(async (path: string) =>
+      path.startsWith("/api/v1/appointments?")
+        ? { ok: true, status: 200, json: async () => ({ items: APPTS }) }
+        : { ok: true, status: 200, json: async () => EMPTY },
+    );
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { template: "<div />" } }, { path: "/hcp/:id", name: "hcp-detail", component: { template: "<div />" } }] });
+    const wrapper = mount(PatientDetailsTab, {
+      props: { patient: PATIENT, canSeeStudies: true },
+      global: { plugins: [createI18n({ legacy: false, locale: "en", messages: { en } }), createVuetify({ components: vuetifyComponents }), router] },
+    });
+    wrappers.push(wrapper);
+    await flushPromises();
+    return wrapper;
+  }
+
+  it("lists all of the patient's appointments — upcoming soonest first, then past — in clinic time", async () => {
+    const w = await mountWithAppointments();
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/appointments?patient_id=p-1", { handleErrors: false });
+    const rows = w.findAll('[data-testid="patient-appointment"]');
+    expect(rows.map((r) => r.attributes("data-id"))).toEqual(["a-soon", "a-late", "a-off", "a-past"]);
+    // 21:00Z is 15:00 at the Mexico City clinic, whatever the reader's zone.
+    expect(rows[0]!.text()).toMatch(/0?3:00\s?PM|15:00/);
+    expect(rows[2]!.text()).toContain("Cancelled");
+  });
+
+  it("the next-appointment tile is the first upcoming scheduled visit, in clinic time", async () => {
+    const w = await mountWithAppointments();
+    const tile = w.find('[data-testid="tile-appointment"]');
+    expect(tile.text()).toContain("Mar 4");
+    expect(tile.text()).toMatch(/0?3:00\s?PM|15:00/);
+  });
+});

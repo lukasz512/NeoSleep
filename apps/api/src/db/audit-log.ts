@@ -152,7 +152,71 @@ export async function getAuditLogForEntities(
     [entityTypes, entityIds]
   );
 
-  return result.rows.map((row) => ({
+  return result.rows.map(toAuditLogEntry);
+}
+
+const TIMELINE_SELECT = `SELECT a.id, a.created_at, a.user_id, a.action, a.entity_type, a.entity_id, a.outcome,
+            a.entity_before, a.entity_after,
+            ui.title AS user_salutation, ui.first_name AS user_first_name, ui.last_name AS user_last_name
+     FROM audit_log a
+     LEFT JOIN users u ON a.user_id = u.id
+     LEFT JOIN identities ui ON u.identity_id = ui.id`;
+
+/**
+ * CORE-133: everything that happened to a patient — their own record plus
+ * every row about something linked to them (appointments incl. emails sent
+ * about them, sleep studies, treatment plans, questionnaire links; deleted
+ * ones too, so a deletion still shows), and any row that names the patient
+ * in entity_before/entity_after/metadata (partner orders, uploads). Reads
+ * stay out (NEO-83). The caller redacts fields per entity type.
+ */
+export async function getPatientTimeline(client: PoolClient, patientId: string): Promise<AuditLogEntry[]> {
+  const result = await client.query<AuditLogRow>(
+    `${TIMELINE_SELECT}
+     WHERE a.action <> 'read'
+       AND (
+         a.entity_id = ANY(
+           ARRAY[$1::text]
+           || ARRAY(SELECT id::text FROM appointment WHERE patient_id = $1::uuid)
+           || ARRAY(SELECT id::text FROM sleep_study WHERE patient_id = $1::uuid)
+           || ARRAY(SELECT id::text FROM treatment_plan WHERE patient_id = $1::uuid)
+           || ARRAY(SELECT id::text FROM questionnaire_request WHERE patient_id = $1::uuid)
+         )
+         OR a.entity_after->>'patient_id' = $1::text
+         OR a.entity_before->>'patient_id' = $1::text
+         OR a.metadata->>'patient_id' = $1::text
+       )
+     ORDER BY a.created_at DESC`,
+    [patientId]
+  );
+  return result.rows.map(toAuditLogEntry);
+}
+
+/**
+ * CORE-133: a doctor's History — their own record plus their appointments
+ * (bookings, reschedules, cancels, emails) and their encounters.
+ */
+export async function getPractitionerTimeline(client: PoolClient, practitionerId: string): Promise<AuditLogEntry[]> {
+  const result = await client.query<AuditLogRow>(
+    `${TIMELINE_SELECT}
+     WHERE a.action <> 'read'
+       AND (
+         a.entity_id = ANY(
+           ARRAY[$1::text]
+           || ARRAY(SELECT id::text FROM appointment WHERE practitioner_id = $1::uuid)
+           || ARRAY(SELECT id::text FROM encounter WHERE practitioner_id = $1::uuid)
+         )
+         OR a.entity_after->>'practitioner_id' = $1::text
+         OR a.entity_before->>'practitioner_id' = $1::text
+       )
+     ORDER BY a.created_at DESC`,
+    [practitionerId]
+  );
+  return result.rows.map(toAuditLogEntry);
+}
+
+function toAuditLogEntry(row: AuditLogRow): AuditLogEntry {
+  return {
     id: row.id,
     created_at: isoDate(row.created_at),
     user_id: row.user_id,
@@ -167,5 +231,5 @@ export async function getAuditLogForEntities(
     outcome: row.outcome,
     entity_before: row.entity_before,
     entity_after: row.entity_after,
-  }));
+  };
 }

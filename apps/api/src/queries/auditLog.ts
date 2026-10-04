@@ -1,5 +1,6 @@
 import type { TenantContext } from "../context/TenantContext.js";
-import { getAuditLogForEntities, getSleepStudiesPaginated, getTreatmentPlansPaginated, findLeadConvertedToPatient } from "../db.js";
+import { getAuditLogForEntities, findLeadConvertedToPatient } from "../db.js";
+import { getPatientTimeline, getPractitionerTimeline } from "../db/audit-log.js";
 import { requirePatientInScope, requirePractitionerInScope, requireOrganizationInScope } from "./entityAccess.js";
 
 /**
@@ -48,6 +49,10 @@ const AUDIT_FIELD_ALLOWLIST: Record<string, readonly string[]> = {
   TreatmentPlan: ["patient_id", "type", "status"],
   Practitioner: ["id", "primary_specialty", "region", "status"],
   Organization: ["id", "name", "type", "status", "region"],
+  // CORE-133: when, and what state — never notes or clinical links. `channel`/`kind` say which email went out.
+  Appointment: ["start_at", "end_at", "timezone", "status", "channel", "kind"],
+  Encounter: ["type", "status", "start_at"],
+  QuestionnaireRequest: ["items", "status", "expires_at"],
 };
 
 function redactAuditFields(
@@ -65,37 +70,12 @@ function redactAuditFields(
 
 export async function GetHistoryForPatientQuery(ctx: TenantContext, patientId: string): Promise<PatientHistoryDto> {
   await requirePatientInScope(ctx, patientId);
-  // Sleep studies and treatment plans linked to this patient — no pagination
-  // limit needed here since a patient realistically has a handful of each,
-  // not thousands.
-  //
-  // Sequential, not Promise.all: ctx.client is a single PoolClient (SET LOCAL
-  // search_path is in effect for this transaction), and pg only ever runs one
-  // query at a time per connection anyway — concurrent calls just queue behind
-  // each other internally. That queuing is deprecated as of pg 8.x and is
-  // removed in pg 9.0, so firing them via Promise.all was relying on behavior
-  // about to disappear for zero actual concurrency benefit.
-  const studies = await getSleepStudiesPaginated(ctx.client, { patient_id: patientId }, 1, 500);
-  const plans = await getTreatmentPlansPaginated(ctx.client, { patient_id: patientId }, 1, 500);
+  // Sequential, not Promise.all: one PoolClient runs one query at a time anyway.
+  const rows = await getPatientTimeline(ctx.client, patientId);
   const lead = await findLeadConvertedToPatient(ctx.client, patientId);
 
-  const entityTypes = ["Patient", "SleepStudy", "TreatmentPlan"];
-  const entityIds = [patientId, ...studies.rows.map((s) => s.id), ...plans.rows.map((p) => p.id)];
-
-  const rows = await getAuditLogForEntities(ctx.client, entityTypes, entityIds);
-
   return {
-    entries: rows.map((r) => ({
-      id: r.id,
-      created_at: r.created_at,
-      user_id: r.user_id,
-      user_name: r.user_name,
-      action: r.action,
-      entity_type: r.entity_type,
-      entity_id: r.entity_id,
-      entity_before: redactAuditFields(r.entity_type, r.entity_before),
-      entity_after: redactAuditFields(r.entity_type, r.entity_after),
-    })),
+    entries: toEntries(rows),
     lead_source: lead ? { source: lead.source, converted_at: lead.converted_at ? lead.converted_at.toISOString() : null } : null,
   };
 }
@@ -118,11 +98,10 @@ function toEntries(rows: Awaited<ReturnType<typeof getAuditLogForEntities>>): Pa
   }));
 }
 
-/** No sleep-study/treatment-plan/lead-conversion composition like the Patient
- *  timeline above — a practitioner's own audit_log rows are the whole story. */
+/** The doctor's own record plus their appointments and encounters (CORE-133). */
 export async function GetHistoryForPractitionerQuery(ctx: TenantContext, practitionerId: string): Promise<EntityHistoryDto> {
   await requirePractitionerInScope(ctx, practitionerId);
-  const rows = await getAuditLogForEntities(ctx.client, ["Practitioner"], [practitionerId]);
+  const rows = await getPractitionerTimeline(ctx.client, practitionerId);
   return { entries: toEntries(rows) };
 }
 

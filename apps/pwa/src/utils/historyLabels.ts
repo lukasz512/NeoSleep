@@ -30,7 +30,11 @@ export interface HistoryFieldChange {
 export interface HistoryValueLookups {
   specialty?: (code: string) => string | undefined;
   region?: (code: string) => string | undefined;
+  /** Formats a stored instant in `zone` (the appointment's clinic zone) or the reader's own (CORE-133). */
+  dateTime?: (iso: string, zone?: string) => string;
 }
+
+const DATE_TIME_FIELDS: ReadonlySet<string> = new Set(["start_at", "end_at", "expires_at"]);
 
 export function historyActionIcon(action: string): AppIconName {
   switch (action) {
@@ -39,6 +43,7 @@ export function historyActionIcon(action: string): AppIconName {
     case "delete":  return "trash";
     case "restore": return "refresh";
     case "read":    return "eye";
+    case "notify":  return "mail";
     default:        return "info-circle";
   }
 }
@@ -85,8 +90,9 @@ export function isClinicalHistoryEntry(entry: Pick<HistoryEntryLike, "entity_typ
 }
 
 // Record identifiers: the entry itself already says which record it's about,
-// so a raw UUID "change" carries no meaning for the reader.
-const HIDDEN_FIELDS: ReadonlySet<string> = new Set(["id", "patient_id"]);
+// so a raw UUID "change" carries no meaning for the reader. `timezone` only
+// says how to show an appointment's times (CORE-133).
+const HIDDEN_FIELDS: ReadonlySet<string> = new Set(["id", "patient_id", "timezone"]);
 
 function isEmptyValue(v: unknown): boolean {
   return v === null || v === undefined || v === "";
@@ -119,9 +125,13 @@ export function historyValueLabel(
   field: string,
   value: unknown,
   lookups: HistoryValueLookups = {},
+  zone?: string,
 ): string {
   if (isEmptyValue(value)) return t("app.history.value.empty");
   if (typeof value !== "string") return typeof value === "object" ? JSON.stringify(value) : String(value);
+
+  if (DATE_TIME_FIELDS.has(field) && lookups.dateTime && !Number.isNaN(Date.parse(value))) return lookups.dateTime(value, zone);
+  if (field === "kind" && entityType === "Appointment") return translateOr(t, `app.history.emailKind.${value}`, value);
 
   if (field === "status") {
     switch (entityType) {
@@ -130,6 +140,7 @@ export function historyValueLabel(
       case "Practitioner":  return translateOr(t, `user.hcp.filters.status${camelKey(`_${value}`)}`, value);
       case "SleepStudy":    return translateOr(t, `app.sleepStudies.status.${camelKey(value)}`, value);
       case "TreatmentPlan": return translateOr(t, `app.treatmentPlans.status.${camelKey(value)}`, value);
+      case "Appointment":   return translateOr(t, `user.appointments.status.${value}`, value);
     }
   }
   if (field === "type") {
@@ -157,7 +168,10 @@ export function historyHeadline(t: Translate, entry: HistoryEntryLike, lookups: 
     if (sentence) return sentence;
   }
   const fallback = `${translateOr(t, `app.history.action.${entry.action}`, entry.action)} ${historyEntityTypeLabel(t, entry.entity_type)}`;
-  return translateOr(t, `app.history.headline.${entry.entity_type}.${entry.action}`, fallback);
+  // An email entry names which email it was ("reminder", "booking confirmation") — CORE-133.
+  const kind = entry.entity_after?.kind;
+  const params = typeof kind === "string" ? { kind: historyValueLabel(t, entry.entity_type, "kind", kind, lookups) } : undefined;
+  return translateOr(t, `app.history.headline.${entry.entity_type}.${entry.action}`, fallback, params);
 }
 
 /** Whether the headline already states the entry's only change (no need to repeat it inline). */

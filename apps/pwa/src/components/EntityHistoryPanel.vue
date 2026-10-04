@@ -267,6 +267,8 @@ const dateLocale = computed(() => intlLocale(locale.value));
 const lookups: HistoryValueLookups = {
   specialty: (code) => configStore.specialtyItems.find((o) => o.value === code)?.title,
   region: (code) => configStore.regionItems.find((o) => o.value === code)?.title,
+  dateTime: (iso, zone) =>
+    new Intl.DateTimeFormat(dateLocale.value, { timeZone: zone, dateStyle: "medium", timeStyle: "short" }).format(new Date(iso)),
 };
 
 function entryIndex(id: string): number {
@@ -294,8 +296,14 @@ function shortId(id: string): string {
   return id.length > 8 ? id.slice(0, 8) : id;
 }
 
+/** An appointment's times read in its clinic's zone, as everywhere else (CORE-120/133). */
+function entryZone(entry: HistoryEntry): string | undefined {
+  const zone = entry.entity_after?.timezone ?? entry.entity_before?.timezone;
+  return typeof zone === "string" ? zone : undefined;
+}
+
 function valueLabel(entry: HistoryEntry, field: string, value: unknown): string {
-  return historyValueLabel(t, entry.entity_type, field, value, lookups);
+  return historyValueLabel(t, entry.entity_type, field, value, lookups, entryZone(entry));
 }
 
 // Changes worth showing without expanding: updates (unless the headline
