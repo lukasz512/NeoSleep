@@ -73,3 +73,19 @@ describe("AppAccountButton (CORE-131)", () => {
     expect(SOURCE).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*?transition:\s*none/);
   });
 });
+
+describe("AppAccountButton avatar contrast (CORE-134)", () => {
+  it("lifts the avatar off the app bar: surface disc with a hairline edge", () => {
+    const disc = rule(".layout-user-btn .layout-user-avatar");
+    expect(disc).toMatch(/background:\s*rgb\(var\(--v-theme-surface\)\)/);
+    expect(disc).toMatch(/box-shadow:\s*0 0 0 1px rgba\(var\(--v-theme-on-surface\)/);
+  });
+
+  it("dark theme gets a brighter disc and firmer edge, scoped to the button", () => {
+    const dark = rule(".layout-user-btn.v-theme--dark .layout-user-avatar");
+    expect(dark).toMatch(/background:\s*color-mix\(/);
+    expect(dark).toMatch(/box-shadow:/);
+    // :global() would swallow the rest of the selector and paint every dark element.
+    expect(SOURCE).not.toMatch(/:global\(\.v-theme--dark\)/);
+  });
+});
