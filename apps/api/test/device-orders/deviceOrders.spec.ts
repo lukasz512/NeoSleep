@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import request from "supertest";
 import { RULES_VERSION } from "@neo/device-order";
 import { app } from "../../src/server.js";
-import { withTenant, getAuditLogForEntities } from "../../src/db.js";
+import { withTenant, getAuditLogForEntities, insertStaffUser } from "../../src/db.js";
 import { getPartnerLink } from "../../src/db/partnerLink.js";
 import {
   __resetOrthoApneaStateForTests,
@@ -16,7 +16,7 @@ import {
 import { ConflictError } from "../../src/errors.js";
 import { signAuthToken } from "../../src/utils/jwt.js";
 import { startOaReplica, type OaReplica } from "../oa-replica/server.js";
-import { addClinic, COMPLETE_HCO, doctorLoginFor, setup, TENANT_SLUG, validOrder, type Setup } from "./fixtures.js";
+import { addClinic, COMPLETE_HCO, doctorLoginFor, setup, TENANT_SLUG, uniqueSuffix, validOrder, type Setup } from "./fixtures.js";
 
 /**
  * POST /api/v1/device-orders and GET /api/v1/device-orders/context (CORE-95)
@@ -609,6 +609,70 @@ describe("GET /api/v1/device-orders/context", () => {
       { path: "dentist_id", code: "required" },
       { path: "product_code", code: "invalid" },
     ]);
+  });
+});
+
+/** A staff identity's unread `device_order_placed` rows for this plan, by their users.id. */
+async function userNotifications(userId: string, planId: string): Promise<string[]> {
+  const { rows } = await withTenant(TENANT_SLUG, (client) =>
+    client.query<{ type: string }>(
+      `SELECT n.type FROM notification n JOIN users u ON u.identity_id = n.identity_id
+        WHERE u.id = $1 AND n.entity_id = $2 AND n.type = 'device_order_placed' AND n.read_at IS NULL`,
+      [userId, planId]
+    )
+  );
+  return rows.map((r) => r.type);
+}
+
+/** A dentist's (practitioner's) unread `device_order_placed` rows for this plan. */
+async function dentistNotifications(dentistId: string, planId: string): Promise<string[]> {
+  const { rows } = await withTenant(TENANT_SLUG, (client) =>
+    client.query<{ type: string }>(
+      `SELECT n.type FROM notification n JOIN practitioner p ON p.identity_id = n.identity_id
+        WHERE p.id = $1 AND n.entity_id = $2 AND n.type = 'device_order_placed' AND n.read_at IS NULL`,
+      [dentistId, planId]
+    )
+  );
+  return rows.map((r) => r.type);
+}
+
+describe("NEO-197: device_order_placed notification", () => {
+  it("201: the dentist, an uninvolved admin and a manager each get exactly one unread item; the placer gets none; an unrelated dentist gets none", async () => {
+    const s = await setup();
+    const unrelated = await setup();
+    const { otherAdminId, managerId } = await withTenant(TENANT_SLUG, async (client) => {
+      const admin = await insertStaffUser(client, `qa-notify-admin-${uniqueSuffix()}@neosleepcare.com`, "QA", "Admin", "admin", null, false);
+      const manager = await insertStaffUser(client, `qa-notify-manager-${uniqueSuffix()}@neosleepcare.com`, "QA", "Manager", "manager", null, false);
+      return { otherAdminId: admin!.id, managerId: manager!.id };
+    });
+
+    const res = await request(app)
+      .post("/api/v1/device-orders")
+      .set("Authorization", `Bearer ${s.token}`)
+      .send({ treatment_plan_id: s.planId, patient_id: s.patientId, order: validOrder(s.dentistId) });
+    expect(res.status).toBe(201);
+    await trackLink(s.planId);
+
+    expect(await dentistNotifications(s.dentistId, s.planId)).toEqual(["device_order_placed"]);
+    expect(await userNotifications(otherAdminId, s.planId)).toEqual(["device_order_placed"]);
+    expect(await userNotifications(managerId, s.planId)).toEqual(["device_order_placed"]);
+    // The admin who placed the order is the actor — notify() never notifies the actor about their own action.
+    expect(await userNotifications(s.userId, s.planId)).toEqual([]);
+    // A dentist unconnected to this order sees nothing.
+    expect(await dentistNotifications(unrelated.dentistId, s.planId)).toEqual([]);
+  });
+
+  it("502 when OrthoApnea rejects the order: nobody is notified", async () => {
+    const s = await setup();
+    replica.failNext(TREATMENTS, 500);
+    const res = await request(app)
+      .post("/api/v1/device-orders")
+      .set("Authorization", `Bearer ${s.token}`)
+      .send({ treatment_plan_id: s.planId, patient_id: s.patientId, order: validOrder(s.dentistId) });
+    expect(res.status).toBe(502);
+    await trackLink(s.planId);
+
+    expect(await dentistNotifications(s.dentistId, s.planId)).toEqual([]);
   });
 });
 

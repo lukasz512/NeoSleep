@@ -39,7 +39,7 @@ async function insertTestUser(client: Parameters<typeof insertStaffUser>[0], rol
  * (shared identity, ADR-014) and the patient is assigned to them — a doctor
  * sees only their own patients (CORE-104).
  */
-async function authAndPatient(role: StaffRole = "doctor"): Promise<{ auth: string; patientId: string }> {
+async function authAndPatient(role: StaffRole = "doctor"): Promise<{ auth: string; patientId: string; practitionerId?: string }> {
   const { user, practitionerId } = await withTenant(TENANT_SLUG, async (client) => {
     if (role !== "doctor") return { user: await insertTestUser(client, role), practitionerId: undefined };
     const email = `qa-patient-route-doctor-${uniqueSuffix()}@neosleepcare.com`;
@@ -51,7 +51,7 @@ async function authAndPatient(role: StaffRole = "doctor"): Promise<{ auth: strin
   const patient = await withTenant(TENANT_SLUG, (client) =>
     insertPatient(client, { first_name: "Route", last_name: `Test-${uniqueSuffix()}`, practitioner_id: practitionerId })
   );
-  return { auth: `Bearer ${signAuthToken({ id: user.id, email: user.email, role, token_version: 0 })}`, patientId: patient.id };
+  return { auth: `Bearer ${signAuthToken({ id: user.id, email: user.email, role, token_version: 0 })}`, patientId: patient.id, practitionerId };
 }
 
 describe("/api/v1/patient/:id/clinical-records", () => {
@@ -359,6 +359,63 @@ describe("patient self-fill: doctor → QR link → patient (public) → doctor"
       client.query<{ id: string }>(`SELECT id FROM questionnaire_request WHERE id = ANY($1::uuid[])`, [[oldLink.body.id, recentLink.body.id]])
     );
     expect(left.rows.map((r) => r.id)).toEqual([recentLink.body.id]);
+  });
+});
+
+describe("NEO-195: questionnaire_submitted notification", () => {
+  /** This doctor's unread `questionnaire_submitted` rows for this questionnaire request. */
+  async function doctorNotifications(practitionerId: string, requestId: string) {
+    const { rows } = await withTenant(TENANT_SLUG, (client) =>
+      client.query<{ type: string; action_url: string | null }>(
+        `SELECT n.type, n.action_url FROM notification n JOIN practitioner p ON p.identity_id = n.identity_id
+          WHERE p.id = $1 AND n.entity_id = $2 AND n.type = 'questionnaire_submitted' AND n.read_at IS NULL`,
+        [practitionerId, requestId]
+      )
+    );
+    return rows;
+  }
+
+  it("notifies only the patient's own doctor, linking to the Estudios tab — a different doctor sees nothing", async () => {
+    const { auth, patientId, practitionerId } = await authAndPatient();
+    const other = await authAndPatient();
+
+    const created = await request(app)
+      .post(`/api/v1/patient/${patientId}/questionnaire-requests`)
+      .set("Authorization", auth)
+      .send({ kind: "stop_bang" });
+    expect(created.status).toBe(201);
+    const token = String(created.body.url).split("/q#")[1];
+
+    const submit = await request(app)
+      .post("/api/v1/public/questionnaire/submit")
+      .send({ token, step: "stopBang", consent: true, answers: { snoring: true, tiredness: true, observed_apnea: false, pressure: false } });
+    expect(submit.status).toBe(201);
+
+    const mine = await doctorNotifications(practitionerId!, created.body.id);
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toMatchObject({ type: "questionnaire_submitted", action_url: `/patients/${patientId}?tab=studies` });
+
+    expect(await doctorNotifications(other.practitionerId!, created.body.id)).toEqual([]);
+  });
+
+  it("a patient with no assigned doctor notifies nobody", async () => {
+    const { auth, patientId } = await authAndPatient("admin");
+    const created = await request(app)
+      .post(`/api/v1/patient/${patientId}/questionnaire-requests`)
+      .set("Authorization", auth)
+      .send({ kind: "stop_bang" });
+    expect(created.status).toBe(201);
+    const token = String(created.body.url).split("/q#")[1];
+
+    const submit = await request(app)
+      .post("/api/v1/public/questionnaire/submit")
+      .send({ token, step: "stopBang", consent: true, answers: { snoring: true, tiredness: true, observed_apnea: false, pressure: false } });
+    expect(submit.status).toBe(201);
+
+    const { rows } = await withTenant(TENANT_SLUG, (client) =>
+      client.query(`SELECT 1 FROM notification WHERE entity_id = $1 AND type = 'questionnaire_submitted'`, [created.body.id])
+    );
+    expect(rows).toHaveLength(0);
   });
 });
 

@@ -38,12 +38,21 @@ export interface NotificationEventDefinition {
 
 const appointmentLink = (): string => "/appointments";
 const patientLink = (p: NotificationLinkParams): string | null => (p.patientId ? `/patients/${p.patientId}` : null);
+/** NEO-195: the patient's sleep-study tab, where a submitted questionnaire shows up. */
+const patientStudiesLink = (p: NotificationLinkParams): string | null => (p.patientId ? `/patients/${p.patientId}?tab=studies` : null);
+/** NEO-196: the doctor's own HCP record. */
+const practitionerLink = (p: NotificationLinkParams): string | null => (p.practitionerId ? `/hcp/${p.practitionerId}` : null);
+/** NEO-197: the patient's OrthoApnea tab, where the placed order shows up. */
+const patientOrthoapneaLink = (p: NotificationLinkParams): string | null => (p.patientId ? `/patients/${p.patientId}?tab=orthoapnea` : null);
 
 export const NOTIFICATION_TYPES = [
   "appointment_booked",
   "appointment_rescheduled",
   "appointment_cancelled",
   "partner_order_status_changed",
+  "questionnaire_submitted",
+  "practitioner_invite_accepted",
+  "device_order_placed",
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -79,6 +88,30 @@ export const NOTIFICATION_CATALOG: Readonly<Record<NotificationType, Notificatio
     channels: ["in_app", "push"],
     escalateAfterMin: null,
     link: patientLink,
+    entityType: "TreatmentPlan",
+  },
+  questionnaire_submitted: {
+    category: "operational",
+    priority: "normal",
+    channels: ["in_app", "push"],
+    escalateAfterMin: null,
+    link: patientStudiesLink,
+    entityType: "QuestionnaireRequest",
+  },
+  practitioner_invite_accepted: {
+    category: "operational",
+    priority: "normal",
+    channels: ["in_app", "push"],
+    escalateAfterMin: null,
+    link: practitionerLink,
+    entityType: "Practitioner",
+  },
+  device_order_placed: {
+    category: "operational",
+    priority: "normal",
+    channels: ["in_app", "push"],
+    escalateAfterMin: null,
+    link: patientOrthoapneaLink,
     entityType: "TreatmentPlan",
   },
 };
