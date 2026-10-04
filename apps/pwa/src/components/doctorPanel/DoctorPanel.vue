@@ -1,5 +1,7 @@
 <template>
-  <section class="dp" :class="{ 'dp--in': entered }" data-testid="doctor-panel" :aria-label="t('app.doctorPanel.label')">
+  <section
+    class="dp"
+    :class="{ 'dp--shown': shown, 'dp--loaded': loaded, 'dp--in': entered, 'dp--leaving': leaving }" data-testid="doctor-panel" :aria-label="t('app.doctorPanel.label')">
     <!-- Soft colour behind the glass, so the blur has something to bend (NEO-238). -->
     <div class="dp__aurora" aria-hidden="true">
       <span class="dp__blob dp__blob--a" />
@@ -46,21 +48,25 @@
         <div class="dp__kpis">
           <RouterLink :to="{ name: 'calendar' }" class="dp__kpi dp-glass" style="--kpi: var(--v-theme-primary)" data-testid="doctor-panel-kpi-visits">
             <span class="dp__kpi-label">{{ t("app.doctorPanel.kpi.visitsToday") }}</span>
+            <span class="dp-skel dp-skel--kpi" aria-hidden="true"><i /><i /></span>
             <b class="dp__kpi-value">{{ kpiVisits }}</b>
             <small class="dp__kpi-sub">{{ visitsSub }}</small>
           </RouterLink>
           <a href="#doctor-panel-actions" class="dp__kpi dp-glass" style="--kpi: var(--v-theme-error)" data-testid="doctor-panel-kpi-interpret" @click.prevent="scrollTo('doctor-panel-actions')">
             <span class="dp__kpi-label">{{ t("app.doctorPanel.kpi.toInterpret") }}</span>
+            <span class="dp-skel dp-skel--kpi" aria-hidden="true"><i /><i /></span>
             <b class="dp__kpi-value">{{ kpiInterpret }}</b>
             <small class="dp__kpi-sub">{{ interpretSub }}</small>
           </a>
           <a href="#doctor-panel-incomplete" class="dp__kpi dp-glass" style="--kpi: var(--v-theme-warning)" data-testid="doctor-panel-kpi-incomplete" @click.prevent="scrollTo('doctor-panel-incomplete')">
             <span class="dp__kpi-label">{{ t("app.doctorPanel.kpi.incomplete") }}</span>
+            <span class="dp-skel dp-skel--kpi" aria-hidden="true"><i /><i /></span>
             <b class="dp__kpi-value">{{ kpiIncomplete }}</b>
             <small class="dp__kpi-sub">{{ t("app.doctorPanel.kpi.incompleteSub") }}</small>
           </a>
           <RouterLink :to="{ name: 'treatment-plans' }" class="dp__kpi dp-glass" style="--kpi: var(--v-theme-success)" data-testid="doctor-panel-kpi-treatment">
             <span class="dp__kpi-label">{{ t("app.doctorPanel.kpi.inTreatment") }}</span>
+            <span class="dp-skel dp-skel--kpi" aria-hidden="true"><i /><i /></span>
             <b class="dp__kpi-value">{{ kpiTreatment }}</b>
             <small class="dp__kpi-sub">{{ t("app.doctorPanel.kpi.inTreatmentSub", { count: activeTotal }) }}</small>
           </RouterLink>
@@ -72,6 +78,7 @@
           <h2 class="dp__title">{{ t("app.doctorPanel.stages.title") }}</h2>
           <RouterLink :to="{ name: 'patients' }" class="dp__more">{{ t("app.doctorPanel.stages.all") }}</RouterLink>
         </header>
+        <div class="dp-skel dp-skel--ring" aria-hidden="true" data-testid="doctor-panel-skeleton"><i /><span><i /><i /><i /><i /></span></div>
         <p v-if="summary && !activeTotal" class="dp__empty">{{ t("app.doctorPanel.stages.empty") }}</p>
         <DoctorPanelDonut
           v-else
@@ -89,6 +96,7 @@
           <h2 class="dp__title">{{ t("app.doctorPanel.today.title") }}</h2>
           <span class="dp__count" data-testid="doctor-panel-today-count">{{ visits.length }}</span>
         </header>
+        <div class="dp-skel dp-skel--rows" aria-hidden="true"><i /><i /><i /></div>
         <p v-if="!visits.length" class="dp__empty" data-testid="doctor-panel-today-empty">{{ t("app.doctorPanel.today.empty") }}</p>
         <RouterLink
           v-for="visit in shownVisits"
@@ -117,6 +125,7 @@
           <h2 class="dp__title">{{ t("app.doctorPanel.actions.title") }}</h2>
           <span class="dp__count" :class="{ 'dp__count--due': actions.length }" data-testid="doctor-panel-actions-count">{{ actions.length }}</span>
         </header>
+        <div class="dp-skel dp-skel--rows" aria-hidden="true"><i /><i /><i /></div>
         <p v-if="!actions.length" class="dp__empty" data-testid="doctor-panel-actions-empty">{{ t("app.doctorPanel.actions.empty") }}</p>
         <RouterLink
           v-for="group in actionGroups"
@@ -141,6 +150,7 @@
           <h2 class="dp__title">{{ t("app.doctorPanel.incomplete.title") }}</h2>
           <span class="dp__count" :class="{ 'dp__count--warn': incomplete.length }">{{ incomplete.length }}</span>
         </header>
+        <div class="dp-skel dp-skel--rows" aria-hidden="true"><i /><i /><i /></div>
         <p v-if="!incomplete.length" class="dp__empty" data-testid="doctor-panel-incomplete-empty">{{ t("app.doctorPanel.incomplete.empty") }}</p>
         <RouterLink
           v-for="row in shownIncomplete"
@@ -236,7 +246,16 @@ const LIST_PREVIEW = 4;
 const MIN_SEARCH = 2;
 const SEARCH_DEBOUNCE_MS = 250;
 /** How long the route waits for the cards and ring to fold away — matches the CSS below. */
-const LEAVE_MS = 380;
+const LEAVE_MS = 420;
+/**
+ * The content waits this long after mount before it plays in (NEO-239): the page change
+ * (page-transitions.css, 520 ms) runs first, the skeleton covers the wait, then the
+ * numbers count and the ring spins where the doctor can actually see them.
+ */
+const ENTRANCE_DELAY_MS = 560;
+/** Indicators start one after another: Citas hoy at 0 ms, each next one this much later. */
+const KPI_STAGGER_MS = 150;
+const COUNT_MS = 1400;
 const DAY_MS = 86_400_000;
 
 const { t, te, locale } = useI18n();
@@ -246,8 +265,15 @@ const actions = ref<DoctorAction[]>([]);
 const visits = ref<Visit[]>([]);
 const summary = ref<Summary | null>(null);
 const showAllIncomplete = ref(false);
-/** Cards rise in; flips back off before the route leaves. */
+/** Card shells rise in right away (skeleton inside). */
+const shown = ref(false);
+/** The three requests answered. */
+const loaded = ref(false);
+/** Content plays in: skeleton fades, numbers count, ring spins. */
 const entered = ref(false);
+/** Folding away before the route changes. */
+const leaving = ref(false);
+let mountedAt = 0;
 const donutDrawn = ref(false);
 
 const search = ref<string | null>("");
@@ -295,10 +321,10 @@ const interpretSub = computed(() => {
   return t("app.doctorPanel.kpi.oldest", { days }, days);
 });
 
-const kpiVisits = useCountUp(computed(() => todayVisits.value.length), 900, entered);
-const kpiInterpret = useCountUp(computed(() => toInterpret.value.length), 900, entered);
-const kpiIncomplete = useCountUp(computed(() => incomplete.value.length), 900, entered);
-const kpiTreatment = useCountUp(computed(() => summary.value?.stages.treatment ?? 0), 900, entered);
+const kpiVisits = useCountUp(computed(() => todayVisits.value.length), COUNT_MS, entered, 0);
+const kpiInterpret = useCountUp(computed(() => toInterpret.value.length), COUNT_MS, entered, KPI_STAGGER_MS);
+const kpiIncomplete = useCountUp(computed(() => incomplete.value.length), COUNT_MS, entered, 2 * KPI_STAGGER_MS);
+const kpiTreatment = useCountUp(computed(() => summary.value?.stages.treatment ?? 0), COUNT_MS, entered, 3 * KPI_STAGGER_MS);
 
 /** One row per kind of waiting item (at most 4 kinds), its oldest patient first. */
 const actionGroups = computed(() =>
@@ -362,14 +388,16 @@ async function load(): Promise<void> {
   visits.value = (visitsBody?.items ?? [])
     .filter((v) => v.status !== "cancelled")
     .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
-  // Render once at rest, then animate in: cards rise, numbers count, the ring draws.
+  loaded.value = true;
+  // Play in only once the page change is over, so the motion is seen, not missed.
   await nextTick();
-  requestAnimationFrame(() =>
+  const wait = prefersReducedMotion() ? 0 : Math.max(0, mountedAt + ENTRANCE_DELAY_MS - Date.now());
+  setTimeout(() => {
     requestAnimationFrame(() => {
       entered.value = true;
       donutDrawn.value = true;
-    })
-  );
+    });
+  }, wait);
 }
 
 watch(search, (value) => {
@@ -390,14 +418,17 @@ watch(search, (value) => {
 
 // Everything folds away before the page changes (Łukasz: "animates on the way in and out").
 onBeforeRouteLeave(async () => {
-  if (!entered.value || prefersReducedMotion()) return true;
-  entered.value = false;
+  if (!shown.value || prefersReducedMotion()) return true;
+  leaving.value = true;
   donutDrawn.value = false;
   await new Promise((resolve) => setTimeout(resolve, LEAVE_MS));
   return true;
 });
 
 onMounted(() => {
+  mountedAt = Date.now();
+  // Two frames so the shells start from their hidden state and rise in.
+  requestAnimationFrame(() => requestAnimationFrame(() => (shown.value = true)));
   void load();
 });
 
@@ -419,12 +450,14 @@ onBeforeUnmount(() => {
 .dp__aurora {
   position: absolute;
   z-index: -1;
-  inset: 0;
+  /* Out to the white sheet's own edges (AppLayout --layout-card-inset), so the colour and
+     the cards' glow are never cut off in a box inside it (NEO-239); fades in from the top. */
+  inset: -200px calc(-1 * var(--layout-card-inset, 16px)) calc(-1 * var(--layout-card-inset, 16px));
   overflow: hidden;
+  border-radius: 0 0 var(--pwa-sheet-radius, 16px) var(--pwa-sheet-radius, 16px);
   pointer-events: none;
-  /* Fade the colour out towards every edge, so the backdrop never shows as a box. */
-  mask-image: radial-gradient(ellipse 60% 60% at 50% 45%, #000 35%, transparent 100%);
-  -webkit-mask-image: radial-gradient(ellipse 60% 60% at 50% 45%, #000 35%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 260px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 260px);
 }
 
 .dp__blob {
@@ -478,21 +511,144 @@ onBeforeUnmount(() => {
 }
 
 /* ---- staggered entrance / exit ----------------------------------------- */
+/* Shells rise in at once with the skeleton inside; the content plays in later (dp--in). */
 .dp-in {
   opacity: 0;
-  transform: translateY(18px) scale(0.97);
-  filter: blur(8px);
+  transform: translateY(22px) scale(0.97);
+  filter: blur(10px);
   transition:
-    opacity 0.5s ease,
-    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1),
-    filter 0.6s ease;
-  transition-delay: calc(var(--i, 0) * 70ms);
+    opacity 0.7s ease,
+    transform 1s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 0.8s ease;
+  transition-delay: calc(var(--i, 0) * 110ms);
 }
 
-.dp--in .dp-in {
+.dp--shown .dp-in {
   opacity: 1;
   transform: none;
   filter: none;
+}
+
+.dp--leaving .dp-in {
+  opacity: 0;
+  transform: translateY(-10px) scale(0.98);
+  filter: blur(8px);
+  transition-duration: 0.35s;
+  transition-delay: calc(var(--i, 0) * 30ms);
+}
+
+/* Content hidden behind the skeleton until it plays in, then a soft crossfade. */
+.dp__kpi > :not(.dp__kpi-label):not(.dp-skel),
+.dp__card > :not(.dp__head):not(.dp-skel) {
+  transition:
+    opacity 0.6s ease,
+    transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dp:not(.dp--in) .dp__kpi > :not(.dp__kpi-label):not(.dp-skel),
+.dp:not(.dp--in) .dp__card > :not(.dp__head):not(.dp-skel) {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+/* ---- skeleton ------------------------------------------------------------ */
+.dp-skel {
+  position: absolute;
+  pointer-events: none;
+  transition: opacity 0.5s ease;
+}
+
+.dp--in .dp-skel {
+  opacity: 0;
+}
+
+.dp-skel i,
+.dp-skel--ring > i {
+  display: block;
+  border-radius: 8px;
+  background: linear-gradient(
+    100deg,
+    rgba(var(--v-theme-on-surface), 0.06) 30%,
+    rgba(var(--v-theme-on-surface), 0.13) 50%,
+    rgba(var(--v-theme-on-surface), 0.06) 70%
+  );
+  background-size: 300% 100%;
+  animation: dp-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes dp-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+
+.dp-skel--kpi {
+  top: 38px;
+  left: var(--space-4);
+  display: grid;
+  gap: 10px;
+}
+
+.dp-skel--kpi i:first-child {
+  width: 48px;
+  height: 30px;
+}
+
+.dp-skel--kpi i:last-child {
+  width: 96px;
+  height: 10px;
+}
+
+.dp-skel--rows {
+  top: 64px;
+  right: var(--space-4);
+  left: var(--space-4);
+  display: grid;
+  gap: 22px;
+}
+
+.dp-skel--rows i {
+  height: 30px;
+  border-radius: 10px;
+}
+
+.dp-skel--rows i:nth-child(2) {
+  width: 82%;
+}
+
+.dp-skel--rows i:nth-child(3) {
+  width: 64%;
+}
+
+.dp-skel--ring {
+  inset: 64px var(--space-4) var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+}
+
+.dp-skel--ring > i {
+  flex: none;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  -webkit-mask: radial-gradient(circle, transparent 54%, #000 55%);
+  mask: radial-gradient(circle, transparent 54%, #000 55%);
+}
+
+.dp-skel--ring > span {
+  display: grid;
+  flex: 1;
+  gap: 12px;
+  max-width: 200px;
+}
+
+.dp-skel--ring > span i {
+  height: 12px;
 }
 
 /* ---- hero: intro + ring top right -------------------------------------- */
@@ -570,6 +726,7 @@ onBeforeUnmount(() => {
 
 .dp__kpi {
   position: relative;
+  min-height: 112px;
   display: grid;
   gap: 2px;
   overflow: hidden;
@@ -641,6 +798,8 @@ onBeforeUnmount(() => {
 }
 
 .dp__card {
+  position: relative;
+  min-height: 220px;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -847,12 +1006,17 @@ onBeforeUnmount(() => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dp__blob {
+  .dp__blob,
+  .dp-skel i,
+  .dp-skel--ring > i {
     animation: none;
   }
 
   .dp-in,
+  .dp-skel,
   .dp__kpi,
+  .dp__kpi > *,
+  .dp__card > *,
   .dp__row,
   .dp__meter i {
     transition: none;
