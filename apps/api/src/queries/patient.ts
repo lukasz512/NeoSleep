@@ -46,6 +46,8 @@ export interface PatientDto {
   practitioner_specialties: string[];
   diagnosis_code: Record<string, unknown> | null;
   ahi_baseline: number | null;
+  /** NEO-231: entered once on the patient card; STOP-Bang takes it from here. */
+  height_cm: number | null;
   cpap_device: string | null;
   medical_record: string | null;
   region: string;
@@ -98,6 +100,7 @@ function toDto(p: Patient & { name: string }, territoryPath: TerritoryPathNode[]
     practitioner_specialties: p.practitioner_specialties ?? [],
     diagnosis_code:  p.diagnosis_code ?? null,
     ahi_baseline:    p.ahi_baseline ?? null,
+    height_cm:       p.height_cm ?? null,
     cpap_device:     p.cpap_device ?? null,
     medical_record:  p.medical_record ?? null,
     region:          p.region,

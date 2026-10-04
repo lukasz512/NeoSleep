@@ -8,7 +8,7 @@
 /** Roles allowed to see and edit the patient's health data (Estudios and Documents tabs, sleep studies) — mirrors the API's requireStudyRole (+ manager, NEO-83, 2026-09-26). */
 export const STUDY_ROLES: readonly string[] = ["admin", "doctor", "manager"];
 
-export type ClinicalRecordKind ="medical_history" | "oral_exam" | "stop_bang";
+export type ClinicalRecordKind = "medical_history" | "oral_exam" | "stop_bang" | "tmj_exam";
 export type PatientFillableKind = "medical_history" | "stop_bang";
 
 export interface QuestionDef {
@@ -43,8 +43,53 @@ export const ORAL_EXAM_QUESTIONS: QuestionDef[] = [
   q("is_mouth_breather", "mouthBreather"),
   q("has_missing_teeth", "missingTeeth"),
   q("has_periodontal_disease", "periodontalDisease"),
-  q("has_tmj_finding", "tmjFinding"),
 ];
+
+/**
+ * The oral exam's old single "Evaluación del ATM" yes/no — no longer asked
+ * (NEO-231: the ATM tab replaces it), still shown read-only where an
+ * earlier exam has an answer.
+ */
+export const LEGACY_TMJ_QUESTION: QuestionDef = q("has_tmj_finding", "tmjFinding");
+
+/** "Evaluación del ATM" (NEO-231 D3, Dra. Lorena): five findings, each marked per side — same keys as the API's TMJ_FINDINGS. */
+export const TMJ_FINDINGS: QuestionDef[] = [
+  { key: "pain_palpation", labelKey: "app.clinical.tmj.painPalpation" },
+  { key: "joint_sounds", labelKey: "app.clinical.tmj.jointSounds" },
+  { key: "opening_limitation", labelKey: "app.clinical.tmj.openingLimitation" },
+  { key: "opening_deviation", labelKey: "app.clinical.tmj.openingDeviation" },
+  { key: "muscle_pain", labelKey: "app.clinical.tmj.musclePain" },
+];
+export const TMJ_SIDES = ["right", "left"] as const;
+export type TmjSide = (typeof TMJ_SIDES)[number];
+export const TMJ_COLUMNS: string[] = TMJ_FINDINGS.flatMap((f) => TMJ_SIDES.map((side) => `${f.key}_${side}`));
+/** Maximum mouth opening, whole mm — the API's TMJ_OPENING_RANGE. */
+export const TMJ_OPENING_RANGE = [0, 80] as const;
+
+export function emptyTmjAnswers(): Record<string, boolean> {
+  return Object.fromEntries(TMJ_COLUMNS.map((key) => [key, false]));
+}
+
+/** The typed opening: a whole number in range, null when empty, or "invalid". */
+export function parseTmjOpening(raw: string): number | null | "invalid" {
+  const text = raw.trim();
+  if (!text) return null;
+  const value = Number(text);
+  return Number.isInteger(value) && value >= TMJ_OPENING_RANGE[0] && value <= TMJ_OPENING_RANGE[1] ? value : "invalid";
+}
+
+/** Saveable: at least one finding or the opening, and the opening (if typed) in range. */
+export function tmjAnswersValid(answers: Record<string, boolean>, opening: string): boolean {
+  const parsed = parseTmjOpening(opening);
+  if (parsed === "invalid") return false;
+  return parsed !== null || TMJ_COLUMNS.some((key) => answers[key]);
+}
+
+/** Which joints have at least one finding — lights them on the skull. */
+export function tmjMarkedSides(answers: Record<string, boolean | null | undefined>): Record<TmjSide, boolean> {
+  const marked = (side: TmjSide) => TMJ_FINDINGS.some((f) => answers[`${f.key}_${side}`] === true);
+  return { right: marked("right"), left: marked("left") };
+}
 
 /** S-T-O-P — self-reported, the part a patient can answer via QR. */
 export const STOP_QUESTIONS: QuestionDef[] = [
@@ -68,6 +113,7 @@ export const KIND_LABEL_KEYS: Record<ClinicalRecordKind, string> = {
   medical_history: "app.clinical.kind.medicalHistory",
   oral_exam: "app.clinical.kind.oralExam",
   stop_bang: "app.clinical.kind.stopBang",
+  tmj_exam: "app.clinical.kind.tmjExam",
 };
 
 /**

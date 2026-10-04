@@ -1,144 +1,8 @@
 <template>
   <div class="studies">
-    <FormRenderer
-      v-model="showSleepStudyAdd"
-      :fields="sleepStudyFormFields"
-      title-key="app.sleepStudies.form.title"
-      submit-label-key="app.sleepStudies.form.submit"
-      @submit="onSleepStudyAdd"
-    />
-    <FormRenderer
-      v-model="showSleepStudyEdit"
-      :fields="sleepStudyFormFields"
-      :initial-data="editingSleepStudy ?? undefined"
-      title-key="app.sleepStudies.form.title"
-      edit-title-key="app.sleepStudies.form.editTitle"
-      submit-label-key="app.sleepStudies.form.submit"
-      edit-submit-label-key="app.sleepStudies.form.editSubmit"
-      @submit="onSleepStudyEdit"
-    />
-    <ClinicalQuestionnaireDialog
-      v-model="questionnaireDialog.open"
-      :kind="questionnaireDialog.kind"
-      :mode="questionnaireDialog.mode"
-      :record="questionnaireDialog.record"
-      :saving="saving"
-      :pdf-loading="printingKey !== null"
-      :date-of-birth="dateOfBirth"
-      :gender="gender"
-      @save="onQuestionnaireSave"
-      @pdf="onPrintRecord"
-    />
-    <QuestionnaireQrDialog
-      v-model="qrDialog.open"
-      :title="qrDialog.title"
-      :url="qrDialog.url"
-    />
-    <SendEmailDialog
-      v-model="emailDialog.open"
-      :items="emailableItems"
-      :open-keys="openEmailKeys"
-      :recipient="emailDialog.recipient"
-      :sends="emailDialog.sends"
-      :sending="emailing"
-      :last-url="emailDialog.lastUrl"
-      :item-title="itemTitle"
-      :format-date-time="formatDateTime"
-      @send="onEmailSend"
-    />
-    <StudyUploadDialog
-      v-model="uploadDialog.open"
-      :items="items"
-      :item-title="itemTitle"
-      :initial-item="uploadDialog.item"
-      :saving="saving"
-      @submit="onUpload"
-    />
-    <AppConfirmDialog
-      v-model="deleteSleepStudy.open"
-      :text="t('app.sleepStudies.deleteConfirmText')"
-      :secondary-label="t('app.common.cancel')"
-      :secondary-color="null"
-      :primary-label="t('app.common.remove')"
-      primary-color="error"
-      primary-variant="text"
-      :loading="deleteSleepStudy.loading"
-      :persistent="false"
-      max-width="400"
-      @secondary="deleteSleepStudy.open = false"
-      @primary="onConfirmDeleteSleepStudy"
-    />
+    <!-- One item's title, status, actions, result and history — a plain row, or the open tab of the Historia clínica. -->
+    <DefineItemBody v-slot="{ item }">
 
-    <AppLoadingState v-if="checklistApi.loading.value && !checklist" />
-    <AppErrorState
-      v-else-if="checklistApi.loadError.value"
-      :error="checklistApi.loadFailure.value"
-      :subtitle="t('app.clinical.errorLoad')"
-      :refresh-label="t('app.errorState.refresh')"
-      :loading="checklistApi.loading.value"
-      @refresh="checklistApi.load"
-    />
-    <template v-else-if="checklist">
-      <header class="studies__header">
-        <AppSegmentProgress
-          class="studies__progress"
-          :segments="checklistSegments(items)"
-          :label="t('app.clinical.progress', summary)"
-          :meta="waitingCount ? t('app.clinical.progressWaiting', { n: waitingCount }) : undefined"
-        />
-        <div class="studies__header-actions">
-          <!-- The QR button is also the link's status (NEO-93) — no separate "waiting" banner. -->
-          <QrStatusButton
-            v-if="showsPatientActions && !hideQrButton"
-            class="studies__qr"
-            :request="checklist.pending_requests[0] ?? null"
-            :expired="checklist.expired_request ?? null"
-            :available="patientCanStillDoSomething"
-            :creating="qrCreating"
-            :failed="qrFailed"
-            :item-title="itemTitleByKey"
-            :format-date-time="formatDateTime"
-            @create="sendEverything"
-            @show-again="resend"
-            @cancel="checklistApi.cancelRequest"
-          />
-          <AppButton
-            v-if="showsPatientActions && patientCanStillDoSomething"
-            class="studies__compact-btn"
-            color="primary"
-            variant="tonal"
-            :loading="emailing"
-            :aria-label="t('app.clinical.email.send')"
-            :title="t('app.clinical.email.send')"
-            @click="openEmailDialog"
-          >
-            <AppIcon name="mail" />
-          </AppButton>
-          <AppButton
-            class="studies__compact-btn studies__add"
-            color="success"
-            variant="tonal"
-            :aria-label="addLabel"
-            :title="addLabel"
-            @click="openUpload(null)"
-          >
-            <AppIcon name="plus" class="studies__add-icon" />
-          </AppButton>
-        </div>
-      </header>
-
-      <section v-for="group in groups" :key="group.key" class="studies__group" :aria-labelledby="`studies-group-${group.key}`">
-        <h3 :id="`studies-group-${group.key}`" class="studies__group-title">{{ t(`app.clinical.group.${group.key}`) }}</h3>
-        <ul class="studies__list">
-          <li
-            v-for="item in group.items"
-            :key="item.key"
-            :ref="(el) => setRowRef(item.key, el)"
-            class="studies__item"
-            :class="[`studies__item--${item.status}`, { 'studies__item--focus': focusedKey === item.key, 'studies__item--arrived': arrivedKeys.has(item.key) }]"
-          >
-            <span class="studies__rail"><ChecklistStatusIcon :status="item.status" /></span>
-            <div class="studies__item-content">
               <div class="studies__item-main" :class="{ 'studies__item-main--result': resultEntry(item) }">
                 <div class="studies__item-text">
                   <span class="studies__item-title">
@@ -260,6 +124,203 @@
                   </ul>
                 </VExpandTransition>
               </template>
+    </DefineItemBody>
+
+    <FormRenderer
+      v-model="showSleepStudyAdd"
+      :fields="sleepStudyFormFields"
+      title-key="app.sleepStudies.form.title"
+      submit-label-key="app.sleepStudies.form.submit"
+      @submit="onSleepStudyAdd"
+    />
+    <FormRenderer
+      v-model="showSleepStudyEdit"
+      :fields="sleepStudyFormFields"
+      :initial-data="editingSleepStudy ?? undefined"
+      title-key="app.sleepStudies.form.title"
+      edit-title-key="app.sleepStudies.form.editTitle"
+      submit-label-key="app.sleepStudies.form.submit"
+      edit-submit-label-key="app.sleepStudies.form.editSubmit"
+      @submit="onSleepStudyEdit"
+    />
+    <ClinicalQuestionnaireDialog
+      v-model="questionnaireDialog.open"
+      :kind="questionnaireDialog.kind"
+      :mode="questionnaireDialog.mode"
+      :record="questionnaireDialog.record"
+      :saving="saving"
+      :pdf-loading="printingKey !== null"
+      :date-of-birth="dateOfBirth"
+      :gender="gender"
+      :height-cm="heightCm ?? null"
+      :legacy-tmj-finding="legacyTmjFinding"
+      @save="onQuestionnaireSave"
+      @pdf="onPrintRecord"
+    />
+    <QuestionnaireQrDialog
+      v-model="qrDialog.open"
+      :title="qrDialog.title"
+      :url="qrDialog.url"
+    />
+    <SendEmailDialog
+      v-model="emailDialog.open"
+      :items="emailableItems"
+      :open-keys="openEmailKeys"
+      :recipient="emailDialog.recipient"
+      :sends="emailDialog.sends"
+      :sending="emailing"
+      :last-url="emailDialog.lastUrl"
+      :item-title="itemTitle"
+      :format-date-time="formatDateTime"
+      @send="onEmailSend"
+    />
+    <StudyUploadDialog
+      v-model="uploadDialog.open"
+      :items="items"
+      :item-title="itemTitle"
+      :initial-item="uploadDialog.item"
+      :saving="saving"
+      @submit="onUpload"
+    />
+    <AppConfirmDialog
+      v-model="deleteSleepStudy.open"
+      :text="t('app.sleepStudies.deleteConfirmText')"
+      :secondary-label="t('app.common.cancel')"
+      :secondary-color="null"
+      :primary-label="t('app.common.remove')"
+      primary-color="error"
+      primary-variant="text"
+      :loading="deleteSleepStudy.loading"
+      :persistent="false"
+      max-width="400"
+      @secondary="deleteSleepStudy.open = false"
+      @primary="onConfirmDeleteSleepStudy"
+    />
+
+    <AppLoadingState v-if="checklistApi.loading.value && !checklist" />
+    <AppErrorState
+      v-else-if="checklistApi.loadError.value"
+      :error="checklistApi.loadFailure.value"
+      :subtitle="t('app.clinical.errorLoad')"
+      :refresh-label="t('app.errorState.refresh')"
+      :loading="checklistApi.loading.value"
+      @refresh="checklistApi.load"
+    />
+    <template v-else-if="checklist">
+      <header class="studies__header">
+        <AppSegmentProgress
+          class="studies__progress"
+          :segments="checklistSegments(items)"
+          :label="t('app.clinical.progress', summary)"
+          :meta="waitingCount ? t('app.clinical.progressWaiting', { n: waitingCount }) : undefined"
+        />
+        <div class="studies__header-actions">
+          <!-- The QR button is also the link's status (NEO-93) — no separate "waiting" banner. -->
+          <QrStatusButton
+            v-if="showsPatientActions && !hideQrButton"
+            class="studies__qr"
+            :request="checklist.pending_requests[0] ?? null"
+            :expired="checklist.expired_request ?? null"
+            :available="patientCanStillDoSomething"
+            :creating="qrCreating"
+            :failed="qrFailed"
+            :item-title="itemTitleByKey"
+            :format-date-time="formatDateTime"
+            @create="sendEverything"
+            @show-again="resend"
+            @cancel="checklistApi.cancelRequest"
+          />
+          <AppButton
+            v-if="showsPatientActions && patientCanStillDoSomething"
+            class="studies__compact-btn"
+            color="primary"
+            variant="tonal"
+            :loading="emailing"
+            :aria-label="t('app.clinical.email.send')"
+            :title="t('app.clinical.email.send')"
+            @click="openEmailDialog"
+          >
+            <AppIcon name="mail" />
+          </AppButton>
+          <AppButton
+            class="studies__compact-btn studies__add"
+            color="success"
+            variant="tonal"
+            :aria-label="addLabel"
+            :title="addLabel"
+            @click="openUpload(null)"
+          >
+            <AppIcon name="plus" class="studies__add-icon" />
+          </AppButton>
+        </div>
+      </header>
+
+      <section v-for="group in groups" :key="group.key" class="studies__group" :aria-labelledby="`studies-group-${group.key}`">
+        <h3 :id="`studies-group-${group.key}`" class="studies__group-title">{{ t(`app.clinical.group.${group.key}`) }}</h3>
+        <ul class="studies__list">
+          <!-- NEO-231 D2: the Historia clínica is one tile, its sections are tabs. -->
+          <li
+            v-if="group.key === 'clinicalHistory' && historiaClinica"
+            data-testid="hc-tile"
+            :ref="(el) => setRowRef(HC_TILE_KEY, el)"
+            class="studies__item studies__item--hc"
+            :class="[
+              `studies__item--${historiaClinica.status}`,
+              {
+                'studies__item--focus': focusedKey === HC_TILE_KEY,
+                'studies__item--arrived': historiaClinica.sections.some((s) => arrivedKeys.has(s.key)),
+              },
+            ]"
+          >
+            <span class="studies__rail"><ChecklistStatusIcon :status="historiaClinica.status" /></span>
+            <div class="studies__item-content">
+              <div class="studies__item-main">
+                <div class="studies__item-text">
+                  <!-- The group heading already says "Historia clínica": the tile leads with its progress. -->
+                  <span class="studies__item-title" data-testid="hc-progress">{{ t("app.clinical.hc.progress", { done: historiaClinica.done, total: historiaClinica.sections.length }) }}</span>
+                  <span class="studies__item-status">{{ t("app.clinical.hc.hint") }}</span>
+                </div>
+                <div v-if="historiaClinica.printable" class="studies__item-actions">
+                  <AppButton variant="text" size="small" :loading="printingKey === historiaClinica.printable.key" @click="onPrint(historiaClinica.printable.key)">
+                    <template #prepend><AppIcon name="printer" /></template>
+                    {{ t("app.clinical.hc.print") }}
+                  </AppButton>
+                </div>
+              </div>
+              <div class="studies__hc-tabs" role="tablist" :aria-label="t('app.clinical.hc.title')">
+                <button
+                  v-for="section in historiaClinica.sections"
+                  :id="`hc-tab-${section.key}`"
+                  :key="section.key"
+                  type="button"
+                  role="tab"
+                  class="studies__hc-tab"
+                  :class="[`studies__hc-tab--${section.status}`, { 'studies__hc-tab--active': section.key === activeHcSection?.key }]"
+                  :aria-selected="section.key === activeHcSection?.key"
+                  :aria-controls="'hc-panel'"
+                  :data-section="section.key"
+                  @click="hcTab = section.key"
+                >
+                  <ChecklistStatusIcon :status="section.status" class="studies__hc-tab-icon" />
+                  <span>{{ itemTitle(section) }}</span>
+                  <span v-if="hasNew(section)" class="studies__new">{{ t("app.clinical.new") }}</span>
+                </button>
+              </div>
+              <div v-if="activeHcSection" id="hc-panel" role="tabpanel" class="studies__hc-panel" :aria-labelledby="`hc-tab-${activeHcSection.key}`">
+                <ItemBody :item="activeHcSection" />
+              </div>
+            </div>
+          </li>
+          <li
+            v-for="item in group.items"
+            :key="item.key"
+            :ref="(el) => setRowRef(item.key, el)"
+            class="studies__item"
+            :class="[`studies__item--${item.status}`, { 'studies__item--focus': focusedKey === item.key, 'studies__item--arrived': arrivedKeys.has(item.key) }]"
+          >
+            <span class="studies__rail"><ChecklistStatusIcon :status="item.status" /></span>
+            <div class="studies__item-content">
+              <ItemBody :item="item" />
             </div>
           </li>
         </ul>
@@ -308,6 +369,7 @@
 </template>
 
 <script setup lang="ts">
+import { createReusableTemplate } from "@vueuse/core";
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, type ComponentPublicInstance } from "vue";
 import { useI18n } from "vue-i18n";
 import { intlLocale } from "@i18n/language-options";
@@ -346,12 +408,16 @@ import { sleepStudyFormFields } from "../../config/forms/sleepStudyForm";
 import {
   MEDICAL_HISTORY_QUESTIONS,
   ORAL_EXAM_QUESTIONS,
+  TMJ_FINDINGS,
+  TMJ_SIDES,
   stopBangRisk,
   checklistItemTitle,
   type ClinicalRecordKind,
 } from "../../config/questionnaires";
+import { HC_SECTION_KEYS, splitHistoriaClinica } from "../../config/historiaClinica";
 
 const FormRenderer = defineAsyncComponent(() => import("../FormRenderer.vue"));
+const [DefineItemBody, ItemBody] = createReusableTemplate<{ item: ChecklistItem }>();
 
 /**
  * Documentos + Estudios tabs — the patient's checklist, one panel per tab
@@ -370,6 +436,8 @@ const props = defineProps<{
   /** From the patient record — STOP-Bang works A (age) and G (sex) out from them. */
   dateOfBirth?: string | null;
   gender?: string | null;
+  /** NEO-231 D1: the patient card's height — STOP-Bang asks only the weight. */
+  heightCm?: number | null;
   /** NEO-153: bumped by the side panel's "QR for the patient" button — opens the everything-QR here, where its status and polling live. */
   qrRequestNonce?: number;
   /** NEO-203: the desktop side panel has the patient QR on every tab, so this tab drops its own QR button (the dialog still opens via qrRequestNonce). */
@@ -392,9 +460,30 @@ const summary = computed(() => ({ done: items.value.filter((i) => i.status === "
 const showsPatientActions = computed(() => props.category !== "study");
 const addLabel = computed(() => t(props.category === "document" ? "app.clinical.addDocument" : "app.clinical.addStudy"));
 
-const GROUP_ORDER: ChecklistGroup[] = ["consent", "patient", "doctor", "results"];
+/** "clinicalHistory" is the app's own group: the Historia clínica tile (NEO-231 D2), right after the consent. */
+type PanelGroup = ChecklistGroup | "clinicalHistory";
+const GROUP_ORDER: PanelGroup[] = ["consent", "clinicalHistory", "patient", "doctor", "results"];
+const HC_TILE_KEY = "historiaClinica";
+
+const hcSplit = computed(() => splitHistoriaClinica(items.value));
+const historiaClinica = computed(() => {
+  const { sections, printable } = hcSplit.value;
+  if (!sections.length) return null;
+  const done = sections.filter((s) => s.status === "done").length;
+  const status: ChecklistItem["status"] = done === sections.length ? "done" : sections.some((s) => s.status !== "missing") ? "partial" : "missing";
+  return { sections, printable, done, status };
+});
+/** The open tab: the one the user picked, else the first section still to do. */
+const hcTab = ref<string | null>(null);
+const activeHcSection = computed(() => {
+  const sections = historiaClinica.value?.sections ?? [];
+  return sections.find((s) => s.key === hcTab.value) ?? sections.find((s) => s.status !== "done") ?? sections[0] ?? null;
+});
 const groups = computed(() =>
-  GROUP_ORDER.map((key) => ({ key, items: items.value.filter((item) => item.group === key) })).filter((g) => g.items.length)
+  GROUP_ORDER.map((key) => ({
+    key,
+    items: key === "clinicalHistory" ? [] : hcSplit.value.rest.filter((item) => item.group === key),
+  })).filter((g) => g.items.length || (g.key === "clinicalHistory" && historiaClinica.value))
 );
 /** "partial" = the patient's part is in (STOP-Bang awaiting B-A-N-G) — mirrors the API's bundle selection. */
 const patientCanStillDoSomething = computed(() => items.value.some((item) => item.actions.qr && (item.status === "missing" || item.status === "pending_patient")));
@@ -434,6 +523,13 @@ function findings(record: ChecklistRecord): string {
     return record.score == null
       ? t("app.clinical.awaitingBang")
       : `${t("app.clinical.score", { score: record.score })} · ${t(`app.clinical.risk.${stopBangRisk(record.score)}`)}`;
+  }
+  if (record.kind === "tmj_exam") {
+    const positives = TMJ_FINDINGS.flatMap((f) =>
+      TMJ_SIDES.filter((side) => record[`${f.key}_${side}`] === true).map((side) => `${t(f.labelKey)} (${t(`app.clinical.tmj.${side}`)})`)
+    );
+    if (record.max_opening_mm != null) positives.push(t("app.clinical.tmj.summaryOpening", { mm: record.max_opening_mm }));
+    return positives.length ? t("app.clinical.positiveFindings", { list: positives.join(", ") }) : t("app.clinical.noPositiveFindings");
   }
   const questions = record.kind === "medical_history" ? MEDICAL_HISTORY_QUESTIONS : ORAL_EXAM_QUESTIONS;
   const positives = questions.filter((q) => record[q.key] === true).map((q) => t(q.labelKey));
@@ -496,6 +592,10 @@ function setRowRef(key: string, el: Element | ComponentPublicInstance | null) {
 const focusedKey = ref<string | null>(null);
 async function highlightItem(key: string | null | undefined) {
   if (!key) return;
+  if ((HC_SECTION_KEYS as readonly string[]).includes(key) && historiaClinica.value) {
+    hcTab.value = key;
+    key = HC_TILE_KEY;
+  }
   await nextTick();
   rowRefs.get(key)?.scrollIntoView({ behavior: "smooth", block: "center" });
   focusedKey.value = key;
@@ -507,6 +607,12 @@ async function highlightItem(key: string | null | undefined) {
 // ---------------------------------------------------------------------------
 const saving = ref(false);
 const printingKey = ref<string | null>(null);
+
+/** The latest oral exam's old ATM yes/no (NEO-231) — shown read-only under a new ATM evaluation. */
+const legacyTmjFinding = computed<boolean | null>(() => {
+  const answer = checklist.value?.items.find((i) => i.key === "oralExam")?.history.find((h) => h.record)?.record?.has_tmj_finding;
+  return typeof answer === "boolean" ? answer : null;
+});
 
 const questionnaireDialog = reactive<{
   open: boolean;
@@ -563,6 +669,7 @@ const PRINT_KEY_FOR_FORM: Record<ClinicalRecordKind, string> = {
   medical_history: "medicalHistory",
   oral_exam: "oralExam",
   stop_bang: "stopBang",
+  tmj_exam: "tmjExam",
 };
 
 async function onPrint(key: string, recordId?: string) {
@@ -1210,5 +1317,55 @@ watch(() => props.focusItem, (key) => highlightItem(key));
 .studies__split-icon {
   width: 14px;
   height: 14px;
+}
+
+/* NEO-231 D2: the Historia clínica tile — sections as tabs, the open one's row underneath. */
+.studies__hc-tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid rgb(var(--v-theme-outline-variant));
+}
+.studies__hc-tab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  cursor: pointer;
+  transition: color 200ms ease, border-color 200ms ease;
+}
+.studies__hc-tab:hover {
+  color: rgb(var(--v-theme-on-surface));
+}
+.studies__hc-tab:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: -2px;
+}
+.studies__hc-tab--active {
+  color: rgb(var(--v-theme-primary));
+  border-bottom-color: rgb(var(--v-theme-primary));
+  font-weight: 600;
+}
+.studies__hc-tab-icon {
+  width: 16px;
+  height: 16px;
+}
+.studies__hc-panel {
+  padding-top: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .studies__hc-tab {
+    transition: none;
+  }
 }
 </style>

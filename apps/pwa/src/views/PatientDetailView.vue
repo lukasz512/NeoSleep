@@ -101,7 +101,7 @@
           </template>
           <template #documents>
             <!-- NEO-193: consent + the Historia Clínica parts; the patient QR lives here. -->
-            <PatientChecklistPanel category="document" :patient-id="patient.id" :focus-item="studyItem" :date-of-birth="patient.date_of_birth" :gender="patient.gender" :qr-request-nonce="qrRequestNonce" :hide-qr-button="asideShown" />
+            <PatientChecklistPanel category="document" :patient-id="patient.id" :focus-item="studyItem" :date-of-birth="patient.date_of_birth" :gender="patient.gender" :height-cm="patient.height_cm ?? null" :qr-request-nonce="qrRequestNonce" :hide-qr-button="asideShown" />
           </template>
           <template #history>
             <EntityHistoryPanel :endpoint="`/api/v1/patient/${patient.id}/history`" />
@@ -196,6 +196,7 @@ interface PatientDetail {
    *  node (see GetPatientByIdQuery in queries/patient.ts). */
   territory_path?: { id: string; name: string; code: string | null; kind: string }[] | null;
   ahi_baseline?: number | null;
+  height_cm?: number | null;
   cpap_device?: string | null;
   medical_record?: string | null;
   /** ICD-10 JSONB — nothing writes it yet; the side panel shows it when present (NEO-153). */

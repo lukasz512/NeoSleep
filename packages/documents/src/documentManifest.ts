@@ -52,6 +52,8 @@ export const DOCUMENT_MANIFEST: readonly DocumentManifestEntry[] = [
   { templateKey: "stopBang", locales: ["en", "mx"], label: "STOP-Bang OSA Screening", refCode: "NSL-SB v1" },
   { templateKey: "medicalHistory", locales: ["en", "mx"], label: "Antecedentes médicos — Patient Medical History", refCode: "NSL-AM v1" },
   { templateKey: "oralExam", locales: ["en", "mx"], label: "Exploración de cavidad oral — Oral Exam", refCode: "NSL-ECO v1" },
+  // NEO-231 (Dra. Lorena): the ATM evaluation, its own Historia clínica section.
+  { templateKey: "tmjExam", locales: ["en", "mx"], label: "Evaluación del ATM — TMJ Evaluation", refCode: "NSL-ATM v1" },
   { templateKey: "__test", locales: ["en", "pl", "mx"], label: "TEST FIXTURE — never shown, never real content", refCode: "NSL-TEST v1", hidden: true },
 ];
 
