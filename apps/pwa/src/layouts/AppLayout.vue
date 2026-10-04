@@ -261,6 +261,7 @@ import AppButton from "../components/AppButton.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppNotificationCenter from "../components/AppNotificationCenter.vue";
 import { useNotificationCenter } from "../composables/useNotificationCenter";
+import { useLabOrderStatusSync } from "../composables/useLabOrderStatusSync";
 import { onAppReady, markAppReady } from "../composables/useAppReady";
 import { usePartnerResources } from "../composables/usePartnerResources";
 import { SIDEBAR_COLLAPSE_ENABLED } from "../config/layout";
@@ -299,6 +300,10 @@ const { visibleNavItems } = useVisibleNavRoutes();
 const { unreadCount, startPolling, stopPolling } = useNotificationCenter();
 onMounted(startPolling);
 onUnmounted(stopPolling);
+
+// CORE-67: device order statuses refresh from the lab every 15 min while the
+// app is open; a scheduled job covers the rest of the day (4 runs).
+useLabOrderStatusSync();
 
 // Silently warms the OrthoApnea session + resources cache in the background
 // as soon as the app shell is up, so ResourcesView.vue doesn't pay that

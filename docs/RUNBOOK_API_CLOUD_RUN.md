@@ -51,6 +51,11 @@ Console → service → **Logs**, or
 | `orthoapnea-status-sync.yml` | 4x a day (08/11/14/17 Mexico City) | prod `/partners/orthoapnea/jobs/sync-statuses` (dev only if prod is unset/404; one target because the DB is shared) | `INTERNAL_JOB_SECRET` |
 | `device-order-reconciliation.yml` | 13:00 UTC daily | dev + prod `/device-orders/jobs/reconcile` | `RECONCILIATION_JOB_SECRET` |
 
+The order status sync also runs from the app: while someone has it open, it calls
+`POST /partners/orthoapnea/sync-statuses` every 15 min, and the API runs that at most once
+per tenant per 15 min. The status write is locked per order, so the app sync, the
+scheduled job and dev/prod never notify the dentist twice for one change.
+
 A red run in Actions = the API answered non-2xx or a tenant crashed; open the run log,
 then the Cloud Run logs (`[orthoapnea-sync]` prefix for the status sync). Run one by hand:
 Actions → the workflow → **Run workflow**.
