@@ -334,6 +334,38 @@ describe("AcceptPractitionerInviteCommand", () => {
   }, 30000);
 });
 
+describe("AcceptPractitionerInviteCommand → NEO-196 notification", () => {
+  it("notifies the inviting admin and every other active admin/manager (deduped), links to the HCP record, never the doctor themselves", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      // buildTestContext's own admin both invites (createInviteToken's
+      // created_by) AND is picked up by the active-admins query — this is
+      // what exercises the recipient de-duplication.
+      const ctx = await buildTestContext(client);
+      const manager = await insertStaffUser(client, `qa-notify-manager-${uniqueSuffix()}@neosleepcare.com`, "QA", "Manager", "manager", null, false);
+      const { practitionerId, token } = await activateAndCaptureToken(ctx, `qa-accept-notify-${uniqueSuffix()}@example.com`, { region: "PL" });
+
+      const result = await AcceptPractitionerInviteCommand(client, await acceptInput(client, token), META());
+
+      const identityIdOf = async (userId: string) =>
+        (await client.query<{ identity_id: string }>(`SELECT identity_id FROM users WHERE id = $1`, [userId])).rows[0]!.identity_id;
+      const unreadFor = async (identityId: string) =>
+        (await client.query<{ action_url: string | null }>(
+          `SELECT action_url FROM notification WHERE identity_id = $1 AND type = 'practitioner_invite_accepted' AND read_at IS NULL`,
+          [identityId],
+        )).rows;
+
+      const inviterIdentityId = await identityIdOf(ctx.user.id);
+      const doctorIdentityId = await identityIdOf(result.userId);
+
+      // Exactly one row each (the inviter isn't double-notified for also being an admin).
+      expect(await unreadFor(inviterIdentityId)).toEqual([{ action_url: `/hcp/${practitionerId}` }]);
+      expect(await unreadFor(manager!.identity_id)).toEqual([{ action_url: `/hcp/${practitionerId}` }]);
+      // The doctor who just accepted isn't notified about their own action.
+      expect(await unreadFor(doctorIdentityId)).toEqual([]);
+    });
+  }, 30000);
+});
+
 describe("GetPartnerDocumentPreviewQuery", () => {
   it("returns the agreement with NeoSleep's signature and name, and leaves party fields for the client to fill", async () => {
     await withTenant(TENANT_SLUG, async (client) => {

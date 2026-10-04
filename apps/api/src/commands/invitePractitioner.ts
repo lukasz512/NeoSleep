@@ -25,7 +25,10 @@ import {
   insertConsent,
   insertFileAttachment,
   insertAuditLog,
+  getIdentityIdForUser,
+  getActiveAdminManagerIdentityIds,
 } from "../db.js";
+import { notify } from "../notifications/notify.js";
 import type { Organization } from "../db/organization.js";
 import {
   ConflictError,
@@ -722,6 +725,31 @@ export async function AcceptPractitionerInviteCommand(
     user_agent: meta.userAgent,
     request_id: meta.requestId,
   });
+
+  // NEO-196: tell whoever sent the invite, plus every admin/manager, that the
+  // doctor is now active — the inviter and the tenant's staff are the
+  // audience for "a partner joined", not the doctor themselves. The invite
+  // records who sent it (invite_tokens.created_by); no row (a pre-NEO-196
+  // invite) just means one fewer recipient, not a failure. Skipped entirely
+  // when there's no practitioner record to link to (shouldn't happen for a
+  // doctor-type invite, but the link has nothing to point at otherwise).
+  if (practitioner) {
+    const recipientIdentityIds = new Set<string>();
+    if (invite.created_by) {
+      const inviterIdentityId = await getIdentityIdForUser(client, invite.created_by);
+      if (inviterIdentityId) recipientIdentityIds.add(inviterIdentityId);
+    }
+    for (const id of await getActiveAdminManagerIdentityIds(client)) recipientIdentityIds.add(id);
+
+    await notify(client, {
+      type: "practitioner_invite_accepted",
+      recipients: [...recipientIdentityIds],
+      entityId: practitioner.id,
+      link: { practitionerId: practitioner.id },
+      // The doctor just activated their own account — never notified about their own action.
+      actorIdentityId: user.identity_id,
+    });
+  }
 
   return {
     userId: user.id,

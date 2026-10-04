@@ -19,11 +19,16 @@ import {
   getDeliveryOrganization,
   listDeliveryOrganizations,
   getTreatmentPlanById,
+  getPatientById,
+  getPractitionerById,
+  getIdentityIdForUser,
+  getActiveAdminManagerIdentityIds,
 } from "../db.js";
 import type { DeliveryOrganization } from "../db/practitionerOrganization.js";
 import { buildContext, type TenantContext } from "../context/TenantContext.js";
 import { getViewer, requirePatientInScope, requirePractitionerInScope } from "../queries/entityAccess.js";
 import { getDeviceOrderProvider } from "../services/deviceOrders/index.js";
+import { notify } from "../notifications/notify.js";
 import { ForbiddenError, NotFoundError } from "../errors.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { requireReconciliationJobSecret } from "../middleware/requireInternalJobSecret.js";
@@ -264,6 +269,39 @@ deviceOrdersRouter.post(
         metadata: { rulesVersion: RULES_VERSION, provider: provider.name, actingUserId: ctx.user.id, patientId },
       })
     );
+
+    // NEO-197: the treating doctor (the order's own dentist, falling back to
+    // the patient's assigned doctor) plus the tenant's admins/managers, minus
+    // whoever placed the order. Its own short transaction, after the lab has
+    // already accepted the order — a notify failure must never undo or hide
+    // a placed order, so it's caught and logged, never thrown (same
+    // discipline as the other best-effort side effects in this codebase,
+    // e.g. routes/invite.ts's signed-documents email).
+    try {
+      await withTenant(slug, async (client) => {
+        const recipientIdentityIds = new Set<string>();
+        const dentist = await getPractitionerById(client, order.dentistId);
+        if (dentist) {
+          recipientIdentityIds.add(dentist.identity_id);
+        } else {
+          const p = await getPatientById(client, patientId);
+          const fallbackDentist = p?.practitioner_id ? await getPractitionerById(client, p.practitioner_id) : null;
+          if (fallbackDentist) recipientIdentityIds.add(fallbackDentist.identity_id);
+        }
+        for (const id of await getActiveAdminManagerIdentityIds(client)) recipientIdentityIds.add(id);
+
+        await notify(client, {
+          type: "device_order_placed",
+          recipients: [...recipientIdentityIds],
+          entityId: treatmentPlanId,
+          link: { patientId },
+          meta: { provider: provider.name, externalId: receipt.externalId },
+          actorIdentityId: await getIdentityIdForUser(client, ctx.user.id),
+        });
+      });
+    } catch (err) {
+      console.error("[device-orders] Failed to notify on device order placed:", err);
+    }
 
     res.status(201).json({ externalId: receipt.externalId, externalStatus: receipt.externalStatus, warnings: validation.warnings });
   })

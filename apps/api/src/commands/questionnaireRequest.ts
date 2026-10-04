@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import type { TenantContext } from "../context/TenantContext.js";
-import { insertAuditLog, insertFileAttachment } from "../db.js";
+import { insertAuditLog, insertFileAttachment, getPatientById, getPractitionerById } from "../db.js";
+import { notify } from "../notifications/notify.js";
 import {
   insertQuestionnaireRequest,
   cancelPendingQuestionnaireRequests,
@@ -473,6 +474,26 @@ async function lockOpenStep(client: PoolClient, token: string, step: string): Pr
 }
 
 /**
+ * NEO-195: tells the patient's own doctor a questionnaire step came back —
+ * PHI-free (no patient name, no answers), one notify() call per submitted
+ * step, in the same transaction as the step's own write so a rolled-back
+ * submit never notifies anyone. No linked doctor (patient.practitioner_id
+ * null) → nothing to notify, silently.
+ */
+async function notifyPatientsDoctorOfSubmission(client: PoolClient, patientId: string, requestId: string): Promise<void> {
+  const patient = await getPatientById(client, patientId);
+  if (!patient?.practitioner_id) return;
+  const practitioner = await getPractitionerById(client, patient.practitioner_id);
+  if (!practitioner) return;
+  await notify(client, {
+    type: "questionnaire_submitted",
+    recipients: [practitioner.identity_id],
+    entityId: requestId,
+    link: { patientId },
+  });
+}
+
+/**
  * One step per call. Questionnaire steps are a single transaction (lock the
  * request row, validate, insert with source='patient' + the health-data
  * consent stamp, mark the step, audit). The consent step signs a PDF:
@@ -532,6 +553,7 @@ export async function SubmitPublicQuestionnaireCommand(
         request_id: meta.requestId,
         metadata: { actor: "patient", consent_version: PATIENT_CONSENT_VERSION },
       });
+      await notifyPatientsDoctorOfSubmission(client, request.patient_id, request.id);
       return { step, completed: updated.used_at !== null };
     });
   }
@@ -639,6 +661,7 @@ export async function SubmitPublicQuestionnaireCommand(
         request_id: meta.requestId,
         metadata: { actor: "patient", content_version_id: prepared.version.id, signature_method: "drawn", read_to_end: readToEnd },
       });
+      await notifyPatientsDoctorOfSubmission(client, request.patient_id, request.id);
       return {
         step,
         completed: updated.used_at !== null,

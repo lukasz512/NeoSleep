@@ -101,8 +101,9 @@ import { useNotificationCenter, type CenterNotification } from "../composables/u
 
 const { t, locale } = useI18n();
 // Polling lifecycle is owned by AppLayout.vue (always mounted for the whole
-// session) — this component only renders on DashboardView now, but the
-// unread count/dots must stay live everywhere else too.
+// session, CORE-4) — this component only renders the bell + its panel; the
+// unread count/dots it reads are the same module-level state the nav badge
+// dots read, so they always agree.
 const { items, unreadCount, loading, loadError, loadFailure, fetchList, markRead, markAllRead } = useNotificationCenter();
 const loadFailureText = useErrorTextFor(loadFailure);
 
@@ -137,6 +138,15 @@ function formatTime(iso: string): string {
 </script>
 
 <style scoped>
+/* CORE-4: a 44px touch target in the global app bar, same floor as the
+   account button next to it (.layout-user-btn in AppLayout.vue), on both
+   breakpoints — a plain icon button would otherwise fall back to Vuetify's
+   smaller default. */
+.notif-center__bell {
+  min-width: 44px;
+  min-height: 44px;
+}
+
 .notif-center__bell-wrap {
   position: relative;
   display: inline-flex;

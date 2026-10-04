@@ -25,6 +25,8 @@ export interface InviteToken {
   user_id: string;
   lead_id: string | null;
   metadata: InviteTokenMetadata | null;
+  /** The admin/manager who sent this invite (users.id) — notified when it's accepted (NEO-196). Null for a legacy row minted before this column was read. */
+  created_by: string | null;
 }
 
 export interface InviteTokenWithIdentity extends InviteToken {
@@ -62,7 +64,7 @@ export async function getInviteTokenByHash(
 ): Promise<InviteTokenWithIdentity | null> {
   try {
     const r = await client.query<InviteTokenWithIdentity>(
-      `SELECT it.id, it.user_id, it.lead_id, it.metadata, u.identity_id, i.email, i.first_name, i.last_name
+      `SELECT it.id, it.user_id, it.lead_id, it.metadata, it.created_by, u.identity_id, i.email, i.first_name, i.last_name
        FROM invite_tokens it
        JOIN users u ON u.id = it.user_id
        JOIN identities i ON i.id = u.identity_id
