@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { mount } from "@vue/test-utils";
 import { createI18n } from "vue-i18n";
@@ -30,7 +30,7 @@ describe("Featured resources (NEO-242)", () => {
 
   it("opens the deck PDF in a new tab", () => {
     const link = mountList().find('[data-testid="resources-featured-protocolo-atencion"]');
-    expect(link.attributes("href")).toMatch(/resources\/protocolo-atencion-neosleep\.pdf$/);
+    expect(link.attributes("href")).toMatch(/files\/protocolo-atencion-neosleep\.pdf$/);
     expect(link.attributes("target")).toBe("_blank");
   });
 
@@ -45,6 +45,14 @@ describe("Featured resources (NEO-242)", () => {
     expect(isServedAsFile("/resources")).toBe(false);
   });
 
+  it("has no public/ folder named like an app route (the server would 403 that route on reload)", () => {
+    const routes = readFileSync(resolve(__dirname, "../../router/routes.ts"), "utf8");
+    const firstSegments = new Set([...routes.matchAll(/path: "\/([a-z0-9-]+)/g)].map((m) => m[1]));
+    const publicDir = resolve(__dirname, "../../../public");
+    const folders = readdirSync(publicDir, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+    expect(folders.filter((f) => firstSegments.has(f))).toEqual([]);
+  });
+
   it("caps the card width on desktop, full width on phones", () => {
     const css = readFileSync(resolve(__dirname, "ResourceFeaturedList.vue"), "utf8");
     expect(css).toMatch(/@media \(min-width: 600px\)\s*{\s*\.resource-featured\s*{\s*max-width: \d+px;/);
@@ -52,7 +60,7 @@ describe("Featured resources (NEO-242)", () => {
 
   it("joins the base URL with exactly one slash", () => {
     const item = FEATURED_RESOURCES[0]!;
-    expect(featuredResourceHref(item, "/")).toBe("/resources/protocolo-atencion-neosleep.pdf");
-    expect(featuredResourceHref(item, "/app")).toBe("/app/resources/protocolo-atencion-neosleep.pdf");
+    expect(featuredResourceHref(item, "/")).toBe("/files/protocolo-atencion-neosleep.pdf");
+    expect(featuredResourceHref(item, "/app")).toBe("/app/files/protocolo-atencion-neosleep.pdf");
   });
 });

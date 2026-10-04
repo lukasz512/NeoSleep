@@ -4,8 +4,9 @@ type AppIconName = InstanceType<typeof AppIcon>["$props"]["name"];
 
 /**
  * Own documents pinned above the partner library on Resources (NEO-242).
- * Files live in apps/pwa/public/resources/ and open in the browser's PDF
- * viewer, in this order.
+ * Files live in apps/pwa/public/files/ and open in the browser's PDF viewer,
+ * in this order. Never put them in a folder named like an app route: the
+ * server would answer that route with a 403 on reload.
  */
 export interface FeaturedResource {
   id: string;
@@ -22,7 +23,7 @@ export const FEATURED_RESOURCES: readonly FeaturedResource[] = [
     titleKey: "user.resources.featured.protocol.title",
     subtitleKey: "user.resources.featured.protocol.subtitle",
     icon: "file-pdf",
-    file: "resources/protocolo-atencion-neosleep.pdf",
+    file: "files/protocolo-atencion-neosleep.pdf",
   },
 ];
 
