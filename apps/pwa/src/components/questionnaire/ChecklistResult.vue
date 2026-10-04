@@ -1,6 +1,20 @@
 <template>
+  <!-- ATM evaluation (NEO-237): a mini skull lit per side, findings per side, the opening, the findings as chips. -->
+  <div v-if="record && record.kind === 'tmj_exam'" class="checklist-result checklist-result--tmj">
+    <div class="checklist-result__row">
+      <TmjSkull class="checklist-result__skull" :counts="tmjCounts" mini />
+      <span class="checklist-result__metric"><b>{{ t("app.clinical.tmj.counts", tmjCounts) }}</b></span>
+      <span v-if="record.max_opening_mm != null" class="checklist-result__metric">
+        <b>{{ t("app.clinical.tmj.mm", { mm: record.max_opening_mm }) }}</b><span>{{ t("app.clinical.tmj.maxOpening") }}</span>
+      </span>
+    </div>
+    <div v-if="tmjPositives.length" class="checklist-result__chips">
+      <span v-for="label in tmjPositives" :key="label" class="checklist-result__chip checklist-result__chip--yes">{{ label }}</span>
+    </div>
+  </div>
+
   <!-- Clinical questionnaire: counts + proportion + the positive answers. -->
-  <div v-if="record && record.kind !== 'stop_bang'" class="checklist-result">
+  <div v-else-if="record && record.kind !== 'stop_bang'" class="checklist-result">
     <div class="checklist-result__row">
       <span class="checklist-result__count checklist-result__count--yes">
         <b>{{ yesNo.yes }}</b><span>{{ record.kind === "oral_exam" ? t("app.clinical.result.findings") : t("app.clinical.result.yes") }}</span>
@@ -61,7 +75,8 @@ import { useI18n } from "vue-i18n";
 import AppIcon from "../AppIcon.vue";
 import { intlLocale } from "@i18n/language-options";
 import type { ChecklistHistoryEntry } from "../../composables/usePatientChecklist";
-import { BANG_QUESTIONS, MEDICAL_HISTORY_QUESTIONS, ORAL_EXAM_QUESTIONS, STOP_QUESTIONS, stopBangRisk } from "../../config/questionnaires";
+import { BANG_QUESTIONS, MEDICAL_HISTORY_QUESTIONS, ORAL_EXAM_QUESTIONS, STOP_QUESTIONS, TMJ_FINDINGS, TMJ_SIDES, stopBangRisk, tmjSideCounts } from "../../config/questionnaires";
+import TmjSkull from "./TmjSkull.vue";
 import { ahiSeverity } from "../../utils/ahiSeverity";
 import AhiScaleBar from "../AhiScaleBar.vue";
 
@@ -92,6 +107,13 @@ const extras = computed(() => {
   if (r.kind === "medical_history" && r.medical_history_other) return [t("app.clinical.result.other", { text: r.medical_history_other })];
   return [];
 });
+
+const tmjCounts = computed(() => tmjSideCounts(record.value ?? {}));
+const tmjPositives = computed(() =>
+  TMJ_FINDINGS.flatMap((f) =>
+    TMJ_SIDES.filter((side) => record.value?.[`${f.key}_${side}`] === true).map((side) => `${t(f.labelKey)} (${t(`app.clinical.tmj.${side}Short`)})`)
+  )
+);
 
 const STOP_BANG_LETTERS = ["S", "T", "O", "P", "B", "A", "N", "G"];
 const letters = computed(() =>
@@ -129,6 +151,10 @@ const formatNumber = (value: number) => value.toLocaleString(intlLocale(locale.v
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 .checklist-result__count,
+.checklist-result__skull {
+  width: 44px;
+  flex: none;
+}
 .checklist-result__metric {
   display: inline-flex;
   align-items: baseline;

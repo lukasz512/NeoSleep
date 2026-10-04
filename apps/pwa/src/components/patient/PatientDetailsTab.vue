@@ -46,6 +46,8 @@
             <dd>{{ patient.medical_record || "—" }}</dd>
           </div>
         </dl>
+        <!-- NEO-237 D1: the latest ATM evaluation, read-only; opens its tab in the Historia clínica. -->
+        <PatientTmjCard v-if="canSeeStudies" :patient-id="patient.id" @open="emit('open-study', 'tmjExam', 'document')" />
       </section>
 
       <section class="patient-details__group" aria-labelledby="pd-contact">
@@ -133,6 +135,8 @@ import { VChip } from "vuetify/components";
 import { intlLocale } from "@i18n/language-options";
 import AhiScaleBar from "../AhiScaleBar.vue";
 import AppIcon from "../AppIcon.vue";
+import PatientTmjCard from "./PatientTmjCard.vue";
+import type { ChecklistCategory } from "../../composables/usePatientChecklist";
 import EntityLink from "../EntityLink.vue";
 import { apiFetch } from "../../composables/useApi";
 import { useIdentity } from "../../composables/useIdentity";
@@ -164,7 +168,7 @@ const props = defineProps<{
   /** Diagnosis is health data — same roles as Documentos/Estudios (NEO-83). */
   canSeeStudies: boolean;
 }>();
-const emit = defineEmits<{ "open-tab": [tab: string] }>();
+const emit = defineEmits<{ "open-tab": [tab: string]; "open-study": [itemKey: string, category: ChecklistCategory] }>();
 
 const { t, locale } = useI18n();
 const { specialtySet } = useIdentity();

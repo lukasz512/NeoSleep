@@ -6,7 +6,7 @@ import * as vuetifyComponents from "vuetify/components";
 import * as vuetifyDirectives from "vuetify/directives";
 import en from "@i18n/en.json";
 import TmjExamForm from "./TmjExamForm.vue";
-import { emptyTmjAnswers, tmjAnswersValid, tmjMarkedSides } from "../../config/questionnaires";
+import { emptyTmjAnswers, tmjAnswersValid, tmjMarkedSides, tmjSideCounts } from "../../config/questionnaires";
 
 /** NEO-231 D3 (Dra. Lorena): the ATM evaluation — five findings per side, the opening in mm, a skull that shows the side. */
 const plugins = () => [createI18n({ legacy: false, locale: "en", messages: { en } }), createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives })];
@@ -61,6 +61,11 @@ describe("TMJ answer rules", () => {
     expect(tmjAnswersValid(emptyTmjAnswers(), "0")).toBe(true);
     expect(tmjAnswersValid(emptyTmjAnswers(), "81")).toBe(false);
     expect(tmjAnswersValid(emptyTmjAnswers(), "40.5")).toBe(false);
+  });
+
+  it("counts the findings per side (NEO-237: the colour grows with each one)", () => {
+    expect(tmjSideCounts({ ...emptyTmjAnswers(), pain_palpation_right: true, muscle_pain_right: true, joint_sounds_left: true })).toEqual({ right: 2, left: 1 });
+    expect(tmjSideCounts(emptyTmjAnswers())).toEqual({ right: 0, left: 0 });
   });
 
   it("knows which sides have a finding", () => {
