@@ -140,10 +140,9 @@ const avatarProps = computed(() => {
   align-items: center;
   gap: 6px;
   color: rgb(var(--v-theme-primary));
+  /* CORE-118: card links never underline, hover only swaps the cursor. */
   text-decoration: none;
-}
-.entity-link:hover {
-  text-decoration: underline;
+  cursor: pointer;
 }
 .entity-link__plain {
   display: inline-flex;
@@ -165,19 +164,11 @@ const avatarProps = computed(() => {
   min-width: 0;
   line-height: 1.3;
 }
-/* The hover underline belongs to the name only, never the specialty line. */
-.entity-link--two-line:hover {
-  text-decoration: none;
-}
 .entity-link--two-line .entity-link__label {
   /* Name above the quiet detail line: a touch heavier, so size and weight
      both say which line is which. */
   font-weight: 500;
 }
-.entity-link--two-line:hover .entity-link__label {
-  text-decoration: underline;
-}
-
 .entity-link__empty {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
