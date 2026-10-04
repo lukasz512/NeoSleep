@@ -90,6 +90,21 @@ function adjust(direction: 1 | -1) {
 
 .number-stepper-field__input :deep(input) {
   text-align: center;
+  /* NEO-225: "-3" was clipped in a narrow box. The −/+ buttons are the steppers,
+     so the browser's spin arrows and most of the side padding go. */
+  padding-inline: 4px;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.number-stepper-field__input :deep(input::-webkit-outer-spin-button),
+.number-stepper-field__input :deep(input::-webkit-inner-spin-button) {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.number-stepper-field__input :deep(.v-field) {
+  padding-inline: 0;
 }
 
 .number-stepper-field__btn {
