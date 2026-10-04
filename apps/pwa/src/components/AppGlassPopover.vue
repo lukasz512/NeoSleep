@@ -387,11 +387,12 @@ onBeforeUnmount(() => {
   max-height: calc(100dvh - 16px);
   overflow-y: auto;
   border-radius: var(--glass-popover-radius);
-  background: var(--glass-surface, rgb(var(--v-theme-surface)));
+  background: var(--glass-sheen, none), var(--glass-surface, rgb(var(--v-theme-surface)));
   -webkit-backdrop-filter: var(--glass-blur, none);
   backdrop-filter: var(--glass-blur, none);
   box-shadow:
     inset 0 1px 0 var(--glass-edge, transparent),
+    var(--glass-rim, 0 0 transparent),
     var(--glass-shadow, 0 18px 48px rgb(0 0 0 / 0.2));
   /* the header avatar's centre: that point stays put while the card grows */
   transform-origin: var(--glass-popover-origin, calc(100% - 44px) 44px);
