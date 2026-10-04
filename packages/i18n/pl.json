@@ -2352,6 +2352,7 @@
   "user.hco.detail.email": "E-mail",
   "user.hco.detail.website": "Strona internetowa",
   "user.hco.detail.googleLink": "Link do Google Maps",
+  "user.hco.detail.mapUnavailable": "Nie udało się załadować mapy — adres powyżej jest aktualny.",
   "user.hco.detail.addressLine1": "Adres",
   "user.hco.detail.city": "Miasto",
   "user.hco.detail.state": "Województwo",

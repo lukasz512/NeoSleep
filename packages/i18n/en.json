@@ -1129,6 +1129,7 @@
   "user.hco.detail.email": "Email",
   "user.hco.detail.website": "Website",
   "user.hco.detail.googleLink": "Google Maps link",
+  "user.hco.detail.mapUnavailable": "The map couldn't be loaded — the address above is still accurate.",
   "user.hco.detail.addressLine1": "Address",
   "user.hco.detail.city": "City",
   "user.hco.detail.state": "State",

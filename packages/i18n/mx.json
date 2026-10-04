@@ -2313,6 +2313,7 @@
   "user.hco.detail.email": "Correo electrónico",
   "user.hco.detail.website": "Sitio web",
   "user.hco.detail.googleLink": "Enlace de Google Maps",
+  "user.hco.detail.mapUnavailable": "No se pudo cargar el mapa; la dirección de arriba sigue siendo correcta.",
   "user.hco.detail.addressLine1": "Dirección",
   "user.hco.detail.city": "Ciudad",
   "user.hco.detail.state": "Estado (entidad)",
