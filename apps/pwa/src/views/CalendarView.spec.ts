@@ -105,24 +105,88 @@ describe("CalendarView (CORE-117)", () => {
     expect(hours).toBeLessThanOrEqual(25);
   });
 
-  it("switching to agenda renders the union list tagged by kind, without a calendar grid", async () => {
-    apiFetch.mockResolvedValue(
-      jsonResponse(true, 200, {
-        items: [
-          { kind: "encounter", id: "e-1", start_at: "2032-01-01T10:00:00.000Z", end_at: "2032-01-01T11:00:00.000Z", data: { id: "e-1", start_at: "2032-01-01T10:00:00.000Z", end_at: "2032-01-01T11:00:00.000Z", type: "visit", status: "scheduled", metadata: { title: "HCO visit" } } },
-          { kind: "appointment", id: "a-1", start_at: "2032-01-01T14:00:00.000Z", end_at: "2032-01-01T14:30:00.000Z", data: { id: "a-1", patient_id: "p-1", patient_name: "Jane Doe", practitioner_id: "doc-1", practitioner_name: "Dr. Smith", start_at: "2032-01-01T14:00:00.000Z", end_at: "2032-01-01T14:30:00.000Z", timezone: "UTC", status: "scheduled" } },
-        ],
-      }),
-    );
+  const TWO_KINDS = {
+    items: [
+      { kind: "encounter", id: "e-1", start_at: "2032-01-01T10:00:00.000Z", end_at: "2032-01-01T11:00:00.000Z", data: { id: "e-1", start_at: "2032-01-01T10:00:00.000Z", end_at: "2032-01-01T11:00:00.000Z", type: "visit", status: "scheduled", metadata: { title: "HCO visit" } } },
+      { kind: "appointment", id: "a-1", start_at: "2032-01-01T14:00:00.000Z", end_at: "2032-01-01T14:30:00.000Z", data: { id: "a-1", patient_id: "p-1", patient_name: "Jane Doe", practitioner_id: "doc-1", practitioner_name: "Dr. Smith", start_at: "2032-01-01T14:00:00.000Z", end_at: "2032-01-01T14:30:00.000Z", timezone: "UTC", status: "scheduled" } },
+    ],
+  };
+
+  it("CORE-122: the month view asks for 6 full weeks from a Monday and draws both kinds", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2032, 0, 1, 9, 0));
+    try {
+      apiFetch.mockResolvedValue(jsonResponse(true, 200, TWO_KINDS));
+      const wrapper = await mountView("manager");
+      apiFetch.mockClear();
+
+      await wrapper.find('[data-testid="calendar-view-month"]').trigger("click");
+      await flushPromises();
+
+      const url = new URL(String(apiFetch.mock.calls[0]![0]), "http://x");
+      const start = new Date(url.searchParams.get("start")!);
+      const days = (new Date(url.searchParams.get("end")!).getTime() - start.getTime()) / 86_400_000;
+      expect(start.getDay()).toBe(1);
+      expect(Math.round(days)).toBe(42);
+      expect(wrapper.find('[data-testid="calendar-month"]').exists()).toBe(true);
+      expect(wrapper.find('[data-testid="calendar-grid"]').exists()).toBe(false);
+      expect(wrapper.findAll('[data-testid="calendar-event"]')).toHaveLength(2);
+      expect(wrapper.text()).toContain("HCO visit");
+      expect(wrapper.text()).toContain("Jane Doe");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("CORE-122: the week grid draws both kinds, and a date in the month opens that day", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2032, 0, 1, 9, 0));
+    try {
+      apiFetch.mockResolvedValue(jsonResponse(true, 200, TWO_KINDS));
+      const wrapper = await mountView("manager");
+      expect(wrapper.find('[data-testid="calendar-grid"]').exists()).toBe(true);
+      expect(wrapper.findAll('[data-testid="calendar-event"]')).toHaveLength(2);
+
+      await wrapper.find('[data-testid="calendar-view-month"]').trigger("click");
+      await flushPromises();
+      apiFetch.mockClear();
+      const fifth = wrapper.findAll('[data-testid="calendar-day-link"]').find((b) => b.text() === "5");
+      await fifth!.trigger("click");
+      await flushPromises();
+
+      expect(wrapper.find('[data-testid="calendar-view-day"]').attributes("aria-selected")).toBe("true");
+      const url = new URL(String(apiFetch.mock.calls[0]![0]), "http://x");
+      expect(new Date(url.searchParams.get("start")!).getDate()).toBe(5);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("CORE-122: prev/next pages by the view's period", async () => {
+    apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
     const wrapper = await mountView("manager");
-    await wrapper.find('[data-testid="calendar-view-agenda"]').trigger("click");
+    const firstStart = new Date(new URL(String(apiFetch.mock.calls[0]![0]), "http://x").searchParams.get("start")!);
+    apiFetch.mockClear();
+
+    await wrapper.find('[data-testid="calendar-next"]').trigger("click");
     await flushPromises();
 
-    expect(wrapper.find('[data-testid="calendar-grid"]').exists()).toBe(false);
-    const rows = wrapper.findAll('[data-testid="calendar-row"]');
-    expect(rows).toHaveLength(2);
-    expect(wrapper.text()).toContain("HCO visit");
-    expect(wrapper.text()).toContain("Jane Doe");
+    const nextStart = new Date(new URL(String(apiFetch.mock.calls[0]![0]), "http://x").searchParams.get("start")!);
+    expect(Math.round((nextStart.getTime() - firstStart.getTime()) / 86_400_000)).toBe(7);
+  });
+
+  it("CORE-122: unticking a calendar hides its entries", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2032, 0, 1, 9, 0));
+    try {
+      apiFetch.mockResolvedValue(jsonResponse(true, 200, TWO_KINDS));
+      const wrapper = await mountView("manager");
+      await wrapper.find('[data-testid="calendar-filter-encounter"]').setValue(false);
+      expect(wrapper.findAll('[data-testid="calendar-event"]')).toHaveLength(1);
+      expect(wrapper.text()).not.toContain("HCO visit");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("the \"+\" button offers a choice between Appointment and Event (CORE-117)", async () => {
