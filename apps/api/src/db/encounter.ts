@@ -58,6 +58,20 @@ export interface GetEncounterFilters {
   territory_id?: string;
   userId?: string | null;
   status?: EncounterStatus;
+  /** CORE-106 row-level visibility — the one filter queries/encounter.ts's
+   *  encounterVisibilityScope() produces and getEncounters() applies. Every
+   *  role sees its own encounters (ownerId); manager/admin additionally see
+   *  anything inside scopePaths (middleware/requireScope.ts), by
+   *  encounter.territory_id — same ltree pattern as practitioner/organization/
+   *  lead. undefined scopePaths = no widening (rep/kam/msl/doctor: owner-only).
+   *  null scopePaths = unrestricted widening (global role scope). */
+  visibility?: EncounterVisibilityScope;
+}
+
+export interface EncounterVisibilityScope {
+  /** Always checked first — every role sees encounters it owns. */
+  ownerId: string;
+  scopePaths?: string[] | null;
 }
 
 export interface InsertEncounterInput {
@@ -96,12 +110,18 @@ export interface UpdateEncounterInput {
 // CONSTANTS
 // ---------------------------------------------------------------------------
 
-const ENCOUNTER_SELECT_COLS = `
-  id, user_id, practitioner_id, organization_id,
-  type, status, class, start_at, end_at, notes, region, territory_id,
-  attendees, transfer_of_value, disclosed_at,
-  metadata, created_at, updated_at
-`.trim();
+const ENCOUNTER_COLUMNS = [
+  "id", "user_id", "practitioner_id", "organization_id",
+  "type", "status", "class", "start_at", "end_at", "notes", "region", "territory_id",
+  "attendees", "transfer_of_value", "disclosed_at",
+  "metadata", "created_at", "updated_at",
+];
+
+const ENCOUNTER_SELECT_COLS = ENCOUNTER_COLUMNS.join(", ");
+// Qualified with the `e` alias — needed once a query JOINs another table
+// (territory, for the visibility scope check) that could otherwise make a
+// bare column name like `id` ambiguous.
+const ENCOUNTER_SELECT_COLS_E = ENCOUNTER_COLUMNS.map((c) => `e.${c}`).join(", ");
 
 const VALID_STATUSES: EncounterStatus[] = ["scheduled", "completed", "cancelled", "no_show"];
 const VALID_TYPES: EncounterType[]      = ["visit", "call", "email", "congress", "webinar", "other"];
@@ -122,42 +142,59 @@ export async function getEncounters(
   client: PoolClient,
   filters: GetEncounterFilters
 ): Promise<{ rows: Encounter[] }> {
-  const conditions: string[] = ["deleted_at IS NULL"];
+  const conditions: string[] = ["e.deleted_at IS NULL"];
   const params: unknown[] = [];
   let i = 1;
 
   // Date range — use start_at for partition pruning (see migration 002)
   if (filters.start?.trim()) {
-    conditions.push(`start_at >= $${i}::timestamptz`);
+    conditions.push(`e.start_at >= $${i}::timestamptz`);
     params.push(filters.start.trim()); i++;
   }
   if (filters.end?.trim()) {
-    conditions.push(`start_at <= $${i}::timestamptz`);
+    conditions.push(`e.start_at <= $${i}::timestamptz`);
     params.push(filters.end.trim()); i++;
   }
   if (filters.region?.trim()) {
-    conditions.push(`region = $${i}`);
+    conditions.push(`e.region = $${i}`);
     params.push(filters.region.trim()); i++;
   }
   if (filters.territory_id?.trim()) {
-    conditions.push(`territory_id = $${i}`);
+    conditions.push(`e.territory_id = $${i}`);
     params.push(filters.territory_id.trim()); i++;
   }
   if (filters.userId?.trim()) {
-    conditions.push(`user_id = $${i}`);
+    conditions.push(`e.user_id = $${i}`);
     params.push(filters.userId.trim()); i++;
   }
   if (filters.status) {
-    conditions.push(`status = $${i}`);
+    conditions.push(`e.status = $${i}`);
     params.push(filters.status); i++;
+  }
+  // CORE-106: row-level visibility — see GetEncounterFilters.visibility's doc comment.
+  if (filters.visibility) {
+    const { ownerId, scopePaths } = filters.visibility;
+    if (scopePaths === undefined) {
+      // rep/kam/msl/doctor — own encounters only, no widening.
+      conditions.push(`e.user_id = $${i}`);
+      params.push(ownerId); i++;
+    } else if (scopePaths !== null) {
+      // manager/admin, restricted scope — own, OR inside the granted territory
+      // (an unassigned territory_id is visible to everyone — same rollout-safety
+      // fallback as practitioner/organization/lead's scopePaths filters).
+      conditions.push(`(e.user_id = $${i} OR e.territory_id IS NULL OR t.path <@ ANY($${i + 1}::extensions.ltree[]))`);
+      params.push(ownerId, scopePaths); i += 2;
+    }
+    // scopePaths === null: manager/admin with a global role scope — unrestricted, no condition.
   }
 
   try {
     const result = await client.query<Encounter>(
-      `SELECT ${ENCOUNTER_SELECT_COLS}
-       FROM encounter
+      `SELECT ${ENCOUNTER_SELECT_COLS_E}
+       FROM encounter e
+       LEFT JOIN territory t ON e.territory_id = t.id
        WHERE ${conditions.join(" AND ")}
-       ORDER BY start_at ASC`,
+       ORDER BY e.start_at ASC`,
       params
     );
     return { rows: result.rows };

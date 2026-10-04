@@ -33,8 +33,18 @@ describe("router guard: /login redirect for an already-authenticated user", () =
     auth.sessionChecked = true;
     auth.user = { id: "1", email: "rep@example.com", role: "rep" };
 
+    await router.push("/login?redirect=%2Fcalendar");
+
+    expect(router.currentRoute.value.path).toBe("/calendar");
+  });
+
+  it("an explicit ?redirect to the old /planner path lands on /calendar (CORE-117 redirect)", async () => {
+    const auth = useAuthStore();
+    auth.sessionChecked = true;
+    auth.user = { id: "1", email: "rep@example.com", role: "rep" };
+
     await router.push("/login?redirect=%2Fplanner");
 
-    expect(router.currentRoute.value.path).toBe("/planner");
+    expect(router.currentRoute.value.path).toBe("/calendar");
   });
 });

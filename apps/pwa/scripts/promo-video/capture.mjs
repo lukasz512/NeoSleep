@@ -45,7 +45,12 @@ async function api(route) {
   if (path.endsWith("/sleep-study-ref")) return json(route, { id: "s1" });
   if (path === "/note") return json(route, fx.notes(q.get("entity_id"), LANG));
   if (path === "/treatment-plan") return json(route, fx.treatmentPlans(q.get("patient_id")));
-  if (path === "/appointments") return json(route, fx.appointments(q.get("start")));
+  // CORE-117: Planificador + Citas merged into one Calendario screen reading /api/v1/calendar —
+  // the old /appointments fixture still supplies the data, just tagged and wrapped as a union item.
+  if (path === "/calendar") {
+    const items = fx.appointments(q.get("start")).items.map((a) => ({ kind: "appointment", id: a.id, start_at: a.start_at, end_at: a.end_at, data: a }));
+    return json(route, { items });
+  }
   if (path === "/encounter") return json(route, { items: [] });
   if (path === "/partners/orthoapnea/status") return json(route, { connected: true, attemptsExhausted: false });
   if (path === "/partners/orthoapnea/resources") return json(route, fx.resources(LANG));
@@ -68,10 +73,10 @@ const SHOTS = [
   // [name, device, path, text that proves the screen rendered, prepare?]
   ["patients", "desktop", "/patients", "Sofía Ramírez"],
   ["patient-detail", "desktop", "/patients/p1?tab=details", "NS-2400"],
-  ["calendar", "desktop", "/appointments", "Sofía", async (page) => page.locator("button[value=week]").first().click()],
+  ["calendar", "desktop", "/calendar", "Sofía", async (page) => page.locator("button[value=week]").first().click()],
   ["resources", "desktop", "/resources", "STOP-Bang"],
   ["patients", "phone", "/patients", "Sofía Ramírez"],
-  ["calendar", "phone", "/appointments", "Sofía"],
+  ["calendar", "phone", "/calendar", "Sofía"],
   ["resources", "phone", "/resources", "STOP-Bang"],
 ];
 

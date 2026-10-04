@@ -36,7 +36,8 @@ export interface NotificationEventDefinition {
   entityType: string;
 }
 
-const appointmentLink = (): string => "/appointments";
+/** CORE-117: Citas merged into the Calendario screen — /appointments still redirects there, but new links point straight at it. */
+const appointmentLink = (): string => "/calendar";
 const patientLink = (p: NotificationLinkParams): string | null => (p.patientId ? `/patients/${p.patientId}` : null);
 /** NEO-195: the patient's sleep-study tab, where a submitted questionnaire shows up. */
 const patientStudiesLink = (p: NotificationLinkParams): string | null => (p.patientId ? `/patients/${p.patientId}?tab=studies` : null);
