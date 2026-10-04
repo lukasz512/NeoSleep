@@ -28,22 +28,22 @@ export const vuetifyLocales: Record<"en" | "pl" | "mx", Record<string, unknown>>
 export const VUETIFY3_THRESHOLDS = { xs: 0, sm: 600, md: 960, lg: 1280, xl: 1920, xxl: 2560 } as const;
 
 /**
- * Light-theme neutrals (NEO-236, "A · warm subtle"): cream cards on a warm
- * grey page, near-black ink. Mirrored by the light tokens in the PWA's
+ * Light-theme neutrals (NEO-236, "A · Graphite + deep teal"): white cards on
+ * a cool graphite page, near-black ink. Mirrored by the light tokens in the PWA's
  * theme.scss (--pwa-bg, --pwa-border, --pwa-text…). The M3 roles (outline,
  * surface-container-*) aren't in Vuetify's default palette since this
  * project isn't on the `md3` blueprint.
  */
 export const lightNeutrals = {
-  background:               "#ECEAE4",
-  surface:                  "#FFFCF6",
-  "on-background":          "#14130F",
-  "on-surface":             "#14130F",
-  outline:                  "#79746A",
-  "outline-variant":        "#CFCBC2",
-  "surface-container-low":  "#F6F3EC",
-  "surface-container":      "#F1EEE7",
-  "surface-container-high": "#EBE7DF",
+  background:               "#E9EDEC",
+  surface:                  "#FFFFFF",
+  "on-background":          "#0E1615",
+  "on-surface":             "#0E1615",
+  outline:                  "#66726F",
+  "outline-variant":        "#C5CFCC",
+  "surface-container-low":  "#F3F5F4",
+  "surface-container":      "#EDF0EF",
+  "surface-container-high": "#E6EAE9",
 } as const;
 
 export interface NeoVuetifyColors {

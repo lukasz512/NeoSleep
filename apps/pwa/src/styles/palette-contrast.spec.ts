@@ -49,8 +49,10 @@ describe("light palette contrast (NEO-236)", () => {
     expect(contrast(fg(), bg())).toBeGreaterThanOrEqual(AA);
   });
 
-  it("the card is a warm white, not pure white (D2)", () => {
-    expect(surface.toUpperCase()).toBe("#FFFCF6");
+  it("the card is pure white on a cool graphite page, no yellow cast (A)", () => {
+    expect(surface.toUpperCase()).toBe("#FFFFFF");
+    const [r, , b] = [1, 3, 5].map((i) => parseInt(page.slice(i, i + 2), 16));
+    expect(b).toBeGreaterThanOrEqual(r);
   });
 
   it("the app primary is darker than the logo teal, which stays the brand mark", () => {
