@@ -3,7 +3,7 @@ import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
-import { GetDoctorActionsQuery } from "../queries/doctorPanel.js";
+import { GetDoctorActionsQuery, GetDoctorPanelSummaryQuery } from "../queries/doctorPanel.js";
 import { AuditHealthDataReadCommand } from "../commands/healthDataReadAudit.js";
 
 /** Doctor Panel (NEO-233) — tile ② "Needs your action". Tile ① reuses GET /appointments. */
@@ -20,6 +20,24 @@ doctorPanelRouter.get(
       const dto = await GetDoctorActionsQuery(ctx);
       if (dto.enabled) {
         await AuditHealthDataReadCommand(ctx, { entity_type: "Patient", entity_id: null, view: "doctor-panel-actions" });
+      }
+      return dto;
+    });
+    res.json(result);
+  })
+);
+
+// GET /api/v1/doctor-panel/summary — Panel v2: own patients per stage + incomplete files; { enabled, stages, incomplete }.
+doctorPanelRouter.get(
+  "/doctor-panel/summary",
+  requireRole("doctor"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const slug = tenantSlugFromHost(req.hostname);
+    const result = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      const dto = await GetDoctorPanelSummaryQuery(ctx);
+      if (dto.enabled) {
+        await AuditHealthDataReadCommand(ctx, { entity_type: "Patient", entity_id: null, view: "doctor-panel-summary" });
       }
       return dto;
     });

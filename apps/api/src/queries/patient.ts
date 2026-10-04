@@ -179,7 +179,7 @@ export async function GetPatientListQuery(
  * unknown keys are dropped.
  */
 const FILL_MODE_ORDER: ChecklistFillMode[] = ["consent", "patient", "doctor", "external"];
-async function getPatientIntakeForms(): Promise<FormCompletionItem[]> {
+export async function getPatientIntakeForms(): Promise<FormCompletionItem[]> {
   const config = await withPlatform((client) => listPatientChecklistConfig(client));
   const known = new Set(DOCUMENT_MANIFEST.filter((entry) => !entry.hidden).map((entry) => entry.templateKey));
   const templates = config

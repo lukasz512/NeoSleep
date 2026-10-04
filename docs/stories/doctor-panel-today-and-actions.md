@@ -49,3 +49,22 @@ GET /api/v1/doctor-panel/actions → `{ enabled, items[] }`, one item per thing 
 
 ### Hand-off
 → `/dev feat doctor-panel` — scope is clear; ③–⑥ mockup goes to Dra. Lorena separately.
+
+## v2 (2026-10-04): separate Panel view
+
+Raw input: "ma byc osobny widok panel jak u admina, tylko ma miec wskazniki, rzeczy na dzis, do uzupelnienia, etc. to ma wygladac smart." Decisions (artifact HyK6Jk7MR771pHyRtnQvpT):
+- D1 → Panel is the doctor's start screen (`/dashboard`, first in the menu), with a patient search box on top; plus an animated pie chart (draws in on enter, folds away on leave).
+- D2 → the tiles leave Pacientes; they live only on the Panel.
+- D3 → "Por completar" = checklist items (same rule as the patient list dots) + missing phone/email.
+- D4 → "Mis pacientes por etapa" built now: one stage per active patient, furthest reached (intake → study → results → plan → treatment), shown as the donut.
+
+Switch unchanged: while `doctorPanel` is off the router sends a doctor from `/dashboard` to `/patients` and the menu hides Panel.
+
+### Acceptance Criteria (v2)
+- [ ] Doctor lands on the Panel; with the switch off, on Pacientes, and the menu has no Panel. (`routes.spec.ts`, router guard)
+- [ ] 4 indicators with a context line: visits today / not confirmed, to interpret / oldest in calendar days, incomplete files, in treatment / of N active. (`DoctorPanel.spec.ts`)
+- [ ] Actions grouped by kind, 3 names then +N. (`DoctorPanel.spec.ts`)
+- [ ] Stages: each own active patient counted once, discharged and other doctors' patients excluded. (`doctorPanel.spec.ts` summary)
+- [ ] Incomplete: checklist + phone + email, least complete first, done + missing = total. (`doctorPanel.spec.ts` summary)
+- [ ] Donut totals the stages, draws in after load, folds away before the route leaves; no animation with reduced motion. (`DoctorPanel.spec.ts`)
+- [ ] Search box finds a patient and links to them. (`DoctorPanel.spec.ts`)

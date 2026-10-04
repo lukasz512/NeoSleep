@@ -44,7 +44,7 @@ export const routes: RouteRecordRaw[] = [
   // Patient's appointment page from the appointment email (CORE-25): confirm, "I can't come", stop emails. Same /a#<token> rule as /q.
   { path: "/a", name: "patient-appointment", component: () => import("../views/PatientAppointmentView.vue"), meta: { layout: "public", public: true } },
   { path: "/dev", name: "dev", component: () => import("../views/DevView.vue"), meta: { layout: "app", devOnly: true } },
-  { path: "/dashboard", name: "dashboard", component: () => import("../views/DashboardView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin"] } }, // admin-only for now (2026-09-26); everyone else lands on homePathForRole()
+  { path: "/dashboard", name: "dashboard", component: () => import("../views/DashboardView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "doctor"] } }, // admin + doctor (NEO-233 Panel v2, behind its switch — see router/index.ts); everyone else lands on homePathForRole()
   { path: "/leads", name: "leads", component: () => import("../views/LeadsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
   { path: "/leads/:id", name: "lead-detail", component: () => import("../views/LeadDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
   { path: "/hcp", name: "hcp", component: () => import("../views/HCPView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
@@ -122,8 +122,14 @@ export function navRoutesForRole(role: UserRole | undefined | null) {
 /** Default post-login entry point; the router guard forwards roles that can't see it to homePathForRole(). */
 export const appHomePath = routes.find((r) => (r as { name?: string }).name === "dashboard")?.path ?? "/dashboard";
 
-/** Roles whose home isn't simply their first visible nav entry (2026-09-26: patients for now). */
-const ROLE_HOME_PATHS: Partial<Record<UserRole, string>> = { doctor: "/patients", manager: "/patients" };
+/**
+ * Roles whose home isn't simply their first visible nav entry. Doctor → the Panel (NEO-233 D1);
+ * while the Panel switch is off the router guard forwards /dashboard to /patients.
+ */
+const ROLE_HOME_PATHS: Partial<Record<UserRole, string>> = { doctor: "/dashboard", manager: "/patients" };
+
+/** Where a doctor lands while the Panel switch is off (the pre-NEO-233 home). */
+export const DOCTOR_FALLBACK_HOME = "/patients";
 
 /** A role's home (landing page + logo link): /dashboard for admin, ROLE_HOME_PATHS, else the first visible nav entry. */
 export function homePathForRole(role: UserRole | undefined | null): string {

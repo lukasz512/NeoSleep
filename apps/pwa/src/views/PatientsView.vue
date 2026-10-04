@@ -25,8 +25,6 @@
       v-model="showAppointmentDialog"
       :patient="appointmentPatient"
     />
-    <!-- NEO-233 D1: the doctor's start screen = Panel tiles on top, their patient list below. -->
-    <DoctorPanelTiles v-if="isDoctor" />
     <AppEntityList
       view-id="patients"
       api-endpoint="/api/v1/patient"
@@ -129,7 +127,6 @@
 import { ref, computed, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import AppEntityList from "../components/AppEntityList.vue";
-import DoctorPanelTiles from "../components/doctorPanel/DoctorPanelTiles.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import PatientIntakeForms from "../components/patient/PatientIntakeForms.vue";
 import PatientNextStep from "../components/patient/PatientNextStep.vue";

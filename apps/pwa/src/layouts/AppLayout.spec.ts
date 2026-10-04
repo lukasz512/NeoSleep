@@ -135,8 +135,8 @@ describe("AppLayout", () => {
       expect(navRoutesForRole("admin").map((r) => r.path)).toEqual(expectedPaths);
     });
 
-    it("doctor sees patients, the clinical aggregates, calendar, and resources — never leads, hcp, hco, or users", () => {
-      const expectedPaths = ["/patients", "/calendar", "/sleep-studies", "/treatment-plans", "/resources"];
+    it("doctor sees the Panel, patients, the clinical aggregates, calendar, and resources — never leads, hcp, hco, or users", () => {
+      const expectedPaths = ["/dashboard", "/patients", "/calendar", "/sleep-studies", "/treatment-plans", "/resources"];
       expect(navRoutesForRole("doctor").map((r) => r.path)).toEqual(expectedPaths);
     });
   });

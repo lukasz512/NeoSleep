@@ -84,3 +84,64 @@ export async function listDoctorActions(client: PoolClient, practitionerId: stri
     throw new DatabaseError("listDoctorActions", err);
   }
 }
+
+/**
+ * Doctor Panel v2 (NEO-233): where each of the doctor's own active patients stands. One stage per
+ * patient, the furthest one reached: treatment > plan > results > study > intake (nothing yet).
+ */
+export const DOCTOR_PATIENT_STAGES = ["intake", "study", "results", "plan", "treatment"] as const;
+export type DoctorPatientStage = (typeof DOCTOR_PATIENT_STAGES)[number];
+
+export interface DoctorPanelPatient {
+  id: string;
+  name: string | null;
+  stage: DoctorPatientStage;
+  has_phone: boolean;
+  has_email: boolean;
+}
+
+interface DoctorPanelPatientRow {
+  id: string;
+  salutation: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  stage: DoctorPatientStage;
+  has_phone: boolean;
+  has_email: boolean;
+}
+
+/** The doctor's own non-discharged patients with their stage and whether a phone/email is on file. */
+export async function listDoctorPanelPatients(client: PoolClient, practitionerId: string): Promise<DoctorPanelPatient[]> {
+  try {
+    const { rows } = await client.query<DoctorPanelPatientRow>(
+      `SELECT p.id, pi.title AS salutation, pi.first_name, pi.last_name,
+              NULLIF(btrim(pi.phone), '') IS NOT NULL AS has_phone,
+              NULLIF(btrim(pi.email), '') IS NOT NULL AS has_email,
+              CASE
+                WHEN EXISTS (SELECT 1 FROM treatment_plan t WHERE t.patient_id = p.id AND t.deleted_at IS NULL
+                               AND t.status IN ('in_progress', 'completed')) THEN 'treatment'
+                WHEN EXISTS (SELECT 1 FROM treatment_plan t WHERE t.patient_id = p.id AND t.deleted_at IS NULL
+                               AND t.status IN ('initiated', 'patient_notified', 'on_hold')) THEN 'plan'
+                WHEN EXISTS (SELECT 1 FROM sleep_study s WHERE s.patient_id = p.id
+                               AND s.status IN ('results_received', 'interpreted')) THEN 'results'
+                WHEN EXISTS (SELECT 1 FROM sleep_study s WHERE s.patient_id = p.id
+                               AND s.status IN ('ordered', 'device_shipped', 'device_delivered', 'study_complete')) THEN 'study'
+                ELSE 'intake'
+              END AS stage
+         FROM patient p
+         JOIN identities pi ON pi.id = p.identity_id
+        WHERE p.practitioner_id = $1 AND p.deleted_at IS NULL AND p.status <> 'discharged'
+        ORDER BY pi.last_name, pi.first_name, p.id`,
+      [practitionerId]
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      name: formatOptionalDisplayName({ salutation: row.salutation, first_name: row.first_name, last_name: row.last_name }),
+      stage: row.stage,
+      has_phone: row.has_phone,
+      has_email: row.has_email,
+    }));
+  } catch (err) {
+    throw new DatabaseError("listDoctorPanelPatients", err);
+  }
+}

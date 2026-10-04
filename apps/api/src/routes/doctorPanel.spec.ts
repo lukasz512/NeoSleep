@@ -195,6 +195,92 @@ describe("NEO-233 doctor panel actions — access and switch", () => {
   });
 });
 
+interface Summary {
+  enabled: boolean;
+  stages: Record<string, number>;
+  incomplete: { patient_id: string; missing: string[]; done: number; total: number }[];
+}
+
+async function summary(auth: string): Promise<Summary> {
+  const res = await request(app).get("/api/v1/doctor-panel/summary").set("Authorization", auth);
+  expect(res.status).toBe(200);
+  return res.body as Summary;
+}
+
+/** A patient of `doc` at a given stage: study/plan statuses are the only thing that decides it. */
+async function patientAt(doc: Doctor, stage: "intake" | "study" | "results" | "plan" | "treatment", contact = { email: "", phone: "" }): Promise<string> {
+  return withTenant(TENANT_SLUG, async (client) => {
+    const p = await insertPatient(client, {
+      first_name: "Stage",
+      last_name: `${stage}-${uniqueSuffix()}`,
+      practitioner_id: doc.practitionerId,
+      email: contact.email || undefined,
+      phone: contact.phone || undefined,
+    });
+    if (stage === "intake") return p.id;
+    const study = await insertSleepStudy(client, { patient_id: p.id, status: stage === "study" ? "ordered" : "interpreted" });
+    if (stage === "plan" || stage === "treatment") {
+      const plan = await insertTreatmentPlan(client, { patient_id: p.id, sleep_study_id: study.id, type: "dental_appliance" });
+      if (stage === "treatment") await client.query(`UPDATE treatment_plan SET status = 'in_progress' WHERE id = $1`, [plan.id]);
+    }
+    return p.id;
+  });
+}
+
+describe("NEO-233 doctor panel summary — stages and incomplete files", () => {
+  it("counts each own active patient once, at the furthest stage reached", async () => {
+    const c = await doctor();
+    for (const stage of ["intake", "study", "results", "plan", "treatment"] as const) await patientAt(c, stage);
+    const discharged = await patientAt(c, "treatment");
+    await withTenant(TENANT_SLUG, (client) => client.query(`UPDATE patient SET status = 'discharged' WHERE id = $1`, [discharged]));
+    await patientAt(b, "intake");
+    const { enabled, stages } = await summary(c.auth);
+    expect(enabled).toBe(true);
+    expect(stages).toEqual({ intake: 1, study: 1, results: 1, plan: 1, treatment: 1 });
+  });
+
+  it("lists a missing phone and email next to the checklist, least complete first", async () => {
+    const c = await doctor();
+    const bare = await patientAt(c, "intake");
+    const reachable = await patientAt(c, "intake", { email: `p-${uniqueSuffix()}@example.invalid`, phone: "+52 55 1234 5678" });
+    await withTenant(TENANT_SLUG, (client) =>
+      insertConsent(client, { entity_type: "patient", entity_id: reachable, legal_basis: "consent", jurisdiction: "MX", purpose: CONSENT_KEY })
+    );
+    const { incomplete } = await summary(c.auth);
+    const rowOf = (id: string) => incomplete.find((i) => i.patient_id === id)!;
+    expect(rowOf(bare).missing).toEqual(expect.arrayContaining(["phone", "email", CONSENT_KEY]));
+    expect(rowOf(reachable).missing).not.toContain("phone");
+    expect(rowOf(reachable).missing).not.toContain("email");
+    expect(rowOf(reachable).missing).not.toContain(CONSENT_KEY);
+    for (const row of incomplete) expect(row.done + row.missing.length).toBe(row.total);
+    expect(incomplete.map((i) => i.patient_id)).toEqual([bare, reachable]);
+  });
+
+  it("never counts another doctor's patient", async () => {
+    const c = await doctor();
+    const theirs = await patientAt(b, "intake");
+    const { stages, incomplete } = await summary(c.auth);
+    expect(Object.values(stages).reduce((x, y) => x + y, 0)).toBe(0);
+    expect(incomplete.some((i) => i.patient_id === theirs)).toBe(false);
+  });
+
+  it("switched off → enabled false, nothing counted", async () => {
+    await setDoctorPanelEnabled(false);
+    try {
+      const res = await summary(a.auth);
+      expect(res.enabled).toBe(false);
+      expect(res.incomplete).toEqual([]);
+    } finally {
+      await setDoctorPanelEnabled(true);
+    }
+  });
+
+  it("rep gets 403", async () => {
+    const res = await request(app).get("/api/v1/doctor-panel/summary").set("Authorization", await staff("rep"));
+    expect(res.status).toBe(403);
+  });
+});
+
 afterEach(() => {
   __setLabOrdersDeployEnvForTests(null);
 });
