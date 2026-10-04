@@ -57,6 +57,9 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   // NEO-237's ATM card: unstubbed, its 401 signs the harness user out and the care team loses its actions.
   if (url.includes("/clinical-records")) return json({ records: [] });
   if (url.includes("/api/v1/practitioner")) return json({ items: [{ id: "h-4", name: "Dr. Pablo Ortiz" }] });
+  if (url.includes("/clinical-records")) return json({ records: [] });
+  // Any other API call answers empty: a real request gets 401, and a 401 signs the harness user out (role gone).
+  if (url.includes("/api/")) return json({ items: [] });
   return realFetch(input, init);
 };
 

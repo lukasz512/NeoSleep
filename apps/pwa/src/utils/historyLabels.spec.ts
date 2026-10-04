@@ -22,6 +22,7 @@ describe("historyActionIcon", () => {
     expect(historyActionIcon("delete")).toBe("trash");
     expect(historyActionIcon("restore")).toBe("refresh");
     expect(historyActionIcon("read")).toBe("eye");
+    expect(historyActionIcon("notify")).toBe("mail");
   });
 
   it("falls back to a generic icon for an unknown action", () => {
@@ -146,6 +147,17 @@ describe("historyValueLabel", () => {
     expect(historyValueLabel(tEn, "Organization", "region", "")).toBe("Not set");
   });
 
+  it("shows appointment times as a date in the clinic's zone, statuses and email kinds in words (CORE-133)", () => {
+    const lookups = { dateTime: (iso: string, zone?: string) => new Intl.DateTimeFormat("en-GB", { timeZone: zone, dateStyle: "short", timeStyle: "short" }).format(new Date(iso)) };
+    expect(historyValueLabel(tEn, "Appointment", "start_at", "2031-01-02T21:00:00.000Z", lookups, "America/Mexico_City")).toBe("02/01/2031, 15:00");
+    expect(historyValueLabel(tEn, "Appointment", "status", "no_show")).toBe("No-show");
+    expect(historyValueLabel(tEn, "Appointment", "kind", "booked")).toBe("booking confirmation");
+  });
+
+  it("never lists the stored zone as a change of its own", () => {
+    expect(historyFieldChanges({ action: "create", entity_type: "Appointment", entity_before: null, entity_after: { status: "scheduled", timezone: "America/Mexico_City" } }).map((c) => c.field)).toEqual(["status"]);
+  });
+
   it("shows unknown codes as-is (fail visible)", () => {
     expect(historyValueLabel(tEn, "SleepStudy", "status", "brand_new_status")).toBe("brand_new_status");
   });
@@ -167,6 +179,33 @@ describe("historyHeadline", () => {
       .toBe("Patient record created");
     expect(historyHeadline(tEn, { action: "read", entity_type: "Practitioner", entity_before: null, entity_after: null }))
       .toBe("Doctor profile viewed");
+  });
+
+  it("reads bookings, emails, encounters and questionnaire links as plain sentences (CORE-133)", () => {
+    const h = (action: string, entity_type: string, entity_after: Record<string, unknown> | null = null, entity_before: Record<string, unknown> | null = null) =>
+      historyHeadline(tEn, { action, entity_type, entity_before, entity_after });
+    expect(h("create", "Appointment", { status: "scheduled" })).toBe("Appointment booked");
+    expect(h("update", "Appointment", { start_at: "2031-01-02T10:00:00.000Z" }, { start_at: "2031-01-01T10:00:00.000Z" })).toBe("Appointment changed");
+    expect(h("update", "Appointment", { status: "cancelled" }, { status: "scheduled" })).toBe("Appointment status changed to Cancelled");
+    expect(h("delete", "Appointment")).toBe("Appointment deleted");
+    expect(h("notify", "Appointment", { channel: "email", kind: "reminder" })).toBe("Email to the patient: reminder");
+    expect(h("create", "Encounter")).toBe("Event created");
+    expect(h("create", "QuestionnaireRequest")).toBe("Questionnaire link created");
+  });
+
+  it("every new headline exists in every language", () => {
+    const keys = [
+      "app.history.headline.Appointment.create", "app.history.headline.Appointment.update", "app.history.headline.Appointment.delete",
+      "app.history.headline.Appointment.notify", "app.history.statusChanged.Appointment",
+      "app.history.headline.Encounter.create", "app.history.headline.Encounter.update",
+      "app.history.headline.QuestionnaireRequest.create", "app.history.headline.QuestionnaireRequest.update",
+      "app.history.emailKind.booked", "app.history.emailKind.rescheduled", "app.history.emailKind.cancelled",
+      "app.history.emailKind.ask", "app.history.emailKind.reminder", "app.history.emailKind.today",
+      "app.history.field.start_at", "app.history.field.end_at", "app.history.field.kind", "app.history.field.channel", "app.history.field.expires_at",
+    ];
+    for (const [locale, dict] of Object.entries({ en, pl, mx } as Record<string, Record<string, unknown>>)) {
+      for (const key of keys) expect(dict[key], `missing ${locale}: ${key}`).toEqual(expect.any(String));
+    }
   });
 
   it("falls back to action + entity label for an unknown entity type", () => {

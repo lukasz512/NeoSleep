@@ -114,6 +114,26 @@
         </dl>
       </section>
 
+      <section v-if="appointments.length" class="patient-details__group" aria-labelledby="pd-appointments">
+        <h3 id="pd-appointments" class="patient-details__group-title">{{ t("app.patients.detail.groups.appointments") }}</h3>
+        <dl class="patient-details__rows">
+          <div
+            v-for="a in appointments"
+            :key="a.id"
+            class="patient-details__row"
+            :class="{ 'patient-details__row--muted': a.status === 'cancelled' }"
+            data-testid="patient-appointment"
+            :data-id="a.id"
+          >
+            <dt>{{ formatDayLabel(a.start_at, a.timezone, intlLocale(locale)) }}</dt>
+            <dd>
+              {{ formatTimeRange(a.start_at, a.end_at, a.timezone, intlLocale(locale)) }}<template v-if="a.practitioner_name"> · {{ a.practitioner_name }}</template>
+              <VChip v-if="a.status !== 'scheduled'" size="x-small" variant="tonal" class="ml-1">{{ t(`user.appointments.status.${a.status}`) }}</VChip>
+            </dd>
+          </div>
+        </dl>
+      </section>
+
       <!-- CORE-132: every other HCP with access — specialty says who does what; when and how they got it (D1). -->
       <section v-if="teamMembers.length || careTeam.canAdd.value" class="patient-details__group" aria-labelledby="pd-team" data-testid="care-team">
         <h3 id="pd-team" class="patient-details__group-title">{{ t("app.patients.detail.groups.careTeam") }}</h3>
@@ -229,6 +249,7 @@ import { useIdentity } from "../../composables/useIdentity";
 import { formatDiagnosis } from "../../utils/diagnosis";
 import { deviceOrderState } from "../../utils/treatmentPlanStatus";
 import { patientStatusColor, patientStatusLabel } from "../../utils/patientStatus";
+import { formatDayLabel, formatTimeRange } from "../../utils/appointmentTime";
 import type { PatientDetailsTabPatient, PatientSummary } from "./patientSummary";
 
 /**
@@ -261,6 +282,16 @@ const { specialtySet } = useIdentity();
 
 const summary = ref<PatientSummary | null>(null);
 
+interface PatientAppointment {
+  id: string;
+  status: string;
+  start_at: string;
+  end_at: string;
+  timezone: string;
+  practitioner_name?: string | null;
+}
+const appointmentItems = ref<PatientAppointment[]>([]);
+
 async function load(): Promise<void> {
   const id = props.patient.id;
   try {
@@ -272,6 +303,19 @@ async function load(): Promise<void> {
     reportCaught(err, { where: "PatientDetailsTab.summary" });
   }
 }
+
+/** Every appointment of the patient, not only the next one (CORE-133). */
+async function loadAppointments(): Promise<void> {
+  const id = props.patient.id;
+  try {
+    const res = await apiFetch(`/api/v1/appointments?patient_id=${id}`, { handleErrors: false });
+    if (id !== props.patient.id || !res.ok) return;
+    appointmentItems.value = ((await res.json()) as { items?: PatientAppointment[] }).items ?? [];
+  } catch (err) {
+    reportCaught(err, { where: "PatientDetailsTab.appointments" });
+  }
+}
+
 const careTeam = usePatientCareTeam(toRef(() => props.patient.id));
 /** The primary doctor has their own row in "care"; this group lists everyone else. */
 const teamMembers = computed(() => careTeam.members.value.filter((m) => !m.primary));
@@ -325,18 +369,30 @@ async function onRemove(): Promise<void> {
 
 onMounted(() => {
   void load();
+  void loadAppointments();
   void careTeam.load();
 });
 watch(
   () => props.patient.id,
   () => {
     summary.value = null;
+    appointmentItems.value = [];
     careTeam.members.value = [];
     adding.value = false;
     void load();
+    void loadAppointments();
     void careTeam.load();
   },
 );
+
+/** Upcoming soonest first, then past most recent first. */
+const appointments = computed(() => {
+  const now = Date.now();
+  const at = (a: PatientAppointment) => new Date(a.start_at).getTime();
+  const upcoming = appointmentItems.value.filter((a) => at(a) >= now).sort((a, b) => at(a) - at(b));
+  const past = appointmentItems.value.filter((a) => at(a) < now).sort((a, b) => at(b) - at(a));
+  return [...upcoming, ...past];
+});
 
 const numberFormat = computed(() => new Intl.NumberFormat(intlLocale(locale.value), { maximumFractionDigits: 1 }));
 const fmt = (n: number) => numberFormat.value.format(n);
@@ -400,14 +456,19 @@ const tiles = computed<Tile[]>(() => {
     }
   }
 
-  const visit = summary.value?.next_appointment ?? null;
+  // The next scheduled visit from the full list knows its clinic's zone; the
+  // summary's bare instant is only the fallback until the list loads (CORE-133).
+  const now = Date.now();
+  const listed = appointments.value.find((a) => a.status === "scheduled" && new Date(a.start_at).getTime() >= now);
+  const visit = listed ?? summary.value?.next_appointment ?? null;
   if (visit) {
     const start = new Date(visit.start_at);
+    const timeZone = listed?.timezone;
     out.push({
       key: "appointment",
       label: t("app.patients.detail.summary.nextAppointment"),
-      value: start.toLocaleDateString(intlLocale(locale.value), { day: "numeric", month: "short" }),
-      sub: start.toLocaleTimeString(intlLocale(locale.value), { hour: "2-digit", minute: "2-digit" }),
+      value: start.toLocaleDateString(intlLocale(locale.value), { day: "numeric", month: "short", timeZone }),
+      sub: start.toLocaleTimeString(intlLocale(locale.value), { hour: "2-digit", minute: "2-digit", timeZone }),
     });
   }
   return out;
@@ -535,6 +596,10 @@ const tiles = computed<Tile[]>(() => {
   border-radius: var(--pwa-radius, 12px);
   background: rgba(var(--v-theme-on-surface), 0.04);
 }
+.patient-details__row--muted {
+  opacity: 0.6;
+}
+
 .patient-details__row {
   display: flex;
   align-items: center;

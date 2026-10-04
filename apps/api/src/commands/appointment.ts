@@ -219,7 +219,7 @@ export async function CreateAppointmentCommand(ctx: TenantContext, input: Create
     action: "create",
     entity_type: "Appointment",
     entity_id: appointment.id,
-    entity_after: { patient_id: appointment.patient_id, practitioner_id: appointment.practitioner_id, start_at: appointment.start_at, end_at: appointment.end_at, status: appointment.status },
+    entity_after: { patient_id: appointment.patient_id, practitioner_id: appointment.practitioner_id, start_at: appointment.start_at, end_at: appointment.end_at, status: appointment.status, timezone: appointment.timezone },
     request_id: ctx.requestId,
   });
   if (joinsCareTeam) {
@@ -282,7 +282,7 @@ export async function UpdateAppointmentCommand(ctx: TenantContext, id: string, i
     entity_type: "Appointment",
     entity_id: id,
     entity_before: { start_at: before.start_at, end_at: before.end_at, status: before.status },
-    entity_after: { start_at: after.start_at, end_at: after.end_at, status: after.status },
+    entity_after: { start_at: after.start_at, end_at: after.end_at, status: after.status, timezone: after.timezone },
     request_id: ctx.requestId,
   });
 
@@ -316,7 +316,7 @@ export async function DeleteAppointmentCommand(ctx: TenantContext, id: string): 
     action: "delete",
     entity_type: "Appointment",
     entity_id: id,
-    entity_before: { patient_id: existing.patient_id, practitioner_id: existing.practitioner_id, start_at: existing.start_at, status: existing.status },
+    entity_before: { patient_id: existing.patient_id, practitioner_id: existing.practitioner_id, start_at: existing.start_at, status: existing.status, timezone: existing.timezone },
     request_id: ctx.requestId,
   });
   await releaseCareTeamAfterVisit(ctx, existing.patient_id, existing.practitioner_id);
