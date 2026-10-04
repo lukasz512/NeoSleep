@@ -7,10 +7,16 @@ import { test, expect, type Page } from "@playwright/test";
  * Harness: e2e/harness/doctor-panel-donut.ts.
  */
 
-async function centre(page: Page, selector: string) {
-  const b = await page.locator(selector).first().boundingBox();
-  if (!b) throw new Error(`no box for ${selector}`);
-  return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+/** Both centres in one frame: the card is still rising in, so two separate reads would drift apart. */
+async function centres(page: Page, selectors: [string, string]) {
+  return page.evaluate((sels) => {
+    return sels.map((sel) => {
+      const el = document.querySelector(sel);
+      if (!el) throw new Error(`no element for ${sel}`);
+      const b = el.getBoundingClientRect();
+      return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+    });
+  }, selectors);
 }
 
 for (const width of [1280, 1000, 390]) {
@@ -19,8 +25,10 @@ for (const width of [1280, 1000, 390]) {
     // Long delay: the skeleton is still up while both are measured.
     await page.goto("/e2e/harness/doctor-panel-donut.html?delay=60000");
     await expect(page.getByTestId("doctor-panel-donut")).toBeAttached();
-    const skeleton = await centre(page, '[data-testid="doctor-panel-stages"] .dp-skel--ring > i');
-    const ring = await centre(page, '[data-testid="doctor-panel-donut"] .dp-donut__stage');
+    const [skeleton, ring] = await centres(page, [
+      '[data-testid="doctor-panel-stages"] .dp-skel--ring > i',
+      '[data-testid="doctor-panel-donut"] .dp-donut__stage',
+    ]);
     expect(Math.abs(skeleton.x - ring.x)).toBeLessThan(1);
     expect(Math.abs(skeleton.y - ring.y)).toBeLessThan(1);
   });
