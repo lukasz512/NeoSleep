@@ -162,6 +162,55 @@ describe("CalendarView (CORE-117)", () => {
     }
   });
 
+  it("CORE-129: a swipe on the month goes to the next / previous month", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2032, 0, 14, 9, 0));
+    try {
+      apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
+      const wrapper = await mountView("manager");
+      await wrapper.find('[data-testid="calendar-view-month"]').trigger("click");
+      await flushPromises();
+      const startOf = () => new Date(new URL(String(apiFetch.mock.calls.at(-1)![0]), "http://x").searchParams.get("start")!);
+      const body = wrapper.find(".cal__body");
+
+      apiFetch.mockClear();
+      await body.trigger("pointerdown", { pointerType: "touch", clientX: 300, clientY: 400 });
+      await body.trigger("pointerup", { pointerType: "touch", clientX: 120, clientY: 410 });
+      await flushPromises();
+      // February 2032's grid starts on Monday 26 January.
+      expect(startOf().getMonth()).toBe(0);
+      expect(startOf().getDate()).toBe(26);
+
+      apiFetch.mockClear();
+      await body.trigger("pointerdown", { pointerType: "touch", clientX: 100, clientY: 400 });
+      await body.trigger("pointerup", { pointerType: "touch", clientX: 300, clientY: 395 });
+      await flushPromises();
+      // Back to January 2032: its grid starts on Monday 29 December 2031.
+      expect(startOf().getFullYear()).toBe(2031);
+      expect(startOf().getDate()).toBe(29);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("CORE-129: a mostly vertical drag is a scroll, not a swipe", async () => {
+    apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
+    const wrapper = await mountView("manager");
+    await wrapper.find('[data-testid="calendar-view-month"]').trigger("click");
+    await flushPromises();
+    apiFetch.mockClear();
+    const body = wrapper.find(".cal__body");
+    await body.trigger("pointerdown", { pointerType: "touch", clientX: 300, clientY: 400 });
+    await body.trigger("pointerup", { pointerType: "touch", clientX: 230, clientY: 200 });
+    await flushPromises();
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("CORE-129: Calendario draws its own header on phones (route meta)", () => {
+    const calendar = routes.find((r) => r.name === "calendar");
+    expect(calendar?.meta?.phoneOwnHeader).toBe(true);
+  });
+
   it("CORE-122: prev/next pages by the view's period", async () => {
     apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
     const wrapper = await mountView("manager");

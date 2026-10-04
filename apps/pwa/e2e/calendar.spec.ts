@@ -51,3 +51,15 @@ test("phone: the week scrolls inside the grid, the month shows that day's list",
   await expect(page.locator('[data-testid="calendar-list"]')).toBeVisible();
   await noPageScrollX(page);
 });
+
+test("CORE-129 phone: + alone in the top-right corner, month leaves horizontal swipes to the calendar", async ({ page }) => {
+  await open(page, 390, 844);
+  await page.locator('[data-testid="calendar-view-month"]').click();
+  const bar = (await page.locator(".cal__toolbar").boundingBox())!;
+  const add = (await page.locator('[data-testid="calendar-add"]').boundingBox())!;
+  const seg = (await page.locator(".cal__seg").boundingBox())!;
+  expect(bar.x + bar.width - (add.x + add.width)).toBeLessThan(12);
+  expect(add.y + add.height).toBeLessThanOrEqual(seg.y);
+  const touchAction = await page.locator(".cal__body").evaluate((el) => getComputedStyle(el).touchAction);
+  expect(touchAction).toBe("pan-y");
+});

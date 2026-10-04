@@ -29,7 +29,7 @@
     </aside>
 
     <div class="cal__main">
-      <div ref="bodyEl" class="cal__body" :class="`cal__body--${calendarType}`" @pointerdown="onSwipeStart" @pointerup="onSwipeEnd">
+      <div ref="bodyEl" class="cal__body" :class="`cal__body--${calendarType}`" @pointerdown="onSwipeStart" @pointerup="onSwipeEnd" @pointercancel="onSwipeCancel">
         <AppErrorState v-if="loadFailed" class="cal__error" :error="loadFailure" :refresh-label="t('app.errorState.refresh')" :loading="loading" @refresh="fetchItems" />
 
         <CalendarTimeGrid
@@ -96,7 +96,7 @@
         <button
           v-if="narrow"
           type="button"
-          class="cal__icon-btn"
+          class="cal__icon-btn cal__side-toggle"
           :aria-label="t('user.calendar.toggleSidebar')"
           :aria-expanded="sideOpen"
           data-testid="calendar-sidebar-toggle"
@@ -620,6 +620,9 @@ let swipe: { x: number; y: number; at: number } | null = null;
 function onSwipeStart(event: PointerEvent) {
   swipe = event.pointerType === "mouse" ? null : { x: event.clientX, y: event.clientY, at: Date.now() };
 }
+function onSwipeCancel() {
+  swipe = null;
+}
 function onSwipeEnd(event: PointerEvent) {
   if (!swipe || calendarType.value === "week") return;
   const dx = event.clientX - swipe.x;
@@ -1076,6 +1079,16 @@ function onEntryClick(entry: CalendarEntry) {
   height: 18px;
 }
 
+/* The sidebar toggle wears the module's calendar glyph, in the module teal like the page-header icon. */
+.cal__side-toggle {
+  color: rgb(var(--v-theme-primary));
+}
+
+.cal__side-toggle :deep(svg) {
+  width: 22px;
+  height: 22px;
+}
+
 .cal__add {
   border-radius: 50%;
   background: rgb(var(--v-theme-primary));
@@ -1148,13 +1161,53 @@ function onEntryClick(entry: CalendarEntry) {
   --cal-day-min: 92px;
 }
 
+/* CORE-129: on a phone this bar is the screen's only header (route meta phoneOwnHeader hides
+   AppLayout's row). Row 1: calendar glyph · month · "+" top-right, like other modules' add.
+   Row 2: Día/Semana/Mes and the arrows. */
 .cal--phone .cal__toolbar {
-  flex-wrap: wrap;
-  row-gap: 8px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "toggle title add"
+    "seg seg nav";
+  gap: 8px;
   left: 8px;
   right: 8px;
-  padding: 8px 8px 8px 12px;
+  padding: 8px 8px 8px 8px;
   border-radius: 22px;
+}
+
+.cal--phone .cal__side-toggle {
+  grid-area: toggle;
+}
+
+.cal--phone .cal__title {
+  grid-area: title;
+  align-self: center;
+}
+
+.cal--phone .cal__add {
+  grid-area: add;
+  justify-self: end;
+  border-radius: 10px;
+  background: none;
+  color: rgb(var(--v-theme-on-surface));
+  box-shadow: none;
+}
+
+.cal--phone .cal__add :deep(svg) {
+  width: 22px;
+  height: 22px;
+}
+
+.cal--phone .cal__nav {
+  grid-area: nav;
+}
+
+/* Month and day: the browser keeps vertical scrolling, horizontal swipes page the calendar. */
+.cal--phone .cal__body--month,
+.cal--phone .cal__body--day {
+  touch-action: pan-y;
 }
 
 .cal--phone .cal__title {
@@ -1166,8 +1219,7 @@ function onEntryClick(entry: CalendarEntry) {
 }
 
 .cal--phone .cal__seg {
-  order: 5;
-  flex-basis: 100%;
+  grid-area: seg;
 }
 
 .cal--phone .cal__seg-btn {

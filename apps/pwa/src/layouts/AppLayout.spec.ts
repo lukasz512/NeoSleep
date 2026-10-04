@@ -304,7 +304,8 @@ describe("AppLayout", () => {
       // NEO-113: views teleport into it on phones too, and an open icon search covers it.
       expect(source).toContain("providePageHeader(computed(() => true))");
       expect(source).toContain("'layout-page-header--search': pageHeaderRow.searchTakesRow.value");
-      expect(source).toContain("const pageHeaderVisible = computed(() => !recordHeaderClaim.value)");
+      // The rule itself (record header, CORE-129 phone-own-header routes) is tested in usePageHeader.spec.ts.
+      expect(source).toMatch(/const pageHeaderVisible = computed\(\(\) =>\s+isPageHeaderVisible\(\{ recordHeaderClaimed: recordHeaderClaim.value/);
       expect(source).toContain("provideRecordHeaderClaim()");
       expect(header).toMatch(/v-if="parentRoute"[\s\S]*?:to="parentRoute"/);
       expect(header).toContain("{{ moduleTitle }}");

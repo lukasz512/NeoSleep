@@ -57,7 +57,7 @@ export const routes: RouteRecordRaw[] = [
   // the separate Planificador (encounters) and Citas (appointments) screens/calendars with one union
   // list; what each role sees within it (own / territory / redacted) is still decided by the API
   // (queries/encounter.ts + queries/appointment.ts, merged in queries/calendar.ts).
-  { path: "/calendar", name: "calendar", component: () => import("../views/CalendarView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
+  { path: "/calendar", name: "calendar", component: () => import("../views/CalendarView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES, phoneOwnHeader: true } },
   // Old routes, kept so bookmarks/links still work — no `layout: "app"` meta, so appNavRoutes (below)
   // never lists them in the sidebar/bottom bar.
   { path: "/planner", redirect: "/calendar" },

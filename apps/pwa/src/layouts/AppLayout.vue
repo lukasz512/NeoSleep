@@ -252,6 +252,7 @@ import {
   providePageHeader,
   providePageHeaderRow,
   provideRecordHeaderClaim,
+  isPageHeaderVisible,
   PAGE_HEADER_ACTIONS_ID,
 } from "../composables/usePageHeader";
 import { useGlyphInset } from "../composables/useGlyphInset";
@@ -342,7 +343,9 @@ const recordHeaderClaim = provideRecordHeaderClaim();
 // Hidden while a record header replaces it — NEO-152: on phones too, whose
 // record header is now the desktop one, its "MODULE ›" link above the name
 // being the way back (no separate "← Module" row).
-const pageHeaderVisible = computed(() => !recordHeaderClaim.value);
+const pageHeaderVisible = computed(() =>
+  isPageHeaderVisible({ recordHeaderClaimed: recordHeaderClaim.value, isMobile: isMobile.value, routeMeta: route.meta }),
+);
 
 // NEO-108: logo sizes. The folded O is exactly the avatar's size, so both
 // corners of the phone bar match.
