@@ -92,6 +92,51 @@ export async function SyncOrthoApneaTreatmentStatusesCommand(
   return { checked: links.length, changed, failed };
 }
 
+/** At most one in-app sync per tenant in this window, however many users have the app open (CORE-67). */
+export const OPEN_APP_SYNC_INTERVAL_MS = 15 * 60_000;
+
+const lastOpenAppSyncAt = new Map<string, number>();
+const openAppSyncInFlight = new Map<string, Promise<SyncOrthoApneaTreatmentStatusesResult>>();
+
+export type SyncOrthoApneaStatusesForOpenAppResult =
+  | ({ ran: true } & SyncOrthoApneaTreatmentStatusesResult)
+  | { ran: false };
+
+/**
+ * The sync the app triggers while someone has it open (every 15 min), on top
+ * of the scheduled job's 4 runs a day (CORE-67). Throttled per tenant here,
+ * not per user: ten open tabs still mean one round of lab calls per window,
+ * and a call that arrives while one is running joins it. The throttle is
+ * in-memory, which holds because the API runs one instance (max-instances=1);
+ * a duplicate across dev and prod is harmless since the status write is
+ * locked (updatePartnerLinkStatus), so the dentist is still notified once.
+ */
+export async function SyncOrthoApneaStatusesForOpenAppCommand(
+  tenantSlug: string,
+  requestId: string,
+  now: number = Date.now()
+): Promise<SyncOrthoApneaStatusesForOpenAppResult> {
+  const running = openAppSyncInFlight.get(tenantSlug);
+  if (running) return { ran: true, ...(await running) };
+
+  const last = lastOpenAppSyncAt.get(tenantSlug);
+  if (last !== undefined && now - last < OPEN_APP_SYNC_INTERVAL_MS) return { ran: false };
+
+  lastOpenAppSyncAt.set(tenantSlug, now);
+  const run = SyncOrthoApneaTreatmentStatusesCommand(tenantSlug, requestId);
+  openAppSyncInFlight.set(tenantSlug, run);
+  try {
+    return { ran: true, ...(await run) };
+  } finally {
+    openAppSyncInFlight.delete(tenantSlug);
+  }
+}
+
+export function __resetOpenAppSyncThrottleForTests(): void {
+  lastOpenAppSyncAt.clear();
+  openAppSyncInFlight.clear();
+}
+
 export interface SyncOrthoApneaTreatmentStatusesAllTenantsResult {
   checked: number;
   changed: number;

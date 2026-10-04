@@ -3,29 +3,32 @@
     ref="rootEl"
     class="app-segmented-tabs position-relative d-flex"
     :class="[
-      underline ? 'app-segmented-tabs--underline' : 'pa-2 pa-sm-1 rounded-pill',
+      underline ? 'app-segmented-tabs--underline' : 'app-segmented-tabs--track',
       { 'app-segmented-tabs--compact': compact, 'app-segmented-tabs--fit': fit },
     ]"
     role="tablist"
   >
     <div
-      class="app-segmented-tabs__thumb position-absolute bg-primary"
-      :class="underline ? 'rounded' : 'rounded-pill'"
+      class="app-segmented-tabs__thumb position-absolute"
+      :class="underline ? 'rounded bg-primary' : ''"
       :style="thumbStyle"
       aria-hidden="true"
     />
     <VBtn
-      v-for="option in options"
+      v-for="(option, index) in options"
       :key="option.value"
+      v-bind="option.attrs"
       variant="text"
       size="small"
       role="tab"
       class="app-segmented-tabs__tab position-relative text-body-medium font-weight-medium"
       :class="{ 'app-segmented-tabs__tab--active': option.value === modelValue, 'flex-grow-1': !fit }"
       :aria-selected="option.value === modelValue"
-      @click="$emit('update:modelValue', option.value)"
+      :tabindex="index === activeIndex ? 0 : -1"
+      @click="emit('update:modelValue', option.value)"
+      @keydown="onKeydown($event, index)"
     >
-      {{ option.label }}
+      <slot name="tab" :option="option" :active="option.value === modelValue">{{ option.label }}</slot>
     </VBtn>
   </div>
 </template>
@@ -56,6 +59,8 @@ import { VBtn } from "vuetify/components";
 export interface AppSegmentedTabOption {
   value: string;
   label: string;
+  /** Extra attributes for this tab's button — ids, aria-controls, data-* (CORE-135: the Historia clínica tabs). */
+  attrs?: Record<string, string>;
 }
 
 const props = defineProps<{
@@ -69,8 +74,13 @@ const props = defineProps<{
   underline?: boolean;
 }>();
 
-defineEmits<{
+const emit = defineEmits<{
   "update:modelValue": [value: string];
+}>();
+
+defineSlots<{
+  /** Custom tab content (status icon, badge); defaults to the label. */
+  tab?: (props: { option: AppSegmentedTabOption; active: boolean }) => unknown;
 }>();
 
 const activeIndex = computed(() => Math.max(0, props.options.findIndex((o) => o.value === props.modelValue)));
@@ -96,9 +106,31 @@ const thumbStyle = computed(() =>
       },
 );
 
+/** ←/→ (and Home/End) move the selection and focus, wrapping — a native segmented control's keyboard model. */
+function onKeydown(event: KeyboardEvent, index: number): void {
+  const last = props.options.length - 1;
+  const next = { ArrowRight: index === last ? 0 : index + 1, ArrowLeft: index === 0 ? last : index - 1, Home: 0, End: last }[event.key];
+  if (next === undefined) return;
+  event.preventDefault();
+  emit("update:modelValue", props.options[next].value);
+  void nextTick(() => rootEl.value?.querySelectorAll<HTMLElement>(".app-segmented-tabs__tab")[next]?.focus());
+}
+
+/** A fit row that scrolls (a phone, many tabs) keeps the active tab in view; only scrollLeft moves, never the page. */
+function revealActive(): void {
+  const root = rootEl.value;
+  const tab = root?.querySelectorAll<HTMLElement>(".app-segmented-tabs__tab")[activeIndex.value];
+  if (!root || !tab || root.scrollWidth <= root.clientWidth) return;
+  const left = tab.offsetLeft;
+  const right = left + tab.offsetWidth;
+  if (left < root.scrollLeft) root.scrollLeft = left;
+  else if (right > root.scrollLeft + root.clientWidth) root.scrollLeft = right - root.clientWidth;
+}
+
 let resizeObserver: ResizeObserver | undefined;
 onMounted(() => {
   measure();
+  revealActive();
   if (typeof ResizeObserver !== "undefined" && rootEl.value) {
     resizeObserver = new ResizeObserver(measure);
     resizeObserver.observe(rootEl.value);
@@ -107,7 +139,11 @@ onMounted(() => {
 onBeforeUnmount(() => resizeObserver?.disconnect());
 watch(
   () => [props.modelValue, props.options, props.fit, props.compact, props.underline],
-  () => void nextTick(measure),
+  () =>
+    void nextTick(() => {
+      measure();
+      revealActive();
+    }),
   { deep: true },
 );
 </script>
@@ -116,20 +152,15 @@ watch(
 /* Glass effect: no Vuetify utility for backdrop-filter. CORE-119: the app's
    --glass-* tokens (apps/pwa theme.scss), same material as the bottom nav and
    AuthChrome.vue's pill; the fallbacks are the old local glass. */
+/* CORE-135: every switcher wears the calendar's control (Día · Semana · Mes) —
+   a quiet grey track, a light glass thumb sliding under the active label. */
 .app-segmented-tabs {
-  --seg-pad: 8px; /* matches the pa-2 utility in the template — kept in sync manually, see below */
-  background: var(--glass-sheen, none), var(--glass-surface, rgba(var(--v-theme-surface), 0.75));
-  box-shadow:
-    inset 0 1px 0 var(--glass-edge, transparent),
-    var(--glass-rim, 0 0 transparent),
-    0 1px 8px rgba(0, 0, 0, 0.12);
-  backdrop-filter: var(--glass-blur, blur(6px));
-  -webkit-backdrop-filter: var(--glass-blur, blur(6px));
+  --seg-pad: 2px;
 }
-@media (min-width: 600px) {
-  .app-segmented-tabs {
-    --seg-pad: 4px; /* matches the pa-sm-1 utility in the template */
-  }
+.app-segmented-tabs--track {
+  padding: var(--seg-pad);
+  border-radius: 11px;
+  background: rgba(var(--v-theme-on-surface), 0.08);
 }
 
 /* Compact: sets the exact same padding desktop already uses (4px), not an
@@ -144,8 +175,7 @@ watch(
   transition: padding 280ms var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1));
 }
 .app-segmented-tabs--compact {
-  --seg-pad: 4px;
-  padding: 4px !important;
+  --seg-pad: 2px;
 }
 
 /* Thumb position/slide: absolute-position coordinates and a transition
@@ -157,10 +187,15 @@ watch(
   top: var(--seg-pad);
   bottom: var(--seg-pad);
   left: var(--seg-pad);
-  box-shadow: 0 2px 8px rgba(var(--v-theme-primary), 0.35);
+  border-radius: 9px;
+  background: rgb(var(--v-theme-surface));
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge, rgb(255 255 255 / 0.7)),
+    0 2px 8px -2px rgb(0 0 0 / 0.22),
+    0 0 0 0.5px rgba(var(--v-theme-on-surface), 0.12);
   transition:
-    transform 300ms var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1)),
-    width 300ms var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1));
+    transform 0.5s var(--menu-spring, cubic-bezier(0.34, 1.3, 0.64, 1)),
+    width 0.5s var(--menu-spring, cubic-bezier(0.34, 1.3, 0.64, 1));
   will-change: transform;
   pointer-events: none;
 }
@@ -169,6 +204,7 @@ watch(
   z-index: 1;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   text-transform: none;
+  transition: color 0.2s;
   /* Tracking comes from the text-body-medium utility class. Vuetify 4 puts
      utilities in a cascade layer, so any letter-spacing here would now
      override it (it never did under Vuetify 3's !important utilities). */
@@ -221,7 +257,11 @@ watch(
   top: auto;
   bottom: -1px;
   height: 2px;
+  border-radius: 2px;
   box-shadow: none;
+  transition:
+    transform 300ms var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1)),
+    width 300ms var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1));
 }
 /* !important: theme.scss makes every labeled VBtn a pill with !important; an
    underline tab is a tab-shaped rectangle that sits on the hairline. */
@@ -254,10 +294,6 @@ watch(
   background-color: rgba(var(--v-theme-primary), 0.08);
   color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
 }
-/* On the pill the active tab sits on the teal thumb — a teal ring would vanish. */
-.app-segmented-tabs:not(.app-segmented-tabs--underline) .app-segmented-tabs__tab--active:focus-visible {
-  box-shadow: inset 0 0 0 2px rgb(var(--v-theme-on-primary));
-}
 
 @media (prefers-reduced-motion: reduce) {
   .app-segmented-tabs__thumb {
@@ -273,27 +309,27 @@ watch(
 }
 
 .app-segmented-tabs__tab--active {
-  color: rgb(var(--v-theme-on-primary));
+  color: rgb(var(--v-theme-on-surface));
+}
+/* The track's tabs are the calendar's: rounded like the thumb, never pills (theme.scss pills every labeled VBtn with !important). */
+.app-segmented-tabs--track .app-segmented-tabs__tab {
+  border-radius: 9px !important;
+  font-size: 0.8125rem;
+  /* Equal columns already share the row; theme.scss's 16px pill padding
+     (!important) would only steal label room ("Sema…" in the calendar). */
+  padding-inline: 4px !important;
+}
+.app-segmented-tabs--track.app-segmented-tabs--fit .app-segmented-tabs__tab {
+  padding-inline: 14px !important;
 }
 
 .app-segmented-tabs__tab :deep(.v-btn__overlay) {
   display: none;
 }
 
-/* VBtn's "small" height (32px) reads as visually thin/cramped as a
-   full-width mobile control — bumped on mobile only, where it's held and
-   tapped rather than clicked with a mouse. 40px rather than the full 44px
-   touch-target minimum per feedback (44px read as too tall here); desktop
-   stays compact by design. No Vuetify utility sets an explicit min-height.
-   Compact reverts this to VBtn's own natural (unset) height — the same
-   32px desktop already has, not a separate hand-picked number. */
-@media (max-width: 599px) {
-  .app-segmented-tabs__tab {
-    min-height: 40px;
-    transition: min-height 280ms var(--pwa-ease-out-smooth, cubic-bezier(0.22, 1, 0.36, 1));
-  }
-  .app-segmented-tabs--compact .app-segmented-tabs__tab {
-    min-height: 32px;
-  }
+/* CORE-135: the calendar's height on every screen — 32px tabs on a 2px track,
+   the size of an iOS segmented control (the phone-only 40px bump is gone). */
+.app-segmented-tabs--track .app-segmented-tabs__tab {
+  min-height: 32px;
 }
 </style>

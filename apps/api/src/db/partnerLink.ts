@@ -173,9 +173,23 @@ export async function setPartnerLinkError(client: PoolClient, id: string, errorM
   }
 }
 
-/** Updates only external_status/last_synced_at — used by the status-poll job, which doesn't touch external_id/sync_status (those are set once, at creation). */
-export async function updatePartnerLinkStatus(client: PoolClient, id: string, externalStatus: string | null): Promise<PartnerLink> {
+/**
+ * Updates only external_status/last_synced_at — used by the status-poll job, which doesn't touch external_id/sync_status (those are set once, at creation).
+ * Returns the status it replaced, read under a row lock: two syncs racing on one link (the in-app sync and the
+ * scheduled job, or dev and prod, which share one DB) serialize here, so only one sees a change and the dentist
+ * is notified once (CORE-67). The caller must be inside a transaction (withTenant) for the lock to hold.
+ */
+export async function updatePartnerLinkStatus(
+  client: PoolClient,
+  id: string,
+  externalStatus: string | null
+): Promise<{ link: PartnerLink; previousStatus: string | null }> {
   try {
+    const locked = await client.query<{ external_status: string | null }>(
+      `SELECT external_status FROM partner_link WHERE id = $1 FOR UPDATE`,
+      [id]
+    );
+    if (!locked.rows[0]) throw new NotFoundError("PartnerLink", id);
     const { rows } = await client.query<PartnerLink>(
       `UPDATE partner_link
        SET external_status = $2, last_synced_at = now(), updated_at = now()
@@ -183,8 +197,7 @@ export async function updatePartnerLinkStatus(client: PoolClient, id: string, ex
        RETURNING ${PARTNER_LINK_COLS}`,
       [id, externalStatus]
     );
-    if (!rows[0]) throw new NotFoundError("PartnerLink", id);
-    return rows[0];
+    return { link: rows[0]!, previousStatus: locked.rows[0].external_status };
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new DatabaseError("updatePartnerLinkStatus", err);
