@@ -78,15 +78,18 @@
           <h2 class="dp__title">{{ t("app.doctorPanel.stages.title") }}</h2>
           <RouterLink :to="{ name: 'patients' }" class="dp__more">{{ t("app.doctorPanel.stages.all") }}</RouterLink>
         </header>
-        <div class="dp-skel dp-skel--ring" aria-hidden="true" data-testid="doctor-panel-skeleton"><i /><span><i /><i /><i /><i /></span></div>
-        <p v-if="summary && !activeTotal" class="dp__empty">{{ t("app.doctorPanel.stages.empty") }}</p>
-        <DoctorPanelDonut
-          v-else
-          :slices="stageSlices"
-          :drawn="donutDrawn"
-          :caption="t('app.doctorPanel.stages.caption')"
-          :aria-label="t('app.doctorPanel.stages.aria', { count: activeTotal })"
-        />
+        <!-- Skeleton and ring share one slot, so the ring lands exactly where the skeleton was. -->
+        <div class="dp__ring-body">
+          <div class="dp-skel dp-skel--ring" aria-hidden="true" data-testid="doctor-panel-skeleton"><i /><span><i /><i /><i /><i /></span></div>
+          <p v-if="summary && !activeTotal" class="dp__empty">{{ t("app.doctorPanel.stages.empty") }}</p>
+          <DoctorPanelDonut
+            v-else
+            :slices="stageSlices"
+            :drawn="donutDrawn"
+            :caption="t('app.doctorPanel.stages.caption')"
+            :aria-label="t('app.doctorPanel.stages.aria', { count: activeTotal })"
+          />
+        </div>
       </article>
     </div>
 
@@ -552,16 +555,22 @@ onBeforeUnmount(() => {
 
 /* Content hidden behind the skeleton until it plays in, then a soft crossfade. */
 .dp__kpi > :not(.dp__kpi-label):not(.dp-skel),
-.dp__card > :not(.dp__head):not(.dp-skel) {
+.dp__card > :not(.dp__head):not(.dp-skel):not(.dp__ring-body),
+.dp__ring-body > :not(.dp-skel) {
   transition:
     opacity 0.6s ease,
     transform 0.8s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .dp:not(.dp--in) .dp__kpi > :not(.dp__kpi-label):not(.dp-skel),
-.dp:not(.dp--in) .dp__card > :not(.dp__head):not(.dp-skel) {
+.dp:not(.dp--in) .dp__card > :not(.dp__head):not(.dp-skel):not(.dp__ring-body) {
   opacity: 0;
   transform: translateY(6px);
+}
+
+/* The ring itself does not slide: it swings in on the spot the skeleton held. */
+.dp:not(.dp--in) .dp__ring-body > :not(.dp-skel) {
+  opacity: 0;
 }
 
 /* ---- skeleton ------------------------------------------------------------ */
@@ -636,31 +645,41 @@ onBeforeUnmount(() => {
   width: 64%;
 }
 
+.dp__ring-body {
+  position: relative;
+}
+
+/* Same box and flex rules as DoctorPanelDonut (176 px stage, legend flex 1 / min 170 px),
+   so the skeleton ring sits exactly where the real ring swings in. */
 .dp-skel--ring {
-  inset: 64px var(--space-4) var(--space-4);
+  inset: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: var(--space-4);
 }
 
+/* The ring track itself (r 48, stroke 13 of a 120 box), at the 0.8 scale the ring starts from. */
 .dp-skel--ring > i {
   flex: none;
-  width: 150px;
-  height: 150px;
+  width: 176px;
+  height: 176px;
   border-radius: 50%;
-  -webkit-mask: radial-gradient(circle, transparent 54%, #000 55%);
-  mask: radial-gradient(circle, transparent 54%, #000 55%);
+  transform: scale(0.8);
+  -webkit-mask: radial-gradient(closest-side, transparent 69%, #000 69.5%, #000 90.5%, transparent 91%);
+  mask: radial-gradient(closest-side, transparent 69%, #000 69.5%, #000 90.5%, transparent 91%);
 }
 
 .dp-skel--ring > span {
   display: grid;
   flex: 1;
   gap: 12px;
-  max-width: 200px;
+  min-width: 170px;
 }
 
 .dp-skel--ring > span i {
+  max-width: 200px;
   height: 12px;
 }
 

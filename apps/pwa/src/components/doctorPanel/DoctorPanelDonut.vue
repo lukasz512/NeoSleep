@@ -132,12 +132,16 @@ const segments = computed(() => {
   stroke: var(--seg-color);
   stroke-linecap: round;
   filter: drop-shadow(0 0 0 transparent);
+  /* A zero-length dash with round caps still paints a dot; hidden until it draws. */
+  opacity: 0;
   transition:
     stroke-dasharray 1.3s cubic-bezier(0.34, 1.15, 0.64, 1),
-    filter 1.3s ease;
+    filter 1.3s ease,
+    opacity 0.2s ease;
 }
 
 .dp-donut--drawn .dp-donut__seg {
+  opacity: 1;
   filter: drop-shadow(0 2px 6px color-mix(in srgb, var(--seg-color) 55%, transparent));
 }
 
