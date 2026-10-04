@@ -38,7 +38,7 @@ describe("notify()", () => {
         category: "operational",
         priority: "normal",
         group_count: 1,
-        action_url: "/calendar",
+        action_url: `/calendar?appointment=${entityId}`, // CORE-4: the visit itself
         entity_type: "Appointment",
       });
 

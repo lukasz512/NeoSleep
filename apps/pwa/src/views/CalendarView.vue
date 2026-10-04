@@ -192,6 +192,7 @@ import { reportCaught } from "@api";
 import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDisplay } from "vuetify";
+import { useRoute, useRouter } from "vue-router";
 import { intlLocale } from "@i18n/language-options";
 import { apiFetch } from "../composables/useApi";
 import { useNotifications } from "../composables/useNotifications";
@@ -762,6 +763,37 @@ function openDetail(appointment: Appointment) {
   selectedAppointment.value = appointment;
   showDetail.value = true;
 }
+
+// ── deep link: ?appointment=<id> (CORE-4) ───────────────────────────────────
+// A notification about a visit links here: load that visit, show its day and
+// open its detail. The query is dropped afterwards so closing the dialog and
+// reloading doesn't reopen it.
+const route = useRoute();
+const router = useRouter();
+
+async function openFromLink(id: string) {
+  try {
+    const res = await apiFetch(`/api/v1/appointments/${encodeURIComponent(id)}`, { handleErrors: false });
+    if (!res.ok) return; // gone or out of scope: the calendar alone is the fallback
+    const appointment = (await res.json()) as Appointment;
+    calendarValue.value = new Date(appointment.start_at);
+    openDetail(appointment);
+  } catch (err) {
+    reportCaught(err, { where: "CalendarView.openFromLink" });
+  } finally {
+    const rest = { ...route.query };
+    delete rest.appointment;
+    void router.replace({ query: rest });
+  }
+}
+
+watch(
+  () => route.query.appointment,
+  (id) => {
+    if (typeof id === "string" && id) void openFromLink(id);
+  },
+  { immediate: true },
+);
 
 function onAppointmentSaved() {
   void fetchItems();
