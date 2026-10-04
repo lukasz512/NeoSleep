@@ -25,11 +25,14 @@ const STATUS_OPTIONS: FormFieldOption[] = [
   { title: "app.patients.filters.statusDischarged", value: "discharged", color: "default" },
 ];
 
-// patient.cpap_device is TEXT: "CPAP" when the patient uses it, "" when not (NEO-228 tiles).
-const CPAP_OPTIONS: FormFieldOption[] = [
-  { title: "app.patients.form.cpapYes", value: "CPAP", icon: "cpap-mask" },
-  { title: "app.patients.form.cpapNo", value: "", icon: "cpap-mask-off" },
-];
+/**
+ * Starting height by sex, per country (NEO-241): picking the sex fills Talla
+ * with a typical adult height so the doctor only nudges it with − / +.
+ * Countries without an entry (PL for now) leave Talla empty.
+ */
+export const DEFAULT_HEIGHT_CM: Partial<Record<string, Record<"male" | "female", number>>> = {
+  MX: { male: 165, female: 155 },
+};
 
 async function loadRegionOptions() {
   const configStore = useConfigStore();
@@ -149,6 +152,15 @@ for (const market of Object.keys(GENDERED_SALUTATIONS) as SalutationMarket[]) {
  * without a sex, or an empty one, never changes anything.
  */
 export const patientFormDerive: FormDerive = (form, prev) => {
+  const sexPatch = salutationSexPatch(form, prev);
+  const heightPatch = defaultHeightPatch({ ...form, ...sexPatch }, prev);
+  return sexPatch || heightPatch ? { ...sexPatch, ...heightPatch } : undefined;
+};
+
+function salutationSexPatch(
+  form: Record<string, unknown>,
+  prev: Record<string, unknown>,
+): { salutation?: string; gender?: string } | undefined {
   const salutationChanged = salutationKey(form.salutation) !== salutationKey(prev.salutation);
   const sexChanged = form.gender !== prev.gender;
   if (salutationChanged === sexChanged) return;
@@ -163,7 +175,32 @@ export const patientFormDerive: FormDerive = (form, prev) => {
   if (form.gender === "other" || form.gender === "prefer_not_to_say") return;
   const sex = maps.sexOf[salutationKey(form.salutation)];
   return sex ? { gender: sex } : undefined;
-};
+}
+
+function defaultHeightFor(form: Record<string, unknown>, sex: unknown): number | undefined {
+  if (sex !== "male" && sex !== "female") return undefined;
+  const own = typeof form.country_code === "string" ? form.country_code : "";
+  const country = (own || useAuthStore().user?.country_code || "").toUpperCase();
+  return DEFAULT_HEIGHT_CM[country]?.[sex];
+}
+
+/**
+ * When the sex changes, Talla takes that sex's default height (NEO-241) —
+ * but only while the doctor hasn't typed one: it is empty, or still the
+ * default the previous sex put there.
+ */
+function defaultHeightPatch(
+  form: Record<string, unknown>,
+  prev: Record<string, unknown>,
+): { height_cm: number } | undefined {
+  if (form.gender === prev.gender) return undefined;
+  const height = defaultHeightFor(form, form.gender);
+  if (height === undefined) return undefined;
+  const current = form.height_cm;
+  const untouched =
+    current === null || current === undefined || current === "" || Number(current) === defaultHeightFor(form, prev.gender);
+  return untouched ? { height_cm: height } : undefined;
+}
 
 function isDoctor(): boolean {
   return useAuthStore().user?.role === "doctor";
@@ -220,7 +257,8 @@ export const patientFormFields: FormFieldDef[] = [
     default: "active",
     // NEO-226: a doctor's new patient is simply active; Estado stays a staff field.
     hidden: isDoctor,
-    cols: 6,
+    // A full row (it stood alone anyway), so it never pairs with AHI and leaves Talla alone (NEO-241).
+    cols: 12,
   },
   {
     key: "region",
@@ -263,7 +301,8 @@ export const patientFormFields: FormFieldDef[] = [
     section: "clinical",
     type: "ahi",
     labelKey: "app.patients.form.ahiBaseline",
-    cols: 12,
+    // NEO-241: half a row, next to Talla; phones stack it full width.
+    cols: 6,
   },
   {
     // NEO-231 D1 (Dra. Lorena): entered once here — STOP-BANG asks only the
@@ -273,17 +312,23 @@ export const patientFormFields: FormFieldDef[] = [
     type: "number",
     labelKey: "app.patients.form.heightCm",
     rules: [heightCmRule],
+    // NEO-241: − / + around the value; prefilled from the sex (DEFAULT_HEIGHT_CM).
+    stepper: { step: 1, min: 100, max: 230, start: 165 },
     cols: 6,
   },
   {
-    // TEXT column presented as two tiles (NEO-228; was a switch): "CPAP" or ""
-    // — whether the patient uses CPAP, not the device model. null = not asked.
+    // TEXT column: "CPAP" when the patient uses it, "" when not — whether the
+    // patient uses CPAP, not the device model. NEO-241: one tile, off (no CPAP)
+    // by default, instead of a crossed-out "No CPAP" choice of its own.
     key: "cpap_device",
     section: "clinical",
-    type: "choice",
-    labelKey: "app.patients.form.cpapTherapy",
-    options: CPAP_OPTIONS,
-    default: null,
+    type: "toggle",
+    labelKey: "app.patients.form.cpapYes",
+    icon: "cpap-mask",
+    toggleText: { on: "app.patients.form.cpapOn", off: "app.patients.form.cpapOff" },
+    trueValue: "CPAP",
+    falseValue: "",
+    default: "",
     cols: 12,
   },
   {

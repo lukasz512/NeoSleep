@@ -40,7 +40,9 @@ export type FormFieldType =
   /** A few large tappable chips instead of a dropdown — see ChoiceChipsField.vue. */
   | "choice"
   /** AHI in events/h with the AASM severity scale under it — see AhiField.vue (NEO-228). */
-  | "ahi";
+  | "ahi"
+  /** One tile that is either on or off, off by default — see ToggleTileField.vue (NEO-241). */
+  | "toggle";
 
 /**
  * One selectable option for 'select'/'autocomplete'/'combobox' fields.
@@ -229,12 +231,20 @@ export interface FormFieldDef {
    * visible field whose `cols` completes it to 12.
    */
   cols?: 2 | 6 | 10 | 12;
+  /** 'toggle' fields: i18n keys for the small state line under the label (NEO-241). */
+  toggleText?: { on: string; off: string };
+  /**
+   * 'number' fields: draw − and + either side of the value (NumberStepperField,
+   * NEO-241). The first press on an empty field lands on `start`.
+   */
+  stepper?: { step: number; min: number; max: number; start: number; unitKey?: string };
   /**
    * 'boolean' fields only — the value stored in form state (and submitted)
    * when the switch is on/off. Default `true`/`false`, a real boolean. Set
    * these to override for a field backed by a non-boolean column being given
    * a boolean UI (e.g. patientForm's `cpap_device`, a TEXT column presented
-   * as a yes/no switch — `trueValue: "CPAP"`, `falseValue: ""`).
+   * as a yes/no switch — `trueValue: "CPAP"`, `falseValue: ""`). 'toggle'
+   * fields use the same pair.
    */
   trueValue?: unknown;
   falseValue?: unknown;
