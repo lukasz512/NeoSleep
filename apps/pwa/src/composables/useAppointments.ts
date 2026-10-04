@@ -28,6 +28,16 @@ export interface Appointment {
   notes: string | null;
   /** The patient's answer from the appointment email (CORE-25); cleared when the appointment moves. */
   patient_response?: AppointmentPatientResponse | null;
+  /** CORE-116: when the patient was asked to confirm — set + no answer = "waiting for the patient". */
+  confirm_request_sent_at?: string | null;
+}
+
+/** The patient's answer at a glance: their reply, "awaiting" once asked without a reply (CORE-116), or nothing. */
+export type AppointmentResponseState = AppointmentPatientResponse | "awaiting";
+
+export function appointmentResponseState(a: { status: string; patient_response?: AppointmentPatientResponse | null; confirm_request_sent_at?: string | null }): AppointmentResponseState | null {
+  if (a.status !== "scheduled") return null;
+  return a.patient_response ?? (a.confirm_request_sent_at ? "awaiting" : null);
 }
 
 export type AppointmentPatientResponse = "confirmed" | "cannot_attend";

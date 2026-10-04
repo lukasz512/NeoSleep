@@ -38,6 +38,7 @@ const appointment = (over: Record<string, unknown> = {}) => ({
   patient_response: null,
   opted_out: false,
   locale: "mx",
+  calendar: { ics: "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", google: "https://calendar.google.com/x", outlook: "https://outlook.live.com/x" },
   ...over,
 });
 
@@ -84,7 +85,7 @@ describe("PatientAppointmentView (CORE-25)", () => {
     expect(lastBody()).toEqual({ token: TOKEN });
   });
 
-  it("'I'll be there' posts the answer and thanks the patient", async () => {
+  it("'Yes' posts the answer, thanks the patient, then offers step 2: add to calendar (CORE-116)", async () => {
     apiFetch.mockResolvedValueOnce(json(200, appointment()));
     const wrapper = await mountView();
     apiFetch.mockResolvedValueOnce(json(200, appointment({ patient_response: "confirmed" })));
@@ -92,17 +93,34 @@ describe("PatientAppointmentView (CORE-25)", () => {
     await flushPromises();
     expect(apiFetch.mock.calls.at(-1)![0]).toBe("/api/v1/public/appointment/respond");
     expect(lastBody()).toEqual({ token: TOKEN, response: "confirmed" });
-    expect(wrapper.find("[data-testid='appointment-answer']").text()).toContain(en["publicAppointment.confirmed"]);
+    expect(wrapper.find("[data-testid='appointment-thanks']").text()).toContain(en["publicAppointment.thanksTitle"]);
+    const calendar = wrapper.find("[data-testid='appointment-calendar']");
+    expect(calendar.text()).toContain(en["publicAppointment.calendarTitle"]);
+    // jsdom's user agent is a desktop one → Google first, Outlook and the .ics file below.
+    expect(calendar.find("[data-testid='calendar-primary']").attributes("href")).toBe("https://calendar.google.com/x");
+    expect(calendar.find("a[href='https://outlook.live.com/x']").exists()).toBe(true);
+    expect(calendar.text()).toContain(en["publicAppointment.calendarFile"]);
   });
 
-  it("'I can't come' tells the patient the clinic will call", async () => {
+  it("the question is two big coloured buttons: yes (green) and no", async () => {
+    apiFetch.mockResolvedValueOnce(json(200, appointment()));
+    const wrapper = await mountView("?r=confirm");
+    expect(wrapper.find("[data-testid='appointment-confirm']").text()).toContain(en["publicAppointment.yes"]);
+    expect(wrapper.find("[data-testid='appointment-confirm']").classes()).toContain("patient-appointment__choice--yes");
+    expect(wrapper.find("[data-testid='appointment-cannot']").text()).toContain(en["publicAppointment.no"]);
+  });
+
+  it("'No' thanks the patient and puts the clinic's phone and email up front, without a calendar step", async () => {
     apiFetch.mockResolvedValueOnce(json(200, appointment()));
     const wrapper = await mountView("?r=cannot");
     apiFetch.mockResolvedValueOnce(json(200, appointment({ patient_response: "cannot_attend" })));
     await wrapper.find("[data-testid='appointment-cannot']").trigger("click");
     await flushPromises();
     expect(lastBody()).toEqual({ token: TOKEN, response: "cannot_attend" });
-    expect(wrapper.find("[data-testid='appointment-answer']").text()).toContain(en["publicAppointment.cannotAttendDone"]);
+    const answer = wrapper.find("[data-testid='appointment-answer']");
+    expect(answer.text()).toContain(en["publicAppointment.cannotTitle"]);
+    expect(answer.find("a[href='tel:+525512345678']").exists()).toBe(true);
+    expect(wrapper.find("[data-testid='appointment-calendar']").exists()).toBe(false);
   });
 
   it("a cancelled appointment shows no buttons", async () => {

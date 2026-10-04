@@ -45,6 +45,7 @@ export const NOTIFICATION_TYPES = [
   "appointment_cancelled",
   "appointment_patient_cannot_attend",
   "appointment_patient_no_email",
+  "appointment_patient_unconfirmed",
   "partner_order_status_changed",
 ] as const;
 
@@ -81,6 +82,15 @@ export const NOTIFICATION_CATALOG: Readonly<Record<NotificationType, Notificatio
     priority: "normal",
     channels: ["in_app", "push"],
     escalateAfterMin: 30,
+    link: appointmentLink,
+    entityType: "Appointment",
+  },
+  /** CORE-116: the day before the visit the patient still hasn't confirmed (asked again) — the clinic calls or frees the slot. */
+  appointment_patient_unconfirmed: {
+    category: "operational",
+    priority: "normal",
+    channels: ["in_app", "push"],
+    escalateAfterMin: null,
     link: appointmentLink,
     entityType: "Appointment",
   },

@@ -455,7 +455,8 @@ export async function sendPatientSignedCopyEmail(
   return id;
 }
 
-export type AppointmentEmailKind = "booked" | "rescheduled" | "cancelled";
+/** booked / rescheduled / cancelled follow a staff action; ask (the 2-day / day-before ask) and reminder come from the CORE-116 schedule. */
+export type AppointmentEmailKind = "booked" | "rescheduled" | "cancelled" | "ask" | "reminder";
 
 export interface AppointmentEmail {
   kind: AppointmentEmailKind;
@@ -473,6 +474,8 @@ export interface AppointmentEmail {
   visitInstructions?: string | null;
   /** CORE-113: the informed consent still to sign — a link, or null when the address is shared (signed at the clinic instead). Absent = nothing to sign. */
   consent?: { link: string | null } | null;
+  /** CORE-116 P2: no buttons yet — the email says the patient will be asked to confirm 2 days before. */
+  confirmLater?: boolean;
   /** Who to call or write to change the appointment (CORE-25: no self-service rescheduling yet). */
   contact: { phone: string | null; email: string | null };
   links: {
@@ -520,6 +523,8 @@ const APPOINTMENT_STATUS: Record<AppointmentEmailKind, { icon: EmailIconName; co
   booked: { icon: "check", color: APPT.teal, bg: APPT.soft },
   rescheduled: { icon: "calendar", color: "#B26A00", bg: "#FFF4E0" },
   cancelled: { icon: "x", color: "#B3261E", bg: "#FDECEA" },
+  ask: { icon: "calendar", color: APPT.teal, bg: APPT.soft },
+  reminder: { icon: "check", color: APPT.teal, bg: APPT.soft },
 };
 
 const iconImg = (name: EmailIconName, size = 20): string =>
@@ -584,7 +589,8 @@ export async function sendAppointmentPatientEmail(to: string, recipient: EmailRe
     <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: greetingName }))}<br>${escapeHtml(t(`${appointment.kind}.body`, { clinic: clinicName }))}</p>
     ${ticket}
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 8px;font-size:15px;${fade}">${rows}</table>
-    ${appointment.links.confirm ? `<p style="margin:18px 0 0;font-size:15px;font-weight:bold;">${escapeHtml(t("question"))}</p>` : ""}`;
+    ${appointment.links.confirm ? `<p style="margin:18px 0 0;font-size:15px;font-weight:bold;">${escapeHtml(t("question"))}</p>` : ""}
+    ${!cancelled && appointment.confirmLater ? `<p style="margin:14px 0 0;font-size:14px;color:${APPT.ink};">${escapeHtml(t("confirmLater"))}</p>` : ""}`;
 
   const instructions = !cancelled && appointment.visitInstructions?.trim()
     ? `
@@ -621,18 +627,31 @@ export async function sendAppointmentPatientEmail(to: string, recipient: EmailRe
     </td></tr></table>`
     : "";
 
-  const calendarLinks = [
-    ...(appointment.links.google ? [`<a href="${escapeHtml(appointment.links.google)}" style="color:${APPT.teal};">Google Calendar</a>`] : []),
-    ...(appointment.links.outlook ? [`<a href="${escapeHtml(appointment.links.outlook)}" style="color:${APPT.teal};">Outlook</a>`] : []),
+  // CORE-116 P3: calendar as a visible box — Google / Outlook buttons, and the attached .ics for Apple, Samsung and the rest.
+  const calButton = (href: string, label: string): string =>
+    `<a href="${escapeHtml(href)}" style="display:inline-block;margin:4px 4px 0 0;padding:9px 14px;border-radius:999px;border:1px solid ${APPT.teal};color:${APPT.teal};font-size:13.5px;font-weight:bold;text-decoration:none;">${escapeHtml(label)}</a>`;
+  const calendarButtons = [
+    ...(appointment.links.google ? [calButton(appointment.links.google, "Google Calendar")] : []),
+    ...(appointment.links.outlook ? [calButton(appointment.links.outlook, "Outlook")] : []),
   ];
+  const calendarHtml = !cancelled && calendarButtons.length
+    ? `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid ${APPT.line};border-radius:12px;margin:0 0 14px;"><tr><td style="padding:14px 16px;">
+      <table role="presentation" cellpadding="0" cellspacing="0"><tr><td valign="top">${iconImg("calendar")}</td>
+      <td style="padding-left:10px;"><div style="font-size:14px;font-weight:bold;color:${APPT.ink};">${escapeHtml(t("calendar.title"))}</div>
+      <div style="font-size:13px;color:${APPT.muted};margin-top:2px;">${escapeHtml(t("calendar.attachmentHint"))}</div></td></tr></table>
+      <div style="margin-top:8px;">${calendarButtons.join("")}</div>
+    </td></tr></table>`
+    : "";
+  if (calendarHtml && !icons.includes("calendar")) icons.push("calendar");
 
   // Under the buttons: the answer hint, the clinic's own text, how to reach the clinic, calendar links, the stop link.
   const afterCtaHtml = `
     ${appointment.links.confirm ? `<p style="margin:0 0 16px;font-size:12.5px;color:${APPT.muted};text-align:center;">${escapeHtml(t("tapHint"))}</p>` : ""}
     ${consentHtml}
     ${instructions}
+    ${calendarHtml}
     ${contactHtml}
-    ${!cancelled && calendarLinks.length ? `<p style="margin:0 0 12px;text-align:center;">${escapeHtml(t("addToCalendar"))} ${calendarLinks.join(" · ")}</p>` : ""}
     <p style="margin:0;font-size:12px;color:#7a827e;text-align:center;">${escapeHtml(t("optOutLead"))} <a href="${escapeHtml(appointment.links.optOut)}" style="color:#7a827e;">${escapeHtml(t("optOut"))}</a></p>`;
 
   const socials = getSocialsForRegion(recipient.region);

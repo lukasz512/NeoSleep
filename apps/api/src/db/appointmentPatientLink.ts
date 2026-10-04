@@ -9,25 +9,82 @@ import type { AppointmentPatientResponse } from "./appointment.js";
  * Only the sha256 of a link token is stored (migration 043).
  */
 
-/** Stores the hash of the token the next email carries; any older link stops working. A reschedule clears the patient's earlier answer. */
+/**
+ * Stores the hash of the token the next email carries; any older link stops working.
+ * A reschedule clears the patient's earlier answer and the CORE-116 schedule stamps,
+ * so the new time is asked about again; `stamp` records which scheduled steps this
+ * email itself covers (set to now()).
+ */
 export async function setAppointmentPatientToken(
   client: PoolClient,
   appointmentId: string,
   tokenHash: string,
   expiresAt: Date,
-  opts: { clearResponse: boolean }
+  opts: { clearResponse: boolean; stamp?: { confirmRequest?: boolean; dayBefore?: boolean } }
 ): Promise<void> {
+  const sets = ["patient_token_hash = $2", "patient_token_expires_at = $3"];
+  if (opts.clearResponse) sets.push("patient_response = NULL", "patient_responded_at = NULL", "confirm_request_sent_at = NULL", "day_before_sent_at = NULL");
+  if (opts.stamp?.confirmRequest) sets.push("confirm_request_sent_at = now()");
+  if (opts.stamp?.dayBefore) sets.push("day_before_sent_at = now()");
   try {
-    await client.query(
-      `UPDATE appointment
-          SET patient_token_hash = $2,
-              patient_token_expires_at = $3
-              ${opts.clearResponse ? ", patient_response = NULL, patient_responded_at = NULL" : ""}
-        WHERE id = $1`,
-      [appointmentId, tokenHash, expiresAt]
-    );
+    await client.query(`UPDATE appointment SET ${sets.join(", ")} WHERE id = $1`, [appointmentId, tokenHash, expiresAt]);
   } catch (err) {
     throw new DatabaseError("setAppointmentPatientToken", err);
+  }
+}
+
+/** Records scheduled steps done without an email (already answered / "can't come"). */
+export async function stampAppointmentSchedule(client: PoolClient, appointmentId: string, stamp: { confirmRequest?: boolean; dayBefore?: boolean }): Promise<void> {
+  const sets = [
+    ...(stamp.confirmRequest ? ["confirm_request_sent_at = COALESCE(confirm_request_sent_at, now())"] : []),
+    ...(stamp.dayBefore ? ["day_before_sent_at = COALESCE(day_before_sent_at, now())"] : []),
+  ];
+  if (!sets.length) return;
+  try {
+    await client.query(`UPDATE appointment SET ${sets.join(", ")} WHERE id = $1`, [appointmentId]);
+  } catch (err) {
+    throw new DatabaseError("stampAppointmentSchedule", err);
+  }
+}
+
+export interface AppointmentScheduleRow {
+  id: string;
+  start_at: string;
+  timezone: string;
+  status: "scheduled";
+  patient_response: AppointmentPatientResponse | null;
+  confirm_request_sent_at: string | null;
+  day_before_sent_at: string | null;
+}
+
+/**
+ * CORE-116: visits in the next 3 days with a scheduled step still open, locked
+ * for this transaction (SKIP LOCKED — two overlapping ticks never take the same row).
+ */
+export async function lockAppointmentsWithOpenSchedule(client: PoolClient, now: Date): Promise<AppointmentScheduleRow[]> {
+  try {
+    const { rows } = await client.query<Omit<AppointmentScheduleRow, "start_at" | "confirm_request_sent_at" | "day_before_sent_at"> & {
+      start_at: Date;
+      confirm_request_sent_at: Date | null;
+      day_before_sent_at: Date | null;
+    }>(
+      `SELECT id, start_at, timezone, status, patient_response, confirm_request_sent_at, day_before_sent_at
+         FROM appointment
+        WHERE status = 'scheduled' AND deleted_at IS NULL
+          AND start_at > $1 AND start_at < $1 + interval '3 days'
+          AND (confirm_request_sent_at IS NULL OR day_before_sent_at IS NULL)
+        ORDER BY start_at
+        FOR UPDATE SKIP LOCKED`,
+      [now]
+    );
+    return rows.map((r) => ({
+      ...r,
+      start_at: r.start_at.toISOString(),
+      confirm_request_sent_at: r.confirm_request_sent_at?.toISOString() ?? null,
+      day_before_sent_at: r.day_before_sent_at?.toISOString() ?? null,
+    }));
+  } catch (err) {
+    throw new DatabaseError("lockAppointmentsWithOpenSchedule", err);
   }
 }
 

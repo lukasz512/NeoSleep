@@ -11,6 +11,8 @@ import { GetAppointmentsQuery, GetAppointmentByIdQuery } from "../queries/appoin
 import { AuditHealthDataReadCommand } from "../commands/healthDataReadAudit.js";
 import { ValidationError } from "../errors.js";
 import { routeParam } from "./utils.js";
+import { requireInternalJobSecret } from "../middleware/requireInternalJobSecret.js";
+import { RunAppointmentRemindersAllTenants } from "../commands/appointmentReminders.js";
 
 /**
  * Appointment routes (NEO-27, ADR-026) — thin waiters; every role rule lives
@@ -167,5 +169,17 @@ appointmentRouter.delete(
       await DeleteAppointmentCommand(ctx, id);
     });
     res.json({ success: true });
+  })
+);
+
+// POST /api/v1/appointments/jobs/reminders — CORE-116: the scheduled patient
+// emails ("please confirm" 2 days before, reminder / second ask the day before).
+// Machine-to-machine only, called every few minutes by
+// .github/workflows/appointment-reminders.yml; off unless APPOINTMENT_REMINDERS=on.
+appointmentRouter.post(
+  "/appointments/jobs/reminders",
+  requireInternalJobSecret,
+  asyncHandler(async (_req: Request, res: Response) => {
+    res.json(await RunAppointmentRemindersAllTenants());
   })
 );

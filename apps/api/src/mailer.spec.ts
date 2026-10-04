@@ -322,4 +322,38 @@ describe("sendAppointmentPatientEmail (CORE-25 / CORE-26)", () => {
     expect(args.html).toContain("Para agendar una nueva cita");
     expect(args.attachments.find((a: { filename: string }) => a.filename === "cancelled.ics").contentType).toContain("method=CANCEL");
   });
+
+  it("CORE-116 P2: a booking without buttons says we'll ask to confirm 2 days before", async () => {
+    const { sendAppointmentPatientEmail } = await importMailer(true);
+    await sendAppointmentPatientEmail("luis@example.org", patient, { ...appointment, confirmLater: true, links: { ...appointment.links, confirm: null, cannotAttend: null } });
+    const args = sendMock.mock.calls[0]![0];
+    expect(args.html).toContain("Dos días antes de su cita le pediremos que confirme");
+    expect(args.html).not.toContain("Confirmo mi asistencia");
+  });
+
+  it("CORE-116: the 2-day ask asks 'will you come?' with both buttons; the reminder thanks and has none", async () => {
+    const { sendAppointmentPatientEmail } = await importMailer(true);
+    await sendAppointmentPatientEmail("luis@example.org", patient, { ...appointment, kind: "ask" });
+    const ask = sendMock.mock.calls[0]![0];
+    expect(ask.subject).toContain("Confirme su cita");
+    expect(ask.html).toContain("¿Asistirá a su cita?");
+    expect(ask.html).toContain("Confirmo mi asistencia");
+
+    await sendAppointmentPatientEmail("luis@example.org", patient, { ...appointment, kind: "reminder", links: { ...appointment.links, confirm: null, cannotAttend: null } });
+    const reminder = sendMock.mock.calls[1]![0];
+    expect(reminder.subject).toContain("Le esperamos mañana");
+    expect(reminder.html).toContain("Gracias por confirmar");
+    expect(reminder.html).not.toContain("Confirmo mi asistencia");
+  });
+
+  it("CORE-116 P3: add-to-calendar is a visible box with Google / Outlook buttons and points to the attached .ics", async () => {
+    const { sendAppointmentPatientEmail } = await importMailer(true);
+    await sendAppointmentPatientEmail("luis@example.org", patient, appointment);
+    const args = sendMock.mock.calls[0]![0];
+    expect(args.html).toContain("Agréguela a su calendario");
+    expect(args.html).toContain("abra el archivo adjunto appointment.ics");
+    expect(args.html).toContain('href="https://calendar.google.com/x"');
+    expect(args.html).toContain('href="https://outlook.live.com/x"');
+    expect(args.attachments.map((a: { contentId?: string }) => a.contentId)).toContain("icon-calendar");
+  });
 });

@@ -53,7 +53,7 @@
           <span class="view-appointments__row-main">
             <span class="view-appointments__row-patient">
               <span class="view-appointments__row-name">{{ a.patient_name }}</span>
-              <AppIcon v-if="a.status === 'scheduled' && a.patient_response" :name="responseIcon(a.patient_response)" :class="`appt-response appt-response--${a.patient_response}`" :aria-label="t(`user.appointments.patientResponse.${a.patient_response}`)" data-testid="appointment-row-response" />
+              <AppIcon v-if="appointmentResponseState(a)" :name="responseIcon(appointmentResponseState(a)!)" :class="`appt-response appt-response--${appointmentResponseState(a)}`" :aria-label="t(`user.appointments.patientResponse.${appointmentResponseState(a)}`)" data-testid="appointment-row-response" />
             </span>
             <span class="view-appointments__row-meta">{{ metaOf(a) }}</span>
           </span>
@@ -122,7 +122,7 @@ import { useDisplay } from "vuetify";
 import { reportCaught } from "@api";
 import { intlLocale } from "@i18n/language-options";
 import { apiFetch } from "../composables/useApi";
-import { useAppointments, APPOINTMENT_STATUS_COLOR, type Appointment, type AppointmentPatientResponse } from "../composables/useAppointments";
+import { useAppointments, APPOINTMENT_STATUS_COLOR, appointmentResponseState, type Appointment, type AppointmentResponseState } from "../composables/useAppointments";
 import { toZonedCalendarDateTime, formatTimeRange, formatDayLabel, zonedDateKey, deviceTimeZone, zonedInputToIso } from "../utils/appointmentTime";
 import AppButton from "../components/AppButton.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
@@ -210,12 +210,13 @@ const calendarEvents = computed(() =>
     status: a.status,
     time: formatTimeRange(a.start_at, a.end_at, a.timezone, lang.value),
     doctor: a.practitioner_name ?? "",
-    response: a.status === "scheduled" ? (a.patient_response ?? null) : null,
+    response: appointmentResponseState(a),
   })),
 );
 
 /** The patient's answer from the appointment email (CORE-25), at a glance in the agenda. */
-function responseIcon(response: AppointmentPatientResponse): AppIconName {
+function responseIcon(response: AppointmentResponseState): AppIconName {
+  if (response === "awaiting") return "clock";
   return response === "confirmed" ? "check-circle" : "alert-triangle";
 }
 
@@ -440,6 +441,10 @@ function onBookNext(a: Appointment) {
 
 .appt-response--cannot_attend {
   color: rgb(var(--v-theme-warning));
+}
+
+.appt-response--awaiting {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 .appt-event__meta {

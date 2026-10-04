@@ -27,6 +27,7 @@ import { hashToken } from "../utils/hashToken.js";
 import { maskEmail } from "../utils/maskEmail.js";
 import { patientEmailLocale } from "../utils/patientEmailLocale.js";
 import { buildAppointmentIcs, googleCalendarLink, outlookCalendarLink } from "../utils/ics.js";
+import { appointmentRemindersEnabled, bookingStamps } from "../utils/appointmentSchedule.js";
 import { getInformedConsentState, INFORMED_CONSENT_KEY } from "../db/informedConsentState.js";
 import { isPatientEmailHeldByAnother } from "../db/identityEmail.js";
 import { insertQuestionnaireRequest } from "../db/questionnaireRequest.js";
@@ -77,8 +78,12 @@ export interface AppointmentPatientEmailPlan {
   appointmentId: string;
   kind: AppointmentEmailKind;
   token: string;
-  /** users.id of whoever booked / changed it — null for system changes. */
+  /** users.id of whoever booked / changed it — null for system changes (the scheduled job). */
   sentBy: string | null;
+  /** CORE-116: the email carries "Confirmo" / "No puedo asistir". */
+  ask: boolean;
+  /** CORE-116 P2: no question yet — "we'll ask you to confirm 2 days before". */
+  confirmLater: boolean;
 }
 
 /** Collects emails a command wants sent after commit (CreateAppointmentCommand / UpdateAppointmentCommand). */
@@ -90,17 +95,34 @@ export function newAppointmentEffects(): AppointmentEffects {
   return { patientEmails: [] };
 }
 
-/** Inside the appointment's transaction: a fresh link for the email about to go out. A reschedule clears the patient's earlier answer. */
+/**
+ * Inside the appointment's transaction: a fresh link for the email about to go out.
+ * A reschedule clears the patient's earlier answer and the schedule stamps.
+ * With the scheduled flow on (CORE-116), a booking / reschedule asks right away
+ * only once the 2-day ask time has passed, and stamps the steps it replaces;
+ * the job's own emails pass their stamp in.
+ */
 export async function planAppointmentPatientEmail(
   client: PoolClient,
   appointment: Appointment,
   kind: AppointmentEmailKind,
-  sentBy: string | null
+  sentBy: string | null,
+  scheduled?: { stamp: { confirmRequest?: boolean; dayBefore?: boolean } },
+  now: Date = new Date()
 ): Promise<AppointmentPatientEmailPlan> {
   const token = generateToken();
   const expiresAt = new Date(new Date(appointment.end_at).getTime() + LINK_TTL_AFTER_VISIT_MS);
-  await setAppointmentPatientToken(client, appointment.id, hashToken(token), expiresAt, { clearResponse: kind === "rescheduled" });
-  return { appointmentId: appointment.id, kind, token, sentBy };
+  let ask = kind !== "cancelled" && kind !== "reminder";
+  let confirmLater = false;
+  let stamp = scheduled?.stamp;
+  if (!scheduled && (kind === "booked" || kind === "rescheduled") && appointmentRemindersEnabled()) {
+    const steps = bookingStamps(appointment.start_at, appointment.timezone, now);
+    ask = steps.askNow;
+    confirmLater = !steps.askNow;
+    stamp = { confirmRequest: steps.confirmRequest, dayBefore: steps.dayBefore };
+  }
+  await setAppointmentPatientToken(client, appointment.id, hashToken(token), expiresAt, { clearResponse: kind === "rescheduled", stamp });
+  return { appointmentId: appointment.id, kind, token, sentBy, ask, confirmLater };
 }
 
 export type AppointmentEmailOutcome = "sent" | "no_email" | "opted_out" | "not_configured" | "failed";
@@ -119,6 +141,39 @@ export function appointmentLinks(frontendOrigin: string, token: string): { confi
   };
 }
 
+/**
+ * The same event for every calendar: the .ics (one UID, so a later email or a
+ * second import updates it instead of duplicating), and Google / Outlook links.
+ */
+export function appointmentCalendar(
+  appointment: Appointment,
+  context: AppointmentEmailContext,
+  locale: string,
+  attendeeEmail: string | null,
+  method: "REQUEST" | "CANCEL"
+): { ics: string; google: string; outlook: string } {
+  const contact = appointmentContact(context);
+  const clinicName = context.organization_name ?? emailT(locale, "email.questionnaireLink.yourClinic");
+  const summary = `${emailT(locale, "publicAppointment.title")} · ${clinicName}`;
+  const contactLine = [contact.phone, contact.email].filter(Boolean).join(" · ");
+  const description = contactLine ? `${emailT(locale, "email.appointment.contactToChange", { clinic: clinicName })} ${contactLine}` : null;
+  const location = appointment.location_type === "online" ? appointment.online_url : context.organization_address;
+  const calendar = { startAt: appointment.start_at, endAt: appointment.end_at, summary, location, description };
+  const organizerEmail = contact.email ?? RESEND_FROM_EMAIL ?? "no-reply@neosleepcare.com";
+  return {
+    ics: buildAppointmentIcs({
+      ...calendar,
+      appointmentId: appointment.id,
+      sequence: Math.floor((Date.now() - SEQUENCE_EPOCH_MS) / 1000),
+      method,
+      organizer: { name: clinicName, email: organizerEmail },
+      attendeeEmail: attendeeEmail ?? organizerEmail,
+    }),
+    google: googleCalendarLink(calendar),
+    outlook: outlookCalendarLink(calendar),
+  };
+}
+
 /** After commit. Never throws: the booking stands whatever happens to the email. */
 export async function deliverAppointmentPatientEmail(tenantSlug: string, plan: AppointmentPatientEmailPlan, frontendOrigin: string): Promise<AppointmentEmailOutcome> {
   try {
@@ -134,7 +189,7 @@ export async function deliverAppointmentPatientEmail(tenantSlug: string, plan: A
         }
         return { outcome: "no_email" as const };
       }
-      const consent = plan.kind === "cancelled" ? null : await consentToSign(client, appointment, context.patient_email, plan, frontendOrigin);
+      const consent = plan.kind !== "booked" && plan.kind !== "rescheduled" ? null : await consentToSign(client, appointment, context.patient_email, plan, frontendOrigin);
       return { outcome: "ready" as const, appointment, context, email: context.patient_email, consent };
     });
     if (prepared.outcome !== "ready") return prepared.outcome;
@@ -144,12 +199,7 @@ export async function deliverAppointmentPatientEmail(tenantSlug: string, plan: A
     const cancelled = plan.kind === "cancelled";
     const contact = appointmentContact(context);
     const links = appointmentLinks(frontendOrigin, plan.token);
-    const clinicName = context.organization_name ?? emailT(locale, "email.questionnaireLink.yourClinic");
-    const summary = `${emailT(locale, "publicAppointment.title")} · ${clinicName}`;
-    const contactLine = [contact.phone, contact.email].filter(Boolean).join(" · ");
-    const description = contactLine ? `${emailT(locale, "email.appointment.contactToChange", { clinic: clinicName })} ${contactLine}` : null;
-    const location = appointment.location_type === "online" ? appointment.online_url : context.organization_address;
-    const calendar = { startAt: appointment.start_at, endAt: appointment.end_at, summary, location, description };
+    const cal = appointmentCalendar(appointment, context, locale, email, cancelled ? "CANCEL" : "REQUEST");
 
     const providerMessageId = await sendAppointmentPatientEmail(
       email,
@@ -167,24 +217,15 @@ export async function deliverAppointmentPatientEmail(tenantSlug: string, plan: A
         onlineUrl: appointment.location_type === "online" ? appointment.online_url : null,
         consent,
         contact,
+        confirmLater: plan.confirmLater,
         links: {
-          confirm: cancelled ? null : links.confirm,
-          cannotAttend: cancelled ? null : links.cannotAttend,
+          confirm: plan.ask ? links.confirm : null,
+          cannotAttend: plan.ask ? links.cannotAttend : null,
           optOut: links.optOut,
-          google: cancelled ? null : googleCalendarLink(calendar),
-          outlook: cancelled ? null : outlookCalendarLink(calendar),
+          google: cancelled ? null : cal.google,
+          outlook: cancelled ? null : cal.outlook,
         },
-        ics: {
-          method: cancelled ? "CANCEL" : "REQUEST",
-          content: buildAppointmentIcs({
-            ...calendar,
-            appointmentId: appointment.id,
-            sequence: Math.floor((Date.now() - SEQUENCE_EPOCH_MS) / 1000),
-            method: cancelled ? "CANCEL" : "REQUEST",
-            organizer: { name: clinicName, email: contact.email ?? RESEND_FROM_EMAIL ?? "no-reply@neosleepcare.com" },
-            attendeeEmail: email,
-          }),
-        },
+        ics: { method: cancelled ? "CANCEL" : "REQUEST", content: cal.ics },
       },
       { tenant: tenantSlug, kind: "appointment" }
     );
@@ -279,6 +320,8 @@ export interface PublicAppointment {
   opted_out: boolean;
   /** The patient's language, so the page speaks it. */
   locale: string;
+  /** CORE-116: "add to my calendar" after confirming — null once the visit is cancelled or over. */
+  calendar: { ics: string; google: string; outlook: string } | null;
 }
 
 export interface PublicAppointmentMeta {
@@ -302,6 +345,7 @@ function isOpen(appointment: Appointment): boolean {
 
 async function toPublic(client: PoolClient, appointment: Appointment, context: AppointmentEmailContext): Promise<PublicAppointment> {
   const contact = appointmentContact(context);
+  const locale = patientEmailLocale(context.patient_language, context.patient_region);
   return {
     status: appointment.status,
     past: new Date(appointment.start_at).getTime() <= Date.now(),
@@ -316,7 +360,8 @@ async function toPublic(client: PoolClient, appointment: Appointment, context: A
     contact_email: contact.email,
     patient_response: appointment.patient_response,
     opted_out: await isAppointmentEmailOptedOut(client, context.patient_identity_id),
-    locale: patientEmailLocale(context.patient_language, context.patient_region),
+    locale,
+    calendar: isOpen(appointment) ? appointmentCalendar(appointment, context, locale, context.patient_email, "REQUEST") : null,
   };
 }
 
