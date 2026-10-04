@@ -77,7 +77,7 @@ describe("PatientNextStep (NEO-221)", () => {
 const ORDER: PatientDeviceOrder = { status: "in_progress", metadata: null, order_sync_status: "synced", appliance_delivered_at: null };
 
 describe("PatientNextStep — device tracking (NEO-223)", () => {
-  it("once a device is ordered, device tracking replaces the QR, with the order state", async () => {
+  it("once a device order exists, device tracking replaces the QR, with the order state", async () => {
     const { wrapper } = await mountNextStep(FORMS, false, ORDER);
     expect(wrapper.find(".next-step__qr").exists()).toBe(false);
     expect(wrapper.find(".next-step__device").exists()).toBe(true);
@@ -94,12 +94,17 @@ describe("PatientNextStep — device tracking (NEO-223)", () => {
     expect(failed.find(".next-step__device").classes()).toContain("next-step__device--attention");
   });
 
-  it("a draft (never sent) or cancelled order keeps the QR", async () => {
-    for (const order of [{ ...ORDER, metadata: { orthoapneaDraft: true as const } }, { ...ORDER, status: "cancelled" }]) {
-      const { wrapper } = await mountNextStep(FORMS, false, order);
-      expect(wrapper.find(".next-step__qr").exists()).toBe(true);
-      expect(wrapper.find(".next-step__device").exists()).toBe(false);
-    }
+  it("tracks from the local entry on: a draft (not sent yet) already shows device tracking", async () => {
+    const { wrapper } = await mountNextStep(FORMS, false, { ...ORDER, metadata: { orthoapneaDraft: true } });
+    expect(wrapper.find(".next-step__qr").exists()).toBe(false);
+    expect(wrapper.find(".next-step__device").classes()).toContain("next-step__device--draft");
+    expect(wrapper.find(".next-step__items").text()).toBe("Not sent");
+  });
+
+  it("a cancelled order keeps the QR", async () => {
+    const { wrapper } = await mountNextStep(FORMS, false, { ...ORDER, status: "cancelled" });
+    expect(wrapper.find(".next-step__qr").exists()).toBe(true);
+    expect(wrapper.find(".next-step__device").exists()).toBe(false);
   });
 
   it("phone card (compact) shows only the tracking button", async () => {

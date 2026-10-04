@@ -524,6 +524,81 @@ describe("SyncOrthoApneaTreatmentStatusesCommand", () => {
   });
 });
 
+describe("SyncOrthoApneaTreatmentStatusesCommand — status mapping gap (NEO-210)", () => {
+  /**
+   * There is NO statusId → named-status mapping table anywhere in this
+   * codebase (ORTHOAPNEA_TERMINAL_STATUSES is deliberately an empty list per
+   * its own doc comment, and fetchOrthoApneaTreatmentStatus just String()s
+   * whatever statusId OrthoApnea returns). That is itself the finding this
+   * test documents: "for each status the code maps" has no table to
+   * enumerate, because none exists — the only behaviour to verify is that an
+   * arbitrary/unrecognised statusId is passed through safely rather than
+   * crashing or being silently coerced into some other value.
+   */
+  it("an unmapped/arbitrary statusId doesn't crash the sync, updates the link verbatim, and fires exactly one notification per change (no duplicate on repeat polls)", async () => {
+    const { ctx, plan, dentist } = await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const patient = await CreatePatientCommand(ctx, { gender: "female", date_of_birth: "1980-01-01", first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
+      const dentist = await CreatePractitionerCommand(ctx, {
+        first_name: "Test",
+        last_name: `Dentist-${uniqueSuffix()}`,
+        email: `qa-dentist-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
+      });
+      const study = await CreateSleepStudyCommand(ctx, { patient_id: patient.id });
+      const plan = await CreateTreatmentPlanCommand(ctx, {
+        patient_id: patient.id,
+        sleep_study_id: study.id,
+        type: "dental_appliance",
+        dentist_id: dentist.id,
+      });
+      return { ctx, dentist, plan };
+    });
+
+    stubFetchRoutes({
+      [LOGIN_ROUTE[0]]: LOGIN_ROUTE[1],
+      "/api/treatments": () => ({ status: 200, body: treatmentDtoFixture }), // statusId 1
+    });
+    await createOrthoApneaTreatment(TENANT_SLUG, plan.id, {});
+    const createdLink = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", plan.id));
+    createdPartnerLinkIds.push(createdLink!.id);
+
+    // An arbitrary statusId no table anywhere maps — bigger than any real OA
+    // status observed so far (only 1 has ever been confirmed, per
+    // ORTHOAPNEA_TERMINAL_STATUSES's own comment).
+    const UNMAPPED_STATUS_ID = 987654321;
+    stubFetchRoutes({
+      [LOGIN_ROUTE[0]]: LOGIN_ROUTE[1],
+      "/api/treatments/DTO": () => ({ status: 200, body: { ...treatmentDtoFixture, statusId: UNMAPPED_STATUS_ID } }),
+    });
+
+    const result = await SyncOrthoApneaTreatmentStatusesCommand(TENANT_SLUG, ctx.requestId);
+    expect(result.failed).toBe(0); // no crash
+    expect(result.changed).toBeGreaterThanOrEqual(1);
+
+    const link = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", plan.id));
+    expect(link?.external_status).toBe(String(UNMAPPED_STATUS_ID)); // passed through verbatim, not dropped/coerced/zeroed
+
+    const notificationsAfterFirst = await query<{ id: string }>(
+      `SELECT n.id FROM notification n JOIN practitioner p ON p.identity_id = n.identity_id
+       WHERE p.id = $1 AND n.entity_id = $2 AND n.type = 'partner_order_status_changed'`,
+      [dentist.id, plan.id]
+    );
+    expect(notificationsAfterFirst).toHaveLength(1); // exactly one, not zero (crash-safe) and not more than one
+
+    // Polling again with the SAME (now current, still unmapped) status must not double-notify.
+    const second = await SyncOrthoApneaTreatmentStatusesCommand(TENANT_SLUG, ctx.requestId);
+    expect(second.changed).toBe(0);
+
+    const notificationsAfterSecond = await query<{ id: string }>(
+      `SELECT n.id FROM notification n JOIN practitioner p ON p.identity_id = n.identity_id
+       WHERE p.id = $1 AND n.entity_id = $2 AND n.type = 'partner_order_status_changed'`,
+      [dentist.id, plan.id]
+    );
+    expect(notificationsAfterSecond).toHaveLength(1); // still just the one — no duplicate
+  });
+});
+
 describe("addOrthoApneaComment", () => {
   it("rejects commenting on a treatment_plan never submitted to OrthoApnea", async () => {
     const { plan } = await setupPatientAndPlan();

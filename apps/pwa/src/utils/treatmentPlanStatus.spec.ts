@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { DEVICE_ORDER_TONE, deviceOrderState, isDraftTreatmentPlan, treatmentPlanStatusColor, treatmentPlanStatusLabel } from "./treatmentPlanStatus";
+import { DEVICE_ORDER_TONE, deviceOrderState, isActiveDeviceOrder, isDraftTreatmentPlan, treatmentPlanStatusColor, treatmentPlanStatusLabel } from "./treatmentPlanStatus";
 
 describe("treatmentPlanStatus (NEO-153)", () => {
   it("maps statuses to chip colors", () => {
@@ -50,5 +50,12 @@ describe("deviceOrderState (NEO-217)", () => {
 
   it("each state has its rail tone", () => {
     expect(DEVICE_ORDER_TONE).toEqual({ draft: "partial", attention: "attention", ordered: "waiting", received: "done", cancelled: "cancelled" });
+  });
+});
+
+describe("isActiveDeviceOrder (NEO-223)", () => {
+  it("draft, needs attention and ordered are active; received and cancelled are closed", () => {
+    expect((["draft", "attention", "ordered", "received", "cancelled"] as const).map(isActiveDeviceOrder))
+      .toEqual([true, true, true, false, false]);
   });
 });

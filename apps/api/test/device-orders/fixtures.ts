@@ -34,7 +34,11 @@ export interface Setup {
 }
 
 /** One committed transaction: an admin user, a dentist with a primary HCO, a patient, a study and a dental-appliance plan. */
-export async function setup(hco: Partial<typeof COMPLETE_HCO> | null = COMPLETE_HCO, role: "admin" | "manager" | "rep" = "admin"): Promise<Setup> {
+export async function setup(
+  hco: Partial<typeof COMPLETE_HCO> | null = COMPLETE_HCO,
+  role: "admin" | "manager" | "rep" = "admin",
+  patientOverrides: Partial<Parameters<typeof CreatePatientCommand>[1]> = {}
+): Promise<Setup> {
   return withTenant(TENANT_SLUG, async (client) => {
     const email = `qa-device-order-${uniqueSuffix()}@neosleepcare.com`;
     const hash = await bcrypt.hash("irrelevant-not-logged-in-with", 4);
@@ -53,6 +57,7 @@ export async function setup(hco: Partial<typeof COMPLETE_HCO> | null = COMPLETE_
       email: `qa-patient-${uniqueSuffix()}@example.com`,
       phone: "600100200",
       region: "MX",
+      ...patientOverrides,
     });
     const dentist = await CreatePractitionerCommand(ctx, {
       first_name: "Test",

@@ -61,7 +61,7 @@
               class="patient-orthoapnea-panel__add"
               color="success"
               variant="tonal"
-              :disabled="!latestSleepStudyId"
+              :disabled="!latestSleepStudyId || !!activeOrder"
               :aria-label="t('app.orthoApneaOrder.title')"
               data-testid="device-order-new"
               @click="startNewOrder"
@@ -70,7 +70,7 @@
             </AppButton>
           </span>
         </template>
-        <span>{{ latestSleepStudyId ? t("app.orthoApneaOrder.title") : t("app.treatmentPlans.needsSleepStudy") }}</span>
+        <span>{{ newOrderHint }}</span>
       </VTooltip>
     </div>
 
@@ -190,7 +190,7 @@ import EntityLink from "../EntityLink.vue";
 import { useIdentity } from "../../composables/useIdentity";
 import { hcpDetailLink } from "../../utils/entityLinks";
 import { apiFetch } from "../../composables/useApi";
-import { DEVICE_ORDER_TONE, deviceOrderState, type DeviceOrderState } from "../../utils/treatmentPlanStatus";
+import { DEVICE_ORDER_TONE, deviceOrderState, isActiveDeviceOrder, type DeviceOrderState } from "../../utils/treatmentPlanStatus";
 import { useNotifications } from "../../composables/useNotifications";
 import { useAuthStore } from "../../stores/auth";
 import { STUDY_ROLES } from "../../config/questionnaires";
@@ -257,6 +257,12 @@ const resumeDraftPlan = ref<OrthoApneaDraftPlan | null>(null);
 /** Newest first (the API's created_at desc) — the first row is always open. */
 const rows = computed<OrderRow[]>(() => plans.value.map((plan) => ({ plan, state: deviceOrderState(plan) })));
 const commentsPlan = computed(() => plans.value.find((p) => p.id === commentsPlanId.value) ?? null);
+/** NEO-223: one device at a time — while an order is in progress, + stays off and points to that order's comments. */
+const activeOrder = computed(() => rows.value.find((row) => isActiveDeviceOrder(row.state)) ?? null);
+const newOrderHint = computed(() => {
+  if (activeOrder.value) return t("app.deviceOrder.oneActive");
+  return latestSleepStudyId.value ? t("app.orthoApneaOrder.title") : t("app.treatmentPlans.needsSleepStudy");
+});
 
 function isOpen(row: OrderRow, index: number): boolean {
   return index === 0 || openIds.value.has(row.plan.id);

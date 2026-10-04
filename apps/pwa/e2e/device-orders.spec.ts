@@ -105,3 +105,14 @@ test("comments open in a side panel on desktop", async ({ page }) => {
   const side = page.locator(".device-order-comments--side");
   await expect.poll(async () => { const box = (await side.boundingBox())!; return 1280 - (box.x + box.width); }).toBeLessThanOrEqual(2);
 });
+
+// NEO-223: one active device per patient — + is off while an order is in progress, back once it's closed.
+for (const [newest, enabled] of [["draft", false], ["ordered", false], ["attention", false], ["received", true]] as const) {
+  test(`new order (+) is ${enabled ? "enabled" : "disabled"} when the newest order is ${newest}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await open(page, `?lang=mx&case=${newest}`);
+    const add = page.getByTestId("device-order-new");
+    if (enabled) await expect(add).toBeEnabled();
+    else await expect(add).toBeDisabled();
+  });
+}

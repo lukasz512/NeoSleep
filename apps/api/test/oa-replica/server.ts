@@ -344,6 +344,12 @@ export async function startOaReplica(): Promise<OaReplica> {
   }
 
   const server: Server = createServer((req, res) => {
+    // A client that aborts (e.g. the real FETCH_TIMEOUT_MS firing in
+    // orthoapnea.ts, NEO-210's timeout spec) closes the socket while this
+    // handler is still mid-delay/mid-write — without this listener, writing
+    // to the now-dead response emits an unhandled 'error' that crashes the
+    // whole test process instead of just failing the one write.
+    res.on("error", () => {});
     handle(req, res).catch((err: unknown) => {
       if (!res.headersSent) send(res, 500, springError(500, "Internal Server Error", String(err), req.url ?? ""));
     });
