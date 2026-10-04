@@ -261,33 +261,34 @@
       the scoped-style attribute Vue adds to it) makes this selector more
       specific than a bare `.v-field`, so it reliably wins regardless of
       stylesheet order. */
+/* CORE-136: every list search wears the Doctor Panel's search look — a
+   filled glass field with 14 px corners and no outline (DoctorPanel.vue
+   `.dp__search-field`). The extra `.app-entity-list__search` ancestor class
+   beats theme.scss's global `.v-field { border-radius: … !important }`. */
 .app-entity-list__search :deep(.v-field) {
-  border-radius: var(--pwa-radius-pill, 9999px) !important;
-  /* Keeps Vuetify's own state-layer/ripple overlay — and the :loading bar
-     below, an absolutely-positioned bar hugging the bottom edge — clipped
-     to the pill shape instead of drawing past its curved corners. */
+  border-radius: 14px !important;
+  background: var(--glass-surface);
+  box-shadow: var(--glass-rim);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  /* Keeps Vuetify's own state-layer/ripple overlay — and the :loading bar,
+     an absolutely-positioned bar hugging the bottom edge — clipped to the
+     rounded shape instead of drawing past its corners. */
   overflow: hidden;
+  transition: box-shadow var(--pwa-fib-t-xl, 233ms) ease;
 }
 
-/* Vuetify thickens the outline to 2px on focus/error by default — keep it at
-   the same thin 1px as the resting state, for visual consistency. */
-.app-entity-list__search :deep(.v-field--focused .v-field__outline) {
-  --v-field-border-width: 1px;
+/* No outline in any state: the glass rim draws the edge. */
+.app-entity-list__search :deep(.v-field__outline) {
+  display: none;
 }
 
-/* At rest, this field's own outlined-variant border (theme.scss's global
-   `.v-field--variant-outlined .v-field__outline` rule, `--v-theme-outline`)
-   read as a different gray from the table border right below it
-   (`--pwa-table-border`, used by .app-entity-list__table-wrap and every
-   other table/list border in the app) — search and table visually
-   disagreed despite sitting in the same toolbar. Pin this field's resting
-   border to the same token. `:not(.v-field--focused)` keeps the focused
-   state on the global rule's own `--v-theme-primary` color untouched (the
-   ticket only asked about the *inactive* border) — without it, this
-   selector and the global focused-state rule tie on specificity and the
-   winner would depend on source order alone. */
-.app-entity-list__search :deep(.v-field:not(.v-field--focused) .v-field__outline) {
-  color: var(--pwa-table-border);
+/* Focus: a soft brand ring instead of the outline, so keyboard users still
+   see where they are. */
+.app-entity-list__search :deep(.v-field--focused) {
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--pwa-primary) 55%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--pwa-primary) 10%, transparent);
 }
 
 /* ── Phone toolbar (NEO-85) ──────────────────────────────────────────────
@@ -389,7 +390,7 @@
   display: flex;
   align-items: center;
   background: var(--pwa-sheet);
-  border-radius: var(--pwa-radius-pill, 9999px);
+  border-radius: 14px;
 }
 .app-entity-list__toolbar--overlay-open .app-entity-list__search :deep(.v-input__control) {
   min-width: 0;

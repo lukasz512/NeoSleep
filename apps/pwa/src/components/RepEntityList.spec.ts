@@ -512,13 +512,23 @@ describe("AppEntityList", () => {
       expect(css).toMatch(/thead > tr > th\)\s*{[^}]*box-shadow:\s*inset 0 -1\.5px 0 var\(--pwa-rule-strong\)[^}]*color:\s*var\(--pwa-primary\)/);
     });
 
-    it("search field's inactive (unfocused) border uses --pwa-table-border, leaving the focused-state primary color untouched", () => {
+    // CORE-136: the list search wears the Doctor Panel search look.
+    it("search field is a filled glass field with 14 px corners", () => {
       expect(css).toMatch(
-        /\.app-entity-list__search :deep\(\.v-field:not\(\.v-field--focused\) \.v-field__outline\)\s*{[^}]*color:\s*var\(--pwa-table-border\)/,
+        /\.app-entity-list__search :deep\(\.v-field\)\s*{[^}]*border-radius:\s*14px !important[^}]*background:\s*var\(--glass-surface\)[^}]*box-shadow:\s*var\(--glass-rim\)[^}]*backdrop-filter:\s*var\(--glass-blur\)/,
       );
-      // The focused-state color override belongs to theme.scss's global rule
-      // (--v-theme-primary) — this file must not also claim the focused state.
-      expect(css).not.toMatch(/\.v-field--focused \.v-field__outline\)\s*{[^}]*--pwa-table-border/);
+    });
+
+    it("search field has no outline; focus shows a soft brand ring instead", () => {
+      expect(css).toMatch(/\.app-entity-list__search :deep\(\.v-field__outline\)\s*{\s*display:\s*none/);
+      expect(css).toMatch(/\.app-entity-list__search :deep\(\.v-field--focused\)\s*{[^}]*box-shadow:[^}]*var\(--pwa-primary\)/);
+    });
+
+    it("filter button beside the search is a matching glass square", () => {
+      const filterSrc = readFileSync(path.resolve(__dirname, "./AppFilterBar.vue"), "utf-8");
+      expect(filterSrc).toMatch(
+        /\.app-filter-bar__btn--no-border\s*{[^}]*border-radius:\s*14px[^}]*background:\s*var\(--glass-surface\)[^}]*box-shadow:\s*var\(--glass-rim\)/,
+      );
     });
 
     it("pagination footer has de-emphasized text instead of Vuetify's unstyled default", () => {
