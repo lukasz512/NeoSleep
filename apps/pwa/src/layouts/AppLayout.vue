@@ -101,9 +101,15 @@
                 <span class="layout-user-name" data-motion="trigger-name">{{ user.displayName }}</span>
                 <span class="layout-user-role" data-motion="trigger-role">{{ user.role }}</span>
               </div>
-              <VAvatar :size="AVATAR_SIZE" color="primary" data-motion="trigger-avatar">
-                <span class="text-body-small font-weight-bold">{{ user.initials }}</span>
-              </VAvatar>
+              <!-- CORE-114: the role badge rides on the app bar avatar too. -->
+              <AppAvatar
+                :name="user.displayName"
+                entity-type="user"
+                :role="user.roleKey"
+                :role-label="user.role"
+                :size="AVATAR_SIZE"
+                data-motion="trigger-avatar"
+              />
             </AppButton>
           </template>
 
@@ -111,6 +117,7 @@
             :name="user.displayName"
             :email="user.email"
             :role-label="user.role"
+            :role="user.roleKey"
             :initials="user.initials"
             :avatar-size="MENU_AVATAR_SIZE"
             :region="user.region"
@@ -264,6 +271,7 @@ import {
   AppInstallCard,
 } from "./components";
 import AppButton from "../components/AppButton.vue";
+import AppAvatar from "../components/AppAvatar.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppNotificationCenter from "../components/AppNotificationCenter.vue";
 import { useNotificationCenter } from "../composables/useNotificationCenter";

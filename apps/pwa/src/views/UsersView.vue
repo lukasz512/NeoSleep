@@ -20,11 +20,19 @@
           :first-name="(item as UserListItem).first_name"
           :last-name="(item as UserListItem).last_name"
           :details="userDetails(roleKeyOf(item as Record<string, unknown>)).details"
+          :role="roleKeyOf(item as Record<string, unknown>)"
+          :role-label="t(`user.users.role.${roleKeyOf(item as Record<string, unknown>)}`)"
           :avatar-size="32"
         />
       </template>
       <template #feed-card-avatar="{ item }">
-        <AppAvatar v-bind="personAvatarProps(item as UserListItem)" entity-type="user" :size="55" />
+        <AppAvatar
+          v-bind="personAvatarProps(item as UserListItem)"
+          entity-type="user"
+          :role="roleKeyOf(item as Record<string, unknown>)"
+          :role-label="t(`user.users.role.${roleKeyOf(item as Record<string, unknown>)}`)"
+          :size="55"
+        />
       </template>
       <template #feed-card-title="{ item }">
         {{ shortPersonName((item as UserListItem).name, (item as UserListItem).first_name, (item as UserListItem).last_name) }}

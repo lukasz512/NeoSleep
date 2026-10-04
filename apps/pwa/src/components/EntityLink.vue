@@ -89,8 +89,12 @@ const props = withDefaults(
     orgType?: string | null;
     /** A lead's channel (lead.source) — the avatar badge shows its icon (NEO-155). */
     leadSource?: string | null;
+    /** A user's role code — the avatar badge shows it (CORE-114). */
+    role?: string | null;
+    /** The role's translated name, for the badge's aria-label. */
+    roleLabel?: string | null;
   }>(),
-  { entityType: undefined, firstName: null, lastName: null, avatarSize: 20, details: () => [], moreDetails: () => [], specialty: null, orgType: null, leadSource: null },
+  { entityType: undefined, firstName: null, lastName: null, avatarSize: 20, details: () => [], moreDetails: () => [], specialty: null, orgType: null, leadSource: null, role: null, roleLabel: null },
 );
 
 const ROUTE_ENTITY_TYPES: Record<string, AppAvatarEntityType> = {
@@ -130,6 +134,8 @@ const avatarProps = computed(() => {
     specialty: props.specialty,
     orgType: props.orgType,
     leadSource: props.leadSource,
+    role: props.role,
+    roleLabel: props.roleLabel,
   };
 });
 </script>
