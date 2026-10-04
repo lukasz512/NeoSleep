@@ -90,14 +90,14 @@
             </AppInlineAlert>
           </div>
           <!-- Only shown when there is a choice: today the wizard orders NOA only. -->
-          <div v-if="productOptions.length > 1" data-field="productCode">
+          <div v-if="productOptions.length > 1" data-field="productCode" class="oa-wizard__center">
             <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.selectProduct") }}</p>
             <AppSegmentedTabs :model-value="order.productCode" :options="productOptions" fit class="oa-wizard__switch" @update:model-value="onProductPicked" />
           </div>
 
           <p class="text-subtitle2 mt-6 mb-4 text-primary">{{ t("app.orthoApneaOrder.paso1.title") }}</p>
           <VRow>
-            <VCol cols="6">
+            <VCol cols="6" class="oa-wizard__center">
               <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.retrusionMax") }}<FieldTooltip :text="t('app.orthoApneaOrder.tooltip.retrusionMax')" /></p>
               <NumberStepperField
                 :model-value="order.retrusionMaxMm"
@@ -170,7 +170,7 @@
             </div>
           </div>
 
-          <VDivider class="my-8" />
+          <VDivider class="my-10" />
 
           <!-- Paso 2 is a size container: below 600 px of dialog width (phone, narrow
                tablet) its blocks stack and centre (NEO-225). -->
@@ -312,11 +312,11 @@
           />
           </section>
 
-          <VDivider class="my-8" />
+          <VDivider class="my-10" />
 
           <p class="text-subtitle2 mb-4 text-primary">{{ t("app.orthoApneaOrder.paso3.title") }}</p>
           <!-- NEO-225: two values only, so the same segmented switch as product / sequence type. -->
-          <div data-field="verticalDimension" class="oa-wizard__stepper-col">
+          <div data-field="verticalDimension" class="oa-wizard__stepper-col oa-wizard__center">
             <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.verticalDimension") }}</p>
             <AppSegmentedTabs
               :model-value="order.verticalDimension.kind"
@@ -375,7 +375,7 @@
             </div>
           </div>
 
-          <VDivider class="my-8" />
+          <VDivider class="my-10" />
 
           <p class="text-subtitle2 mb-4 text-primary">{{ t("app.orthoApneaOrder.paso4.title") }}</p>
           <div class="oa-wizard__section--centered">
@@ -1338,6 +1338,32 @@ watch(
   /* overflow-x alone computes overflow-y to auto, which let the teeth
      diagram scroll up/down inside the form (NEO-229). */
   overflow-y: hidden;
+}
+
+/* NEO-229 D1: fields sit on the form's centre axis at every width (Paso
+   titles and the COMPLEMENTOS label stay left). Paso 2 reuses the rules its
+   narrow container query already had; the SP ruler keeps its 7/5 split. */
+.oa-wizard__center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.oa-wizard__center .oa-wizard__field-label,
+.oa-wizard__sp-header,
+.oa-wizard__paso2 [data-testid="sequence"] > .d-flex {
+  justify-content: center;
+  text-align: center;
+}
+
+.oa-wizard__center .oa-wizard__switch,
+.oa-wizard__paso2 .oa-wizard__switch {
+  margin-inline: auto;
+}
+
+.oa-wizard__paso2 .oa-wizard__seq-row {
+  justify-content: center;
 }
 
 /* NEO-229: Lateralidad / Limitación de apertura centred in their half, like

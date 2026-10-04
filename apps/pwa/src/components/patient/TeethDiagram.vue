@@ -151,14 +151,14 @@ function toggleTooth(tooth: string) {
   position: relative;
   display: block;
   width: 42px;
-  height: 52px;
+  height: 64px;
 }
 
 .teeth-diagram__img {
   position: relative;
   display: block;
   width: 42px;
-  height: 52px;
+  height: 64px;
   object-fit: contain;
 }
 
