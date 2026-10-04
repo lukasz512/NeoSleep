@@ -1700,9 +1700,10 @@ export async function fetchOrthoApneaTreatmentStatus(
     if (!success) return null;
 
     const externalStatus = responsePayload!.statusId != null ? String(responsePayload!.statusId) : null;
-    const changed = externalStatus !== link.external_status;
-    await updatePartnerLinkStatus(client, link.id, externalStatus);
-    return { externalStatus, changed };
+    // Compared with the stored status under a row lock, not with `link` (read when the sync
+    // started): a concurrent sync may have written the new status since (CORE-67).
+    const { previousStatus } = await updatePartnerLinkStatus(client, link.id, externalStatus);
+    return { externalStatus, changed: externalStatus !== previousStatus };
   });
 
   if (!outcome) {

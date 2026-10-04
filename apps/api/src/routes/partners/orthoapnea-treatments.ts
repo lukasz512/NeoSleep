@@ -13,7 +13,10 @@ import {
   fetchOrthoApneaClinics,
   fetchCountries,
 } from "../../services/partners/orthoapnea.js";
-import { SyncOrthoApneaTreatmentStatusesAllTenantsCommand } from "../../commands/orthoapneaSync.js";
+import {
+  SyncOrthoApneaTreatmentStatusesAllTenantsCommand,
+  SyncOrthoApneaStatusesForOpenAppCommand,
+} from "../../commands/orthoapneaSync.js";
 import { CreateNoteCommand } from "../../commands/note.js";
 import { ForbiddenError, LabOrdersDisabledError, ValidationError } from "../../errors.js";
 import { getLabOrdersSendConfig } from "../../db/config.js";
@@ -198,6 +201,24 @@ orthoapneaTreatmentsRouter.get(
     );
 
     res.json(history);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// POST /api/v1/partners/orthoapnea/sync-statuses
+// The app calls this every 15 min while it is open (CORE-67); the scheduled
+// job below covers the rest of the day, 4 times. Any signed-in user may
+// trigger it: it only reads statuses from the lab, never sends anything, and
+// the command throttles it to one run per tenant per 15 min. Returns
+// { ran: false } inside that window.
+// ---------------------------------------------------------------------------
+orthoapneaTreatmentsRouter.post(
+  "/partners/orthoapnea/sync-statuses",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const slug = tenantSlugFromHost(req.hostname);
+    const requestId = (req.headers["x-request-id"] as string | undefined) ?? crypto.randomUUID();
+    res.json(await SyncOrthoApneaStatusesForOpenAppCommand(slug, requestId));
   })
 );
 
