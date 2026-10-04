@@ -1,4 +1,6 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
+import { harnessPort } from "./harnessPort";
 
 /**
  * NEO-182: the harness-only e2e specs (they load /e2e/harness/*.html — no API,
@@ -6,8 +8,9 @@ import { defineConfig, devices } from "@playwright/test";
  * Chromium only, on its own port so it never reuses a dev server from another
  * worktree (which would test different code). CI still runs the full suite in
  * three engines via playwright.config.ts.
+ * The port is per worktree (CORE-126, harnessPort.ts); HARNESS_PORT overrides it.
  */
-const PORT = 5199;
+const PORT = Number(process.env.HARNESS_PORT) || harnessPort(fileURLToPath(new URL(".", import.meta.url)));
 
 export default defineConfig({
   testDir: "./e2e",
