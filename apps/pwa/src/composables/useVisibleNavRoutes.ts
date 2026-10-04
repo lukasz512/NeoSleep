@@ -1,8 +1,9 @@
-import { computed } from "vue";
+import { computed, watchEffect } from "vue";
 import { useI18n } from "vue-i18n";
 import { navRoutesForRole, navTitleKey } from "../router/routes";
 import { useAuthStore } from "../stores/auth";
 import { useRolePreviewStore } from "../stores/rolePreview";
+import { doctorPanelEnabled, loadDoctorPanelEnabled } from "./useDoctorPanelSwitch";
 
 /**
  * The current user's role-filtered nav list, respecting the admin "view as"
@@ -14,9 +15,15 @@ export function useVisibleNavRoutes() {
   const { t } = useI18n();
   const authStore = useAuthStore();
   const rolePreviewStore = useRolePreviewStore();
+  const role = computed(() => rolePreviewStore.previewRole ?? authStore.user?.role);
+
+  // NEO-233: a doctor's "Panel" entry appears only once its per-tenant switch is known to be on.
+  watchEffect(() => {
+    if (role.value === "doctor" && authStore.user?.id) void loadDoctorPanelEnabled(authStore.user.id);
+  });
 
   const visibleNavRoutes = computed(() =>
-    navRoutesForRole(rolePreviewStore.previewRole ?? authStore.user?.role),
+    navRoutesForRole(role.value).filter((r) => !(r.name === "dashboard" && role.value === "doctor" && !doctorPanelEnabled.value)),
   );
 
   const visibleNavItems = computed(() =>

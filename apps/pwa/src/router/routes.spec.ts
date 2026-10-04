@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { homePathForRole, isRoleAllowed, navRoutesForRole, navParentName, routes } from "./routes";
+import { homePathForRole, isRoleAllowed, navRoutesForRole, navParentName, routes, DOCTOR_FALLBACK_HOME } from "./routes";
 
 // NEO-55: AppLayout's back arrow and "← <Module>" title come from this mapping.
 describe("navParentName", () => {
@@ -72,14 +72,18 @@ describe("navRoutesForRole", () => {
 });
 
 describe("homePathForRole", () => {
-  it("sends admin to the dashboard — the only role that can see it", () => {
+  it("sends admin to the dashboard; a manager never sees it", () => {
     expect(homePathForRole("admin")).toBe("/dashboard");
     expect(navRoutesForRole("manager").some((r) => r.path === "/dashboard")).toBe(false);
-    expect(navRoutesForRole("doctor").some((r) => r.path === "/dashboard")).toBe(false);
   });
 
-  it("lands doctor and manager on patients", () => {
-    expect(homePathForRole("doctor")).toBe("/patients");
+  it("lands a doctor on their Panel (NEO-233; the guard falls back to patients while its switch is off)", () => {
+    expect(homePathForRole("doctor")).toBe("/dashboard");
+    expect(navRoutesForRole("doctor")[0]?.path).toBe("/dashboard");
+    expect(DOCTOR_FALLBACK_HOME).toBe("/patients");
+  });
+
+  it("lands a manager on patients", () => {
     expect(homePathForRole("manager")).toBe("/patients");
   });
 
