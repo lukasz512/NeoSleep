@@ -417,7 +417,4 @@ const tiles = computed<Tile[]>(() => {
   color: rgb(var(--v-theme-primary));
   text-decoration: none;
 }
-.patient-details__link:hover {
-  text-decoration: underline;
-}
 </style>
