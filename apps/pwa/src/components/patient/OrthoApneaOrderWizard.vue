@@ -358,12 +358,12 @@
           <VRow class="mb-6 oa-wizard__stepper-row">
             <VCol cols="12" sm="6" data-field="laterality" class="oa-wizard__stepper-col">
               <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.laterality") }}<FieldTooltip :text="t('app.orthoApneaOrder.tooltip.laterality')" :image="TOOLTIP_IMG.laterality" :image-alt="t('app.orthoApneaOrder.form.laterality')" /></p>
-              <NumberStepperField v-model="order.laterality" :error="!!fieldError('laterality')" class="oa-wizard__stepper" />
+              <NumberStepperField v-model="order.laterality" :error="!!fieldError('laterality')" class="oa-wizard__number-stepper" />
               <span v-if="fieldError('laterality')" class="oa-wizard__field-error">{{ fieldError("laterality") }}</span>
             </VCol>
             <VCol cols="12" sm="6" data-field="limitOpening" class="oa-wizard__stepper-col">
               <p class="oa-wizard__field-label">{{ t("app.orthoApneaOrder.form.limitOpening") }}<FieldTooltip :text="t('app.orthoApneaOrder.tooltip.limitOpening')" :image="TOOLTIP_IMG.limitOpening" :image-alt="t('app.orthoApneaOrder.form.limitOpening')" /></p>
-              <NumberStepperField v-model="order.limitOpening" :error="!!fieldError('limitOpening')" class="oa-wizard__stepper" />
+              <NumberStepperField v-model="order.limitOpening" :error="!!fieldError('limitOpening')" class="oa-wizard__number-stepper" />
               <span v-if="fieldError('limitOpening')" class="oa-wizard__field-error">{{ fieldError("limitOpening") }}</span>
             </VCol>
           </VRow>
@@ -1128,6 +1128,38 @@ watch(
   background: transparent;
 }
 
+/* Phone (NEO-232): four titles don't fit, and Vuetify then scrolls the header
+   sideways. Only the current step keeps its title; the others are their
+   numbered circle, so every step is on screen and the current one reads in full. */
+@media (max-width: 599px) {
+  .oa-wizard__stepper :deep(.v-stepper-header) {
+    overflow-x: visible;
+    padding-inline: 16px;
+  }
+  .oa-wizard__stepper :deep(.v-stepper-item) {
+    flex: none;
+    padding-inline: 8px;
+  }
+  .oa-wizard__stepper :deep(.v-stepper-item:not(.v-stepper-item--selected) .v-stepper-item__content) {
+    display: none;
+  }
+  /* A long title ("Configuración del tratamiento") wraps onto a second line
+     instead of pushing step 4 off screen; it never shrinks below its longest word. */
+  .oa-wizard__stepper :deep(.v-stepper-item--selected) {
+    flex: 0 1 auto;
+  }
+  .oa-wizard__stepper :deep(.v-stepper-item--selected .v-stepper-item__title) {
+    white-space: normal;
+    line-height: 1.25;
+  }
+  /* The connectors take what's left, so they shrink before any title does. */
+  .oa-wizard__stepper :deep(.v-stepper-header > .v-divider) {
+    flex: 1 1 0;
+    min-width: 12px;
+    margin-inline: 0;
+  }
+}
+
 /* Right half of the MR/MP row — "Rango avance mandibular" filling the
    remaining 50% of the row's width, scaled up since it's the only content
    in that half (matches the left half's MR+MP visual weight). */
@@ -1297,9 +1329,11 @@ watch(
 }
 
 /* One stepper size for SP, Lateralidad and Limitación de apertura (NEO-225):
-   −/+ and a box wide enough for "-3", and it fits a 320 px phone. */
+   −/+ and a box wide enough for "-3", and it fits a 320 px phone. Not
+   .oa-wizard__stepper: that is the step header, which this squeezed to
+   180 px and cut off after step 2 (NEO-232). */
 .oa-wizard__sp-field-input,
-.oa-wizard__stepper {
+.oa-wizard__number-stepper {
   width: 180px;
   max-width: 100%;
 }
