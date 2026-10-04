@@ -197,14 +197,17 @@ function removeChip(def: FilterDefinition, value: string) {
    search look), so the toolbar reads as one piece. */
 .app-filter-bar__btn--no-border {
   border: none;
+  /* Same 48 px as the search field, so both sit on one line. */
+  width: 48px;
+  height: 48px;
   border-radius: 14px;
-  background: var(--glass-surface);
+  background: color-mix(in srgb, rgb(var(--v-theme-on-surface)) 5%, var(--glass-surface));
   box-shadow: var(--glass-rim);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
 
   &:hover {
-    background: color-mix(in srgb, rgb(var(--v-theme-on-surface)) 8%, var(--glass-surface));
+    background: color-mix(in srgb, rgb(var(--v-theme-on-surface)) 10%, var(--glass-surface));
   }
 }
 

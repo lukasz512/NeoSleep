@@ -515,7 +515,7 @@ describe("AppEntityList", () => {
     // CORE-136: the list search wears the Doctor Panel search look.
     it("search field is a filled glass field with 14 px corners", () => {
       expect(css).toMatch(
-        /\.app-entity-list__search :deep\(\.v-field\)\s*{[^}]*border-radius:\s*14px !important[^}]*background:\s*var\(--glass-surface\)[^}]*box-shadow:\s*var\(--glass-rim\)[^}]*backdrop-filter:\s*var\(--glass-blur\)/,
+        /\.app-entity-list__search :deep\(\.v-field\)\s*{[^}]*border-radius:\s*14px !important[^}]*background:\s*color-mix\([^;]*var\(--glass-surface\)\)[^}]*box-shadow:\s*var\(--glass-rim\)[^}]*backdrop-filter:\s*var\(--glass-blur\)/,
       );
     });
 
@@ -527,7 +527,7 @@ describe("AppEntityList", () => {
     it("filter button beside the search is a matching glass square", () => {
       const filterSrc = readFileSync(path.resolve(__dirname, "./AppFilterBar.vue"), "utf-8");
       expect(filterSrc).toMatch(
-        /\.app-filter-bar__btn--no-border\s*{[^}]*border-radius:\s*14px[^}]*background:\s*var\(--glass-surface\)[^}]*box-shadow:\s*var\(--glass-rim\)/,
+        /\.app-filter-bar__btn--no-border\s*{[^}]*border-radius:\s*14px[^}]*background:\s*color-mix\([^;]*var\(--glass-surface\)\)[^}]*box-shadow:\s*var\(--glass-rim\)/,
       );
     });
 

@@ -267,7 +267,9 @@
    beats theme.scss's global `.v-field { border-radius: … !important }`. */
 .app-entity-list__search :deep(.v-field) {
   border-radius: 14px !important;
-  background: var(--glass-surface);
+  /* The glass surface alone is white on the list's white sheet; a 5 % ink
+     tint gives it the Panel field's soft grey. */
+  background: color-mix(in srgb, rgb(var(--v-theme-on-surface)) 5%, var(--glass-surface));
   box-shadow: var(--glass-rim);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
