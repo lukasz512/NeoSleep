@@ -45,9 +45,16 @@
           :class="`view-appointments__row--${a.status}`"
           @click="openDetail(a)"
         >
-          <span class="view-appointments__row-time">{{ timeOf(a) }}</span>
+          <!-- Start over end: "10:00 a.m.–11:00 a.m." on one line left no room for the name in es-MX. -->
+          <span class="view-appointments__row-time" :aria-label="timeOf(a)">
+            <span>{{ timeParts(a)[0] }}</span>
+            <span class="view-appointments__row-end">{{ timeParts(a)[1] }}</span>
+          </span>
           <span class="view-appointments__row-main">
-            <span class="view-appointments__row-patient">{{ a.patient_name }}</span>
+            <span class="view-appointments__row-patient">
+              <span class="view-appointments__row-name">{{ a.patient_name }}</span>
+              <AppIcon v-if="appointmentResponseState(a)" :name="responseIcon(appointmentResponseState(a)!)" :class="`appt-response appt-response--${appointmentResponseState(a)}`" :aria-label="t(`user.appointments.patientResponse.${appointmentResponseState(a)}`)" data-testid="appointment-row-response" />
+            </span>
             <span class="view-appointments__row-meta">{{ metaOf(a) }}</span>
           </span>
           <VChip :color="APPOINTMENT_STATUS_COLOR[a.status]" size="x-small" variant="tonal">{{ t(`user.appointments.status.${a.status}`) }}</VChip>
@@ -80,7 +87,10 @@
           :style="{ '--appt-color': event.tint }"
           data-testid="appointment-event"
         >
-          <span class="appt-event__title">{{ event.name }}</span>
+          <span class="appt-event__title">
+            <span class="appt-event__name">{{ event.name }}</span>
+            <AppIcon v-if="event.response" :name="responseIcon(event.response)" :class="`appt-response appt-response--${event.response}`" :aria-label="t(`user.appointments.patientResponse.${event.response}`)" />
+          </span>
           <span class="appt-event__meta">{{ event.time }}</span>
           <span v-if="event.doctor" class="appt-event__meta">{{ event.doctor }}</span>
         </div>
@@ -112,10 +122,10 @@ import { useDisplay } from "vuetify";
 import { reportCaught } from "@api";
 import { intlLocale } from "@i18n/language-options";
 import { apiFetch } from "../composables/useApi";
-import { useAppointments, APPOINTMENT_STATUS_COLOR, type Appointment } from "../composables/useAppointments";
+import { useAppointments, APPOINTMENT_STATUS_COLOR, appointmentResponseState, type Appointment, type AppointmentResponseState } from "../composables/useAppointments";
 import { toZonedCalendarDateTime, formatTimeRange, formatDayLabel, zonedDateKey, deviceTimeZone, zonedInputToIso } from "../utils/appointmentTime";
 import AppButton from "../components/AppButton.vue";
-import AppIcon from "../components/AppIcon.vue";
+import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppEmptyState from "../components/AppEmptyState.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
 import AppErrorState from "../components/AppErrorState.vue";
@@ -200,8 +210,15 @@ const calendarEvents = computed(() =>
     status: a.status,
     time: formatTimeRange(a.start_at, a.end_at, a.timezone, lang.value),
     doctor: a.practitioner_name ?? "",
+    response: appointmentResponseState(a),
   })),
 );
+
+/** The patient's answer from the appointment email (CORE-25), at a glance in the agenda. */
+function responseIcon(response: AppointmentResponseState): AppIconName {
+  if (response === "awaiting") return "clock";
+  return response === "confirmed" ? "check-circle" : "alert-triangle";
+}
 
 const groups = computed(() => {
   const byDay = new Map<string, { key: string; label: string; items: Appointment[] }>();
@@ -215,6 +232,11 @@ const groups = computed(() => {
 
 function timeOf(a: Appointment): string {
   return formatTimeRange(a.start_at, a.end_at, a.timezone, lang.value);
+}
+/** [start, end] of the formatted range — split on the en dash formatTimeRange puts between them. */
+function timeParts(a: Appointment): [string, string] {
+  const [start = "", end = ""] = timeOf(a).split("–");
+  return [start.trim(), end.trim()];
 }
 function metaOf(a: Appointment): string {
   return [a.practitioner_name, a.organization_name].filter(Boolean).join(" · ");
@@ -389,10 +411,40 @@ function onBookNext(a: Appointment) {
 }
 
 .appt-event__title {
+  display: flex;
+  align-items: center;
+  min-width: 0;
   font-weight: 600;
+}
+
+.appt-event__name {
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.appt-event__title .appt-response {
+  flex: none;
+}
+
+/* The patient's answer from the appointment email (CORE-25): ✓ confirmed, ⚠ can't come. */
+.appt-response {
+  margin-inline-start: 4px;
+  font-size: 14px;
+  vertical-align: -2px;
+}
+
+.appt-response--confirmed {
+  color: rgb(var(--v-theme-success));
+}
+
+.appt-response--cannot_attend {
+  color: rgb(var(--v-theme-warning));
+}
+
+.appt-response--awaiting {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 .appt-event__meta {
@@ -454,10 +506,17 @@ function onBookNext(a: Appointment) {
 }
 
 .view-appointments__row-time {
+  display: grid;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   font-size: 0.875rem;
   white-space: nowrap;
+}
+
+.view-appointments__row-end {
+  font-weight: 400;
+  font-size: 0.8125rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 .view-appointments__row-main {
@@ -466,10 +525,21 @@ function onBookNext(a: Appointment) {
 }
 
 .view-appointments__row-patient {
+  display: flex;
+  align-items: center;
+  min-width: 0;
   font-weight: 500;
+}
+
+.view-appointments__row-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.view-appointments__row-patient .appt-response {
+  flex: none;
 }
 
 .view-appointments__row-meta {

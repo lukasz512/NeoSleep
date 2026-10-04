@@ -175,7 +175,7 @@ organizationRouter.post(
       name?: string; type?: string; status?: string;
       address_line1?: string; city?: string; state?: string; postal_code?: string;
       country_code?: string; region?: string; territory_id?: string | null; phone?: string; email?: string; website?: string;
-      google_link?: string; specialties?: string[]; show_on_public_map?: boolean;
+      google_link?: string; visit_instructions?: string; privacy_notice_url?: string; specialties?: string[]; show_on_public_map?: boolean;
       metadata?: Record<string, unknown>;
     };
 
@@ -196,6 +196,8 @@ organizationRouter.post(
         email:         typeof body.email         === "string" ? body.email         : null,
         website:       typeof body.website       === "string" ? body.website       : null,
         google_link:   typeof body.google_link   === "string" ? body.google_link   : null,
+        visit_instructions: typeof body.visit_instructions === "string" ? body.visit_instructions : null,
+        privacy_notice_url: typeof body.privacy_notice_url === "string" ? body.privacy_notice_url : null,
         specialties:   Array.isArray(body.specialties) ? body.specialties : undefined,
         show_on_public_map: typeof body.show_on_public_map === "boolean" ? body.show_on_public_map : undefined,
         metadata:      body.metadata ?? null,
@@ -221,7 +223,7 @@ organizationRouter.patch(
       name?: string; type?: string; status?: string;
       address_line1?: string; city?: string; state?: string; postal_code?: string;
       country_code?: string; region?: string; territory_id?: string | null; phone?: string; email?: string; website?: string;
-      google_link?: string; specialties?: string[]; show_on_public_map?: boolean;
+      google_link?: string; visit_instructions?: string; privacy_notice_url?: string; specialties?: string[]; show_on_public_map?: boolean;
       metadata?: Record<string, unknown>;
     };
 
@@ -242,6 +244,8 @@ organizationRouter.patch(
         email:         body.email                !== undefined ? body.email        : undefined,
         website:       body.website              !== undefined ? body.website      : undefined,
         google_link:   body.google_link          !== undefined ? body.google_link  : undefined,
+        visit_instructions: typeof body.visit_instructions === "string" ? body.visit_instructions : undefined,
+        privacy_notice_url: typeof body.privacy_notice_url === "string" ? body.privacy_notice_url : undefined,
         specialties:   Array.isArray(body.specialties) ? body.specialties : undefined,
         show_on_public_map: typeof body.show_on_public_map === "boolean" ? body.show_on_public_map : undefined,
         metadata:      body.metadata             !== undefined ? body.metadata     : undefined,

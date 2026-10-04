@@ -33,6 +33,7 @@ import { sendQuestionnaireLinkEmail, sendPatientSignedCopyEmail, sendEmailSentCo
 import { isPatientEmailHeldByAnother } from "../db/identityEmail.js";
 import { insertPatientEmailSend } from "../db/patientEmailSend.js";
 import { maskEmail } from "../utils/maskEmail.js";
+import { patientEmailLocale } from "../utils/patientEmailLocale.js";
 import { PRIVACY_NOTICE_URL } from "../env.js";
 import { validateMedicalHistory, validateStop } from "./clinicalRecordFields.js";
 
@@ -160,16 +161,6 @@ export async function CreateQuestionnaireRequestCommand(
 
 export { maskEmail };
 
-/** Email language from the patient's own settings: Polish, Mexican Spanish, else by region, else English. */
-function patientEmailLocale(language: string | null, region: string | null): string {
-  const lang = (language ?? "").toLowerCase();
-  if (lang.startsWith("pl")) return "pl";
-  if (lang.startsWith("es") || lang === "mx") return "mx";
-  const reg = (region ?? "").toUpperCase();
-  if (reg === "PL") return "pl";
-  if (reg === "MX") return "mx";
-  return "en";
-}
 
 /**
  * "Send questionnaires by email" on the patient (Łukasz, 2026-09-26): one
@@ -330,6 +321,14 @@ export interface PublicQuestionnaire {
   clinic_email: string | null;
   clinic_phone: string | null;
   privacy_notice_url: string;
+  /**
+   * The aviso de privacidad the patient accepts before signing a consent
+   * (CORE-113, consent-visit-r1 Z3): the clinic's own when it set one —
+   * the clinic is the data controller — else the platform notice above.
+   */
+  clinic_privacy_notice_url: string;
+  /** true = clinic_privacy_notice_url is the clinic's own aviso. */
+  clinic_privacy_notice_own: boolean;
   /** The platform's public site (the privacy notice's origin) — linked from the patient's menu. */
   website_url: string;
   expires_at: Date;
@@ -425,6 +424,8 @@ export async function GetPublicQuestionnaireQuery(client: PoolClient, token: str
     clinic_email: context.organization_email,
     clinic_phone: context.organization_phone,
     privacy_notice_url: PRIVACY_NOTICE_URL,
+    clinic_privacy_notice_url: context.organization_privacy_notice_url ?? PRIVACY_NOTICE_URL,
+    clinic_privacy_notice_own: context.organization_privacy_notice_url !== null,
     website_url: new URL(PRIVACY_NOTICE_URL).origin,
     expires_at: request.expires_at,
     steps,
@@ -570,6 +571,10 @@ export async function SubmitPublicQuestionnaireCommand(
   const readToEnd = body.readToEnd === true;
   // "Email me a copy" — ticked by the patient before signing (their own Art. 15 request), in the same tap.
   const sendCopy = body.sendCopy === true;
+  // CORE-113 (Z3): the patient confirms reading the clinic's aviso de privacidad before signing; stored with the signature.
+  if (body.privacyNoticeAccepted !== true) {
+    throw new ValidationError("Accept the privacy notice before signing", "privacyNoticeAccepted");
+  }
 
   // (1) lock + validate + prepare
   const prepared = await run(async (client) => {
@@ -645,6 +650,11 @@ export async function SubmitPublicQuestionnaireCommand(
           signature_method: "drawn",
           read_to_end: readToEnd,
           locale,
+          privacy_notice: {
+            url: prepared.context.organization_privacy_notice_url ?? PRIVACY_NOTICE_URL,
+            own: prepared.context.organization_privacy_notice_url !== null,
+            accepted_at: signedAt.toISOString(),
+          },
         },
       });
       const updated = await completeQuestionnaireStep(client, request.id, step);

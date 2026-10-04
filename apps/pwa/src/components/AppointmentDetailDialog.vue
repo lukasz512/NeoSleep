@@ -16,6 +16,18 @@
             {{ t(`user.appointments.status.${appointment.status}`) }}
           </VChip>
         </div>
+        <!-- The patient's answer from the appointment email (CORE-25). -->
+        <VChip
+          v-if="responseState"
+          :color="responseState === 'confirmed' ? 'success' : responseState === 'awaiting' ? 'info' : 'warning'"
+          size="small"
+          variant="tonal"
+          class="appointment-detail__response"
+          data-testid="appointment-patient-response"
+        >
+          <AppIcon :name="responseState === 'confirmed' ? 'check-circle' : responseState === 'awaiting' ? 'clock' : 'alert-triangle'" class="appointment-detail__response-icon" />
+          {{ t(`user.appointments.patientResponse.${responseState}`) }}
+        </VChip>
         <dl class="appointment-detail__facts">
           <dt>{{ t('user.appointments.form.fieldPatient') }}</dt>
           <dd>
@@ -130,7 +142,7 @@ import { useI18n } from "vue-i18n";
 import { reportCaught } from "@api";
 import { intlLocale } from "@i18n/language-options";
 import { useNotifications } from "../composables/useNotifications";
-import { useAppointments, APPOINTMENT_STATUS_COLOR, type Appointment, type AppointmentStatus } from "../composables/useAppointments";
+import { useAppointments, APPOINTMENT_STATUS_COLOR, appointmentResponseState, type Appointment, type AppointmentStatus } from "../composables/useAppointments";
 import { formatTimeRange, formatDayLabel, timeZoneLabel } from "../utils/appointmentTime";
 import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
@@ -159,6 +171,7 @@ const timeRange = computed(() => (props.appointment ? formatTimeRange(props.appo
 const dayLabel = computed(() => (props.appointment ? formatDayLabel(props.appointment.start_at, props.appointment.timezone, lang.value) : ""));
 const zoneLabel = computed(() => (props.appointment ? timeZoneLabel(props.appointment.start_at, props.appointment.timezone, lang.value) : ""));
 const changeable = computed(() => !!props.appointment && canChange(props.appointment));
+const responseState = computed(() => (props.appointment ? appointmentResponseState(props.appointment) : null));
 /** "Book the next visit" after a completed one (Łukasz, 2026-09-26) — offered to whoever can book for this patient. */
 const canBookNext = computed(() => !isFieldForce.value || changeable.value);
 
@@ -224,6 +237,15 @@ async function onConfirmCancel() {
 .appointment-detail__status {
   grid-column: 2;
   grid-row: 1 / span 2;
+}
+
+.appointment-detail__response {
+  justify-self: start;
+}
+
+.appointment-detail__response-icon {
+  margin-inline-end: 4px;
+  font-size: 16px;
 }
 
 .appointment-detail__facts {

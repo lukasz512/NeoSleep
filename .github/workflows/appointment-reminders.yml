@@ -1,0 +1,63 @@
+# Scheduled patient appointment emails (CORE-116, decision form confirm-flow-r1):
+# "please confirm" 2 days before at 10:00 clinic time, and the day before at 10:00 a
+# reminder (confirmed) or a second ask + "hasn't confirmed" for the clinic.
+#
+# Every 10 minutes: each send is stamped before it goes out, so a late or doubled
+# tick never emails twice; a tick that runs late just sends a bit after 10:00.
+# GitHub may delay scheduled runs by several minutes under load — fine here.
+#
+# The API does nothing unless APPOINTMENT_REMINDERS=on (dev.env.yaml; prod unset).
+# Secrets: API_URL_DEV / API_URL_PROD (Cloud Run; prod skipped while unset) and
+# INTERNAL_JOB_SECRET — the same value as the APIs' INTERNAL_JOB_SECRET in Secret
+# Manager (infrastructure/cloud-run/secrets.list). Without it the job only warns.
+
+name: Appointment reminders (every 10 min)
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: appointment-reminders
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [dev, prod]
+    steps:
+      - name: Send due appointment emails
+        env:
+          TARGET: ${{ matrix.target }}
+          API_URL_DEV: ${{ secrets.API_URL_DEV }}
+          API_URL_PROD: ${{ secrets.API_URL_PROD }}
+          JOB_SECRET: ${{ secrets.INTERNAL_JOB_SECRET }}
+        run: |
+          if [ "$TARGET" = "prod" ]; then API_URL="$API_URL_PROD"; else API_URL="$API_URL_DEV"; fi
+          if [ -z "$API_URL" ]; then
+            echo "::warning::$TARGET API URL not set — skipped."
+            exit 0
+          fi
+          if [ -z "$JOB_SECRET" ]; then
+            echo "::warning::INTERNAL_JOB_SECRET not set in GitHub secrets — skipped."
+            exit 0
+          fi
+          status=$(curl -s -o result.json -w "%{http_code}" --max-time 120 -X POST \
+            -H "Authorization: Bearer $JOB_SECRET" -H "Content-Type: application/json" -d '{}' \
+            "$API_URL/api/v1/appointments/jobs/reminders")
+          echo "$TARGET: HTTP $status"
+          if [ "$status" = "404" ]; then
+            echo "::warning::$TARGET has no reminders endpoint yet (404) — skipped until it is deployed."
+            exit 0
+          fi
+          jq '.' result.json || cat result.json
+          [ "$status" = "200" ] || exit 1
+          [ "$(jq '.tenantsFailed' result.json)" = "0" ]

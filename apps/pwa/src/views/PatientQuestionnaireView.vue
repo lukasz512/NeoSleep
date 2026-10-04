@@ -134,6 +134,17 @@
                   <span>{{ t("app.questionnaire.consentStep.signerNote") }}</span>
                   <span class="patient-questionnaire__not-you">{{ t("app.questionnaire.consentStep.notYou") }}</span>
                 </p>
+                <!-- CORE-113 (Z3): the clinic's own aviso de privacidad, read and accepted before signing — stored with the signature. -->
+                <a
+                  :href="questionnaire.clinic_privacy_notice_url"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="patient-questionnaire__privacy-link"
+                  data-testid="consent-privacy-link"
+                >{{ t("app.questionnaire.consentStep.privacyLink", { clinic: clinicName }) }}</a>
+                <VCheckbox v-model="privacyAccepted" hide-details class="patient-questionnaire__consent" data-testid="consent-privacy">
+                  <template #label>{{ t("app.questionnaire.consentStep.privacyAccept") }}</template>
+                </VCheckbox>
                 <VCheckbox v-model="accepted" hide-details class="patient-questionnaire__consent" data-testid="consent-accept">
                   <template #label>{{ t("app.questionnaire.consentStep.accept") }}</template>
                 </VCheckbox>
@@ -154,6 +165,12 @@
               type="warning"
               class="patient-questionnaire__alert"
               :title="t('app.questionnaire.consentStep.missingSignature')"
+            />
+            <AppInlineAlert
+              v-else-if="showMissing && !privacyAccepted"
+              type="warning"
+              class="patient-questionnaire__alert"
+              :title="t('app.questionnaire.consentStep.missingPrivacy')"
             />
             <AppInlineAlert
               v-else-if="showMissing && !accepted"
@@ -312,6 +329,8 @@ interface PublicQuestionnaire {
   clinic_email: string | null;
   clinic_phone?: string | null;
   privacy_notice_url: string;
+  /** The clinic's own aviso (or the platform notice) — accepted before signing a consent (CORE-113). */
+  clinic_privacy_notice_url: string;
   website_url?: string;
   steps: PublicStep[];
 }
@@ -364,6 +383,8 @@ const readerOpen = ref(false);
 const docRead = ref(false);
 /** "I have read the document and accept its content." */
 const accepted = ref(false);
+/** CORE-113 (Z3): "I've read the clinic's privacy notice" — required before signing. */
+const privacyAccepted = ref(false);
 /** "Email me a copy at j***@…" — the patient's own request, sent with the signature. */
 const sendCopy = ref(false);
 /** When the signing area appeared — the date shown next to "signing as". */
@@ -390,7 +411,7 @@ const clinicName = computed(() => questionnaire.value?.clinic_name || t("app.que
 const unansweredCount = computed(() => questions.value.filter((q) => answers.value[q.key] == null).length);
 const allAnswered = computed(() => unansweredCount.value === 0);
 const canSend = computed(() => allAnswered.value && consent.value);
-const canSign = computed(() => signed.value && accepted.value);
+const canSign = computed(() => signed.value && accepted.value && privacyAccepted.value);
 /** 1 = reading, 2 = signing, 3 = done. */
 const consentPhase = computed(() => (phase.value === "submitted" ? 3 : docRead.value ? 2 : 1));
 const consentSegments = computed<SegmentState[]>(() =>
@@ -455,6 +476,7 @@ function resetStepState() {
   readerOpen.value = false;
   docRead.value = false;
   accepted.value = false;
+  privacyAccepted.value = false;
   sendCopy.value = false;
   showMissing.value = false;
   submitError.value = false;
@@ -603,12 +625,12 @@ function goToFirstMissing() {
 async function submitConsent() {
   const signature = signaturePadRef.value?.isEmpty() ? null : signaturePadRef.value?.toDataURL();
   signed.value = !!signature; // the alerts below read it — the pad is the source of truth at send time
-  if (!signature || !accepted.value) {
+  if (!signature || !accepted.value || !privacyAccepted.value) {
     showMissing.value = true;
     return;
   }
   if (!step.value) return;
-  await send({ step: step.value.key, signatureDataUrl: signature, readToEnd: docRead.value, sendCopy: sendCopy.value && !!questionnaire.value?.copy_email });
+  await send({ step: step.value.key, signatureDataUrl: signature, readToEnd: docRead.value, privacyNoticeAccepted: privacyAccepted.value, sendCopy: sendCopy.value && !!questionnaire.value?.copy_email });
 }
 
 async function submitQuestionnaire() {
@@ -903,6 +925,15 @@ async function submitQuestionnaire() {
 .patient-questionnaire__consent {
   margin: 12px 0 0;
   align-items: flex-start;
+}
+
+.patient-questionnaire__privacy-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 8px;
+  color: rgb(var(--v-theme-primary));
+  font-weight: 600;
 }
 
 /* Looks disabled but still takes the tap, so the patient is told what's missing (a truly disabled button just ignores them). */

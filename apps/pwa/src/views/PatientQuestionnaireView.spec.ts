@@ -48,6 +48,7 @@ const lookup = (steps: unknown[], over: Record<string, unknown> = {}) => ({
   clinic_name: null,
   clinic_email: null,
   privacy_notice_url: "https://neosleepcare.com/privacy",
+  clinic_privacy_notice_url: "https://neosleepcare.com/privacy",
   steps,
   ...over,
 });
@@ -214,8 +215,13 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
     // No signature yet → nothing is sent.
     await wrapper.find("form").trigger("submit");
     expect(alerts(wrapper)).toEqual(["Sign in the box to continue."]);
-    // Signed, but "I have read and accept" not ticked → still nothing.
+    // Signed, but the clinic's privacy notice not accepted (CORE-113) → still nothing.
     signed = true;
+    expect(wrapper.find("[data-testid='consent-privacy-link']").attributes("href")).toBe("https://neosleepcare.com/privacy");
+    await wrapper.find("form").trigger("submit");
+    expect(alerts(wrapper)).toEqual(["Confirm that you have read the privacy notice"]);
+    // Privacy accepted, but "I have read and accept" not ticked → still nothing.
+    await wrapper.find("[data-testid='consent-privacy'] input").setValue(true);
     await wrapper.find("form").trigger("submit");
     expect(alerts(wrapper)).toEqual(["Tick the box above to confirm you have read the document."]);
     expect(apiFetch).toHaveBeenCalledTimes(1);
@@ -225,7 +231,7 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
     await wrapper.find("form").trigger("submit");
     await flushPromises();
     const consentBody = JSON.parse((apiFetch.mock.calls[1]![1] as RequestInit).body as string);
-    expect(consentBody).toMatchObject({ token: TOKEN, step: "informedConsent", signatureDataUrl: SIGNATURE, readToEnd: true });
+    expect(consentBody).toMatchObject({ token: TOKEN, step: "informedConsent", signatureDataUrl: SIGNATURE, readToEnd: true, privacyNoticeAccepted: true });
 
     expect(wrapper.text()).toContain("Step 2 of 2");
     expect(wrapper.text()).toContain("Do you snore loudly?");
@@ -270,6 +276,7 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
 
     await readDocument(wrapper);
     signed = true;
+    await wrapper.find("[data-testid='consent-privacy'] input").setValue(true);
     await wrapper.find("[data-testid='consent-accept'] input").setValue(true);
     // The copy by email is the patient's own choice — offered, never pre-ticked.
     const copyBox = wrapper.find("[data-testid='consent-send-copy'] input");

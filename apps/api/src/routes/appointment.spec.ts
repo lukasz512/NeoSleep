@@ -154,7 +154,7 @@ describe("/api/v1/appointments", () => {
     const doc = await doctor();
     const own = await patient(doc.practitionerId);
     const res = await request(app).post("/api/v1/appointments").set("Authorization", doc.login!.auth).send({ patient_id: own, start_at: futureSlot() });
-    const notifications = await withTenant(TENANT_SLUG, (client) => client.query(`SELECT 1 FROM notification WHERE entity_id = $1`, [res.body.id]));
+    const notifications = await withTenant(TENANT_SLUG, (client) => client.query(`SELECT 1 FROM notification WHERE entity_id = $1 AND type = 'appointment_booked'`, [res.body.id]));
     expect(notifications.rowCount).toBe(0);
   });
 
@@ -219,7 +219,7 @@ describe("/api/v1/appointments", () => {
     expect([noShow.status, completed.status]).toEqual([200, 200]);
 
     const types = await withTenant(TENANT_SLUG, (client) =>
-      client.query<{ type: string }>(`SELECT type FROM notification WHERE entity_id = $1 ORDER BY created_at`, [created.body.id]),
+      client.query<{ type: string }>(`SELECT type FROM notification WHERE entity_id = $1 AND type <> 'appointment_patient_no_email' ORDER BY created_at`, [created.body.id]),
     );
     expect(types.rows.map((r) => r.type)).toEqual(["appointment_booked", "appointment_rescheduled"]);
   });
