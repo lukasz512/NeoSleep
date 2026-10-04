@@ -26,6 +26,10 @@ import { dirname, join, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ticketFromBranch, ticketTeams } from "./ticket.mjs";
 import { validateQuestions, widget } from "../decision-form/decisions.mjs";
+import { cacheGet, cacheSet, defaultCachePath, isRateLimitError, noteRateLimit, rateLimitedUntil } from "../../../infrastructure/scripts/gh-cache.mjs";
+
+/** A PR appears or merges rarely; one lookup per branch per 10 minutes is plenty (CORE-128). */
+const PR_CACHE_TTL_MS = 10 * 60_000;
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const git = (...args) => {
@@ -105,11 +109,25 @@ function isPushed() {
  *  page fell back to the "PR link after push" placeholder even though the work shipped. */
 function existingPr() {
   try {
-    const out = execFileSync("gh", ["pr", "list", "--head", BRANCH, "--state", "all", "--limit", "1", "--json", "number,url,state"], {
-      encoding: "utf-8",
-      stdio: ["ignore", "pipe", "ignore"],
-    });
-    const pr = JSON.parse(out)[0];
+    // CORE-128: shared 10-minute cache and the API cooldown, so re-rendering doesn't spend the GitHub limit.
+    const cachePath = defaultCachePath();
+    const key = `pr:${BRANCH}`;
+    let prs = cacheGet(cachePath, key);
+    if (prs === undefined) {
+      if (rateLimitedUntil(cachePath)) return null;
+      try {
+        const out = execFileSync("gh", ["pr", "list", "--head", BRANCH, "--state", "all", "--limit", "1", "--json", "number,url,state"], {
+          encoding: "utf-8",
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+        prs = JSON.parse(out);
+        cacheSet(cachePath, key, prs, PR_CACHE_TTL_MS);
+      } catch (err) {
+        if (isRateLimitError(err)) noteRateLimit(cachePath);
+        return null;
+      }
+    }
+    const pr = prs[0];
     if (!pr) return null;
     const state = String(pr.state).toLowerCase();
     // A merged/closed PR only describes this branch if nothing new was committed on top
