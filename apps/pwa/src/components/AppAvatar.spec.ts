@@ -5,6 +5,8 @@ import * as vuetifyComponents from "vuetify/components";
 import * as vuetifyDirectives from "vuetify/directives";
 import AppAvatar from "./AppAvatar.vue";
 import AppIcon from "./AppIcon.vue";
+import { ref } from "vue";
+import { USER_ROLE_BADGE_OVERRIDES } from "../utils/userRoleBadge";
 
 // A named type import from a .vue file only resolves through this app's "*.vue"
 // ambient shim's default export — same InstanceType introspection formField.ts/
@@ -184,6 +186,15 @@ describe("AppAvatar (user role badge, CORE-114)", () => {
     const w = mountUser({ role: "manager", avatarUrl: "https://example.com/a.png", size: 32 });
     expect(badge(w).exists()).toBe(true);
     expect(badgeIcon(w)).toBe("shield-check");
+  });
+
+  it("uses the tenant's icon override provided by the app", () => {
+    const w = mount(AppAvatar, {
+      props: { entityType: "user", name: "Ana Ruiz", role: "manager" },
+      global: { plugins: [vuetify()], provide: { [USER_ROLE_BADGE_OVERRIDES as symbol]: ref({ manager: "users-group" }) } },
+    });
+    mountedWrappers.push(w);
+    expect(badgeIcon(w)).toBe("users-group");
   });
 
   it("no badge for an unknown role, a user without a role, or a non-user entity", () => {

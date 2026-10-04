@@ -18,8 +18,17 @@
  * GET /config/app). Overrides are limited to ROLE_BADGE_ICONS so a typo in
  * the DB can never ask AppIcon for an icon it doesn't have.
  */
+import type { InjectionKey, Ref } from "vue";
 import type AppIcon from "../components/AppIcon.vue";
 import { practitionerSpecialtyIcon } from "./hcpLabels";
+
+/**
+ * The tenant's overrides reach AppAvatar through provide/inject (main.ts
+ * provides them from the config store) — AppAvatar importing the store itself
+ * pulled the whole API layer into every page that shows an avatar.
+ */
+export const USER_ROLE_BADGE_OVERRIDES: InjectionKey<Readonly<Ref<Record<string, string>>>> =
+  Symbol("userRoleBadgeOverrides");
 
 type AppIconName = InstanceType<typeof AppIcon>["$props"]["name"];
 

@@ -47,10 +47,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
-import { getActivePinia } from "pinia";
-import { useConfigStore } from "../stores/config";
-import { userRoleBadge } from "../utils/userRoleBadge";
+import { computed, inject } from "vue";
+import { userRoleBadge, USER_ROLE_BADGE_OVERRIDES } from "../utils/userRoleBadge";
 import AppIcon, { type AppIconName } from "./AppIcon.vue";
 import { getInitials, getInitialsFromParts } from "../utils/initials";
 import { hcoTypeIcon } from "../utils/hcoLabels";
@@ -166,12 +164,11 @@ const sizePx = computed(() => (typeof props.size === "number" ? props.size : par
 const showDoctorBadge = computed(() => props.entityType === "hcp");
 const badgeIcon = computed(() => practitionerSpecialtyIcon(props.specialty ?? undefined));
 const leadBadgeIcon = computed(() => (props.entityType === "lead" ? leadSourceIcon(props.leadSource) : null));
-// The tenant's icon overrides come from the config store when one is
-// running (always in the app; a bare component mount has no Pinia).
-const configStore = getActivePinia() ? useConfigStore() : null;
+// The tenant's icon overrides, provided by main.ts (none in a bare mount).
+const roleBadgeOverrides = inject(USER_ROLE_BADGE_OVERRIDES, null);
 const roleBadge = computed(() =>
   props.entityType === "user"
-    ? userRoleBadge(props.role, { specialty: props.specialty, overrides: configStore?.config?.user_role_badges })
+    ? userRoleBadge(props.role, { specialty: props.specialty, overrides: roleBadgeOverrides?.value })
     : null,
 );
 const initialsFontSize = computed(() => `${Math.max(sizePx.value * FIBONACCI_INITIALS_RATIO, 8)}px`);
