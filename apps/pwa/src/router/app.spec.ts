@@ -15,9 +15,9 @@ describe("Pwa app", () => {
     expect(names).toContain("dashboard");
   });
 
-  it("router has app-layout routes (dashboard, leads, hcp, hco, planner, presentations) with app layout meta", () => {
+  it("router has app-layout routes (dashboard, leads, hcp, hco, calendar, presentations) with app layout meta", () => {
     const allRoutes = router.getRoutes();
-    const appRoutes = ["dashboard", "leads", "planner", "hcp", "hco", "presentations"];
+    const appRoutes = ["dashboard", "leads", "calendar", "hcp", "hco", "presentations"];
     for (const name of appRoutes) {
       const r = allRoutes.find((x) => x.name === name);
       expect(r).toBeDefined();
@@ -36,6 +36,21 @@ describe("Pwa app", () => {
     for (const name of portalOnly) {
       expect(names).not.toContain(name);
     }
+  });
+
+  it("/planner and /appointments (the old Planificador/Citas screens) redirect to /calendar (CORE-117)", async () => {
+    await router.push("/planner");
+    expect(router.currentRoute.value.path).toBe("/calendar");
+    await router.push("/appointments");
+    expect(router.currentRoute.value.path).toBe("/calendar");
+  });
+
+  it("the old /planner and /appointments routes carry no nav entry (not in appNavRoutes)", () => {
+    const names = router.getRoutes().map((r) => r.name).filter(Boolean) as string[];
+    // Only the merged "calendar" route is named; the redirects above have no `name`.
+    expect(names).toContain("calendar");
+    expect(names).not.toContain("planner");
+    expect(names).not.toContain("appointments");
   });
 });
 

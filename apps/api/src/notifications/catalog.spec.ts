@@ -42,7 +42,7 @@ describe("notification catalog", () => {
   });
 
   it("builds deep links from ids only", () => {
-    expect(NOTIFICATION_CATALOG.appointment_booked.link({})).toBe("/appointments");
+    expect(NOTIFICATION_CATALOG.appointment_booked.link({})).toBe("/calendar");
     expect(NOTIFICATION_CATALOG.partner_order_status_changed.link({ patientId: "p-1" })).toBe("/patients/p-1");
     expect(NOTIFICATION_CATALOG.partner_order_status_changed.link({})).toBeNull();
   });
