@@ -107,22 +107,13 @@
         <h2 class="cal__title" data-testid="calendar-title">
           <strong>{{ titleParts[0] }}</strong> <span>{{ titleParts[1] }}</span>
         </h2>
-        <div ref="segEl" class="cal__seg" role="tablist" :aria-label="t('user.calendar.viewSwitch')">
-          <span class="cal__seg-thumb" :style="thumbStyle" aria-hidden="true" />
-          <button
-            v-for="v in VIEWS"
-            :key="v"
-            :ref="(el) => setSegButton(v, el)"
-            type="button"
-            role="tab"
-            class="cal__seg-btn"
-            :aria-selected="calendarType === v"
-            :data-testid="`calendar-view-${v}`"
-            @click="navigate(v, calendarValue)"
-          >
-            {{ t(VIEW_LABEL[v]) }}
-          </button>
-        </div>
+        <AppSegmentedTabs
+          class="cal__seg"
+          :aria-label="t('user.calendar.viewSwitch')"
+          :model-value="calendarType"
+          :options="viewOptions"
+          @update:model-value="(v: string) => navigate(v as CalendarViewType, calendarValue)"
+        />
         <div class="cal__nav">
           <button type="button" class="cal__icon-btn" :aria-label="t('user.planner.prev')" data-testid="calendar-prev" @click="step(-1)">
             <AppIcon name="chevron-left" />
@@ -190,6 +181,7 @@
 
 <script setup lang="ts">
 import { reportCaught } from "@api";
+import { AppSegmentedTabs } from "@ui";
 import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDisplay } from "vuetify";
@@ -238,6 +230,8 @@ const lang = computed(() => intlLocale(locale.value));
 
 const VIEWS: readonly CalendarViewType[] = ["day", "week", "month"];
 const VIEW_LABEL: Record<CalendarViewType, string> = { day: "user.planner.viewDay", week: "user.planner.viewWeek", month: "user.planner.viewMonth" };
+/** CORE-135: the shared segmented control — this calendar's look is now everyone's. */
+const viewOptions = computed(() => VIEWS.map((v) => ({ value: v, label: t(VIEW_LABEL[v]), attrs: { "data-testid": `calendar-view-${v}` } })));
 
 /** Container widths (not the window's): the sidebar folds below NARROW_PX, the phone layout starts below PHONE_PX. */
 const NARROW_PX = 900;
@@ -261,29 +255,15 @@ const miniMonth = ref(new Date(calendarValue.value.getFullYear(), calendarValue.
 const rootEl = ref<HTMLElement | null>(null);
 const bodyEl = ref<HTMLElement | null>(null);
 const toolbarEl = ref<HTMLElement | null>(null);
-const segEl = ref<HTMLElement | null>(null);
-const segButtons = reactive<Record<string, HTMLElement | null>>({});
 const containerWidth = ref(smAndUp.value ? 1200 : 400);
 const narrow = computed(() => containerWidth.value < NARROW_PX);
 const phone = computed(() => containerWidth.value < PHONE_PX);
 const sideOpen = ref(false);
 const toolbarBottom = ref(72);
-const thumbStyle = ref<Record<string, string>>({});
 
 function measure() {
   if (rootEl.value) containerWidth.value = rootEl.value.clientWidth || containerWidth.value;
   if (toolbarEl.value) toolbarBottom.value = toolbarEl.value.offsetTop + toolbarEl.value.offsetHeight + 6;
-  placeThumb();
-}
-
-function setSegButton(view: CalendarViewType, el: unknown) {
-  segButtons[view] = el instanceof HTMLElement ? el : null;
-}
-
-function placeThumb() {
-  const btn = segButtons[calendarType.value];
-  if (!btn) return;
-  thumbStyle.value = { width: `${btn.offsetWidth}px`, transform: `translateX(${btn.offsetLeft}px)` };
 }
 
 let resizeObserver: ResizeObserver | null = null;
@@ -562,7 +542,6 @@ function navigate(type: CalendarViewType, date: Date, origin?: HTMLElement) {
       miniMonth.value = new Date(target.getFullYear(), target.getMonth(), 1);
     }
     await nextTick();
-    placeThumb();
     if (motion !== "none") {
       await Promise.race([pendingFetch, new Promise((resolve) => setTimeout(resolve, TRANSITION_FETCH_WAIT_MS))]);
       await nextTick();
@@ -1003,50 +982,6 @@ function onEntryClick(entry: CalendarEntry) {
   font-weight: 700;
 }
 
-.cal__seg {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  padding: 2px;
-  border-radius: 11px;
-  background: rgba(var(--v-theme-on-surface), 0.08);
-}
-
-.cal__seg-thumb {
-  position: absolute;
-  top: 2px;
-  bottom: 2px;
-  left: 0;
-  border-radius: 9px;
-  background: var(--cal-glass-strong);
-  box-shadow:
-    inset 0 1px 0 var(--glass-edge, rgb(255 255 255 / 0.7)),
-    0 2px 8px -2px rgb(0 0 0 / 0.22),
-    0 0 0 0.5px var(--cal-line-strong);
-  transition:
-    transform 0.5s var(--menu-spring, cubic-bezier(0.34, 1.3, 0.64, 1)),
-    width 0.5s var(--menu-spring, cubic-bezier(0.34, 1.3, 0.64, 1));
-}
-
-.cal__seg-btn {
-  position: relative;
-  z-index: 1;
-  min-height: 32px;
-  padding: 4px 14px;
-  border: 0;
-  border-radius: 9px;
-  background: none;
-  font: inherit;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--cal-muted);
-  cursor: pointer;
-  transition: color 0.2s;
-}
-
-.cal__seg-btn[aria-selected="true"] {
-  color: rgb(var(--v-theme-on-surface));
-}
 
 .cal__nav {
   display: flex;
@@ -1104,7 +1039,6 @@ function onEntryClick(entry: CalendarEntry) {
   box-shadow: 0 4px 12px -4px rgb(var(--v-theme-primary));
 }
 
-.cal__seg-btn:focus-visible,
 .cal__icon-btn:focus-visible,
 .cal__today:focus-visible,
 .cal__add:focus-visible {
@@ -1234,10 +1168,6 @@ function onEntryClick(entry: CalendarEntry) {
 
 .cal--phone .cal__seg {
   grid-area: seg;
-}
-
-.cal--phone .cal__seg-btn {
-  padding: 4px 0;
 }
 
 .cal--phone .cal__body--week {
