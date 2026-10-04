@@ -9,10 +9,11 @@ import {
   type Patient,
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
-import { ValidationError } from "../errors.js";
+import { ForbiddenError, ValidationError } from "../errors.js";
 import { assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
 import { assertCanSeePatient, practitionerIdForWrite } from "../queries/entityAccess.js";
 import { ConvertLeadCommand } from "./lead.js";
+import { addCareTeamMember } from "./careTeam.js";
 
 /**
  * COMMANDS — Patient domain.
@@ -240,10 +241,18 @@ export async function UpdatePatientCommand(
     : input.hcp_id !== undefined
       ? input.hcp_id
       : undefined;
-  // A doctor can't hand their patient to another doctor (or unassign it).
-  const practitionerId = requestedPractitionerId === undefined
-    ? undefined
-    : (await practitionerIdForWrite(ctx, requestedPractitionerId)) ?? undefined;
+  // Re-sending the current primary doctor (the edit form always does) changes nothing.
+  // A doctor can't hand their patient to another doctor (or unassign it), and only an
+  // admin replaces a primary doctor already set (CORE-132 D5) — the previous one stays
+  // on the care team.
+  let practitionerId: string | undefined;
+  if (requestedPractitionerId !== undefined && (requestedPractitionerId || null) !== before.practitioner_id) {
+    practitionerId = (await practitionerIdForWrite(ctx, requestedPractitionerId)) ?? undefined;
+    if (practitionerId === before.practitioner_id) practitionerId = undefined;
+    if (practitionerId && before.practitioner_id && ctx.user.role !== "admin") {
+      throw new ForbiddenError("Only an admin can change the patient's primary doctor");
+    }
+  }
 
   const updateInput: PatientUpdate = {
     salutation:     input.salutation !== undefined ? (input.salutation || undefined) : undefined,
@@ -274,10 +283,14 @@ export async function UpdatePatientCommand(
     action:        "update",
     entity_type:   "Patient",
     entity_id:     id,
-    entity_before: { status: before.status, region: before.region },
-    entity_after:  { status: after.status,  region: after.region },
+    entity_before: { status: before.status, region: before.region, practitioner_id: before.practitioner_id },
+    entity_after:  { status: after.status,  region: after.region, practitioner_id: after.practitioner_id },
     request_id:    ctx.requestId,
   });
+
+  if (practitionerId && before.practitioner_id) {
+    await addCareTeamMember(ctx, { patientId: id, practitionerId: before.practitioner_id, source: "former_primary" });
+  }
 
   return after;
 }

@@ -13,6 +13,7 @@ import {
   getTenantDefaultTimezone,
   insertAuditLog,
   getIdentityIdForUser,
+  isOnCareTeam,
   APPOINTMENT_STATUSES,
   type Appointment,
   type AppointmentStatus,
@@ -24,13 +25,16 @@ import { timezoneForCountry, wallTimeToUtc } from "../utils/timezones.js";
 import { assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
 import { getAppointmentViewer, assertCanSeeAppointment, redactForViewer, type AppointmentViewer, type AppointmentView } from "../queries/appointment.js";
 import { planAppointmentPatientEmail, type AppointmentEffects } from "./appointmentPatient.js";
+import { addCareTeamMember, releaseCareTeamAfterVisit } from "./careTeam.js";
 
 /**
  * COMMANDS — Appointment domain (NEO-27, ADR-026).
  *
  * Booking rules (Łukasz, scoping form 2026-09-26):
  *   - staff book (admin, manager, doctor, rep/kam/msl); patients don't book in v1
- *   - a doctor books only their own patients (patient.practitioner_id), always with themselves
+ *   - a doctor books only their own patients (primary doctor or care team), always with themselves
+ *   - booking with a doctor outside the care team adds them to it, confirmed by
+ *     grant_access; cancelling or deleting that visit takes it back (CORE-132, careTeam.ts)
  *   - managers and the field force book patients inside their territories; admin books anyone
  *   - a booking is confirmed at once; the doctor gets an in-app notification when someone else booked
  *   - default length 60 minutes; clinic's time zone
@@ -152,6 +156,8 @@ export interface CreateAppointmentInput {
   notes?: string;
   sleep_study_id?: string;
   treatment_plan_id?: string;
+  /** CORE-132 D4: the booker confirms that a doctor outside the care team gets the patient's record. */
+  grant_access?: boolean;
 }
 
 export async function CreateAppointmentCommand(ctx: TenantContext, input: CreateAppointmentInput, effects?: AppointmentEffects): Promise<AppointmentView> {
@@ -167,7 +173,7 @@ export async function CreateAppointmentCommand(ctx: TenantContext, input: Create
     if (input.practitioner_id && input.practitioner_id !== viewer.practitionerId) {
       throw new ForbiddenError("A doctor can only book appointments with themselves");
     }
-    if (patient.practitioner_id !== viewer.practitionerId) {
+    if (!(await isOnCareTeam(ctx.client, patient.id, viewer.practitionerId!))) {
       throw new ForbiddenError("A doctor can only book their own patients");
     }
     practitionerId = viewer.practitionerId!;
@@ -177,6 +183,12 @@ export async function CreateAppointmentCommand(ctx: TenantContext, input: Create
   if (!practitionerId) throw new ValidationError("practitioner_id is required (the patient has no assigned doctor)");
   const practitioner = await getPractitionerById(ctx.client, practitionerId);
   if (!practitioner) throw new NotFoundError("Practitioner", practitionerId);
+  // CORE-132 D4: booking with an HCP outside the care team gives them the patient's record,
+  // so the booker confirms it explicitly.
+  const joinsCareTeam = !(await isOnCareTeam(ctx.client, patient.id, practitionerId));
+  if (joinsCareTeam && input.grant_access !== true) {
+    throw new ValidationError("grant_access must be confirmed: this doctor is not on the patient's care team yet", "grant_access");
+  }
 
   if (viewer.kind === "field" && (input.notes || input.sleep_study_id || input.treatment_plan_id)) {
     throw new ForbiddenError("Notes and clinical links are for clinical staff only");
@@ -210,6 +222,9 @@ export async function CreateAppointmentCommand(ctx: TenantContext, input: Create
     entity_after: { patient_id: appointment.patient_id, practitioner_id: appointment.practitioner_id, start_at: appointment.start_at, end_at: appointment.end_at, status: appointment.status },
     request_id: ctx.requestId,
   });
+  if (joinsCareTeam) {
+    await addCareTeamMember(ctx, { patientId: patient.id, practitionerId, source: "appointment", appointmentId: appointment.id });
+  }
   if (viewer.practitionerId !== appointment.practitioner_id) await notifyDoctor(ctx, appointment, "appointment_booked");
   if (effects) effects.patientEmails.push(await planAppointmentPatientEmail(ctx.client, appointment, "booked", ctx.user.id));
 
@@ -274,6 +289,11 @@ export async function UpdateAppointmentCommand(ctx: TenantContext, id: string, i
   const change = after.status === "cancelled" && before.status !== "cancelled"
     ? "cancelled"
     : after.start_at !== before.start_at || after.end_at !== before.end_at ? "rescheduled" : null;
+  // CORE-132 D2: a cancelled visit takes back the access it gave; reopening it gives it back.
+  if (change === "cancelled") await releaseCareTeamAfterVisit(ctx, after.patient_id, after.practitioner_id);
+  if (before.status === "cancelled" && after.status !== "cancelled" && !(await isOnCareTeam(ctx.client, after.patient_id, after.practitioner_id))) {
+    await addCareTeamMember(ctx, { patientId: after.patient_id, practitionerId: after.practitioner_id, source: "appointment", appointmentId: after.id });
+  }
   if (change && viewer.practitionerId !== after.practitioner_id) {
     await notifyDoctor(ctx, after, change === "cancelled" ? "appointment_cancelled" : "appointment_rescheduled");
   }
@@ -299,4 +319,5 @@ export async function DeleteAppointmentCommand(ctx: TenantContext, id: string): 
     entity_before: { patient_id: existing.patient_id, practitioner_id: existing.practitioner_id, start_at: existing.start_at, status: existing.status },
     request_id: ctx.requestId,
   });
+  await releaseCareTeamAfterVisit(ctx, existing.patient_id, existing.practitioner_id);
 }

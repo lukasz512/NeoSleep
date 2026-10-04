@@ -1,5 +1,5 @@
 import type { TenantContext } from "../context/TenantContext.js";
-import { getPatientById, getPractitionerById, getOrganizationById, getIdentityIdForUser, getPractitionerIdByIdentityId, type Patient } from "../db.js";
+import { getPatientById, getPractitionerById, getOrganizationById, getIdentityIdForUser, getPractitionerIdByIdentityId, isOnCareTeam, type Patient } from "../db.js";
 import { ForbiddenError, NotFoundError } from "../errors.js";
 import { assertTerritoryAccessByTerritoryId, getAllowedScopePaths } from "../middleware/requireScope.js";
 
@@ -8,8 +8,9 @@ import { assertTerritoryAccessByTerritoryId, getAllowedScopePaths } from "../mid
  *
  * Who sees which patients:
  *   admin               every patient in their territories (usually global; NEO-47 region-scoped admins)
- *   doctor              only patients assigned to them (patient.practitioner_id = their
- *                       practitioner row, ADR-014); territory doesn't widen or narrow it
+ *   doctor              only patients assigned to them: primary doctor (patient.practitioner_id
+ *                       = their practitioner row, ADR-014) or on the care team (CORE-132,
+ *                       patient_practitioner); territory doesn't widen or narrow it
  *   manager / field     patients in their territories (requireScope.ts)
  *
  * Every list and by-id read, and every write, of a patient or anything hanging off one
@@ -66,7 +67,8 @@ export function patientListScope(viewer: Viewer, requestedPractitionerId?: strin
 export async function assertCanSeePatient(ctx: TenantContext, patient: Pick<Patient, "id" | "practitioner_id" | "territory_id">): Promise<void> {
   const viewer = await getViewer(ctx);
   if (viewer.kind === "doctor") {
-    if (patient.practitioner_id !== viewer.practitionerId) throw new NotFoundError("Patient", patient.id);
+    if (patient.practitioner_id === viewer.practitionerId) return;
+    if (!(await isOnCareTeam(ctx.client, patient.id, viewer.practitionerId!))) throw new NotFoundError("Patient", patient.id);
     return;
   }
   await assertTerritoryAccessByTerritoryId(ctx, patient.territory_id);

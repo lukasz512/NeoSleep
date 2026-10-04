@@ -7,6 +7,7 @@ import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
 import { CreatePatientCommand, UpdatePatientCommand, DeletePatientCommand } from "../commands/patient.js";
 import { GetPatientListQuery, GetPatientByIdQuery } from "../queries/patient.js";
+import { ListCareTeamQuery, AddCareTeamMemberCommand, RemoveCareTeamMemberCommand } from "../commands/careTeam.js";
 import { GetHistoryForPatientQuery } from "../queries/auditLog.js";
 import { GetPatientDocumentsQuery, GetPatientDocumentDownloadUrlQuery } from "../queries/entityDocuments.js";
 import { RecordClinicalQuestionnaireCommand, CompleteStopBangCommand } from "../commands/clinicalRecords.js";
@@ -465,6 +466,47 @@ patientRouter.delete(
       return CancelQuestionnaireRequestCommand(ctx, id, requestId);
     });
     res.status(204).end();
+  })
+);
+
+// ---------------------------------------------------------------------------
+// Care team (CORE-132) — who treats the patient, with access since when. Every
+// staff role reads it; who may add or remove is decided in commands/careTeam.ts.
+// ---------------------------------------------------------------------------
+patientRouter.get(
+  "/patient/:id/care-team",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = uuidParam(req, "id");
+    const slug = tenantSlugFromHost(req.hostname);
+    const team = await withTenant(slug, async (client) => ListCareTeamQuery(await buildContext(req, client, slug), id));
+    res.json(team);
+  })
+);
+
+patientRouter.post(
+  "/patient/:id/care-team",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = uuidParam(req, "id");
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const practitionerId = typeof body.practitioner_id === "string" ? body.practitioner_id.trim() : undefined;
+    if (practitionerId && !UUID_RE.test(practitionerId)) throw new ValidationError("practitioner_id must be a UUID", "practitioner_id");
+    const slug = tenantSlugFromHost(req.hostname);
+    const team = await withTenant(slug, async (client) => AddCareTeamMemberCommand(await buildContext(req, client, slug), id, practitionerId));
+    res.status(201).json(team);
+  })
+);
+
+patientRouter.delete(
+  "/patient/:id/care-team/:practitionerId",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = uuidParam(req, "id");
+    const practitionerId = uuidParam(req, "practitionerId");
+    const slug = tenantSlugFromHost(req.hostname);
+    const team = await withTenant(slug, async (client) => RemoveCareTeamMemberCommand(await buildContext(req, client, slug), id, practitionerId));
+    res.json(team);
   })
 );
 
