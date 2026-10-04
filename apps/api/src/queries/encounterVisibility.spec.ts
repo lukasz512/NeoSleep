@@ -29,9 +29,11 @@ import { signAuthToken } from "../utils/jwt.js";
  * The fixed rule (queries/encounter.ts's encounterVisibilityScope /
  * isEncounterVisible, the one place this is decided):
  *   rep / kam / msl / doctor   only their own encounters (user_id = self)
- *   manager / admin            their own encounters PLUS any encounter whose
+ *   manager                    their own encounters PLUS any encounter whose
  *                              territory falls within their allowed scope
  *                              (middleware/requireScope.ts getAllowedScopePaths)
+ *   admin                      every encounter in the tenant, whatever its
+ *                              territory scope (Łukasz, 2026-10-04)
  *
  * A not-visible encounter 404s (GetEncounterByIdQuery / UpdateEncounterCommand
  * return null) rather than 403ing — existence must not leak.
@@ -130,33 +132,25 @@ describe("Encounter visibility (CORE-106 — Planificador leak)", () => {
     });
   }, 20000);
 
-  it("admin sees per its granted scope: global admin sees every region, a region-scoped admin only its own", async () => {
+  it("admin sees every encounter in the tenant, even with a region-scoped role", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
-      const globalId = await getGlobalTerritoryId(client);
       const plId = await getCountryTerritoryId(client, "PL");
       const mxId = await getCountryTerritoryId(client, "MX");
       if (!plId || !mxId) throw new Error("PL/MX country territory not seeded");
 
       const repPL = await buildTestContext(client, "rep", plId);
       const repMX = await buildTestContext(client, "rep", mxId);
-      const adminGlobal = await buildTestContext(client, "admin", globalId);
       const adminPL = await buildTestContext(client, "admin", plId);
 
       const encPL = await CreateEncounterCommand(repPL, { start_at: NOW, type: "visit", territory_id: plId, notes: "PL for admin test" });
       const encMX = await CreateEncounterCommand(repMX, { start_at: NOW, type: "visit", territory_id: mxId, notes: "MX for admin test" });
 
-      const globalList = await GetEncounterListQuery(adminGlobal, {});
-      const globalIds = globalList.items.map((e) => e.id);
-      expect(globalIds).toContain(encPL.id);
-      expect(globalIds).toContain(encMX.id);
+      const ids = (await GetEncounterListQuery(adminPL, {})).items.map((e) => e.id);
+      expect(ids).toContain(encPL.id);
+      expect(ids).toContain(encMX.id);
 
-      const plAdminList = await GetEncounterListQuery(adminPL, {});
-      const plAdminIds = plAdminList.items.map((e) => e.id);
-      expect(plAdminIds).toContain(encPL.id);
-      expect(plAdminIds).not.toContain(encMX.id);
-
-      expect((await GetEncounterByIdQuery(adminPL, encPL.id))?.id).toBe(encPL.id);
-      expect(await GetEncounterByIdQuery(adminPL, encMX.id)).toBeNull();
+      expect((await GetEncounterByIdQuery(adminPL, encMX.id))?.id).toBe(encMX.id);
+      expect((await UpdateEncounterCommand(adminPL, encMX.id, { notes: "edited by admin" }))?.id).toBe(encMX.id);
     });
   }, 20000);
 
