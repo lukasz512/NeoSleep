@@ -20,8 +20,8 @@ export default createNeoVuetify({ i18n, useI18n }, {
   // layout) — same threshold, no dead zone between the two.
   mobileBreakpoint: MOBILE_BREAKPOINT,
   colors: {
-    lightPrimary:      brandColors.primary,
-    lightPrimaryDarken:brandColors.primaryHover,
+    lightPrimary:      brandColors.appPrimary,
+    lightPrimaryDarken:brandColors.appPrimaryHover,
     darkPrimary:       brandColors.primaryOnDark,
     darkPrimaryDarken: brandColors.primaryOnDarkHover,
   },

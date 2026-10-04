@@ -14,6 +14,12 @@ export const brandColors = {
   /** Very dark teal – footer, dark sections */
   primaryDark: "#082A27",
 
+  /** App UI primary (buttons, links, active tab) on light surfaces: a deeper
+   *  teal than the logo so text and buttons pass WCAG AA (NEO-236). */
+  appPrimary: "#0B6B62",
+  /** Hover / pressed for appPrimary */
+  appPrimaryHover: "#08534C",
+
   /** Primary for dark-mode surfaces (lighter teal, meets contrast) */
   primaryOnDark: "#17b5a5",
   /** Hover for dark-mode primary */
