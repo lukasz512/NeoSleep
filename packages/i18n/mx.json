@@ -1603,6 +1603,7 @@
   "app.treatmentPlans.form.scanFileUrl": "URL del escaneo 3D",
   "app.orthoApneaOrder.title": "Nueva solicitud de dispositivo",
   "app.deviceOrder.section": "Pedidos del dispositivo",
+  "app.deviceOrder.oneActive": "Un dispositivo a la vez: el paciente tiene un pedido en curso. Agrega un comentario a ese pedido.",
   "app.deviceOrder.title": "Dispositivo de avance mandibular",
   "app.deviceOrder.titleNumber": "{title} · nº {n}",
   "app.deviceOrder.state.draft": "Sin enviar",

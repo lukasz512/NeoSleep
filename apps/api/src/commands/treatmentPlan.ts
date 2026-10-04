@@ -3,6 +3,7 @@ import { requirePatientInScope } from "../queries/entityAccess.js";
 import { requireTreatmentPlanInScope } from "../queries/treatmentPlan.js";
 import {
   insertTreatmentPlan,
+  hasActiveTreatmentPlan,
   updateTreatmentPlan,
   getTreatmentPlanById,
   getSleepStudyById,
@@ -12,7 +13,7 @@ import {
   type TreatmentPlan,
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
-import { ValidationError } from "../errors.js";
+import { ValidationError, ConflictError } from "../errors.js";
 import {
   TREATMENT_PLAN_TYPES,
   TREATMENT_PLAN_STATUSES,
@@ -77,6 +78,11 @@ export async function CreateTreatmentPlanCommand(
   if (!study) throw new ValidationError("sleep_study_id does not reference an existing sleep study");
   if (study.patient_id !== input.patient_id) {
     throw new ValidationError("sleep_study_id does not belong to the given patient_id");
+  }
+
+  // NEO-223: one active device per patient — follow up on the open order (comments) instead.
+  if (await hasActiveTreatmentPlan(ctx.client, input.patient_id, input.type)) {
+    throw new ConflictError("The patient already has an active order of this type", "DEVICE_ORDER_ACTIVE");
   }
 
   const plan = await insertTreatmentPlan(ctx.client, input);
