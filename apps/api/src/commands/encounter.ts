@@ -12,6 +12,7 @@ import {
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
 import { ValidationError } from "../errors.js";
+import { isEncounterVisible } from "../queries/encounter.js";
 
 /**
  * COMMANDS — the "cooks" of the CQRS kitchen.
@@ -118,7 +119,11 @@ export interface UpdateEncounterPayload {
 }
 
 /**
- * Updates an Encounter. Returns null if the encounter does not exist.
+ * Updates an Encounter. Returns null if the encounter does not exist, OR
+ * (CORE-106) if it exists but isn't visible to ctx.user under
+ * queries/encounter.ts's isEncounterVisible() — same 404-not-403 contract
+ * as GetEncounterByIdQuery, so a foreign encounter's existence never leaks
+ * through PATCH either.
  */
 export async function UpdateEncounterCommand(
   ctx: TenantContext,
@@ -135,6 +140,7 @@ export async function UpdateEncounterCommand(
 
   const before = await getEncounterById(ctx.client, id);
   if (!before) return null;
+  if (!(await isEncounterVisible(ctx, before))) return null;
 
   const updateInput: UpdateEncounterInput = {
     start_at:          input.start_at,
