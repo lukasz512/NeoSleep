@@ -218,6 +218,35 @@ describe("AppAccountMenu — NEO-122 avatar button turns into the menu", () => {
       expect(card()!.style.transform).toBe("");
     });
 
+    // Łukasz, 2026-10-04: pulling the card up should work like the avatar's —
+    // from anywhere, as long as the list fits and has nothing to scroll.
+    it("closes on a swipe up from a [data-glass-scroll] list that fits without scrolling", async () => {
+      const open = ref(false);
+      const Host = defineComponent({
+        setup: () => () =>
+          h(
+            AppGlassPopover,
+            { open: open.value, "onUpdate:open": (v: boolean) => (open.value = v), mobile: true, label: "Notifications", swipeFrom: "handle", testId: "notification-center" },
+            {
+              trigger: () => h("button", { type: "button", "data-testid": "trigger" }, [h("span", { "data-motion": "trigger-avatar" }, "B")]),
+              default: () => h("div", { "data-glass-scroll": "", "data-testid": "list" }, [h("button", { type: "button", "data-testid": "row" }, "Row")]),
+            },
+          ),
+      });
+      const wrapper = mount(Host, { attachTo: document.body });
+      mounted.push(wrapper);
+      await wrapper.get('[data-testid="trigger"]').trigger("click");
+      await flushPromises();
+
+      const list = document.querySelector<HTMLElement>('[data-testid="list"]')!;
+      expect(list.classList.contains("glass-popover__scroll--fits")).toBe(true);
+      pointer(document.querySelector('[data-testid="row"]')!, "pointerdown", 300, 0);
+      pointer(window, "pointermove", 200, 400);
+      pointer(window, "pointerup", 200, 400);
+      await flushPromises();
+      expect(open.value).toBe(false);
+    });
+
     it("names the dim and handle after the test id", async () => {
       await openPhone();
       expect(document.querySelector('[data-testid="notification-center-dim"]')).not.toBeNull();

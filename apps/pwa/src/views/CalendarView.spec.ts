@@ -38,18 +38,18 @@ afterEach(() => {
   apiFetch.mockReset();
 });
 
-async function mountView(role: string) {
+async function mountView(role: string, path = "/calendar") {
   setActivePinia(createPinia());
   useAuthStore().user = { id: "u-1", email: "qa@clinic.test", role } as ReturnType<typeof useAuthStore>["user"];
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
   const router = createRouter({ history: createMemoryHistory(), routes });
-  await router.push("/calendar");
+  await router.push(path);
   await router.isReady();
   const wrapper = mount(CalendarView, { global: { plugins: [i18n, vuetify, router] } });
   wrappers.push(wrapper);
   await flushPromises();
-  return wrapper;
+  return Object.assign(wrapper, { router });
 }
 
 describe("CalendarView (CORE-117)", () => {
@@ -134,5 +134,34 @@ describe("CalendarView (CORE-117)", () => {
 
     expect(document.body.querySelector('[data-testid="calendar-add-appointment"]')).not.toBeNull();
     expect(document.body.querySelector('[data-testid="calendar-add-event"]')).not.toBeNull();
+  });
+
+  // CORE-4: a notification about a visit opens that visit, not just the calendar.
+  it("?appointment=<id> loads that visit, jumps to its day and opens its detail", async () => {
+    const appointment = { id: "a-9", patient_id: "p-1", patient_name: "Jane Doe", practitioner_id: "doc-1", practitioner_name: "Dr. Smith", start_at: "2032-03-10T14:00:00.000Z", end_at: "2032-03-10T14:30:00.000Z", timezone: "UTC", status: "scheduled" };
+    apiFetch.mockImplementation(async (url: string) =>
+      String(url).startsWith("/api/v1/appointments/a-9") ? jsonResponse(true, 200, appointment) : jsonResponse(true, 200, { items: [] }),
+    );
+    const wrapper = await mountView("manager", "/calendar?appointment=a-9");
+    await flushPromises();
+
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/appointments/a-9", expect.anything());
+    expect(document.body.querySelector('[data-testid="appointment-status"]')).not.toBeNull();
+    expect(document.body.textContent).toContain("Jane Doe");
+    const lastCalendar = apiFetch.mock.calls.map((c) => String(c[0])).filter((u) => u.startsWith("/api/v1/calendar")).pop()!;
+    const start = new URL(lastCalendar, "http://x").searchParams.get("start")!;
+    expect(new Date(start).getTime()).toBeLessThanOrEqual(Date.parse(appointment.start_at));
+    expect(Date.parse(appointment.start_at) - new Date(start).getTime()).toBeLessThan(8 * 86_400_000);
+    expect(wrapper.router.currentRoute.value.query.appointment).toBeUndefined();
+  });
+
+  it("?appointment=<id> that can't be loaded leaves the calendar as it is", async () => {
+    apiFetch.mockImplementation(async (url: string) =>
+      String(url).startsWith("/api/v1/appointments/") ? jsonResponse(false, 404, {}) : jsonResponse(true, 200, { items: [] }),
+    );
+    const wrapper = await mountView("manager", "/calendar?appointment=gone");
+    await flushPromises();
+    expect(document.body.querySelector('[data-testid="appointment-status"]')).toBeNull();
+    expect(wrapper.router.currentRoute.value.query.appointment).toBeUndefined();
   });
 });

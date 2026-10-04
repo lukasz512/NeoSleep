@@ -148,7 +148,7 @@ function setDrag(dy: number) {
 
 function onCardPointerDown(e: PointerEvent) {
   if (!props.mobile || !swipeable.value || !open.value || e.button !== 0) return;
-  if (props.swipeFrom === "handle" && !(e.target instanceof Element && e.target.closest("[data-glass-swipe]"))) return;
+  if (props.swipeFrom === "handle" && !(e.target instanceof Element && e.target.closest(`[data-glass-swipe], .${SCROLL_FITS}`))) return;
   swipe = { id: e.pointerId, y0: e.clientY, x0: e.clientX, t0: e.timeStamp, dy: 0, active: false };
   window.addEventListener("pointermove", onSwipeMove);
   window.addEventListener("pointerup", onSwipeEnd);
@@ -197,6 +197,46 @@ function onCardClickCapture(e: MouseEvent) {
   e.preventDefault();
 }
 
+// ── Phone, swipeFrom "handle": a list that fits takes the swipe too ─────────
+// While the [data-glass-scroll] list has nothing to scroll, the whole card
+// can be pulled up like the account card (Łukasz, 2026-10-04); once it
+// overflows, only the header and handle can, so the list keeps scrolling.
+// The class switches touch-action, which the browser reads at touchstart.
+const SCROLL_FITS = "glass-popover__scroll--fits";
+let fitResize: ResizeObserver | null = null;
+let fitMutations: MutationObserver | null = null;
+
+function stopScrollFit() {
+  fitResize?.disconnect();
+  fitMutations?.disconnect();
+  fitResize = null;
+  fitMutations = null;
+}
+
+function watchScrollFit(card: HTMLElement) {
+  stopScrollFit();
+  const list = card.querySelector<HTMLElement>("[data-glass-scroll]");
+  if (!list || !props.mobile || props.swipeFrom !== "handle") return;
+  const update = () => list.classList.toggle(SCROLL_FITS, list.scrollHeight <= list.clientHeight + 1);
+  const observeAll = () => {
+    if (!fitResize) return;
+    fitResize.disconnect();
+    fitResize.observe(list);
+    for (const child of Array.from(list.children)) fitResize.observe(child);
+  };
+  if (typeof ResizeObserver !== "undefined") fitResize = new ResizeObserver(update);
+  if (typeof MutationObserver !== "undefined") {
+    // rows arrive after the card opens (the list loads then), so re-check on every change
+    fitMutations = new MutationObserver(() => {
+      observeAll();
+      update();
+    });
+    fitMutations.observe(list, { childList: true, subtree: true });
+  }
+  observeAll();
+  update();
+}
+
 function resetDrag() {
   swipe = null;
   dragging.value = false;
@@ -222,6 +262,7 @@ async function show() {
     placeCard({ triggerAvatar, card, phone: props.mobile, anchorSize: props.anchorSize });
     card.querySelectorAll<HTMLElement>('[data-motion="row"]').forEach((row, i) => row.style.setProperty("--glass-popover-i", String(i)));
     swipeable.value = props.mobile && (props.swipeFrom === "handle" || card.scrollHeight <= card.clientHeight);
+    watchScrollFit(card);
   }
   // the menu's avatar takes over at once, so the pressed bar avatar can't peek out behind it
   triggerHidden.value = true;
@@ -236,6 +277,7 @@ async function hide() {
   const id = ++run;
   if (!rendered.value) return;
   shown.value = false;
+  stopScrollFit();
   // Dropping a swipe's inline offset in the same frame lets the close
   // transition run from where the finger let go.
   resetDrag();
@@ -272,6 +314,7 @@ watch(rendered, (value) => {
 onBeforeUnmount(() => {
   document.removeEventListener("keydown", onKeydown);
   endSwipeListeners();
+  stopScrollFit();
 });
 </script>
 
@@ -389,7 +432,8 @@ onBeforeUnmount(() => {
 
 /* Swipe: the card takes the gesture itself (no page scroll behind it). */
 .glass-popover__card--swipe,
-.glass-popover__card--swipe-handle :deep([data-glass-swipe]) {
+.glass-popover__card--swipe-handle :deep([data-glass-swipe]),
+.glass-popover__card--swipe-handle :deep(.glass-popover__scroll--fits) {
   touch-action: none;
   user-select: none;
 }

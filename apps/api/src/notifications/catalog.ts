@@ -32,7 +32,11 @@ export interface NotificationAction {
   href: string;
 }
 
-/** Ids only — never names or clinical values. Used to build deep links. */
+/**
+ * Ids only — never names or clinical values. Used to build deep links.
+ * notify() always passes `entityId` (the event's own record) next to the
+ * producer's own params.
+ */
 export type NotificationLinkParams = Readonly<Record<string, string | null | undefined>>;
 
 export interface NotificationEventDefinition {
@@ -52,7 +56,9 @@ export interface NotificationEventDefinition {
 }
 
 /** CORE-117: Citas merged into the Calendario screen — /appointments still redirects there, but new links point straight at it. */
-const appointmentLink = (): string => "/calendar";
+/** CORE-4: the visit itself — CalendarView opens `?appointment=<id>` in its detail dialog. */
+const appointmentLink = (p: NotificationLinkParams): string =>
+  p.entityId ? `/calendar?appointment=${encodeURIComponent(p.entityId)}` : "/calendar";
 const patientLink = (p: NotificationLinkParams): string | null => (p.patientId ? `/patients/${p.patientId}` : null);
 /** NEO-195: the patient's sleep-study tab, where a submitted questionnaire shows up. */
 const patientStudiesLink = (p: NotificationLinkParams): string | null => (p.patientId ? `/patients/${p.patientId}?tab=studies` : null);
@@ -192,6 +198,19 @@ export function resolveNotificationActions(
     }
   }
   return result;
+}
+
+/**
+ * The link an in-app row opens, rebuilt when the list is read (CORE-4): an
+ * appointment event links to its own visit, also for rows stored before
+ * deep links existed (their action_url is the bare calendar). Other types
+ * keep the link stored at notify time — it carries params (patientId…) the
+ * row alone can't rebuild.
+ */
+export function resolveNotificationLink(type: string, entityId: string | null, storedUrl: string | null): string | null {
+  if (!isNotificationType(type) || !entityId) return storedUrl;
+  const def = NOTIFICATION_CATALOG[type];
+  return def.entityType === "Appointment" ? def.link({ entityId }) : storedUrl;
 }
 
 /** i18n keys for a type's copy. Grouped rows (group_count > 1) use the shared grouped body. */
