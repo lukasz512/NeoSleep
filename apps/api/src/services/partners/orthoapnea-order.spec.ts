@@ -350,17 +350,17 @@ describe("createOrthoApneaTreatment", () => {
       "fetch",
       vi.fn(async (url: string) => {
         if (url.includes("/api/login")) return { ok: true, status: 200, json: async () => ({ token: fakeJwt(1800) }) } as Response;
-        if (url.includes("/api/treatments")) throw new Error("network down");
+        if (url.includes("/api/treatments")) throw new TypeError("fetch failed", { cause: Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" }) });
         throw new Error(`Unmocked fetch call in test: ${url}`);
       })
     );
 
-    await expect(createOrthoApneaTreatment(TENANT_SLUG, plan.id, {})).rejects.toThrow("network down");
+    await expect(createOrthoApneaTreatment(TENANT_SLUG, plan.id, {})).rejects.toThrow("could not connect");
 
     const link = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", plan.id));
     expect(link?.sync_status).toBe("failed");
     expect(link?.external_id).toBeNull();
-    expect(link?.last_error).toContain("network down");
+    expect(link?.last_error).toContain("could not connect");
     createdPartnerLinkIds.push(link!.id);
 
     const transactions = await query<{
@@ -376,7 +376,28 @@ describe("createOrthoApneaTreatment", () => {
     expect(transactions[0]!.success).toBe(false);
     expect(transactions[0]!.http_status).toBeNull(); // never got an HTTP response at all — distinct from a 500
     expect(transactions[0]!.response_payload).toBeNull();
-    expect(transactions[0]!.error_message).toContain("network down");
+    expect(transactions[0]!.error_message).toContain("could not connect");
+  });
+
+  it("keeps partner_link pending (ambiguous, like a timeout) when the connection drops mid-request (NEO-210)", async () => {
+    const { plan } = await setupPatientAndPlan();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.includes("/api/login")) return { ok: true, status: 200, json: async () => ({ token: fakeJwt(1800) }) } as Response;
+        if (url.includes("/api/treatments")) throw new TypeError("fetch failed", { cause: Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }) });
+        throw new Error(`Unmocked fetch call in test: ${url}`);
+      })
+    );
+
+    await expect(createOrthoApneaTreatment(TENANT_SLUG, plan.id, {})).rejects.toThrow("lost its connection");
+
+    // The lab may have created the order before the socket dropped: never
+    // "failed" (which would allow a blind resend), always "pending".
+    const link = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", plan.id));
+    expect(link?.sync_status).toBe("pending");
+    createdPartnerLinkIds.push(link!.id);
   });
 
   it("rejects a duplicate submission for a treatment_plan already synced to OrthoApnea", async () => {
