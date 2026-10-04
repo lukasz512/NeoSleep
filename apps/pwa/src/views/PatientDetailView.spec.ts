@@ -123,6 +123,16 @@ const CHECKLIST = {
   summary: { done: 1, total: 2 },
 };
 
+const SUMMARY = {
+  preferred_name: null,
+  shipping_address: null,
+  data_consent_at: null,
+  data_consent_withdrawn_at: null,
+  latest_study: { id: "s-1", study_date: "2026-09-12", ahi_score: 22.4, spo2_nadir: 84, odi: 19, diagnosis_code: null },
+  device_order: null,
+  next_appointment: null,
+};
+
 // jsdom has no scrollIntoView (the Studies tab scrolls the opened item into view).
 Element.prototype.scrollIntoView = vi.fn();
 
@@ -130,36 +140,32 @@ function routeApi() {
   apiFetch.mockImplementation(async (path: string) => {
     if (path === "/api/v1/patient/patient-1") return jsonResponse(true, 200, PATIENT);
     if (path.endsWith("/checklist")) return jsonResponse(true, 200, CHECKLIST);
+    if (path.endsWith("/summary")) return jsonResponse(true, 200, SUMMARY);
     return jsonResponse(true, 200, { items: [] });
   });
 }
 
+describe("PatientDetailView — Details tab (NEO-206)", () => {
+  it("Details has no documents checklist and loads the summary strip instead", async () => {
+    routeApi();
+    const { wrapper } = await mountPatientDetail();
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="summary-strip"]').exists()).toBe(true));
+    expect(wrapper.find(".studies-summary").exists()).toBe(false);
+    expect(apiFetch.mock.calls.some(([path]) => String(path).endsWith("/checklist"))).toBe(false);
+    await flushPromises();
+  });
+
+  it("the PSG tile opens the Studies tab", async () => {
+    routeApi();
+    const { wrapper, router } = await mountPatientDetail();
+    await vi.waitFor(() => expect(wrapper.find('[data-testid="tile-psg"]').exists()).toBe(true));
+    await wrapper.find('[data-testid="tile-psg"]').trigger("click");
+    await vi.waitFor(() => expect(router.currentRoute.value.query).toMatchObject({ tab: "studies" }));
+    await flushPromises();
+  });
+});
+
 describe("PatientDetailView — Estudios checklist (NEO-36)", () => {
-  it("the Details tab shows one status icon per study; a click opens that item in the Studies tab", async () => {
-    routeApi();
-    const { wrapper, router } = await mountPatientDetail();
-    await vi.waitFor(() => expect(wrapper.find(".studies-summary__item").exists()).toBe(true));
-
-    const icons = wrapper.findAll(".studies-summary__item");
-    expect(icons.map((b) => b.text())).toEqual(["Informed consent", "Polysomnography"]);
-    expect(icons[0]!.classes()).toContain("studies-summary__item--done");
-    expect(wrapper.text()).toContain("1 of 2 done");
-
-    await icons[1]!.trigger("click");
-    await vi.waitFor(() => expect(router.currentRoute.value.query).toMatchObject({ tab: "studies", item: "polysomnography" }));
-    await vi.waitFor(() => expect(wrapper.find(".studies__item").exists()).toBe(true));
-    await flushPromises();
-  });
-
-  it("a click on a document item (consent) opens it in the Documents tab (NEO-193)", async () => {
-    routeApi();
-    const { wrapper, router } = await mountPatientDetail();
-    await vi.waitFor(() => expect(wrapper.find(".studies-summary__item").exists()).toBe(true));
-    await wrapper.findAll(".studies-summary__item")[0]!.trigger("click");
-    await vi.waitFor(() => expect(router.currentRoute.value.query).toMatchObject({ tab: "documents", item: "informedConsent" }));
-    await flushPromises();
-  });
-
   it("a rep gets no Estudios card and never requests the checklist", async () => {
     routeApi();
     const { wrapper } = await mountPatientDetail("rep");

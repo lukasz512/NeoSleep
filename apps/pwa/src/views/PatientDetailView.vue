@@ -87,59 +87,8 @@
       <template v-if="patient" #sections>
         <DetailViewTabs v-model="activeTab" :tabs="patientTabs">
           <template #details>
-            <div class="view-item__row">
-              <dt class="view-item__label">{{ t("app.patients.detail.email") }}</dt>
-              <dd class="view-item__value">
-                <a v-if="patient.email" :href="`mailto:${patient.email}`" class="view-item__link">{{ patient.email }}</a>
-                <span v-else class="view-item__empty">—</span>
-              </dd>
-            </div>
-            <div class="view-item__row">
-              <dt class="view-item__label">{{ t("app.patients.detail.phone") }}</dt>
-              <dd class="view-item__value">
-                <a v-if="patient.phone" :href="`tel:${patient.phone}`" class="view-item__link">{{ patient.phone }}</a>
-                <span v-else class="view-item__empty">—</span>
-              </dd>
-            </div>
-            <div class="view-item__row">
-              <dt class="view-item__label">{{ t("app.patients.detail.practitioner") }}</dt>
-              <dd class="view-item__value">
-                <EntityLink
-                  :to="patient.practitioner_id ? { name: 'hcp-detail', params: { id: patient.practitioner_id } } : null"
-                  :label="patient.practitioner_name"
-                  entity-type="hcp"
-                  :specialty="patient.practitioner_specialty"
-                  :details="specialtySet(patient.practitioner_specialty, patient.practitioner_specialties).details"
-                  :more-details="specialtySet(patient.practitioner_specialty, patient.practitioner_specialties).more"
-                  :avatar-size="32"
-                />
-              </dd>
-            </div>
-            <div class="view-item__row">
-              <dt class="view-item__label">{{ t("app.patients.detail.status") }}</dt>
-              <dd class="view-item__value">
-                <VChip :color="patientStatusColor(patient.status)" size="small" variant="tonal">
-                  {{ patientStatusLabel(t, patient.status) }}
-                </VChip>
-              </dd>
-            </div>
-            <div class="view-item__row">
-              <dt class="view-item__label">{{ t("app.patients.detail.region") }}</dt>
-              <dd class="view-item__value">{{ regionBreadcrumb }}</dd>
-            </div>
-            <div class="view-item__row">
-              <dt class="view-item__label">{{ t("app.patients.detail.ahiBaseline") }}</dt>
-              <dd class="view-item__value">{{ patient.ahi_baseline ?? "—" }}</dd>
-            </div>
-            <div class="view-item__row">
-              <dt class="view-item__label">{{ t("app.patients.detail.cpapDevice") }}</dt>
-              <dd class="view-item__value">{{ patient.cpap_device ? t("app.common.yes") : t("app.common.no") }}</dd>
-            </div>
-            <div class="view-item__row">
-              <dt class="view-item__label">{{ t("app.patients.detail.medicalRecord") }}</dt>
-              <dd class="view-item__value">{{ patient.medical_record || "—" }}</dd>
-            </div>
-            <PatientStudiesSummary v-if="canSeeStudies" :patient-id="patient.id" @open="openStudy" />
+            <!-- NEO-206: summary strip + grouped rows; the documents checklist lives in the side panel and on Documentos. -->
+            <PatientDetailsTab :patient="patient" :can-see-studies="canSeeStudies" @open-tab="(tab: string) => (activeTab = tab)" />
           </template>
           <template #notes>
             <PatientNotesPanel entity-type="patient" :entity-id="patient.id" />
@@ -204,14 +153,13 @@ import AppButton from "../components/AppButton.vue";
 import AppConfirmDialog from "../components/AppConfirmDialog.vue";
 import AppIcon from "../components/AppIcon.vue";
 import DetailViewTabs from "../components/DetailViewTabs.vue";
-import EntityLink from "../components/EntityLink.vue";
 import { useIdentity } from "../composables/useIdentity";
 import AppAvatar from "../components/AppAvatar.vue";
 import IdentityDetails from "../components/IdentityDetails.vue";
 import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
 import PatientAsidePanel from "../components/patient/PatientAsidePanel.vue";
 import PatientChecklistPanel from "../components/patient/PatientChecklistPanel.vue";
-import PatientStudiesSummary from "../components/patient/PatientStudiesSummary.vue";
+import PatientDetailsTab from "../components/patient/PatientDetailsTab.vue";
 import PatientOrthoApneaPanel from "../components/patient/PatientOrthoApneaPanel.vue";
 import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
 import { patientFormFields, patientFormDerive } from "../config/forms/patientForm";
@@ -219,7 +167,6 @@ import { STUDY_ROLES } from "../config/questionnaires";
 import { CHECKLIST_TAB, type ChecklistCategory } from "../composables/usePatientChecklist";
 import { useAuthStore } from "../stores/auth";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
-import { patientStatusColor, patientStatusLabel } from "../utils/patientStatus";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
 const AppointmentDialog = defineAsyncComponent(() => import("../components/AppointmentDialog.vue"));
@@ -253,29 +200,17 @@ interface PatientDetail {
   medical_record?: string | null;
   /** ICD-10 JSONB — nothing writes it yet; the side panel shows it when present (NEO-153). */
   diagnosis_code?: Record<string, unknown> | null;
+  created_at?: string;
 }
 
 const { t } = useI18n();
-const { patientDetails, specialtySet } = useIdentity();
+const { patientDetails } = useIdentity();
 const route = useRoute();
 const router = useRouter();
 const notifications = useNotifications();
 const { submit } = useEntitySubmit();
 
 const patient = ref<PatientDetail | null>(null);
-
-
-/** territory_path (when set) as "mx/cdmx/polanco" — each ancestor's own short
- *  `code`, root-first, lowercased. Falls back to the flat identities.region
- *  text for patients with no territory assigned yet (the common case until
- *  this gets populated — see PatientDetailView's Region row). */
-const regionBreadcrumb = computed(() => {
-  const path = patient.value?.territory_path;
-  if (path && path.length > 0) {
-    return path.map((node) => (node.code || node.name).toLowerCase()).join("/");
-  }
-  return patient.value?.region || "—";
-});
 
 const loading = ref(true);
 /** True when loadPatient() failed for a reason other than a genuine 404 (network/server) — see loadPatient(). */
