@@ -250,7 +250,7 @@ import {
 import { useGlyphInset } from "../composables/useGlyphInset";
 import { useBarLogoFit } from "../composables/useBarLogoFit";
 import { useThemeColorMeta } from "../composables/useThemeColorMeta";
-import { MENU_AVATAR_SIZE } from "../composables/useAccountMenuMotion";
+import { MENU_AVATAR_SIZE } from "../composables/useGlassPopoverMotion";
 import { useI18n } from "vue-i18n";
 import { AppShell, useAppVersionParts, CHANGE_PASSWORD_FROM_MENU } from "@ui";
 import { useLayoutState } from "../composables/useLayoutState";

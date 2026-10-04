@@ -120,8 +120,8 @@ test("the account avatar grows into the card's top-right corner, inset like the 
   await expect
     .poll(() =>
       page.evaluate(async () => {
-        const el = document.querySelector('.account-menu__card [data-motion="avatar"]');
-        if (!el?.closest(".account-menu--open")) return false;
+        const el = document.querySelector('[data-testid="account-menu"] [data-motion="avatar"]');
+        if (!el?.closest(".glass-popover--open")) return false;
         if (el.getAnimations().some((a) => a.playState === "running")) return false;
         const read = () => JSON.stringify(el.getBoundingClientRect());
         const before = read();
@@ -130,8 +130,8 @@ test("the account avatar grows into the card's top-right corner, inset like the 
       }),
     )
     .toBe(true);
-  const card = await box(page, ".account-menu__card");
-  const avatar = await box(page, '.account-menu__card [data-motion="avatar"]');
+  const card = await box(page, '[data-testid="account-menu"]');
+  const avatar = await box(page, '[data-testid="account-menu"] [data-motion="avatar"]');
   expect(Math.abs(avatar.width - 56)).toBeLessThan(1);
   expect(Math.abs(card.x + card.width - (avatar.x + avatar.width) - 16)).toBeLessThan(1.5);
   expect(Math.abs(avatar.y - card.y - 16)).toBeLessThan(1.5);

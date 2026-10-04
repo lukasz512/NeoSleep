@@ -293,7 +293,7 @@ $pwa-avatar-dark: (patient: (24, 72), doctor: (23, 78), org: (22, 76), lead: (16
 /*
  * NEO-161 "Kropla": one liquid-glass material and one motion for every phone
  * menu — the bottom pill, its module capsule (packages/ui MobileNavPanel) and
- * the account card (AppAccountMenu). Only transform + opacity move; the blur
+ * the glass popovers (AppGlassPopover: account card, notification bell). Only transform + opacity move; the blur
  * sits on the surfaces themselves and is never animated, so slow phones only
  * composite. The surface mixes from the theme's own surface colour, so it
  * follows the tenant palette and the dark theme.

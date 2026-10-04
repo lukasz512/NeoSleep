@@ -22,7 +22,7 @@ import { AppShell } from "@neo/ui";
 import AppIcon, { type AppIconName } from "../../src/components/AppIcon.vue";
 import AppAccountMenu from "../../src/layouts/components/AppAccountMenu.vue";
 import AppUserMenuPanel from "../../src/layouts/components/AppUserMenuPanel.vue";
-import { MENU_AVATAR_SIZE } from "../../src/composables/useAccountMenuMotion";
+import { MENU_AVATAR_SIZE } from "../../src/composables/useGlassPopoverMotion";
 
 const params = new URLSearchParams(location.search);
 const theme = params.get("theme") === "dark" ? darkTheme : lightTheme;
