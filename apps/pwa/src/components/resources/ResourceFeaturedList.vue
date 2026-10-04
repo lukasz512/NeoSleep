@@ -35,6 +35,12 @@ const { t } = useI18n();
   gap: 12px;
   margin-bottom: 24px;
 }
+/* Full width only on phones; on wider screens a document row, not a banner (NEO-242). */
+@media (min-width: 600px) {
+  .resource-featured {
+    max-width: 480px;
+  }
+}
 
 /* Same tonal card as the document tiles (surface-container-low + outline-variant), one full-width row. */
 .resource-featured__card {

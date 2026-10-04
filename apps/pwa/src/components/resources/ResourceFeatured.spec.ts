@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { mount } from "@vue/test-utils";
 import { createI18n } from "vue-i18n";
@@ -8,6 +8,7 @@ import mx from "@i18n/mx.json";
 import pl from "@i18n/pl.json";
 import ResourceFeaturedList from "./ResourceFeaturedList.vue";
 import { FEATURED_RESOURCES, featuredResourceHref } from "../../config/featuredResources";
+import { isServedAsFile } from "../../config/pwaFiles";
 
 function mountList(locale = "en") {
   return mount(ResourceFeaturedList, {
@@ -37,6 +38,16 @@ describe("Featured resources (NEO-242)", () => {
     for (const item of FEATURED_RESOURCES) {
       expect(existsSync(resolve(__dirname, "../../../public", item.file))).toBe(true);
     }
+  });
+
+  it("keeps every featured file out of the service worker's index.html fallback", () => {
+    for (const item of FEATURED_RESOURCES) expect(isServedAsFile(featuredResourceHref(item, "/"))).toBe(true);
+    expect(isServedAsFile("/resources")).toBe(false);
+  });
+
+  it("caps the card width on desktop, full width on phones", () => {
+    const css = readFileSync(resolve(__dirname, "ResourceFeaturedList.vue"), "utf8");
+    expect(css).toMatch(/@media \(min-width: 600px\)\s*{\s*\.resource-featured\s*{\s*max-width: \d+px;/);
   });
 
   it("joins the base URL with exactly one slash", () => {
