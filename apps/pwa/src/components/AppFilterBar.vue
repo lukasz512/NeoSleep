@@ -193,13 +193,21 @@ function removeChip(def: FilterDefinition, value: string) {
   color: var(--pwa-text, currentColor);
 }
 
+/* CORE-136: a glass square matching the list search beside it (Doctor Panel
+   search look), so the toolbar reads as one piece. */
 .app-filter-bar__btn--no-border {
   border: none;
-  box-shadow: none;
-  background: transparent;
+  /* Same 48 px as the search field, so both sit on one line. */
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: color-mix(in srgb, rgb(var(--v-theme-on-surface)) 5%, var(--glass-surface));
+  box-shadow: var(--glass-rim);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
 
   &:hover {
-    background: rgba(var(--v-theme-on-surface), 0.08);
+    background: color-mix(in srgb, rgb(var(--v-theme-on-surface)) 10%, var(--glass-surface));
   }
 }
 
