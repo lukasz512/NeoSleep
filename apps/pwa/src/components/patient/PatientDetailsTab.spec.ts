@@ -10,6 +10,9 @@ import PatientDetailsTab from "./PatientDetailsTab.vue";
 import type { PatientDetailsTabPatient, PatientSummary } from "./patientSummary";
 import type { CareTeamMember } from "../../composables/usePatientCareTeam";
 import { useAuthStore } from "../../stores/auth";
+import { CHECKLIST_UPDATED } from "../../composables/usePatientChecklist";
+import { emitPatientChanged } from "../../composables/usePatientChanged";
+import { routes } from "../../router/routes";
 
 const apiFetch = vi.fn();
 vi.mock("../../composables/useApi", async (importOriginal) => ({
@@ -66,7 +69,7 @@ async function mountTab(
     if (path.endsWith("/care-team")) return { ok: true, status: 200, json: async () => opts.careTeam ?? [] };
     return summary ? { ok: true, status: 200, json: async () => summary } : { ok: false, status: 500, json: async () => ({}) };
   });
-  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { template: "<div />" } }, { path: "/hcp/:id", name: "hcp-detail", component: { template: "<div />" } }] });
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { template: "<div />" } }, { path: "/hcp/:id", name: "hcp-detail", component: { template: "<div />" } }, { path: "/calendar", name: "calendar", component: { template: "<div />" } }] });
   const wrapper = mount(PatientDetailsTab, {
     props: { patient: { ...PATIENT, ...opts.patient }, canSeeStudies: opts.canSeeStudies ?? true },
     global: { plugins: [createI18n({ legacy: false, locale: "en", messages: { en } }), createVuetify({ components: vuetifyComponents }), router] },
@@ -115,12 +118,13 @@ describe("PatientDetailsTab (NEO-206)", () => {
     expect(tileKeys(w)).toEqual(["tile-treatment", "tile-appointment"]);
   });
 
-  it("PSG and treatment tiles open their tabs; the others are not buttons", async () => {
+  it("PSG and treatment tiles open their tabs; diagnosis is not a button; the next visit is a calendar link", async () => {
     const w = await mountTab(FULL);
     await w.find('[data-testid="tile-psg"]').trigger("click");
     await w.find('[data-testid="tile-treatment"]').trigger("click");
     expect(w.emitted("open-tab")).toEqual([["studies"], ["orthoapnea"]]);
-    expect(w.find('[data-testid="tile-appointment"]').element.tagName).toBe("DIV");
+    expect(w.find('[data-testid="tile-diagnosis"]').element.tagName).toBe("DIV");
+    expect(w.find('[data-testid="tile-appointment"]').attributes("href")).toBe("/calendar?appointment=a-1");
   });
 
   it("groups the rows; keeps IAH basal and CPAP; extra rows only when set", async () => {
@@ -166,7 +170,7 @@ describe("PatientDetailsTab — every appointment (CORE-133)", () => {
           ? { ok: true, status: 200, json: async () => [] }
           : { ok: true, status: 200, json: async () => EMPTY },
     );
-    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { template: "<div />" } }, { path: "/hcp/:id", name: "hcp-detail", component: { template: "<div />" } }] });
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { template: "<div />" } }, { path: "/hcp/:id", name: "hcp-detail", component: { template: "<div />" } }, { path: "/calendar", name: "calendar", component: { template: "<div />" } }] });
     const wrapper = mount(PatientDetailsTab, {
       props: { patient: PATIENT, canSeeStudies: true },
       global: { plugins: [createI18n({ legacy: false, locale: "en", messages: { en } }), createVuetify({ components: vuetifyComponents }), router] },
@@ -208,7 +212,7 @@ describe("PatientDetailsTab — events for the patient (CORE-137)", () => {
       if (path.startsWith("/api/v1/appointments?")) return { ok: true, status: 200, json: async () => ({ items: [] }) };
       return { ok: true, status: 200, json: async () => EMPTY };
     });
-    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { template: "<div />" } }, { path: "/hcp/:id", name: "hcp-detail", component: { template: "<div />" } }] });
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { template: "<div />" } }, { path: "/hcp/:id", name: "hcp-detail", component: { template: "<div />" } }, { path: "/calendar", name: "calendar", component: { template: "<div />" } }] });
     const wrapper = mount(PatientDetailsTab, {
       props: { patient: PATIENT, canSeeStudies: true },
       global: { plugins: [createI18n({ legacy: false, locale: "en", messages: { en } }), createVuetify({ components: vuetifyComponents }), router] },
@@ -281,5 +285,115 @@ describe("PatientDetailsTab — care team (CORE-132)", () => {
   it("no team and no right to add: no Care team group at all", async () => {
     const w = await mountTab(EMPTY, { careTeam: [PRIMARY], role: "doctor" });
     expect(groupTitles(w)).not.toContain("Care team");
+  });
+});
+
+describe("PatientDetailsTab — live refresh, visit links, doctor view (patient card refresh)", () => {
+  const SOON = { id: "a-soon", status: "scheduled", start_at: "2031-03-04T21:00:00.000Z", end_at: "2031-03-04T22:00:00.000Z", timezone: "America/Mexico_City", practitioner_name: "Dra. Ruiz" };
+  const NEW = { ...SOON, id: "a-new", start_at: "2031-03-02T21:00:00.000Z", end_at: "2031-03-02T22:00:00.000Z" };
+  const TEAM: CareTeamMember[] = [{
+    practitioner_id: "pr-2", name: "Dr. Juan Pérez", primary_specialty: "ent", specialties: [], primary: false,
+    source: "appointment", appointment_id: "a-1", added_by_name: null, added_at: null,
+  }];
+
+  interface Server { appointments: unknown[]; summary: PatientSummary; version: string; fail: boolean }
+  let server: Server;
+
+  async function mountLive(opts: { role?: string; active?: boolean } = {}) {
+    server = { appointments: [SOON], summary: EMPTY, version: "v1", fail: false };
+    setActivePinia(createPinia());
+    if (opts.role) useAuthStore().user = { id: "u-1", role: opts.role } as NonNullable<ReturnType<typeof useAuthStore>["user"]>;
+    apiFetch.mockImplementation(async (path: string) => {
+      if (server.fail) return { ok: false, status: 503, json: async () => ({}) };
+      if (path.startsWith("/api/v1/appointments?")) return { ok: true, status: 200, json: async () => ({ items: server.appointments }) };
+      if (path.startsWith("/api/v1/encounter?")) return { ok: true, status: 200, json: async () => ({ items: [], total: 0 }) };
+      if (path.endsWith("/care-team")) return { ok: true, status: 200, json: async () => TEAM };
+      if (path.endsWith("/version")) return { ok: true, status: 200, json: async () => ({ version: server.version }) };
+      return { ok: true, status: 200, json: async () => server.summary };
+    });
+    // The real routes: who may open an HCP record comes from hcp-detail's own meta.roles.
+    const router = createRouter({ history: createMemoryHistory(), routes });
+    const wrapper = mount(PatientDetailsTab, {
+      props: { patient: { ...PATIENT, practitioner_id: "pr-1", practitioner_name: "Dra. Lorena Ruiz" }, canSeeStudies: true, active: opts.active ?? true },
+      global: { plugins: [createI18n({ legacy: false, locale: "en", messages: { en } }), createVuetify({ components: vuetifyComponents }), router] },
+    });
+    wrappers.push(wrapper);
+    await flushPromises();
+    return wrapper;
+  }
+  const rowIds = (w: VueWrapper) => w.findAll('[data-testid="patient-appointment"]').map((r) => r.attributes("data-id"));
+  const calls = (part: string) => apiFetch.mock.calls.filter(([p]) => String(p).includes(part)).length;
+
+  it("a visit booked from the card shows up without remounting the tab", async () => {
+    const w = await mountLive();
+    server.appointments = [SOON, NEW];
+    emitPatientChanged("p-1", "visits");
+    await flushPromises();
+    expect(rowIds(w)).toEqual(["a-new", "a-soon"]);
+  });
+
+  it("a change on another patient's card is ignored", async () => {
+    const w = await mountLive();
+    server.appointments = [SOON, NEW];
+    emitPatientChanged("p-2", "visits");
+    await flushPromises();
+    expect(rowIds(w)).toEqual(["a-soon"]);
+  });
+
+  it("a saved study (checklist moved) reloads the summary strip", async () => {
+    const w = await mountLive();
+    server.summary = FULL;
+    window.dispatchEvent(new CustomEvent(CHECKLIST_UPDATED, { detail: { patientId: "p-1", version: "v2" } }));
+    await flushPromises();
+    expect(w.find('[data-testid="tile-psg"]').exists()).toBe(true);
+  });
+
+  it("a silent refresh that fails keeps what is on screen", async () => {
+    const w = await mountLive();
+    server.fail = true;
+    emitPatientChanged("p-1", "visits");
+    await flushPromises();
+    expect(rowIds(w)).toEqual(["a-soon"]);
+  });
+
+  it("coming back to the Details tab reloads it", async () => {
+    const w = await mountLive({ active: false });
+    server.appointments = [SOON, NEW];
+    await w.setProps({ active: true });
+    await flushPromises();
+    expect(rowIds(w)).toEqual(["a-new", "a-soon"]);
+  });
+
+  it("back to the app: checks the fingerprint and reloads only when it moved", async () => {
+    const w = await mountLive();
+    const before = calls("/appointments?");
+    const versions = calls("/p-1/version");
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flushPromises();
+    expect(calls("/p-1/version")).toBe(versions + 1);
+    expect(calls("/appointments?")).toBe(before); // same fingerprint → nothing reloaded
+
+    server.version = "v2";
+    server.appointments = [SOON, NEW];
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flushPromises();
+    expect(rowIds(w)).toEqual(["a-new", "a-soon"]);
+  });
+
+  it("the next-appointment tile and every visit row open that visit in the calendar", async () => {
+    const w = await mountLive();
+    expect(w.find('[data-testid="tile-appointment"]').attributes("href")).toBe("/calendar?appointment=a-soon");
+    expect(w.find('[data-testid="patient-appointment"] a').attributes("href")).toBe("/calendar?appointment=a-soon");
+  });
+
+  it("a doctor sees HCP names as plain text (doctors have no HCP detail); other roles get links", async () => {
+    const doctor = await mountLive({ role: "doctor" });
+    expect(doctor.find('[href^="/hcp/"]').exists()).toBe(false);
+    expect(doctor.text()).toContain("Lorena Ruiz");
+    expect(doctor.text()).toContain("Juan");
+
+    const manager = await mountLive({ role: "manager" });
+    expect(manager.find('[href="/hcp/pr-1"]').exists()).toBe(true);
+    expect(manager.find('[href="/hcp/pr-2"]').exists()).toBe(true);
   });
 });

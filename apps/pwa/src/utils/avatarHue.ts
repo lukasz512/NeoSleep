@@ -8,7 +8,7 @@ import type { IdentityTone } from "./identityTone";
  * Keep AVATAR_FAMILY_SIZES equal to the theme.scss list lengths.
  */
 export const AVATAR_FAMILY_SIZES: Record<IdentityTone, number> = {
-  patient: 4,
+  patient: 8,
   doctor: 3,
   org: 5,
   lead: 2,

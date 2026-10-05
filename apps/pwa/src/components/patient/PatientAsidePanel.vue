@@ -25,8 +25,10 @@
         {{ patientStatusLabel(t, patient.status) }}
       </VChip>
       <span v-if="patient.ahi_baseline != null">{{ t("app.patients.detail.aside.ahi", { n: patient.ahi_baseline }) }}</span>
+      <!-- A doctor's patient is their own: no need to read their own name here. -->
+      <template v-if="isDoctor" />
       <RouterLink
-        v-if="patient.practitioner_id && patient.practitioner_name"
+        v-else-if="patient.practitioner_id && patient.practitioner_name"
         class="patient-aside__link"
         :to="{ name: 'hcp-detail', params: { id: patient.practitioner_id } }"
       >
@@ -119,6 +121,7 @@ import { formatDiagnosis } from "../../utils/diagnosis";
 import { useNotes } from "../../composables/useNotes";
 import { useAsyncAction } from "../../composables/useAsyncAction";
 import { patientStatusColor, patientStatusLabel } from "../../utils/patientStatus";
+import { usePermissions } from "../../composables/usePermissions";
 
 const RECENT_NOTES = 1;
 /** Rows the documents card shows before "See all" — what fits a 720px-tall window with the rest of the panel. */
@@ -140,6 +143,8 @@ const props = defineProps<{
   /** Shown as the "Next step" tab below 1280px (NEO-235) — flows with the page instead of fitting the window. */
   inline?: boolean;
 }>();
+
+const { isDoctor } = usePermissions();
 
 defineEmits<{
   "open-notes": [];

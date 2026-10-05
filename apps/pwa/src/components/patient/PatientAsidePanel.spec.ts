@@ -16,6 +16,7 @@ vi.mock("../../composables/useApi", async (importOriginal) => ({
 vi.mock("../../composables/useNotifications", () => ({ useNotifications: () => ({ show: vi.fn() }) }));
 
 import PatientAsidePanel from "./PatientAsidePanel.vue";
+import { useAuthStore } from "../../stores/auth";
 
 const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
 const actions = (qr: boolean) => ({ qr, fill: null, form: null, print: true, upload: true });
@@ -64,6 +65,21 @@ async function mountPanel(props: Record<string, unknown> = {}): Promise<VueWrapp
 }
 
 const qrButton = (w: VueWrapper) => w.find(".patient-aside__qr");
+
+describe("PatientAsidePanel — the doctor's own name", () => {
+  it("a doctor does not see the practitioner (their own name) in the key facts; other roles get the link", async () => {
+    const doctor = await mountPanel();
+    useAuthStore().user = { id: "u-1", email: "doc@x.mx", role: "doctor" };
+    await flushPromises();
+    expect(doctor.find(".patient-aside__facts").text()).not.toContain("Dr Marta Nowak");
+    expect(doctor.find(".patient-aside__facts a").exists()).toBe(false);
+
+    const manager = await mountPanel();
+    useAuthStore().user = { id: "u-2", email: "mgr@x.mx", role: "manager" };
+    await flushPromises();
+    expect(manager.find(".patient-aside__facts a").text()).toBe("Dr Marta Nowak");
+  });
+});
 
 describe("PatientAsidePanel (NEO-153, NEO-203)", () => {
   it("opens with the next-step card, the QR button inside it", async () => {

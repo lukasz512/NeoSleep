@@ -20,6 +20,8 @@ export function usePermissions() {
   // patients' clinical data same as everyone else.
   const canEditPatients = computed(() => !!role.value);
   const isAdmin = computed(() => role.value === "admin");
+  /** A doctor works on their own patients (CORE-104): the record's practitioner is them. */
+  const isDoctor = computed(() => role.value === "doctor");
 
-  return { canEditOrganizations, canEditPractitioners, canEditPatients, isAdmin };
+  return { canEditOrganizations, canEditPractitioners, canEditPatients, isAdmin, isDoctor };
 }

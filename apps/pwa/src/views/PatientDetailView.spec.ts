@@ -21,8 +21,10 @@ vi.mock("../composables/useNotifications", () => ({ useNotifications: () => ({ s
 
 // See HCPDetailView.spec.ts's own comment: pre-imports FormRenderer/EventForm's
 // whole nested chunk graph up front instead of racing it against teardown.
-import "../components/FormRenderer.vue";
+import FormRenderer from "../components/FormRenderer.vue";
+import AppointmentDialog from "../components/AppointmentDialog.vue";
 import "../components/EventForm.vue";
+import { PATIENT_CHANGED } from "../composables/usePatientChanged";
 import PatientDetailView from "./PatientDetailView.vue";
 import QuestionnaireQrDialog from "../components/questionnaire/QuestionnaireQrDialog.vue";
 
@@ -276,5 +278,50 @@ describe("PatientDetailView — QR opens straight to a loader (NEO-235)", () => 
     expect(dialog.props("modelValue")).toBe(true);
     await flushPromises();
     await vi.waitFor(() => expect(dialog.props("modelValue")).toBe(false));
+  });
+});
+
+describe("PatientDetailView — the card refreshes in place (patient card refresh)", () => {
+  it("saving an edit keeps the record on screen while it reloads, then shows the new values", async () => {
+    let releaseReload: () => void = () => {};
+    let loads = 0;
+    apiFetch.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === "/api/v1/patient/patient-1" && init?.method === "PATCH") return jsonResponse(true, 200, {});
+      if (path === "/api/v1/patient/patient-1") {
+        loads += 1;
+        if (loads === 1) return jsonResponse(true, 200, PATIENT);
+        await new Promise<void>((resolve) => (releaseReload = resolve));
+        return jsonResponse(true, 200, { ...PATIENT, name: "Jan Nowak" });
+      }
+      if (path.endsWith("/summary")) return jsonResponse(true, 200, SUMMARY);
+      return jsonResponse(true, 200, { items: [] });
+    });
+    const { wrapper } = await mountPatientDetail();
+    await vi.waitFor(() => expect(wrapper.text()).toContain("Jan Kowalski"));
+
+    wrapper.findComponent(FormRenderer).vm.$emit("submit", { last_name: "Nowak" }, vi.fn());
+    await vi.waitFor(() => expect(loads).toBe(2));
+    expect(wrapper.text()).toContain("Jan Kowalski"); // no blank screen while it reloads
+
+    releaseReload();
+    await vi.waitFor(() => expect(wrapper.text()).toContain("Jan Nowak"));
+    await flushPromises();
+  });
+
+  it("a booked visit tells the rest of the card (patient-changed, visits)", async () => {
+    routeApi();
+    const { wrapper } = await mountPatientDetail();
+    await vi.waitFor(() => expect(wrapper.text()).toContain("Jan Kowalski"));
+    const heard = vi.fn();
+    const listener = (e: Event) => heard((e as CustomEvent).detail);
+    window.addEventListener(PATIENT_CHANGED, listener);
+
+    await wrapper.find('[data-testid="patient-book-appointment"]').trigger("click");
+    await vi.waitFor(() => expect(wrapper.findComponent(AppointmentDialog).exists()).toBe(true));
+    wrapper.findComponent(AppointmentDialog).vm.$emit("saved", { id: "a-1" });
+    expect(heard).toHaveBeenCalledWith({ patientId: "patient-1", scope: "visits" });
+
+    window.removeEventListener(PATIENT_CHANGED, listener);
+    await flushPromises();
   });
 });
