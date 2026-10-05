@@ -1,0 +1,52 @@
+{
+  "meta": {
+    "file": "user-guide-neosleep.pdf",
+    "title": "User guide",
+    "subtitle": "The NeoSleep app for doctors",
+    "edition": "Edition {date}",
+    "toc": "Contents",
+    "chapterLabel": "Chapter {n}",
+    "upcoming": "coming soon",
+    "footer": "NeoSleep · User guide"
+  },
+  "chapters": {
+    "access": { "title": "Signing in", "lead": "Sign in, stay signed in, and get back in when you forget your password." },
+    "patients": { "title": "Patients", "lead": "Add a patient, record the polysomnography, book visits and complete the record." },
+    "device": { "title": "Device order (DAM)", "lead": "Order the mandibular advancement device and follow it until delivery." },
+    "calendar": { "title": "Calendar", "lead": "Your visits by day, week and month." },
+    "panel": { "title": "Panel", "lead": "What is waiting for you today, at a glance." },
+    "faq": { "title": "Frequently asked questions", "lead": "Quick answers to the most common questions." }
+  },
+  "slides": {
+    "login": {
+      "title": "Sign in",
+      "lead": "Open the app address in your browser. Your account was created by NeoSleep: use the email you were invited with.",
+      "steps": [
+        "Type your email.",
+        "Type your password. The eye icon shows what you typed.",
+        "Leave “Remember me” ticked on your own device so you don't have to sign in every day. Untick it on a shared computer.",
+        "Tap “Sign in”."
+      ],
+      "tip": "Tip: add the app to your phone's home screen from the browser menu (“Add to Home screen”)."
+    },
+    "forgot": {
+      "title": "Forgot your password",
+      "lead": "On the sign-in screen tap “Forgot your password?”.",
+      "steps": [
+        "Type the email of your account.",
+        "Tap “Send reset link”. Within a few minutes you will receive an email with a link."
+      ],
+      "tip": "No email? Check your spam folder. For security the app doesn't say whether the address exists."
+    },
+    "reset": {
+      "title": "Set a new password",
+      "lead": "The link in the email opens this screen. It is valid for 1 hour and works once.",
+      "steps": [
+        "Type the new password.",
+        "Type it again to confirm.",
+        "Save it. From now on sign in with the new password."
+      ],
+      "tip": "Link expired? Request a new one from “Forgot your password?”."
+    }
+  }
+}

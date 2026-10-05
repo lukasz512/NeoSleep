@@ -35,7 +35,9 @@
     "worktree:clean:test": "./infrastructure/scripts/worktree-clean.test.sh",
     "tooling:test": "node --test .claude/skills/ship-artifact/ticket.test.mjs && bash .claude/hooks/pre-tool-linear-ticket-format.test.sh && ./infrastructure/scripts/worktree-clean.test.sh",
     "dev": "pnpm exec concurrently --names api,pwa,web -c blue,green,magenta \"pnpm --filter @neo/api dev\" \"pnpm --filter @neo/pwa dev\" \"pnpm --filter @neo/web dev\"",
-    "db:seed": "pnpm --filter @neo/api seed:demo"
+    "db:seed": "pnpm --filter @neo/api seed:demo",
+    "guide:shots": "node docs/user-guide/shots.mjs",
+    "guide:build": "node docs/user-guide/build.mjs"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.70.1",

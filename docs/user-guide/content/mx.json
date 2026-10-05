@@ -1,0 +1,52 @@
+{
+  "meta": {
+    "file": "guia-uso-neosleep.pdf",
+    "title": "Guía de uso",
+    "subtitle": "La aplicación NeoSleep para médicos",
+    "edition": "Edición {date}",
+    "toc": "Contenido",
+    "chapterLabel": "Capítulo {n}",
+    "upcoming": "próximamente",
+    "footer": "NeoSleep · Guía de uso"
+  },
+  "chapters": {
+    "access": { "title": "Acceso", "lead": "Inicia sesión, mantén tu sesión abierta y recupera el acceso si olvidas tu contraseña." },
+    "patients": { "title": "Pacientes", "lead": "Agrega un paciente, registra la polisomnografía, agenda citas y completa el expediente." },
+    "device": { "title": "Solicitud de dispositivo (DAM)", "lead": "Solicita el dispositivo de avance mandibular y sigue su estado hasta la entrega." },
+    "calendar": { "title": "Calendario", "lead": "Tus citas por día, semana y mes." },
+    "panel": { "title": "Panel", "lead": "Lo que te espera hoy, de un vistazo." },
+    "faq": { "title": "Preguntas frecuentes", "lead": "Respuestas rápidas a las dudas más comunes." }
+  },
+  "slides": {
+    "login": {
+      "title": "Iniciar sesión",
+      "lead": "Abre la dirección de la aplicación en tu navegador. NeoSleep creó tu cuenta: usa el correo con el que recibiste la invitación.",
+      "steps": [
+        "Escribe tu correo electrónico.",
+        "Escribe tu contraseña. El ícono del ojo muestra lo que escribiste.",
+        "Deja marcado «Recordarme» en tu propio dispositivo para no iniciar sesión cada día. Desmárcalo en una computadora compartida.",
+        "Toca «Iniciar sesión»."
+      ],
+      "tip": "Consejo: agrega la aplicación a la pantalla de inicio de tu teléfono desde el menú del navegador («Agregar a pantalla de inicio»)."
+    },
+    "forgot": {
+      "title": "¿Olvidaste tu contraseña?",
+      "lead": "En la pantalla de inicio de sesión toca «¿Olvidaste tu contraseña?».",
+      "steps": [
+        "Escribe el correo de tu cuenta.",
+        "Toca «Enviar enlace de restablecimiento». En unos minutos recibirás un correo con un enlace."
+      ],
+      "tip": "¿No llegó el correo? Revisa la carpeta de spam. Por seguridad, la aplicación no indica si el correo existe."
+    },
+    "reset": {
+      "title": "Establece una nueva contraseña",
+      "lead": "El enlace del correo abre esta pantalla. Es válido por 1 hora y funciona una sola vez.",
+      "steps": [
+        "Escribe la nueva contraseña.",
+        "Escríbela de nuevo para confirmarla.",
+        "Guárdala. A partir de ahora inicia sesión con la nueva contraseña."
+      ],
+      "tip": "¿El enlace caducó? Solicita uno nuevo desde «¿Olvidaste tu contraseña?»."
+    }
+  }
+}
