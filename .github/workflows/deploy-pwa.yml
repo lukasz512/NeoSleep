@@ -16,10 +16,32 @@
 
 name: Deploy NeoSleepCare App
 
+# Deploys only when something this app is built from changed (CORE-PENDING):
+# its own code, the shared packages it imports, or the root build files. A
+# change elsewhere (API, docs, the other app) no longer rebuilds and re-uploads
+# it. Run it by hand (workflow_dispatch) to redeploy without a change.
 on:
   push:
     branches: [prod, dev]
+    paths:
+      - "apps/pwa/**"
+      - "packages/**"
+      - "apps/api/client/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".nvmrc"
+      - "tsconfig.base.json"
+      - "tsconfig.json"
+      - ".github/workflows/deploy-pwa.yml"
   workflow_dispatch:
+
+# A newer merge replaces a deploy that is still waiting for a runner, instead
+# of queueing behind it. A deploy that already started is never cancelled — a
+# half-finished FTP upload leaves the site pointing at missing assets.
+concurrency:
+  group: deploy-pwa-${{ github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
