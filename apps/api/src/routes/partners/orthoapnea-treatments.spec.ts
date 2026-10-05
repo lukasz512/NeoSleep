@@ -10,7 +10,12 @@ import type { TenantContext } from "../../context/TenantContext.js";
 import { CreatePatientCommand } from "../../commands/patient.js";
 import { CreateSleepStudyCommand } from "../../commands/sleepStudy.js";
 import { CreateTreatmentPlanCommand } from "../../commands/treatmentPlan.js";
-import { createOrthoApneaTreatment, __resetOrthoApneaStateForTests } from "../../services/partners/orthoapnea.js";
+import {
+  createOrthoApneaTreatment,
+  fetchOrthoApneaTreatmentStatus,
+  __resetOrthoApneaStateForTests,
+} from "../../services/partners/orthoapnea.js";
+import { __resetOpenAppSyncThrottleForTests } from "../../commands/orthoapneaSync.js";
 import { signAuthToken } from "../../utils/jwt.js";
 
 // Loaded via fs rather than a static JSON import — see orthoapnea-order.spec.ts's own comment.
@@ -70,6 +75,7 @@ const createdPartnerLinkIds: string[] = [];
 // statically imports the same module-scoped session/cooldown state.
 beforeEach(() => {
   __resetOrthoApneaStateForTests();
+  __resetOpenAppSyncThrottleForTests();
 });
 
 afterEach(async () => {
@@ -148,5 +154,170 @@ describe("GET /api/v1/partners/orthoapnea/treatments/:treatmentPlanId/transactio
     // exact object built for the HTTP request body is what's stored and
     // returned here — not a re-serialized or partially-dropped copy.
     expect(res.body.transactions[0].request_payload).toEqual(wizardPayload);
+  });
+});
+
+/** Stubs the lab: login, and every order reads back with the given status. */
+function stubLabWithStatus(statusId: number): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      if (url.includes("/api/login")) return { ok: true, status: 200, json: async () => ({ token: fakeJwt(1800) }) } as Response;
+      if (url.includes("/api/treatments")) return { ok: true, status: 200, json: async () => ({ ...treatmentDtoFixture, statusId }) } as Response;
+      throw new Error(`Unmocked fetch call in test: ${url}`);
+    })
+  );
+}
+
+describe("POST /api/v1/partners/orthoapnea/sync-statuses (in-app sync, CORE-67)", () => {
+  it("401s with no token", async () => {
+    const res = await request(app).post("/api/v1/partners/orthoapnea/sync-statuses");
+    expect(res.status).toBe(401);
+  });
+
+  it("runs once per 15 min per tenant, however many users call it", async () => {
+    stubLabWithStatus(1);
+
+    const first = await request(app)
+      .post("/api/v1/partners/orthoapnea/sync-statuses")
+      .set("Authorization", `Bearer ${tokenFor("rep")}`);
+    expect(first.status).toBe(200);
+    expect(first.body).toMatchObject({ ran: true, checked: expect.any(Number), changed: expect.any(Number) });
+
+    const second = await request(app)
+      .post("/api/v1/partners/orthoapnea/sync-statuses")
+      .set("Authorization", `Bearer ${tokenFor("admin")}`);
+    expect(second.status).toBe(200);
+    expect(second.body).toEqual({ ran: false });
+  });
+});
+
+/** A real admin user (partner_sync_run.triggered_by is a FK to users) plus a token signed for it. */
+async function realAdmin(): Promise<{ id: string; token: string }> {
+  const user = await withTenant(TENANT_SLUG, async (client) => {
+    const hash = await bcrypt.hash("irrelevant-not-logged-in-with", 4);
+    return insertStaffUser(client, `qa-sync-card-${uniqueSuffix()}@neosleepcare.com`, "QA", "Admin", "admin", hash, false);
+  });
+  const token = signAuthToken({ id: user!.id, email: user!.email, role: "admin", token_version: 0 });
+  return { id: user!.id, token };
+}
+
+describe("Admin lab sync card endpoints (CORE-67)", () => {
+  it("401s without a token and 403s for a rep, on both endpoints", async () => {
+    expect((await request(app).get("/api/v1/partners/orthoapnea/sync-status")).status).toBe(401);
+    expect((await request(app).post("/api/v1/partners/orthoapnea/sync-statuses/now")).status).toBe(401);
+    const rep = `Bearer ${tokenFor("rep")}`;
+    expect((await request(app).get("/api/v1/partners/orthoapnea/sync-status").set("Authorization", rep)).status).toBe(403);
+    expect(
+      (await request(app).post("/api/v1/partners/orthoapnea/sync-statuses/now").set("Authorization", rep)).status
+    ).toBe(403);
+  });
+
+  it("Check now records a manual run with counts for the admin, and GET lists it first", async () => {
+    stubLabWithStatus(1);
+    const admin = await realAdmin();
+
+    const now = await request(app)
+      .post("/api/v1/partners/orthoapnea/sync-statuses/now")
+      .set("Authorization", `Bearer ${admin.token}`);
+    expect(now.status).toBe(200);
+    expect(now.body).toMatchObject({ checked: expect.any(Number), changed: expect.any(Number), failed: expect.any(Number) });
+
+    const res = await request(app)
+      .get("/api/v1/partners/orthoapnea/sync-status")
+      .set("Authorization", `Bearer ${admin.token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.runs.length).toBeLessThanOrEqual(10);
+    expect(res.body.runs[0]).toMatchObject({
+      trigger: "manual",
+      triggeredBy: admin.id,
+      checked: now.body.checked,
+      changed: now.body.changed,
+      failed: now.body.failed,
+      error: null,
+    });
+    expect(res.body.runs[0].finishedAt).not.toBeNull();
+  });
+
+  it("Check now bypasses the in-app throttle", async () => {
+    stubLabWithStatus(1);
+    const admin = await realAdmin();
+    await request(app).post("/api/v1/partners/orthoapnea/sync-statuses").set("Authorization", `Bearer ${admin.token}`);
+    const now = await request(app)
+      .post("/api/v1/partners/orthoapnea/sync-statuses/now")
+      .set("Authorization", `Bearer ${admin.token}`);
+    expect(now.status).toBe(200);
+    expect(now.body).not.toEqual({ ran: false });
+    expect(now.body).toHaveProperty("checked");
+  });
+
+  it("the in-app sync records an 'app' run", async () => {
+    stubLabWithStatus(1);
+    const admin = await realAdmin();
+    const sync = await request(app)
+      .post("/api/v1/partners/orthoapnea/sync-statuses")
+      .set("Authorization", `Bearer ${tokenFor("rep")}`);
+    expect(sync.body.ran).toBe(true);
+
+    const res = await request(app)
+      .get("/api/v1/partners/orthoapnea/sync-status")
+      .set("Authorization", `Bearer ${admin.token}`);
+    expect(res.body.runs[0]).toMatchObject({ trigger: "app", triggeredBy: null, error: null });
+  });
+
+  it("openOrders lists a submitted order with its patient, lab number and status, and counts it in totalLinks", async () => {
+    stubLabWithStatus(1);
+    const admin = await realAdmin();
+    const lastName = `Patient-${uniqueSuffix()}`;
+    const { plan, patient } = await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const patient = await CreatePatientCommand(ctx, { gender: "female", date_of_birth: "1980-01-01", first_name: "Sync", last_name: lastName, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
+      const study = await CreateSleepStudyCommand(ctx, { patient_id: patient.id });
+      const plan = await CreateTreatmentPlanCommand(ctx, { patient_id: patient.id, sleep_study_id: study.id, type: "dental_appliance" });
+      return { plan, patient };
+    });
+    await createOrthoApneaTreatment(TENANT_SLUG, plan.id, { product: { id: 3 }, retrusionMax: -5, protrusionMax: 5 });
+    const link = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", plan.id));
+    createdPartnerLinkIds.push(link!.id);
+
+    const res = await request(app)
+      .get("/api/v1/partners/orthoapnea/sync-status")
+      .set("Authorization", `Bearer ${admin.token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.totalLinks).toBeGreaterThanOrEqual(1);
+    const order = (res.body.openOrders as Array<Record<string, unknown>>).find((o) => o.treatmentPlanId === plan.id);
+    expect(order).toMatchObject({
+      patientId: patient.id,
+      externalId: link!.external_id,
+      externalStatus: "1",
+      syncStatus: "synced",
+    });
+    expect(order!.patientName).toContain(lastName);
+  });
+});
+
+describe("fetchOrthoApneaTreatmentStatus under concurrent syncs (CORE-67)", () => {
+  it("reports a status change once when two syncs read the same order at the same time", async () => {
+    const plan = await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const patient = await CreatePatientCommand(ctx, { gender: "female", date_of_birth: "1980-01-01", first_name: "Test", last_name: `Patient-${uniqueSuffix()}`, email: `qa-patient-${uniqueSuffix()}@example.com`, phone: "600100200" });
+      const study = await CreateSleepStudyCommand(ctx, { patient_id: patient.id });
+      return CreateTreatmentPlanCommand(ctx, { patient_id: patient.id, sleep_study_id: study.id, type: "dental_appliance" });
+    });
+    stubLabWithStatus(1);
+    await createOrthoApneaTreatment(TENANT_SLUG, plan.id, { product: { id: 3 }, retrusionMax: -5, protrusionMax: 5 });
+    const staleLink = await withTenant(TENANT_SLUG, (client) => getPartnerLink(client, "orthoapnea", "treatment_plan", plan.id));
+    createdPartnerLinkIds.push(staleLink!.id);
+    expect(staleLink!.external_status).toBe("1");
+
+    // The lab moves the order; the scheduled job and the in-app sync both read it.
+    stubLabWithStatus(2);
+    const results = await Promise.all([
+      fetchOrthoApneaTreatmentStatus(TENANT_SLUG, staleLink!),
+      fetchOrthoApneaTreatmentStatus(TENANT_SLUG, staleLink!),
+    ]);
+
+    expect(results.map((r) => r.externalStatus)).toEqual(["2", "2"]);
+    expect(results.filter((r) => r.changed)).toHaveLength(1);
   });
 });

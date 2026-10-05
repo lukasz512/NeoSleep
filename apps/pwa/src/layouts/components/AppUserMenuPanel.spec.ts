@@ -128,4 +128,13 @@ describe("AppUserMenuPanel — NEO-102 account menu (icon rows + action pair)", 
     expect(on).toHaveLength(1);
     expect(on[0].classes()).toContain("user-menu__choice--on");
   });
+
+  it("My reports sits under Feedback for every signed-in user and emits my-reports then close", async () => {
+    const wrapper = mountPanel();
+    const rows = wrapper.findAll(".user-menu__row").map((r) => r.attributes("data-testid"));
+    expect(rows.indexOf("user-menu-my-reports")).toBe(rows.indexOf("user-menu-report-problem") + 1);
+    await wrapper.get('[data-testid="user-menu-my-reports"]').trigger("click");
+    expect(wrapper.emitted("my-reports")).toHaveLength(1);
+    expect(wrapper.emitted("close")).toHaveLength(1);
+  });
 });

@@ -35,6 +35,8 @@ export interface Encounter {
   user_id: string;
   practitioner_id: string | null;
   organization_id: string | null;
+  /** CORE-137: the patients the event is for (FHIR Encounter.subject), from encounter_patient. */
+  patient_ids: string[];
   type: EncounterType;
   status: EncounterStatus;
   class: EncounterClass;
@@ -58,6 +60,8 @@ export interface GetEncounterFilters {
   territory_id?: string;
   userId?: string | null;
   status?: EncounterStatus;
+  /** CORE-137: only events linked to this patient (through encounter_patient). */
+  patient_id?: string;
   /** CORE-106 row-level visibility — the one filter queries/encounter.ts's
    *  encounterVisibilityScope() produces and getEncounters() applies. Every
    *  role sees its own encounters (ownerId); manager/admin additionally see
@@ -83,6 +87,8 @@ export interface InsertEncounterInput {
   notes?: string | null;
   practitioner_id?: string | null;
   organization_id?: string | null;
+  /** CORE-137: linked patients; the caller has already scope-checked them. */
+  patient_ids?: string[];
   region?: string | null;
   territory_id?: string | null;
   attendees?: string[];
@@ -98,6 +104,8 @@ export interface UpdateEncounterInput {
   notes?: string | null;
   practitioner_id?: string | null;
   organization_id?: string | null;
+  /** CORE-137: replaces the linked patients when given; undefined leaves them alone. */
+  patient_ids?: string[];
   region?: string | null;
   territory_id?: string | null;
   attendees?: string[];
@@ -117,11 +125,15 @@ const ENCOUNTER_COLUMNS = [
   "metadata", "created_at", "updated_at",
 ];
 
-const ENCOUNTER_SELECT_COLS = ENCOUNTER_COLUMNS.join(", ");
+// CORE-137: the linked patients, aggregated from encounter_patient (text[] so pg returns plain strings).
+const patientIdsSql = (alias: string) =>
+  `COALESCE((SELECT array_agg(ep.patient_id::text ORDER BY ep.patient_id) FROM encounter_patient ep WHERE ep.encounter_id = ${alias}.id), '{}'::text[]) AS patient_ids`;
+
+const ENCOUNTER_SELECT_COLS = `${ENCOUNTER_COLUMNS.join(", ")}, ${patientIdsSql("encounter")}`;
 // Qualified with the `e` alias — needed once a query JOINs another table
 // (territory, for the visibility scope check) that could otherwise make a
 // bare column name like `id` ambiguous.
-const ENCOUNTER_SELECT_COLS_E = ENCOUNTER_COLUMNS.map((c) => `e.${c}`).join(", ");
+const ENCOUNTER_SELECT_COLS_E = `${ENCOUNTER_COLUMNS.map((c) => `e.${c}`).join(", ")}, ${patientIdsSql("e")}`;
 
 const VALID_STATUSES: EncounterStatus[] = ["scheduled", "completed", "cancelled", "no_show"];
 const VALID_TYPES: EncounterType[]      = ["visit", "call", "email", "congress", "webinar", "other"];
@@ -167,6 +179,10 @@ export async function getEncounters(
     conditions.push(`e.user_id = $${i}`);
     params.push(filters.userId.trim()); i++;
   }
+  if (filters.patient_id?.trim()) {
+    conditions.push(`EXISTS (SELECT 1 FROM encounter_patient fp WHERE fp.encounter_id = e.id AND fp.patient_id = $${i})`);
+    params.push(filters.patient_id.trim()); i++;
+  }
   if (filters.status) {
     conditions.push(`e.status = $${i}`);
     params.push(filters.status); i++;
@@ -204,6 +220,32 @@ export async function getEncounters(
   }
 }
 
+/** Replaces an encounter's linked patients with exactly `patientIds` (deduped). */
+export async function setEncounterPatients(
+  client: PoolClient,
+  encounterId: string,
+  patientIds: string[]
+): Promise<void> {
+  try {
+    const ids = [...new Set(patientIds)];
+    await client.query(
+      `DELETE FROM encounter_patient WHERE encounter_id = $1 AND NOT (patient_id = ANY($2::uuid[]))`,
+      [encounterId, ids]
+    );
+    if (ids.length > 0) {
+      await client.query(
+        `INSERT INTO encounter_patient (encounter_id, patient_id)
+         SELECT $1, UNNEST($2::uuid[])
+         ON CONFLICT DO NOTHING`,
+        [encounterId, ids]
+      );
+    }
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("setEncounterPatients", err);
+  }
+}
+
 export async function getEncounterById(
   client: PoolClient,
   id: string
@@ -228,13 +270,13 @@ export async function insertEncounter(
 ): Promise<Encounter> {
   try {
     const fhirClass = typeToFhirClass(input.type);
-    const result = await client.query<Encounter>(
+    const result = await client.query<{ id: string }>(
       `INSERT INTO encounter
          (user_id, practitioner_id, organization_id,
           type, status, class, start_at, end_at, notes,
           region, territory_id, attendees, transfer_of_value, metadata)
        VALUES ($1,$2,$3,$4,$5,$6,$7::timestamptz,$8::timestamptz,$9,$10,$11,$12,$13,$14)
-       RETURNING ${ENCOUNTER_SELECT_COLS}`,
+       RETURNING id`,
       [
         input.user_id,
         input.practitioner_id  ?? null,
@@ -252,8 +294,11 @@ export async function insertEncounter(
         input.metadata ? JSON.stringify(input.metadata) : null,
       ]
     );
-    const row = result.rows[0];
-    if (!row) throw new DatabaseError("insertEncounter", new Error("Insert returned no rows"));
+    const created = result.rows[0];
+    if (!created) throw new DatabaseError("insertEncounter", new Error("Insert returned no rows"));
+    await setEncounterPatients(client, created.id, input.patient_ids ?? []);
+    const row = await getEncounterById(client, created.id);
+    if (!row) throw new DatabaseError("insertEncounter", new Error("Inserted row not found"));
     return row;
   } catch (err) {
     if (err instanceof AppError) throw err;
@@ -296,15 +341,17 @@ export async function updateEncounter(
     if (input.disclosed_at !== undefined)    push("disclosed_at = ?::timestamptz", input.disclosed_at);
     if (input.metadata !== undefined)        push("metadata = ?",            input.metadata ? JSON.stringify(input.metadata) : null);
 
-    if (sets.length === 0) return existing;
+    if (sets.length === 0 && input.patient_ids === undefined) return existing;
 
-    sets.push("updated_at = now()");
-    params.push(id);
-
-    await client.query(
-      `UPDATE encounter SET ${sets.join(", ")} WHERE id = $${i}`,
-      params
-    );
+    if (sets.length > 0) {
+      sets.push("updated_at = now()");
+      params.push(id);
+      await client.query(
+        `UPDATE encounter SET ${sets.join(", ")} WHERE id = $${i}`,
+        params
+      );
+    }
+    if (input.patient_ids !== undefined) await setEncounterPatients(client, id, input.patient_ids);
 
     return getEncounterById(client, id);
   } catch (err) {

@@ -11,6 +11,7 @@ import basicSsl from "@vitejs/plugin-basic-ssl";
 import type { Plugin } from "vite";
 import { sharedViteConfig } from "../../vite.shared.ts";
 import { injectBootSplash } from "./src/boot/splash.ts";
+import { NAVIGATE_FALLBACK_DENYLIST } from "./src/config/pwaFiles.ts";
 
 /** Paints the auth backdrop from static HTML before any JS runs — see src/boot/splash.ts. */
 function bootSplashPlugin(): Plugin {
@@ -66,6 +67,7 @@ function neoPwaPlugin(opts: NeoPwaOptions): ReturnType<typeof VitePWA> {
       // app are fully closed — on a phone, practically never.
       skipWaiting: true,
       clientsClaim: true,
+      navigateFallbackDenylist: NAVIGATE_FALLBACK_DENYLIST,
       globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
       runtimeCaching: [
         { urlPattern: /^https?:\/\/.*\/api\//, handler: "NetworkOnly" },

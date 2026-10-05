@@ -192,6 +192,67 @@ export async function sendPasswordResetEmail(to: string, resetLink: string, reci
   });
 }
 
+/** Trackable reports: which reporter email — the receipt, or the closing one (D3). */
+export type ProblemReportEmailKind = "received" | "resolved" | "dismissed";
+
+export interface ProblemReportEmail {
+  kind: ProblemReportEmailKind;
+  number: number | string;
+  /** The ticket it was filed under (e.g. CORE-123), when an admin linked one. */
+  trackerRef: string | null;
+  /** The admin's PHI-free reply to the reporter; never the internal admin note. */
+  reply: string | null;
+  /** "My reports", opened on this report. */
+  link: string;
+}
+
+/**
+ * Trackable reports: the email the reporter gets when a report arrives and
+ * when it is resolved or won't be fixed. Never carries the report's own text
+ * (it may hold patient data): only its number, the linked ticket and the
+ * admin's reply. Pure, so the copy is testable without Resend.
+ */
+export function buildProblemReportEmail(to: string, recipient: EmailRecipient, report: ProblemReportEmail): { subject: string; html: string } {
+  const locale = recipient.language;
+  const t = (key: string, params?: Record<string, string>) => emailT(locale, `email.problemReport.${report.kind}.${key}`, params);
+  const number = String(report.number);
+  const muted = (text: string) => `<p style="margin:0 0 16px;font-size:13px;color:#7a827e;">${escapeHtml(text)}</p>`;
+
+  const bodyHtml = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(t("title", { number }))}</h1>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: formatGreetingName(recipient, to) }))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(t("body", { number }))}</p>${
+    report.trackerRef ? `
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.problemReport.ticket", { ticket: report.trackerRef }))}</p>` : ""}${
+    report.reply ? `
+    <p style="margin:0 0 4px;font-weight:bold;">${escapeHtml(emailT(locale, "email.problemReport.replyLabel"))}</p>
+    <p style="margin:0 0 16px;white-space:pre-line;">${escapeHtml(report.reply)}</p>` : ""}
+    ${muted(emailT(locale, "email.problemReport.track"))}`;
+
+  const socials = getSocialsForRegion(recipient.region);
+  const html = renderEmailLayout({
+    preheader: t("title", { number }),
+    bodyHtml,
+    cta: { text: emailT(locale, "email.problemReport.cta"), href: report.link },
+    footerTagline: emailT(locale, "email.footer.tagline"),
+    footerCities: emailT(locale, "email.footer.cities"),
+    footerCopyright: emailT(locale, "email.footer.copyright", { year: String(new Date().getFullYear()) }),
+    supportLeadIn: emailT(locale, "email.footer.support"),
+    socials,
+  });
+  return { subject: t("subject", { number }), html };
+}
+
+export async function sendProblemReportEmail(to: string, recipient: EmailRecipient, report: ProblemReportEmail): Promise<void> {
+  const { subject, html } = buildProblemReportEmail(to, recipient, report);
+  await sendEmail(`problem report ${report.kind} email`, {
+    to,
+    subject,
+    html,
+    attachments: getEmailAttachments(getSocialsForRegion(recipient.region)),
+  });
+}
+
 /**
  * The patient's personal link to their open questionnaires — returns whether it was actually handed to Resend (docs/stories/
  * clinical-questionnaire-capture-redesign.md). Deliberately says nothing
@@ -335,6 +396,18 @@ export async function sendDemoBookingConfirmationEmail(to: string, meeting: Demo
   });
 }
 
+/**
+ * Partner emails (invite, signed documents) open with a formal address line ("Dr First Last,"),
+ * never the casual "Hi …," greeting and never the bare email address. Every partner is a doctor,
+ * so a missing salutation on the record falls back to the locale's "Dr" rather than dropping it.
+ */
+function formatPartnerAddress(recipient: EmailRecipient, to: string): string {
+  const locale = recipient.language;
+  const hasName = !!(recipient.firstName?.trim() || recipient.lastName?.trim());
+  const title = recipient.title?.trim() || (hasName ? emailT(locale, "email.partner.defaultTitle") : null);
+  return emailT(locale, "email.partner.address", { name: formatGreetingName({ ...recipient, title }, to) });
+}
+
 export async function sendPartnerInviteEmail(
   to: string,
   registerLink: string,
@@ -342,11 +415,10 @@ export async function sendPartnerInviteEmail(
   sender: EmailSender
 ): Promise<void> {
   const locale = recipient.language;
-  const greetingName = formatGreetingName(recipient, to);
 
   const bodyHtml = `
     <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.partnerInvite.title"))}</h1>
-    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: greetingName }))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(formatPartnerAddress(recipient, to))}</p>
     <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.partnerInvite.body"))}</p>
     <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.partnerInvite.deviceNote"))}</p>
     <p style="margin:0 0 16px;font-size:13px;color:#7a827e;">${escapeHtml(emailT(locale, "email.partnerInvite.expiry"))}</p>`;
@@ -714,16 +786,10 @@ export async function sendSignedDocumentsEmail(
   ccEmail?: string | null
 ): Promise<string | null> {
   const locale = recipient.language;
-  // These are the signed legal documents, so the address line is formal ("Dr First Last,"), never
-  // the casual "Hi …," greeting and never the bare email address. Every partner is a doctor, so a
-  // missing salutation on the record falls back to the locale's "Dr" rather than dropping the title.
-  const hasName = !!(recipient.firstName?.trim() || recipient.lastName?.trim());
-  const title = recipient.title?.trim() || (hasName ? emailT(locale, "email.signedDocuments.defaultTitle") : null);
-  const addressName = formatGreetingName({ ...recipient, title }, to);
 
   const bodyHtml = `
     <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.signedDocuments.title"))}</h1>
-    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.signedDocuments.address", { name: addressName }))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(formatPartnerAddress(recipient, to))}</p>
     <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.signedDocuments.body"))}</p>`;
 
   const socials = getSocialsForRegion(recipient.region);

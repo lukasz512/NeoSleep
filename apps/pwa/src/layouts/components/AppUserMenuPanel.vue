@@ -107,6 +107,30 @@
       {{ t(`layout.install.title.${device.form}`) }}
     </button>
 
+    <button
+      v-if="accountActions"
+      type="button"
+      class="user-menu__row"
+      data-motion="row"
+      data-testid="user-menu-report-problem"
+      @click="$emit('report-problem'); $emit('close')"
+    >
+      <AppIcon name="feedback" class="user-menu__action-icon" />
+      {{ t('report.menu.feedback') }}
+    </button>
+
+    <button
+      v-if="accountActions"
+      type="button"
+      class="user-menu__row"
+      data-motion="row"
+      data-testid="user-menu-my-reports"
+      @click="$emit('my-reports'); $emit('close')"
+    >
+      <AppIcon name="view-list" class="user-menu__action-icon" />
+      {{ t('report.menu.myReports') }}
+    </button>
+
     <div v-if="accountActions" class="user-menu__actions" :class="{ 'user-menu__actions--single': !canChangePassword }" data-motion="row">
       <button
         v-if="canChangePassword"
@@ -175,6 +199,8 @@ const emit = defineEmits<{
   "set-theme": [preference: ThemePreference];
   "change-locale": [lang: string];
   "change-password": [];
+  "report-problem": [];
+  "my-reports": [];
   logout: [];
   close: [];
 }>();

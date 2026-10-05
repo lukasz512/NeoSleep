@@ -44,10 +44,37 @@ describe("AppSegmentedTabs", () => {
     expect(wrapper.find(".app-segmented-tabs__thumb").classes()).not.toContain("rounded-pill");
   });
 
-  it("pill stays the default look", () => {
+  // CORE-135: one look for every switcher — the calendar's grey track with a light sliding thumb, not the teal pill.
+  it("the default look is the calendar's track with a light thumb", () => {
     const wrapper = mountTabs();
-    expect(wrapper.classes()).toContain("rounded-pill");
+    expect(wrapper.classes()).toContain("app-segmented-tabs--track");
+    expect(wrapper.classes()).not.toContain("rounded-pill");
+    expect(wrapper.find(".app-segmented-tabs__thumb").classes()).not.toContain("bg-primary");
     expect(wrapper.classes()).not.toContain("app-segmented-tabs--underline");
+  });
+
+  // CORE-135: Historia clínica tabs carry a status icon, a "New" chip and their own ids.
+  it("a tab slot renders custom content and option attrs land on the tab", () => {
+    const wrapper = mount(AppSegmentedTabs, {
+      props: { modelValue: "a", options: [{ value: "a", label: "A", attrs: { id: "tab-a", "data-section": "a" } }, { value: "b", label: "B" }] },
+      slots: { tab: `<template #tab="{ option, active }"><i class="mark">{{ option.label }}{{ active ? "*" : "" }}</i></template>` },
+      global: { plugins: [createVuetify({ components: vuetifyComponents })] },
+    });
+    const tabs = wrapper.findAll(".app-segmented-tabs__tab");
+    expect(tabs[0].attributes("id")).toBe("tab-a");
+    expect(tabs[0].attributes("data-section")).toBe("a");
+    expect(tabs.map((t) => t.find(".mark").text())).toEqual(["A*", "B"]);
+  });
+
+  it("arrow keys move the selection like a native segmented control", async () => {
+    const wrapper = mountTabs({ modelValue: "documents" });
+    const tabs = wrapper.findAll(".app-segmented-tabs__tab");
+    await tabs[1].trigger("keydown", { key: "ArrowRight" });
+    await tabs[1].trigger("keydown", { key: "ArrowLeft" });
+    await tabs[0].trigger("keydown", { key: "ArrowLeft" });
+    expect(wrapper.emitted("update:modelValue")).toEqual([["history"], ["details"], ["history"]]);
+    expect(tabs[0].attributes("tabindex")).toBe("-1");
+    expect(tabs[1].attributes("tabindex")).toBe("0");
   });
 
   it("marks the active tab and emits the clicked one", async () => {

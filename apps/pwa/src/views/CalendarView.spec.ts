@@ -32,6 +32,12 @@ function jsonResponse(ok: boolean, status: number, body: unknown) {
   return { ok, status, json: async () => body } as Response;
 }
 
+/** The visible window behind a /calendar request — the request is padded by 2 local days each side (CORE-139). */
+function shown(url: URL, edge: "start" | "end"): Date {
+  const d = new Date(url.searchParams.get(edge)!);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + (edge === "start" ? 2 : -2));
+}
+
 const wrappers: VueWrapper[] = [];
 afterEach(() => {
   for (const w of wrappers.splice(0)) w.unmount();
@@ -58,7 +64,7 @@ describe("CalendarView (CORE-117)", () => {
     await mountView("doctor");
     const url = new URL(String(apiFetch.mock.calls[0]![0]), "http://x");
     expect(url.pathname).toBe("/api/v1/calendar");
-    const hours = (new Date(url.searchParams.get("end")!).getTime() - new Date(url.searchParams.get("start")!).getTime()) / 3_600_000;
+    const hours = (shown(url, "end").getTime() - shown(url, "start").getTime()) / 3_600_000;
     expect(hours).toBeGreaterThanOrEqual(23);
     expect(hours).toBeLessThanOrEqual(25);
   });
@@ -67,7 +73,7 @@ describe("CalendarView (CORE-117)", () => {
     apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
     await mountView("manager");
     const url = new URL(String(apiFetch.mock.calls[0]![0]), "http://x");
-    const days = (new Date(url.searchParams.get("end")!).getTime() - new Date(url.searchParams.get("start")!).getTime()) / 86_400_000;
+    const days = (shown(url, "end").getTime() - shown(url, "start").getTime()) / 86_400_000;
     expect(Math.round(days)).toBe(7);
   });
 
@@ -75,7 +81,7 @@ describe("CalendarView (CORE-117)", () => {
     apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
     await mountView("manager");
     const url = new URL(String(apiFetch.mock.calls[0]![0]), "http://x");
-    const monday = new Date(url.searchParams.get("start")!);
+    const monday = shown(url, "start");
     expect(monday.getDay()).toBe(1);
   });
 
@@ -100,7 +106,7 @@ describe("CalendarView (CORE-117)", () => {
 
     expect(apiFetch).toHaveBeenCalled();
     const url = new URL(String(apiFetch.mock.calls[0]![0]), "http://x");
-    const hours = (new Date(url.searchParams.get("end")!).getTime() - new Date(url.searchParams.get("start")!).getTime()) / 3_600_000;
+    const hours = (shown(url, "end").getTime() - shown(url, "start").getTime()) / 3_600_000;
     expect(hours).toBeGreaterThanOrEqual(23);
     expect(hours).toBeLessThanOrEqual(25);
   });
@@ -124,8 +130,8 @@ describe("CalendarView (CORE-117)", () => {
       await flushPromises();
 
       const url = new URL(String(apiFetch.mock.calls[0]![0]), "http://x");
-      const start = new Date(url.searchParams.get("start")!);
-      const days = (new Date(url.searchParams.get("end")!).getTime() - start.getTime()) / 86_400_000;
+      const start = shown(url, "start");
+      const days = (shown(url, "end").getTime() - start.getTime()) / 86_400_000;
       expect(start.getDay()).toBe(1);
       expect(Math.round(days)).toBe(42);
       expect(wrapper.find('[data-testid="calendar-month"]').exists()).toBe(true);
@@ -156,7 +162,7 @@ describe("CalendarView (CORE-117)", () => {
 
       expect(wrapper.find('[data-testid="calendar-view-day"]').attributes("aria-selected")).toBe("true");
       const url = new URL(String(apiFetch.mock.calls[0]![0]), "http://x");
-      expect(new Date(url.searchParams.get("start")!).getDate()).toBe(5);
+      expect(shown(url, "start").getDate()).toBe(5);
     } finally {
       vi.useRealTimers();
     }
@@ -170,7 +176,7 @@ describe("CalendarView (CORE-117)", () => {
       const wrapper = await mountView("manager");
       await wrapper.find('[data-testid="calendar-view-month"]').trigger("click");
       await flushPromises();
-      const startOf = () => new Date(new URL(String(apiFetch.mock.calls.at(-1)![0]), "http://x").searchParams.get("start")!);
+      const startOf = () => shown(new URL(String(apiFetch.mock.calls.at(-1)![0]), "http://x"), "start");
       const body = wrapper.find(".cal__body");
 
       apiFetch.mockClear();
@@ -224,29 +230,57 @@ describe("CalendarView (CORE-117)", () => {
     expect(Math.round((nextStart.getTime() - firstStart.getTime()) / 86_400_000)).toBe(7);
   });
 
-  it("CORE-122: unticking a calendar hides its entries", async () => {
+  it("hides the sidebar (mini month + calendars) and its toggle on tablet and desktop", async () => {
+    apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
+    const wrapper = await mountView("manager");
+    expect(wrapper.find('[data-testid="calendar-sidebar"]').isVisible()).toBe(false);
+    expect(wrapper.find('[data-testid="calendar-sidebar-toggle"]').exists()).toBe(false);
+  });
+
+  it("CORE-122: unticking a calendar hides its entries (phone, where the sidebar still lives)", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2032, 0, 1, 9, 0));
+    const innerWidth = window.innerWidth;
+    window.innerWidth = 390;
+    try {
+      apiFetch.mockResolvedValue(jsonResponse(true, 200, TWO_KINDS));
+      const wrapper = await mountView("manager");
+      expect(wrapper.text()).toContain("HCO visit");
+      await wrapper.find('[data-testid="calendar-filter-encounter"]').setValue(false);
+      // A phone opens on the month with that day's list.
+      expect(wrapper.text()).toContain("Jane Doe");
+      expect(wrapper.text()).not.toContain("HCO visit");
+    } finally {
+      window.innerWidth = innerWidth;
+      vi.useRealTimers();
+    }
+  });
+
+  it("CORE-145: with the sidebar hidden, a calendar unticked on a phone does not keep hiding entries on a wider screen", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2032, 0, 1, 9, 0));
     try {
       apiFetch.mockResolvedValue(jsonResponse(true, 200, TWO_KINDS));
       const wrapper = await mountView("manager");
+      // The checkbox stays in the DOM under v-show: this stands in for a filter left unticked before the screen widened.
       await wrapper.find('[data-testid="calendar-filter-encounter"]').setValue(false);
-      expect(wrapper.findAll('[data-testid="calendar-event"]')).toHaveLength(1);
-      expect(wrapper.text()).not.toContain("HCO visit");
+      expect(wrapper.findAll('[data-testid="calendar-event"]')).toHaveLength(2);
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it("the \"+\" button offers a choice between Appointment and Event (CORE-117)", async () => {
+  // For now "+" always means a Cita — doctors book their own patients; the Evento choice (CORE-117) comes back later.
+  it("the \"+\" button opens the appointment booking straight away, no Cita/Evento choice", async () => {
     apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
     const wrapper = await mountView("manager");
 
     await wrapper.find('[data-testid="calendar-add"]').trigger("click");
     await flushPromises();
 
-    expect(document.body.querySelector('[data-testid="calendar-add-appointment"]')).not.toBeNull();
-    expect(document.body.querySelector('[data-testid="calendar-add-event"]')).not.toBeNull();
+    expect(document.body.querySelector('[data-testid="appointment-submit"]')).not.toBeNull();
+    expect(document.body.querySelector('[data-testid="calendar-add-appointment"]')).toBeNull();
+    expect(document.body.querySelector('[data-testid="calendar-add-event"]')).toBeNull();
   });
 
   // CORE-4: a notification about a visit opens that visit, not just the calendar.
@@ -276,5 +310,38 @@ describe("CalendarView (CORE-117)", () => {
     await flushPromises();
     expect(document.body.querySelector('[data-testid="appointment-status"]')).toBeNull();
     expect(wrapper.router.currentRoute.value.query.appointment).toBeUndefined();
+  });
+
+  it("CORE-139: a Mexico City evening appointment shows on its clinic day for a viewer in Warsaw", async () => {
+    // 18:00 in Mexico City on Monday 5 Jan = 01:00 Tuesday in Warsaw: a device-day fetch for Monday missed it.
+    const appointment = (id: string, start: string, end: string, name: string) => ({
+      kind: "appointment", id, start_at: start, end_at: end,
+      data: { id, patient_id: "p-1", patient_name: name, practitioner_id: "doc-1", practitioner_name: "Dr. Smith", start_at: start, end_at: end, timezone: "America/Mexico_City", status: "scheduled" },
+    });
+    const all = [
+      appointment("a-evening", "2032-01-06T00:00:00.000Z", "2032-01-06T00:30:00.000Z", "Evening Patient"),
+      appointment("a-tuesday", "2032-01-06T20:00:00.000Z", "2032-01-06T20:30:00.000Z", "Tuesday Patient"),
+    ];
+    // The API's own filter: rows overlapping the requested instants.
+    apiFetch.mockImplementation(async (path: string) => {
+      const url = new URL(path, "http://x");
+      const from = new Date(url.searchParams.get("start")!).getTime();
+      const to = new Date(url.searchParams.get("end")!).getTime();
+      return jsonResponse(true, 200, { items: all.filter((a) => new Date(a.end_at).getTime() > from && new Date(a.start_at).getTime() < to) });
+    });
+    const tz = process.env.TZ;
+    process.env.TZ = "Europe/Warsaw";
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2032-01-05T08:00:00.000Z"));
+    try {
+      const wrapper = await mountView("doctor");
+      expect(wrapper.text()).toContain("Evening Patient");
+      // Fetched because of the padding, but its clinic day (Tuesday) isn't on screen — not drawn, not counted.
+      expect(wrapper.text()).not.toContain("Tuesday Patient");
+      expect(wrapper.find('[data-testid="calendar-filter-appointment"]').element.parentElement!.textContent).toContain("1");
+    } finally {
+      vi.useRealTimers();
+      process.env.TZ = tz;
+    }
   });
 });

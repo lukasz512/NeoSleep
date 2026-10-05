@@ -178,7 +178,7 @@ test("a form with one section stays a single sheet", async ({ page }) => {
   await expect(page.locator(".pwa-form-section__title")).toHaveCount(0);
 });
 
-test("Clínico: AHI scale follows the number, CPAP tiles, Expediente is a box (NEO-228)", async ({ page }) => {
+test("Clínico: AHI scale follows the number, AHI + Talla steppers, CPAP tile, Expediente is a box (NEO-228, NEO-241)", async ({ page }) => {
   await open(page, "", LAPTOP);
   const clinical = body(page).locator("[data-section=clinical]");
   await clinical.scrollIntoViewIfNeeded();
@@ -186,15 +186,19 @@ test("Clínico: AHI scale follows the number, CPAP tiles, Expediente is a box (N
   await expect(clinical.locator(".ahi-scale__labels .is-active")).toHaveText("15–30 moderate");
   await clinical.locator(".ahi-field input").fill("31");
   await expect(clinical.locator(".ahi-scale__labels .is-active")).toHaveText(">30 severe");
-  // CPAP: two tiles side by side, taller than a text field, the saved one picked.
-  const tiles = clinical.locator(".choice-chips-field__row.is-tiles .choice-chips-field__chip");
-  await expect(tiles).toHaveText(["Uses CPAP", "No CPAP"]);
-  await expect(clinical.locator("[aria-checked=true]")).toHaveText("Uses CPAP");
-  const [a, b] = await tiles.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect));
-  expect(Math.abs(a.top - b.top)).toBeLessThan(1);
-  expect(a.height).toBeGreaterThan(64);
-  await tiles.nth(1).click();
-  await expect(clinical.locator("[aria-checked=true]")).toHaveText("No CPAP");
+  // NEO-241: AHI and Talla side by side, each with − / +; + on Talla adds a cm.
+  const ahiBox = await clinical.locator(".ahi-field").boundingBox();
+  const talla = clinical.locator(".number-stepper").nth(1);
+  const tallaBox = await talla.boundingBox();
+  expect(ahiBox && tallaBox && Math.abs(ahiBox.y - tallaBox.y)).toBeLessThan(1);
+  expect(ahiBox && tallaBox && tallaBox.x).toBeGreaterThan((ahiBox?.x ?? 0) + (ahiBox?.width ?? 0) - 1);
+  await talla.getByRole("button", { name: "Increase" }).click();
+  await expect(talla.locator("input")).toHaveValue("159");
+  // CPAP: one switch tile, on for María; one tap turns it off (no crossed-out "No CPAP" choice).
+  const cpap = clinical.getByRole("switch", { name: /Uses CPAP/ });
+  await expect(cpap).toHaveAttribute("aria-checked", "true");
+  await cpap.click();
+  await expect(cpap).toHaveAttribute("aria-checked", "false");
   // Expediente médico is a multi-line box.
   await expect(clinical.locator("textarea").first()).toBeVisible();
 });

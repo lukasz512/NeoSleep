@@ -54,24 +54,52 @@ $pwa-fib-t-3xl: 987ms;
 
 /* Avatar color families, "quiet + accent" (NEO-155, Łukasz's pick
    2026-09-28): everything lives in the desk's greys and only patients carry
-   the brand teal, so the eye lands on the person under care. Each family is
-   a list of (hue, saturation) tints; AppAvatar picks one by a hash of the
+   the brand green, so the eye lands on the person under care. Patients have
+   their own explicit list below; every other family is a list of
+   (hue, saturation) tints; AppAvatar picks one by a hash of the
    name (org: by organization type) — utils/avatarHue.ts, keep
    AVATAR_FAMILY_SIZES equal to these list lengths. Lightness is shared per
    family and theme, so every tint has the same initials contrast. Leads use
    only the fg (outline, no fill). */
 $pwa-avatar-families: (
-  patient: ((172, 55), (178, 50), (166, 45), (184, 45)),
   doctor: ((205, 14), (215, 12), (195, 12)),
   org: ((35, 16), (28, 14), (42, 14), (20, 12), (48, 12)),
   lead: ((172, 45), (178, 40)),
   person: ((150, 5), (200, 5), (30, 5)),
 );
 /* (background lightness, initials lightness) per family. */
-$pwa-avatar-light: (patient: (90, 30), doctor: (92, 26), org: (91, 30), lead: (96, 32), person: (93, 34));
-$pwa-avatar-dark: (patient: (24, 72), doctor: (23, 78), org: (22, 76), lead: (16, 74), person: (22, 74));
+$pwa-avatar-light: (doctor: (92, 26), org: (91, 30), lead: (96, 32), person: (93, 34));
+$pwa-avatar-dark: (doctor: (23, 78), org: (22, 76), lead: (16, 74), person: (22, 74));
 
-@mixin pwa-avatar-tokens($lightness) {
+/* Patients (D3 variant 2, 2026-10-05): the app's green, shaded light to deep, plus
+   slate-blue and sage-olive accents, so neighbours in a list are told apart.
+   Each tint is (light bg, light initials, dark bg, dark initials); initials are
+   at least 4.5:1 on their background in both themes. The deep tints keep
+   white initials in dark mode too. Keep AVATAR_FAMILY_SIZES.patient equal to
+   this list's length (utils/avatarHue.ts). */
+$pwa-avatar-patient-tints: (
+  (hsl(176 48% 89%), #0b6b62, hsl(176 40% 22%), #8ed6ce),
+  (hsl(168 42% 76%), hsl(174 80% 16%), hsl(168 35% 30%), hsl(168 60% 84%)),
+  (hsl(82 26% 78%), hsl(82 35% 20%), hsl(82 20% 30%), hsl(82 45% 84%)),
+  (hsl(148 32% 82%), hsl(150 50% 20%), hsl(148 28% 26%), hsl(148 50% 82%)),
+  (hsl(172 42% 34%), #ffffff, hsl(172 42% 34%), #ffffff),
+  (hsl(205 24% 42%), #ffffff, hsl(205 24% 42%), #ffffff),
+  (#0b6b62, #ffffff, #0b6b62, #ffffff),
+  (hsl(186 45% 28%), #ffffff, hsl(186 45% 28%), #ffffff)
+);
+
+@mixin pwa-avatar-tokens($lightness, $dark: false) {
+  @for $i from 1 through list.length($pwa-avatar-patient-tints) {
+    $tint: list.nth($pwa-avatar-patient-tints, $i);
+    $bg: list.nth($tint, 1);
+    $fg: list.nth($tint, 2);
+    @if $dark {
+      $bg: list.nth($tint, 3);
+      $fg: list.nth($tint, 4);
+    }
+    --pwa-avatar-patient-#{$i - 1}-bg: #{$bg};
+    --pwa-avatar-patient-#{$i - 1}-fg: #{$fg};
+  }
   @each $family, $tints in $pwa-avatar-families {
     $l: map.get($lightness, $family);
     @for $i from 1 through list.length($tints) {
@@ -228,7 +256,7 @@ $pwa-avatar-dark: (patient: (24, 72), doctor: (23, 78), org: (22, 76), lead: (16
   --pwa-identity-person-soft: rgba(160, 175, 172, 0.12);
   --pwa-identity-lead: hsl(172 55% 62%);
   --pwa-avatar-doctor-badge: hsl(210 22% 66%);
-  @include pwa-avatar-tokens($pwa-avatar-dark);
+  @include pwa-avatar-tokens($pwa-avatar-dark, true);
   --pwa-toast-bg: #1e1e1e;
   --pwa-toast-border: #333333;
   --pwa-toast-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ApiError } from "./errors";
 import {
   buildDiagnosticPayload,
+  getRecentErrors,
   configureErrorReporting,
   reportCaught,
   reportFailedResponse,
@@ -179,5 +180,27 @@ describe("installGlobalErrorHandlers", () => {
       message: "[vue:render function] Error: render failed",
       metadata: { where: "vue:render function", x_component: "FindSpecialistView" },
     });
+  });
+});
+
+describe("getRecentErrors", () => {
+  it("records scrubbed entries with request id, status and path, even when sending is deduped", () => {
+    const err = new ApiError({ kind: "server", message: "boom for maria@example.mx", status: 500, requestId: "req-1", path: "/api/v1/x?q=secret", method: "GET" });
+    reportCaught(err, { where: "A.load" });
+    reportCaught(err, { where: "A.load" });
+    const list = getRecentErrors();
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ where: "A.load", request_id: "req-1", status: 500, path: "/api/v1/x" });
+    expect(list[0]?.message).not.toContain("maria@example.mx");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps only the last 10 and resets for tests", () => {
+    for (let i = 0; i < 12; i++) reportCaught(new Error(`e${i}`), { where: `W${i}` });
+    const list = getRecentErrors();
+    expect(list).toHaveLength(10);
+    expect(list[0]?.where).toBe("W2");
+    resetErrorReportingForTests();
+    expect(getRecentErrors()).toEqual([]);
   });
 });

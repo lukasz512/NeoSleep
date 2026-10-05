@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   calendarMotion,
   dateKey,
+  fetchWindow,
+  inWindow,
   layoutDay,
   minutesAtOffset,
   monthCells,
@@ -26,6 +28,20 @@ describe("calendarLayout (CORE-122)", () => {
     expect(dateKey(start)).toBe("2026-10-04");
     expect(start.getHours()).toBe(0);
     expect(dateKey(end)).toBe("2026-10-05");
+  });
+
+  it("CORE-139: the fetch window pads the view by 2 days each side, so a clinic zone up to 26 h away still lands in it", () => {
+    const { start, end } = fetchWindow("week", SUN);
+    expect(dateKey(start)).toBe("2026-09-26");
+    expect(dateKey(end)).toBe("2026-10-07");
+  });
+
+  it("CORE-139: an entry belongs to the view by its wall-clock day, not by its instant", () => {
+    const week = viewWindow("week", SUN);
+    expect(inWindow("2026-09-28", week)).toBe(true);
+    expect(inWindow("2026-10-04", week)).toBe(true);
+    expect(inWindow("2026-09-27", week)).toBe(false);
+    expect(inWindow("2026-10-05", week)).toBe(false);
   });
 
   it("the week window is Monday to next Monday", () => {

@@ -8,6 +8,7 @@ import {
   type EncounterVisibilityScope,
 } from "../db.js";
 import { getAllowedScopePaths } from "../middleware/requireScope.js";
+import { requirePatientInScope } from "./entityAccess.js";
 
 /**
  * QUERIES — the "serving counter" of the CQRS kitchen.
@@ -29,6 +30,7 @@ export interface EncounterDto {
   user_id: string;
   practitioner_id: string | null;
   organization_id: string | null;
+  patient_ids: string[];
   type: string;
   status: string;
   class: string;
@@ -51,6 +53,7 @@ function toDto(e: Encounter): EncounterDto {
     user_id:           e.user_id,
     practitioner_id:   e.practitioner_id   ?? null,
     organization_id:   e.organization_id   ?? null,
+    patient_ids:       e.patient_ids       ?? [],
     type:              e.type,
     status:            e.status,
     class:             e.class,
@@ -137,6 +140,8 @@ export interface GetEncounterListInput {
   territory_id?: string;
   status?: string;
   userId?: string;
+  /** CORE-137: only events for this patient — the caller must be allowed to see the patient (403 otherwise). */
+  patient_id?: string;
 }
 
 export interface GetEncounterListResult {
@@ -155,6 +160,7 @@ export async function GetEncounterListQuery(
   ctx: TenantContext,
   input: GetEncounterListInput
 ): Promise<GetEncounterListResult> {
+  if (input.patient_id) await requirePatientInScope(ctx, input.patient_id);
   const visibility = await encounterVisibilityScope(ctx);
 
   const filters: GetEncounterFilters = {
@@ -163,6 +169,7 @@ export async function GetEncounterListQuery(
     region:       input.region,
     territory_id: input.territory_id,
     status:       input.status as EncounterStatus | undefined,
+    patient_id:   input.patient_id,
     // Only meaningful for manager/admin (own-only roles are already fully
     // restricted by `visibility` below, regardless of what the client sent).
     userId: visibility.scopePaths !== undefined ? input.userId : undefined,

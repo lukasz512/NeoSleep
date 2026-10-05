@@ -178,3 +178,71 @@ describe("AppointmentDialog (NEO-34)", () => {
     expect(lastPostBody().practitioner_id).toBeUndefined();
   });
 });
+
+describe("AppointmentDialog — doctor outside the care team (CORE-132 D4)", () => {
+  const routeApi = (team: { practitioner_id: string }[]) =>
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path === "/api/v1/patient/p-1/care-team") return jsonResponse(true, 200, team);
+      return jsonResponse(true, 200, { items: [] });
+    });
+  const posts = () => apiFetch.mock.calls.filter(([p, init]) => p === "/api/v1/appointments" && (init as { method?: string })?.method === "POST");
+
+  it("asks to confirm access and won't book until it's ticked; then sends grant_access", async () => {
+    routeApi([{ practitioner_id: "doc-1" }]);
+    await open("admin", { practitioner: { id: "doc-2", name: "Dr. Pérez" } });
+    expect(byTestId("appointment-grant")!.textContent).toContain("Dr. Pérez is not on this patient's care team yet");
+
+    byTestId("appointment-submit")!.click();
+    await flushPromises();
+    expect(posts()).toHaveLength(0);
+
+    byTestId("appointment-grant-checkbox")!.querySelector("input")!.click();
+    await flushPromises();
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 201, { ...SAVED, practitioner_id: "doc-2" }));
+    byTestId("appointment-submit")!.click();
+    await flushPromises();
+    expect(posts()).toHaveLength(1);
+    expect(lastPostBody()).toMatchObject({ practitioner_id: "doc-2", grant_access: true });
+  });
+
+  it("a doctor already on the team needs no confirmation and sends no grant_access", async () => {
+    routeApi([{ practitioner_id: "doc-1" }, { practitioner_id: "doc-2" }]);
+    await open("admin", { practitioner: { id: "doc-2", name: "Dr. Pérez" } });
+    expect(byTestId("appointment-grant")).toBeNull();
+
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 201, SAVED));
+    byTestId("appointment-submit")!.click();
+    await flushPromises();
+    expect(lastPostBody().grant_access).toBeUndefined();
+  });
+
+  it("a doctor booking themself is never asked", async () => {
+    routeApi([]);
+    await open("doctor");
+    expect(byTestId("appointment-grant")).toBeNull();
+    expect(apiFetch.mock.calls.some(([p]) => String(p).endsWith("/care-team"))).toBe(false);
+  });
+
+  it("CORE-138: when the care team couldn't be read, the API's grant_access refusal reveals the confirmation instead of a generic error", async () => {
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path.endsWith("/care-team")) return jsonResponse(false, 500, {});
+      return jsonResponse(true, 200, { items: [] });
+    });
+    await open("admin", { practitioner: { id: "doc-2", name: "Dr. Pérez" } });
+    expect(byTestId("appointment-grant")).toBeNull();
+
+    const refusal = { error: "grant_access must be confirmed", code: "VALIDATION_ERROR", field: "grant_access" };
+    apiFetch.mockResolvedValueOnce({ ...jsonResponse(false, 400, refusal), clone: () => jsonResponse(false, 400, refusal) } as Response);
+    byTestId("appointment-submit")!.click();
+    await flushPromises();
+    expect(byTestId("appointment-problem")).toBeNull();
+    expect(byTestId("appointment-grant")!.textContent).toContain("Dr. Pérez is not on this patient's care team yet");
+
+    byTestId("appointment-grant-checkbox")!.querySelector("input")!.click();
+    await flushPromises();
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, 201, { ...SAVED, practitioner_id: "doc-2" }));
+    byTestId("appointment-submit")!.click();
+    await flushPromises();
+    expect(lastPostBody()).toMatchObject({ practitioner_id: "doc-2", grant_access: true });
+  });
+});

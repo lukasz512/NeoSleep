@@ -103,6 +103,8 @@ export function useAppointments() {
     duration_minutes: number;
     notes?: string;
     treatment_plan_id?: string;
+    /** CORE-132: the booker confirmed that a doctor outside the patient's care team gets the record. */
+    grant_access?: boolean;
   }): Promise<AppointmentWriteResult> {
     return write("/api/v1/appointments", "POST", body);
   }

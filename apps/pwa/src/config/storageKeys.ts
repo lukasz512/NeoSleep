@@ -8,6 +8,9 @@ export const APP_STORAGE_KEYS = {
    *  force a re-login. The short-lived access token itself is memory-only and re-derived
    *  from this on demand via POST /auth/refresh (see composables/useApi.ts). */
   refreshToken: "app-refresh-token",
+  /** Id of the person signed in on this browser, so other tabs follow a sign-out or a
+   *  switch to someone else (router/sessionLossRedirect.ts). */
+  sessionUser: "app-session-user",
   /** "Add to device" card: how often the user said "Later" (NEO-87) — per device on purpose. */
   installCard: "app-install-card",
   /** Prefix of a patient's unsent questionnaire answers on their own device (composables/useQuestionnaireDraft.ts) —

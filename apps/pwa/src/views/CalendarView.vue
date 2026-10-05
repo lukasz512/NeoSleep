@@ -5,10 +5,10 @@
   <div
     ref="rootEl"
     class="view-calendar cal"
-    :class="{ 'cal--narrow': narrow, 'cal--phone': phone, 'cal--side-open': sideOpen }"
+    :class="{ 'cal--narrow': narrow, 'cal--phone': phone, 'cal--side-open': sideOpen, 'cal--no-side': !showSide }"
     :style="{ '--cal-top': `${toolbarBottom}px` }"
   >
-    <aside class="cal__side" :aria-hidden="narrow && !sideOpen ? 'true' : undefined" :inert="narrow && !sideOpen ? true : undefined">
+    <aside v-show="showSide" class="cal__side" data-testid="calendar-sidebar" :aria-hidden="narrow && !sideOpen ? 'true' : undefined" :inert="narrow && !sideOpen ? true : undefined">
       <CalendarMiniMonth
         :month="miniMonth"
         :today="today"
@@ -23,7 +23,7 @@
         <label v-for="kind in KINDS" :key="kind" class="cal__filter" :style="{ '--cal-color': KIND_COLOR[kind] }">
           <input v-model="visibleKinds[kind]" type="checkbox" class="cal__check" :data-testid="`calendar-filter-${kind}`" />
           <span>{{ t(`user.calendar.filter.${kind}`) }}</span>
-          <span class="cal__filter-count">{{ entries.filter((e) => e.kind === kind).length }}</span>
+          <span class="cal__filter-count">{{ shownEntries.filter((e) => e.kind === kind).length }}</span>
         </label>
       </section>
     </aside>
@@ -94,7 +94,7 @@
       <!-- After the body in the DOM so its View Transition snapshot paints above the sliding grid. -->
       <div ref="toolbarEl" class="cal__toolbar cal-glass">
         <button
-          v-if="narrow"
+          v-if="narrow && showSide"
           type="button"
           class="cal__icon-btn cal__side-toggle"
           :aria-label="t('user.calendar.toggleSidebar')"
@@ -107,22 +107,13 @@
         <h2 class="cal__title" data-testid="calendar-title">
           <strong>{{ titleParts[0] }}</strong> <span>{{ titleParts[1] }}</span>
         </h2>
-        <div ref="segEl" class="cal__seg" role="tablist" :aria-label="t('user.calendar.viewSwitch')">
-          <span class="cal__seg-thumb" :style="thumbStyle" aria-hidden="true" />
-          <button
-            v-for="v in VIEWS"
-            :key="v"
-            :ref="(el) => setSegButton(v, el)"
-            type="button"
-            role="tab"
-            class="cal__seg-btn"
-            :aria-selected="calendarType === v"
-            :data-testid="`calendar-view-${v}`"
-            @click="navigate(v, calendarValue)"
-          >
-            {{ t(VIEW_LABEL[v]) }}
-          </button>
-        </div>
+        <AppSegmentedTabs
+          class="cal__seg"
+          :aria-label="t('user.calendar.viewSwitch')"
+          :model-value="calendarType"
+          :options="viewOptions"
+          @update:model-value="(v: string) => navigate(v as CalendarViewType, calendarValue)"
+        />
         <div class="cal__nav">
           <button type="button" class="cal__icon-btn" :aria-label="t('user.planner.prev')" data-testid="calendar-prev" @click="step(-1)">
             <AppIcon name="chevron-left" />
@@ -132,7 +123,7 @@
             <AppIcon name="chevron-right" />
           </button>
         </div>
-        <button type="button" class="cal__add" data-testid="calendar-add" :aria-label="t('user.calendar.add')" :title="t('user.calendar.add')" @click="openAddChoice()">
+        <button type="button" class="cal__add" data-testid="calendar-add" :aria-label="t('user.calendar.add')" :title="t('user.calendar.add')" @click="openAdd()">
           <AppIcon name="plus" />
         </button>
         <VProgressLinear v-if="loading" indeterminate absolute location="bottom" height="2" color="primary" class="cal__progress" />
@@ -140,32 +131,6 @@
 
       <div v-if="narrow && sideOpen" class="cal__scrim" @click="sideOpen = false" />
     </div>
-
-    <!-- "+" offers Cita or Evento (CORE-117) — each opens its own existing dialog below. -->
-    <AppFormDialog
-      :model-value="showAddChoice"
-      :max-width="380"
-      :title="t('user.calendar.addChoice.title')"
-      @update:model-value="showAddChoice = $event"
-      @close="showAddChoice = false"
-    >
-      <VList class="view-calendar__choice-list">
-        <VListItem data-testid="calendar-add-appointment" @click="onChooseAppointment">
-          <template #prepend>
-            <AppIcon name="nav-appointments" class="view-calendar__choice-icon" />
-          </template>
-          <VListItemTitle>{{ t('user.calendar.addChoice.appointment') }}</VListItemTitle>
-          <VListItemSubtitle>{{ t('user.calendar.addChoice.appointmentHint') }}</VListItemSubtitle>
-        </VListItem>
-        <VListItem data-testid="calendar-add-event" @click="onChooseEvent">
-          <template #prepend>
-            <AppIcon name="nav-planner" class="view-calendar__choice-icon" />
-          </template>
-          <VListItemTitle>{{ t('user.calendar.addChoice.event') }}</VListItemTitle>
-          <VListItemSubtitle>{{ t('user.calendar.addChoice.eventHint') }}</VListItemSubtitle>
-        </VListItem>
-      </VList>
-    </AppFormDialog>
 
     <EventForm v-model="showEventForm" :initial-data="eventFormInitial" @submit="onEventFormSubmit" />
 
@@ -190,6 +155,7 @@
 
 <script setup lang="ts">
 import { reportCaught } from "@api";
+import { AppSegmentedTabs } from "@ui";
 import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount, defineAsyncComponent } from "vue";
 import { useI18n } from "vue-i18n";
 import { useDisplay } from "vuetify";
@@ -205,6 +171,8 @@ import {
   calendarMotion,
   capitalizeFirst,
   dateKey,
+  fetchWindow,
+  inWindow,
   monthCells,
   parseWallTime,
   startOfDay,
@@ -219,7 +187,6 @@ import type { SubmitDone } from "../composables/useEntitySubmit";
 import type { EventFormInitialData, EventSubmitPayload } from "../components/EventForm.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppErrorState from "../components/AppErrorState.vue";
-import AppFormDialog from "../components/AppFormDialog.vue";
 import CalendarTimeGrid from "../components/calendar/CalendarTimeGrid.vue";
 import CalendarMonthGrid from "../components/calendar/CalendarMonthGrid.vue";
 import CalendarMiniMonth from "../components/calendar/CalendarMiniMonth.vue";
@@ -238,10 +205,14 @@ const lang = computed(() => intlLocale(locale.value));
 
 const VIEWS: readonly CalendarViewType[] = ["day", "week", "month"];
 const VIEW_LABEL: Record<CalendarViewType, string> = { day: "user.planner.viewDay", week: "user.planner.viewWeek", month: "user.planner.viewMonth" };
+/** CORE-135: the shared segmented control — this calendar's look is now everyone's. */
+const viewOptions = computed(() => VIEWS.map((v) => ({ value: v, label: t(VIEW_LABEL[v]), attrs: { "data-testid": `calendar-view-${v}` } })));
 
 /** Container widths (not the window's): the sidebar folds below NARROW_PX, the phone layout starts below PHONE_PX. */
 const NARROW_PX = 900;
 const PHONE_PX = 600;
+/** Mini month + calendars are hidden on tablet and desktop for now; a phone still opens them from the toolbar. */
+const SIDEBAR_ON_WIDE = false;
 /** Grid starts scrolled to 07:00; the whole day stays reachable. */
 const FIRST_VISIBLE_HOUR = 7;
 /** Longest a period change waits for its data before the slide starts (the screen is frozen meanwhile). */
@@ -261,29 +232,16 @@ const miniMonth = ref(new Date(calendarValue.value.getFullYear(), calendarValue.
 const rootEl = ref<HTMLElement | null>(null);
 const bodyEl = ref<HTMLElement | null>(null);
 const toolbarEl = ref<HTMLElement | null>(null);
-const segEl = ref<HTMLElement | null>(null);
-const segButtons = reactive<Record<string, HTMLElement | null>>({});
 const containerWidth = ref(smAndUp.value ? 1200 : 400);
 const narrow = computed(() => containerWidth.value < NARROW_PX);
 const phone = computed(() => containerWidth.value < PHONE_PX);
+const showSide = computed(() => SIDEBAR_ON_WIDE || phone.value);
 const sideOpen = ref(false);
 const toolbarBottom = ref(72);
-const thumbStyle = ref<Record<string, string>>({});
 
 function measure() {
   if (rootEl.value) containerWidth.value = rootEl.value.clientWidth || containerWidth.value;
   if (toolbarEl.value) toolbarBottom.value = toolbarEl.value.offsetTop + toolbarEl.value.offsetHeight + 6;
-  placeThumb();
-}
-
-function setSegButton(view: CalendarViewType, el: unknown) {
-  segButtons[view] = el instanceof HTMLElement ? el : null;
-}
-
-function placeThumb() {
-  const btn = segButtons[calendarType.value];
-  if (!btn) return;
-  thumbStyle.value = { width: `${btn.offsetWidth}px`, transform: `translateX(${btn.offsetLeft}px)` };
 }
 
 let resizeObserver: ResizeObserver | null = null;
@@ -312,8 +270,8 @@ onBeforeUnmount(() => {
   clearInterval(clock);
   window.removeEventListener("keydown", onKey);
 });
-watch(narrow, (isNarrow) => {
-  if (!isNarrow) sideOpen.value = false;
+watch([narrow, showSide], ([isNarrow, hasSide]) => {
+  if (!isNarrow || !hasSide) sideOpen.value = false;
 });
 watch([calendarType, phone, narrow, locale], () => void nextTick(measure), { flush: "post" });
 
@@ -425,7 +383,7 @@ function fetchItems(): Promise<void> {
     loading.value = true;
     loadFailed.value = false;
     try {
-      const { start, end } = windowOf();
+      const { start, end } = fetchWindow(calendarType.value, calendarValue.value);
       const res = await apiFetch(`/api/v1/calendar?start=${encodeURIComponent(start.toISOString())}&end=${encodeURIComponent(end.toISOString())}`, {
         handleErrors: false,
       });
@@ -452,10 +410,16 @@ function clockLabel(minutes: number): string {
   return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
 }
 
+/** The fetched entries whose wall-clock day is on screen — the fetch is padded (CORE-139). */
+const shownEntries = computed(() => {
+  const window = windowOf();
+  return entries.value.filter((e) => inWindow(parseWallTime(toZonedCalendarDateTime(e.start_at, e.timezone)).key, window));
+});
+
 const gridEvents = computed<CalendarGridEvent[]>(() => {
   const now = Date.now();
-  return entries.value
-    .filter((e) => visibleKinds[e.kind])
+  return shownEntries.value
+    .filter((e) => !showSide.value || visibleKinds[e.kind])
     .map((e) => {
       const start = parseWallTime(toZonedCalendarDateTime(e.start_at, e.timezone));
       const end = parseWallTime(toZonedCalendarDateTime(e.end_at, e.timezone));
@@ -562,7 +526,6 @@ function navigate(type: CalendarViewType, date: Date, origin?: HTMLElement) {
       miniMonth.value = new Date(target.getFullYear(), target.getMonth(), 1);
     }
     await nextTick();
-    placeThumb();
     if (motion !== "none") {
       await Promise.race([pendingFetch, new Promise((resolve) => setTimeout(resolve, TRANSITION_FETCH_WAIT_MS))]);
       await nextTick();
@@ -600,7 +563,7 @@ function onKey(event: KeyboardEvent) {
   if (event.metaKey || event.ctrlKey || event.altKey) return;
   const target = event.target as HTMLElement | null;
   if (target?.closest("input, textarea, select, [contenteditable='true'], .v-overlay")) return;
-  if (showAddChoice.value || showEventForm.value || showBooking.value || showDetail.value) return;
+  if (showEventForm.value || showBooking.value || showDetail.value) return;
   const byKey: Record<string, () => void> = {
     ArrowLeft: () => step(-1),
     ArrowRight: () => step(1),
@@ -643,28 +606,16 @@ function onOpen(id: string) {
 function onSlot(dayKey: string, minutes: number) {
   // The clicked time is wall time: an event reads it in the device zone, a booking in the clinic's (CORE-120).
   const wall = `${dayKey}T${clockLabel(minutes)}`;
-  openAddChoice(zonedInputToIso(wall, deviceTimeZone()), wall);
+  openAdd(zonedInputToIso(wall, deviceTimeZone()), wall);
 }
 
-// ── "+" add choice ───────────────────────────────────────────────────────────
+// ── "+" add ──────────────────────────────────────────────────────────────────
 
-const showAddChoice = ref(false);
-const addPrefillStart = ref<string | null>(null);
-/** The clicked slot as wall time — a booking keeps it in the clinic's zone (CORE-120). */
-const addPrefillWall = ref<string | null>(null);
-
-function openAddChoice(prefillStartIso?: string, prefillWall?: string) {
-  addPrefillStart.value = prefillStartIso ?? null;
-  addPrefillWall.value = prefillWall ?? null;
-  showAddChoice.value = true;
-}
-
-function defaultStart(): string {
-  if (addPrefillStart.value) return addPrefillStart.value;
-  const d = new Date();
-  d.setMinutes(0, 0, 0);
-  d.setHours(d.getHours() + 1);
-  return d.toISOString();
+// "+" and an empty slot always book a Cita for now — doctors schedule their own patients.
+// The Cita/Evento choice (CORE-117) comes back when events are needed again.
+// prefillWall is the clicked slot as wall time — a booking keeps it in the clinic's zone (CORE-120).
+function openAdd(prefillStartIso?: string, prefillWall?: string) {
+  openBooking({ start: prefillStartIso, startLocal: prefillWall ?? null });
 }
 
 // ── encounter dialog (EventForm) ────────────────────────────────────────────
@@ -672,13 +623,6 @@ function defaultStart(): string {
 const showEventForm = ref(false);
 const eventFormInitial = ref<EventFormInitialData | undefined>(undefined);
 
-function onChooseEvent() {
-  showAddChoice.value = false;
-  const start = defaultStart();
-  const end = new Date(new Date(start).getTime() + 3_600_000).toISOString();
-  eventFormInitial.value = { start_at: start, end_at: end };
-  showEventForm.value = true;
-}
 
 function openEncounter(encounter: PlannerEvent) {
   eventFormInitial.value = {
@@ -693,6 +637,7 @@ function openEncounter(encounter: PlannerEvent) {
     video_link: encounter.video_link,
     notes: encounter.notes,
     region: encounter.region,
+    patient_ids: encounter.patient_ids,
   };
   showEventForm.value = true;
 }
@@ -763,11 +708,6 @@ function openBooking(opts: { start?: string | null; startLocal?: string | null; 
   bookingStart.value = opts.start ?? null;
   bookingStartLocal.value = opts.startLocal ?? null;
   showBooking.value = true;
-}
-
-function onChooseAppointment() {
-  showAddChoice.value = false;
-  openBooking({ start: addPrefillStart.value ?? undefined, startLocal: addPrefillWall.value });
 }
 
 function openDetail(appointment: Appointment) {
@@ -1003,50 +943,6 @@ function onEntryClick(entry: CalendarEntry) {
   font-weight: 700;
 }
 
-.cal__seg {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  padding: 2px;
-  border-radius: 11px;
-  background: rgba(var(--v-theme-on-surface), 0.08);
-}
-
-.cal__seg-thumb {
-  position: absolute;
-  top: 2px;
-  bottom: 2px;
-  left: 0;
-  border-radius: 9px;
-  background: var(--cal-glass-strong);
-  box-shadow:
-    inset 0 1px 0 var(--glass-edge, rgb(255 255 255 / 0.7)),
-    0 2px 8px -2px rgb(0 0 0 / 0.22),
-    0 0 0 0.5px var(--cal-line-strong);
-  transition:
-    transform 0.5s var(--menu-spring, cubic-bezier(0.34, 1.3, 0.64, 1)),
-    width 0.5s var(--menu-spring, cubic-bezier(0.34, 1.3, 0.64, 1));
-}
-
-.cal__seg-btn {
-  position: relative;
-  z-index: 1;
-  min-height: 32px;
-  padding: 4px 14px;
-  border: 0;
-  border-radius: 9px;
-  background: none;
-  font: inherit;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--cal-muted);
-  cursor: pointer;
-  transition: color 0.2s;
-}
-
-.cal__seg-btn[aria-selected="true"] {
-  color: rgb(var(--v-theme-on-surface));
-}
 
 .cal__nav {
   display: flex;
@@ -1104,7 +1000,6 @@ function onEntryClick(entry: CalendarEntry) {
   box-shadow: 0 4px 12px -4px rgb(var(--v-theme-primary));
 }
 
-.cal__seg-btn:focus-visible,
 .cal__icon-btn:focus-visible,
 .cal__today:focus-visible,
 .cal__add:focus-visible {
@@ -1121,7 +1016,8 @@ function onEntryClick(entry: CalendarEntry) {
 }
 
 /* ── narrow (tablet): the sidebar floats as a glass panel ── */
-.cal--narrow {
+.cal--narrow,
+.cal--no-side {
   grid-template-columns: minmax(0, 1fr);
 }
 
@@ -1234,10 +1130,6 @@ function onEntryClick(entry: CalendarEntry) {
 
 .cal--phone .cal__seg {
   grid-area: seg;
-}
-
-.cal--phone .cal__seg-btn {
-  padding: 4px 0;
 }
 
 .cal--phone .cal__body--week {
@@ -1355,17 +1247,6 @@ function onEntryClick(entry: CalendarEntry) {
 .cal__row-meta {
   font-size: 0.8125rem;
   color: var(--cal-muted);
-}
-
-/* "+" choice dialog */
-.view-calendar__choice-list {
-  padding-top: 0;
-  padding-bottom: 8px;
-}
-
-.view-calendar__choice-icon {
-  width: 22px;
-  height: 22px;
 }
 
 @keyframes cal-fade-in {

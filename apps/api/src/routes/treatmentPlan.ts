@@ -4,8 +4,14 @@ import { requireAuth } from "../middleware/requireAuth.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
-import { CreateTreatmentPlanCommand, UpdateTreatmentPlanCommand, DeleteTreatmentPlanCommand } from "../commands/treatmentPlan.js";
-import { GetTreatmentPlanListQuery, GetTreatmentPlanByIdQuery } from "../queries/treatmentPlan.js";
+import {
+  CreateTreatmentPlanCommand,
+  UpdateTreatmentPlanCommand,
+  DeleteTreatmentPlanCommand,
+  SetTreatmentAdvanceLevelCommand,
+} from "../commands/treatmentPlan.js";
+import { GetTreatmentPlanListQuery, GetTreatmentPlanByIdQuery, GetTreatmentPlanQueueCountsQuery } from "../queries/treatmentPlan.js";
+import { isTreatmentQueue } from "../db/clinicalQueues.js";
 import { ValidationError } from "../errors.js";
 import { parsePaginationParams, routeParam } from "./utils.js";
 
@@ -82,6 +88,7 @@ treatmentPlanRouter.get(
     const type = typeof req.query.type === "string" ? req.query.type.trim() : undefined;
     const status = typeof req.query.status === "string" ? req.query.status.trim() : undefined;
     const search = typeof req.query.search === "string" ? req.query.search.trim() : undefined;
+    const queue = typeof req.query.queue === "string" ? req.query.queue.trim() : undefined;
 
     const result = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
@@ -90,6 +97,7 @@ treatmentPlanRouter.get(
         type: type || undefined,
         status: status || undefined,
         search: search || undefined,
+        queue: isTreatmentQueue(queue) ? queue : undefined,
         page,
         limit,
         sortBy,
@@ -97,6 +105,24 @@ treatmentPlanRouter.get(
       });
     });
     res.json(result);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/treatment-plan/queues — how many plans per list chip (action/active/follow_up/done)
+// ---------------------------------------------------------------------------
+treatmentPlanRouter.get(
+  "/treatment-plan/queues",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const slug = tenantSlugFromHost(req.hostname);
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : undefined;
+    const type = typeof req.query.type === "string" ? req.query.type.trim() : undefined;
+    const counts = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetTreatmentPlanQueueCountsQuery(ctx, { search: search || undefined, type: type || undefined });
+    });
+    res.json(counts);
   })
 );
 
@@ -170,6 +196,27 @@ treatmentPlanRouter.patch(
     });
 
     if (!plan) { res.status(404).json({ error: "Treatment plan not found" }); return; }
+    res.json(plan);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// PUT /api/v1/treatment-plan/:id/advance-level — { advance_level: number | null }, set at a control visit
+// ---------------------------------------------------------------------------
+treatmentPlanRouter.put(
+  "/treatment-plan/:id/advance-level",
+  requireRole("admin", "doctor"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = routeParam(req, "id")?.trim();
+    if (!id) throw new ValidationError("Missing treatment plan id");
+    const raw = (req.body as { advance_level?: unknown }).advance_level;
+    if (raw !== null && typeof raw !== "number") throw new ValidationError("advance_level must be a number or null", "advance_level");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const plan = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return SetTreatmentAdvanceLevelCommand(ctx, id, raw);
+    });
     res.json(plan);
   })
 );

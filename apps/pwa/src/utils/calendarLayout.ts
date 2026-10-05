@@ -65,6 +65,22 @@ export function viewWindow(type: CalendarViewType, anchor: Date): { start: Date;
   return { start: cells[0]!, end: addDays(cells[41]!, 1) };
 }
 
+/**
+ * What /api/v1/calendar is asked for (CORE-139): the view padded by 2 days each side.
+ * Appointments are drawn on their clinic's wall-clock day, which can be up to 26 h
+ * from the device's; a device-day fetch alone dropped e.g. Mexico City evenings seen
+ * from Europe. inWindow() then keeps only the entries whose day is on screen.
+ */
+export function fetchWindow(type: CalendarViewType, anchor: Date): { start: Date; end: Date } {
+  const { start, end } = viewWindow(type, anchor);
+  return { start: addDays(start, -2), end: addDays(end, 2) };
+}
+
+/** Whether a "YYYY-MM-DD" wall-clock day falls inside a half-open view window. */
+export function inWindow(dayKey: string, window: { start: Date; end: Date }): boolean {
+  return dayKey >= dateKey(window.start) && dayKey < dateKey(window.end);
+}
+
 /** Prev/next: one day, one week or one month (landing on the 1st, as macOS does). */
 export function stepAnchor(type: CalendarViewType, anchor: Date, direction: -1 | 1): Date {
   if (type === "day") return addDays(anchor, direction);

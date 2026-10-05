@@ -1,6 +1,7 @@
 import type { TenantContext } from "../context/TenantContext.js";
 import { getSleepStudiesPaginated, getSleepStudyById, type GetSleepStudiesFilters, type SleepStudy } from "../db.js";
-import { getLatestSleepStudyIdForPatient } from "../db/sleepStudy.js";
+import { getLatestSleepStudyIdForPatient, getSleepStudyQueueCounts, type SleepStudyListItem } from "../db/sleepStudy.js";
+import type { StudyQueue } from "../db/clinicalQueues.js";
 import { GetPatientByIdQuery } from "./patient.js";
 import { NotFoundError } from "../errors.js";
 import { getViewer, patientListScope, requirePatientInScope } from "./entityAccess.js";
@@ -35,7 +36,7 @@ export async function requireSleepStudyInScope(ctx: TenantContext, id: string): 
 
 export type SleepStudyDto = SleepStudy;
 
-function toDto(s: SleepStudy): SleepStudyDto {
+function toDto<T extends SleepStudy>(s: T): T {
   return s;
 }
 
@@ -43,6 +44,7 @@ export interface GetSleepStudyListInput {
   patient_id?: string;
   status?: string;
   search?: string;
+  queue?: StudyQueue;
   page?: number;
   limit?: number;
   sortBy?: string;
@@ -50,7 +52,7 @@ export interface GetSleepStudyListInput {
 }
 
 export interface GetSleepStudyListResult {
-  items: SleepStudyDto[];
+  items: SleepStudyListItem[];
   total: number;
 }
 
@@ -62,6 +64,7 @@ export async function GetSleepStudyListQuery(
     patient_id: input.patient_id,
     status: input.status,
     search: input.search,
+    queue: input.queue,
     // CORE-104: only studies of patients the viewer may see (a doctor: their own).
     patientScope: patientListScope(await getViewer(ctx)),
   };
@@ -73,6 +76,17 @@ export async function GetSleepStudyListQuery(
 
   const { rows, total } = await getSleepStudiesPaginated(ctx.client, filters, page, limit, sortBy, sortOrder);
   return { items: rows.map(toDto), total };
+}
+
+/** Counts for the list's queue chips, same scope and search as the list. */
+export async function GetSleepStudyQueueCountsQuery(
+  ctx: TenantContext,
+  input: { search?: string }
+): Promise<Record<StudyQueue, number>> {
+  return getSleepStudyQueueCounts(ctx.client, {
+    search: input.search,
+    patientScope: patientListScope(await getViewer(ctx)),
+  });
 }
 
 export async function GetSleepStudyByIdQuery(ctx: TenantContext, id: string): Promise<SleepStudyDto | null> {

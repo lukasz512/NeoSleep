@@ -51,4 +51,16 @@ describe("AhiField (NEO-228)", () => {
     await w.find("input").setValue("17");
     expect(w.emitted("update:modelValue")?.at(-1)).toEqual(["17"]);
   });
+
+  it("− and + either side step by 1 event/h, starting from 0, never below 0 (NEO-241)", async () => {
+    const [minus, plus] = mountField(null).findAll("button.number-stepper__btn");
+    await plus!.trigger("click");
+    const w = mountField(12);
+    const [m, p] = w.findAll("button.number-stepper__btn");
+    await p!.trigger("click");
+    await m!.trigger("click");
+    expect(w.emitted("update:modelValue")).toEqual([[13], [11]]);
+    expect(minus!.attributes("disabled")).toBeUndefined();
+    expect(mountField(0).findAll("button.number-stepper__btn")[0]!.attributes("disabled")).toBeDefined();
+  });
 });

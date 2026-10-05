@@ -108,6 +108,7 @@ describe("CORE-104 doctor sees only own patients — by id (404, never 200/403)"
     `/api/v1/patient/${f.patientId}/clinical-records`,
     `/api/v1/patient/${f.patientId}/checklist`,
     `/api/v1/patient/${f.patientId}/checklist/version`,
+    `/api/v1/patient/${f.patientId}/version`,
     `/api/v1/patient/${f.patientId}/email-sends`,
     `/api/v1/sleep-study/${f.studyId}`,
     `/api/v1/sleep-study/${f.studyId}/attachments`,

@@ -74,6 +74,25 @@ for (let offset = -10; offset <= 30; offset++) {
   }
 }
 
+// CORE-139: `?clinic=mx` adds today's evening visits at a Mexico City clinic (UTC-6, no DST),
+// to view from a browser in Europe — they used to fall between two device-day fetches.
+if (params.get("clinic") === "mx") {
+  const mxDay = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City" }).format(new Date());
+  for (const [i, time] of ["17:00", "18:30", "19:30"].entries()) {
+    const start = new Date(`${mxDay}T${time}:00-06:00`);
+    const end = new Date(start.getTime() + 45 * 60_000);
+    const id = `mx-${i}`;
+    items.push({
+      kind: "appointment", id, start_at: start.toISOString(), end_at: end.toISOString(),
+      data: {
+        id, patient_id: `p-mx-${i}`, patient_name: `${PATIENTS[i]} (MX ${time})`, practitioner_id: "doc-1",
+        practitioner_name: "Dra. Lorena Ruiz", organization_name: "Consultorio Polanco", start_at: start.toISOString(), end_at: end.toISOString(),
+        timezone: "America/Mexico_City", status: "scheduled",
+      },
+    });
+  }
+}
+
 const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
 const realFetch = window.fetch.bind(window);
 window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {

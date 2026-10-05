@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import { createI18n } from "vue-i18n";
 import { createVuetify } from "vuetify";
@@ -110,10 +113,19 @@ describe("AppNotificationCenter — glass card (CORE-4)", () => {
   });
 
   it("pins events with quick actions under Needs action, the rest under Today", async () => {
-    const wrapper = await mountBell();
-    await openBell(wrapper);
-    const headings = [...card().querySelectorAll(".notif-center__group-title")].map((h) => h.textContent?.trim());
-    expect(headings).toEqual(["Needs action", "Today"]);
+    // At midday, so the rows (12 and 30 min old) are Today even when the suite runs just after midnight.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2032, 0, 15, 12, 0));
+    try {
+      const rows = [{ ...ROWS[0]!, created_at: minutesAgo(12) }, { ...ROWS[1]!, created_at: minutesAgo(30) }];
+      apiFetch.mockImplementation((url: string) => (url.startsWith("/api/v1/notification?") ? respond({ items: rows, total: 2 }) : respond({})));
+      const wrapper = await mountBell();
+      await openBell(wrapper);
+      const headings = [...card().querySelectorAll(".notif-center__group-title")].map((h) => h.textContent?.trim());
+      expect(headings).toEqual(["Needs action", "Today"]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("names the patient and uses the short in-app title instead of the push copy", async () => {
@@ -187,5 +199,32 @@ describe("AppNotificationCenter — glass card (CORE-4)", () => {
     const wrapper = await mountBell();
     await openBell(wrapper);
     expect(card().textContent).not.toMatch(/see all/i);
+  });
+});
+
+describe("AppNotificationCenter bell — badge and focus (CORE-134)", () => {
+  const SOURCE = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "AppNotificationCenter.vue"), "utf-8");
+  const rule = (selector: string) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return SOURCE.match(new RegExp(`(^|\\n)${escaped}\\s*\\{[\\s\\S]*?\\}`))?.[0] ?? "";
+  };
+
+  it("does not clip the unread badge", () => {
+    // VBtn sets overflow: hidden, which cut the count off at the bell's edge.
+    expect(rule(".notif-center__bell")).toMatch(/overflow:\s*visible\s*!important/);
+    expect(rule(".notif-center__badge")).toMatch(/z-index:\s*2/);
+  });
+
+  it("keyboard focus is a brand tint + brand ring, never Vuetify's grey", () => {
+    const focus = rule(".notif-center__bell:focus-visible");
+    expect(focus).toMatch(/outline:\s*none/);
+    expect(focus).toMatch(/background-color:\s*rgba\(var\(--v-theme-primary\)/);
+    expect(rule(".notif-center__bell::after")).toMatch(/border-color:\s*rgb\(var\(--v-theme-primary\)\)/);
+    expect(rule(".notif-center__bell:focus-visible::after")).toMatch(/opacity:\s*1/);
+    expect(SOURCE).not.toMatch(/\.notif-center__bell:focus(?!-visible)/);
+  });
+
+  it("turns the focus motion off for reduced motion", () => {
+    expect(SOURCE).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*?\.notif-center__bell::after/);
   });
 });

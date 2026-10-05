@@ -1,5 +1,7 @@
+import { isIPv4, isIPv6 } from "node:net";
 import type { PoolClient } from "pg";
 import { getDb } from "./connection.js";
+import { currentRequestContext } from "../context/requestContext.js";
 import { isoDate } from "../routes/utils.js";
 import { formatOptionalDisplayName } from "../utils/personName.js";
 
@@ -26,7 +28,7 @@ export interface AuditLogInsert {
   entity_before?: Record<string, unknown> | null;
   entity_after?: Record<string, unknown> | null;
   legal_basis?: string | null;             // 'legitimate_interest' | 'consent' | 'contract'
-  jurisdiction?: string | null;            // 'EU' | 'MX' | 'US'
+  jurisdiction?: string | null;            // 'PL' | 'MX' — the actor's country, same values as consent.jurisdiction
   retain_until?: Date | null;
   user_ip?: string | null;
   user_agent?: string | null;
@@ -35,6 +37,48 @@ export interface AuditLogInsert {
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Retention per audit-context-r1 D1 (2026-10-05): a row that changes data is
+ * evidence for the medical record and lives as long as it (PL 20 years under
+ * the patient rights act, MX 5 years under NOM-004); a read is an access
+ * trail only and goes after 2 years (GDPR minimisation). An unknown country
+ * gets the longest period, since deleting evidence too early can't be undone.
+ */
+const READ_RETENTION_YEARS = 2;
+const RECORD_RETENTION_YEARS: Record<string, number> = { PL: 20, MX: 5 };
+const DEFAULT_RECORD_RETENTION_YEARS = 20;
+
+export function auditRetainUntil(action: string, jurisdiction: string | null, at: Date = new Date()): Date {
+  const years =
+    action === "read"
+      ? READ_RETENTION_YEARS
+      : (jurisdiction ? RECORD_RETENTION_YEARS[jurisdiction] : undefined) ?? DEFAULT_RECORD_RETENTION_YEARS;
+  const until = new Date(at);
+  until.setUTCFullYear(until.getUTCFullYear() + years);
+  return until;
+}
+
+/**
+ * audit-context-r1 D4: the full IP is kept where it is security evidence (a
+ * change); a read keeps only the network (IPv4 /24, IPv6 /48), because an IP
+ * is personal data under GDPR. Anything that isn't an IP is dropped, since the
+ * column is inet and a bad value would make the insert fail.
+ */
+export function auditIp(action: string, ip: string | null | undefined): string | null {
+  if (!ip) return null;
+  const plain = ip.startsWith("::ffff:") && isIPv4(ip.slice(7)) ? ip.slice(7) : ip;
+  if (isIPv4(plain)) {
+    return action === "read" ? `${plain.split(".").slice(0, 3).join(".")}.0` : plain;
+  }
+  if (isIPv6(plain)) {
+    if (action !== "read") return plain;
+    // Groups before a "::" are explicit; fewer than 3 of them means the rest are zeros.
+    const groups = (plain.split("::")[0] ?? "").split(":").filter(Boolean);
+    return `${[...groups, "0", "0", "0"].slice(0, 3).join(":")}::`;
+  }
+  return null;
+}
 
 /**
  * Inserts an audit record using the tenant-scoped PoolClient.
@@ -63,6 +107,9 @@ export async function insertAuditLog(clientOrRow: PoolClient | AuditLogInsert, r
   }
 
   try {
+    // Values the caller passed win; the rest comes from the request being handled.
+    const request = currentRequestContext();
+    const jurisdiction = data.jurisdiction ?? request?.jurisdiction ?? null;
     const userId = data.user_id?.trim();
     const isValidUuid = userId && UUID_RE.test(userId);
     const entityId = data.entity_id ?? null;
@@ -83,11 +130,11 @@ export async function insertAuditLog(clientOrRow: PoolClient | AuditLogInsert, r
         data.entity_before ? JSON.stringify(data.entity_before) : null,
         data.entity_after  ? JSON.stringify(data.entity_after)  : null,
         data.legal_basis   ?? null,
-        data.jurisdiction  ?? null,
-        data.retain_until  ?? null,
-        data.user_ip       ?? null,
-        data.user_agent    ?? null,
-        data.request_id    ?? null,
+        jurisdiction,
+        data.retain_until  ?? auditRetainUntil(data.action, jurisdiction),
+        auditIp(data.action, data.user_ip ?? request?.ip),
+        data.user_agent    ?? request?.userAgent ?? null,
+        data.request_id    ?? request?.requestId ?? null,
         data.metadata ? JSON.stringify(data.metadata) : null,
       ]
     );
@@ -152,7 +199,81 @@ export async function getAuditLogForEntities(
     [entityTypes, entityIds]
   );
 
-  return result.rows.map((row) => ({
+  return result.rows.map(toAuditLogEntry);
+}
+
+const TIMELINE_SELECT = `SELECT a.id, a.created_at, a.user_id, a.action, a.entity_type, a.entity_id, a.outcome,
+            a.entity_before, a.entity_after,
+            ui.title AS user_salutation, ui.first_name AS user_first_name, ui.last_name AS user_last_name
+     FROM audit_log a
+     LEFT JOIN users u ON a.user_id = u.id
+     LEFT JOIN identities ui ON u.identity_id = ui.id`;
+
+/**
+ * CORE-133: everything that happened to a patient — their own record plus
+ * every row about something linked to them (appointments incl. emails sent
+ * about them, events (CORE-137), sleep studies, treatment plans, questionnaire links; deleted
+ * ones too, so a deletion still shows), and any row that names the patient
+ * in entity_before/entity_after/metadata (partner orders, uploads). Reads
+ * stay out (NEO-83). The caller redacts fields per entity type.
+ */
+export async function getPatientTimeline(client: PoolClient, patientId: string): Promise<AuditLogEntry[]> {
+  const result = await client.query<AuditLogRow>(
+    `${TIMELINE_SELECT}
+     WHERE a.action <> 'read'
+       AND (
+         a.entity_id = ANY(
+           ARRAY[$1::text]
+           || ARRAY(SELECT id::text FROM appointment WHERE patient_id = $1::uuid)
+           || ARRAY(SELECT id::text FROM sleep_study WHERE patient_id = $1::uuid)
+           || ARRAY(SELECT id::text FROM treatment_plan WHERE patient_id = $1::uuid)
+           || ARRAY(SELECT id::text FROM questionnaire_request WHERE patient_id = $1::uuid)
+           || ARRAY(SELECT encounter_id::text FROM encounter_patient WHERE patient_id = $1::uuid)
+         )
+         OR a.entity_after->>'patient_id' = $1::text
+         OR a.entity_before->>'patient_id' = $1::text
+         OR a.entity_after->'patient_ids' @> to_jsonb($1::text)
+         OR a.entity_before->'patient_ids' @> to_jsonb($1::text)
+         OR a.metadata->>'patient_id' = $1::text
+       )
+     ORDER BY a.created_at DESC`,
+    [patientId]
+  );
+  return result.rows.map(toAuditLogEntry);
+}
+
+/**
+ * CORE-133: a doctor's History — their own record plus their appointments
+ * (bookings, reschedules, cancels, emails) and their encounters.
+ */
+export async function getPractitionerTimeline(client: PoolClient, practitionerId: string): Promise<AuditLogEntry[]> {
+  const result = await client.query<AuditLogRow>(
+    `${TIMELINE_SELECT}
+     WHERE a.action <> 'read'
+       AND (
+         a.entity_id = ANY(
+           ARRAY[$1::text]
+           || ARRAY(SELECT id::text FROM appointment WHERE practitioner_id = $1::uuid)
+           || ARRAY(SELECT id::text FROM encounter WHERE practitioner_id = $1::uuid)
+         )
+         OR a.entity_after->>'practitioner_id' = $1::text
+         OR a.entity_before->>'practitioner_id' = $1::text
+       )
+     ORDER BY a.created_at DESC`,
+    [practitionerId]
+  );
+  return result.rows.map(toAuditLogEntry);
+}
+
+/**
+ * Rows written before 2026-10-05 call staff accounts "Person", a name the
+ * project no longer uses. Audit rows are never rewritten (audit-context-r1
+ * D3: append-only evidence), so the old name is translated on the way out.
+ */
+const LEGACY_ENTITY_TYPES: Record<string, string> = { Person: "User" };
+
+function toAuditLogEntry(row: AuditLogRow): AuditLogEntry {
+  return {
     id: row.id,
     created_at: isoDate(row.created_at),
     user_id: row.user_id,
@@ -162,10 +283,10 @@ export async function getAuditLogForEntities(
       last_name: row.user_last_name,
     }),
     action: row.action,
-    entity_type: row.entity_type,
+    entity_type: LEGACY_ENTITY_TYPES[row.entity_type] ?? row.entity_type,
     entity_id: row.entity_id,
     outcome: row.outcome,
     entity_before: row.entity_before,
     entity_after: row.entity_after,
-  }));
+  };
 }

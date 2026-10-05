@@ -1,7 +1,10 @@
+import { careTeamCondition } from "./careTeam.js";
+
 /**
  * SQL side of the patient access policy (CORE-104, queries/entityAccess.ts) for list
  * queries of records that hang off a patient (sleep studies, treatment plans, …).
- * Same rules as getPatientsPaginated: a forced practitioner_id for a doctor, territory
+ * Same rules as getPatientsPaginated: a forced practitioner_id for a doctor (primary
+ * doctor or care team, CORE-132), territory
  * paths for manager / field (a patient with no territory passes — rollout fallback).
  */
 export interface PatientScope {
@@ -19,7 +22,7 @@ export function patientScopeCondition(scope: PatientScope | undefined, params: u
   const parts: string[] = [];
   if (scope.practitioner_id) {
     params.push(scope.practitioner_id);
-    parts.push(`sp.practitioner_id = $${params.length}`);
+    parts.push(careTeamCondition("sp", `$${params.length}`));
   }
   if (scope.scopePaths !== null) {
     params.push(scope.scopePaths);

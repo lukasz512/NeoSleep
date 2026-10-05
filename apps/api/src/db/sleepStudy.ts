@@ -3,6 +3,13 @@ import { patientScopeCondition, type PatientScope } from "./patientScope.js";
 import { AppError, DatabaseError } from "../errors.js";
 import { isoDate } from "../routes/utils.js";
 import { formatOptionalDisplayName } from "../utils/personName.js";
+import {
+  STUDY_PRIORITY_ORDER,
+  STUDY_PROGRESS_COLS,
+  studyProgressCte,
+  type StudyProgress,
+  type StudyQueue,
+} from "./clinicalQueues.js";
 
 export const SLEEP_STUDY_STATUSES = [
   "ordered",
@@ -66,7 +73,12 @@ export interface GetSleepStudiesFilters {
   search?: string;
   /** Viewer's patient access (CORE-104, db/patientScope.ts); undefined = unrestricted. */
   patientScope?: PatientScope;
+  /** The doctor's list chips (clinicalQueues.ts); set → rows sorted by priority unless another column is asked for. */
+  queue?: StudyQueue;
 }
+
+/** A list row: the study plus the next step it waits for. */
+export type SleepStudyListItem = SleepStudy & { progress: StudyProgress };
 
 export interface SleepStudyInsert {
   patient_id: string;
@@ -132,6 +144,13 @@ type SleepStudyRow = {
   metadata: Record<string, unknown> | null;
   created_at: Date;
   updated_at: Date;
+};
+
+type SleepStudyProgressRow = SleepStudyRow & {
+  phase: StudyProgress["phase"];
+  next_step: StudyProgress["next_step"];
+  queue: StudyQueue;
+  needs_action: boolean;
 };
 
 const SLEEP_STUDY_SELECT_COLS = `
@@ -212,14 +231,78 @@ export async function getSleepStudiesPaginated(
   limit: number,
   sortBy = "created_at",
   sortOrder: "asc" | "desc" = "desc"
-): Promise<{ rows: SleepStudy[]; total: number }> {
+): Promise<{ rows: SleepStudyListItem[]; total: number }> {
   const allowed = ["created_at", "study_date", "status"];
   const col = allowed.includes(sortBy) ? sortBy : "created_at";
   const dir = sortOrder === "asc" ? "ASC" : "DESC";
+  // The list's untouched default (created_at) gives way to priority once a queue chip is picked.
+  const order = filters.queue && col === "created_at" ? STUDY_PRIORITY_ORDER : `${col} ${dir}, id`;
 
-  const conditions: string[] = [];
   const params: unknown[] = [];
+  const cte = studyCte(studyListWhere(filters, params));
+  let queueWhere = "";
+  if (filters.queue) {
+    params.push(filters.queue);
+    queueWhere = `WHERE queue = $${params.length}`;
+  }
 
+  try {
+    const countResult = await client.query<{ count: string }>(
+      `${cte} SELECT COUNT(*) AS count FROM queued ${queueWhere}`,
+      params
+    );
+    const total = parseInt(countResult.rows[0]?.count ?? "0", 10);
+
+    const offset = (page - 1) * limit;
+    params.push(limit, offset);
+    const dataResult = await client.query<SleepStudyProgressRow>(
+      `${cte} SELECT * FROM queued ${queueWhere}
+       ORDER BY ${order}
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+    return { rows: dataResult.rows.map(serializeListItem), total };
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getSleepStudiesPaginated", err);
+  }
+}
+
+/** How many studies sit in each queue chip, under the same filters (search, scope) as the list. */
+export async function getSleepStudyQueueCounts(
+  client: PoolClient,
+  filters: Omit<GetSleepStudiesFilters, "queue">
+): Promise<Record<StudyQueue, number>> {
+  const params: unknown[] = [];
+  const cte = studyCte(studyListWhere(filters, params));
+  try {
+    const { rows } = await client.query<{ queue: StudyQueue; count: string }>(
+      `${cte} SELECT queue, COUNT(*) AS count FROM queued GROUP BY queue`,
+      params
+    );
+    const counts: Record<StudyQueue, number> = { action: 0, active: 0, done: 0 };
+    for (const r of rows) counts[r.queue] = parseInt(r.count, 10);
+    return counts;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getSleepStudyQueueCounts", err);
+  }
+}
+
+function serializeListItem(row: SleepStudyProgressRow): SleepStudyListItem {
+  return {
+    ...serialize(row),
+    progress: { phase: row.phase, next_step: row.next_step, queue: row.queue, needs_action: row.needs_action },
+  };
+}
+
+function studyCte(where: string): string {
+  return studyProgressCte(`SELECT ${SLEEP_STUDY_SELECT_COLS}, ${STUDY_PROGRESS_COLS} ${SLEEP_STUDY_JOIN} ${where}`);
+}
+
+/** WHERE for the study list and its queue counts: every filter but the queue itself. */
+function studyListWhere(filters: GetSleepStudiesFilters, params: unknown[]): string {
+  const conditions: string[] = [];
   if (filters.patient_id?.trim()) {
     params.push(filters.patient_id.trim());
     conditions.push(`s.patient_id = $${params.length}`);
@@ -234,31 +317,7 @@ export async function getSleepStudiesPaginated(
   }
   const scoped = patientScopeCondition(filters.patientScope, params, "s.patient_id");
   if (scoped) conditions.push(scoped);
-
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-
-  try {
-    const countResult = await client.query<{ count: string }>(
-      `SELECT COUNT(*) AS count ${SLEEP_STUDY_JOIN} ${where}`,
-      params
-    );
-    const total = parseInt(countResult.rows[0]?.count ?? "0", 10);
-
-    const offset = (page - 1) * limit;
-    params.push(limit, offset);
-    const dataResult = await client.query<SleepStudyRow>(
-      `SELECT ${SLEEP_STUDY_SELECT_COLS}
-       ${SLEEP_STUDY_JOIN}
-       ${where}
-       ORDER BY s.${col} ${dir}
-       LIMIT $${params.length - 1} OFFSET $${params.length}`,
-      params
-    );
-    return { rows: dataResult.rows.map(serialize), total };
-  } catch (err) {
-    if (err instanceof AppError) throw err;
-    throw new DatabaseError("getSleepStudiesPaginated", err);
-  }
+  return conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 }
 
 export async function getSleepStudyById(client: PoolClient, id: string): Promise<SleepStudy | null> {

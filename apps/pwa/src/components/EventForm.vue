@@ -132,7 +132,9 @@
         </template>
       </VAutocomplete>
       <VAutocomplete
+        :ref="(el) => setFieldEl('patientIds', el)"
         v-model="form.patientIds"
+        :error-messages="serverError('patientIds')"
         :label="t('user.planner.form.fieldPatient')"
         :items="patientOptions"
         item-title="name"
@@ -145,6 +147,7 @@
         closable-chips
         :loading="loadingPatient"
         :placeholder="t('user.planner.form.fieldPatientPlaceholder')"
+        data-testid="event-patients"
       >
         <template #item="{ internalItem: item, props: itemProps }">
           <VListItem v-if="item.value" v-bind="itemProps" :title="item.raw.name">
@@ -257,6 +260,7 @@ export interface EventFormData {
   status: string;
   hcoIds: string[];
   hcpIds: string[];
+  /** The patients the event is for (encounter_patient, CORE-137) — it shows on each one's card and History. */
   patientIds: string[];
   location: string;
   videoLink: string;
@@ -276,6 +280,7 @@ export interface EventFormInitialData {
   hcoIds?: string[];
   hcpIds?: string[];
   patientIds?: string[];
+  patient_ids?: string[];
   attendees?: { attendee_type: string; attendee_id: string }[];
   location?: string;
   video_link?: string;
@@ -295,7 +300,8 @@ export interface EventSubmitPayload {
   video_link?: string | null;
   notes?: string | null;
   region: string;
-  attendees: { attendee_type: "doctor" | "hco" | "lead" | "patient"; attendee_id: string; is_primary?: boolean }[];
+  patient_ids: string[];
+  attendees: { attendee_type: "doctor" | "hco" | "lead"; attendee_id: string; is_primary?: boolean }[];
 }
 
 const props = withDefaults(

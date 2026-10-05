@@ -70,6 +70,21 @@
             </template>
           </VAutocomplete>
 
+          <!-- CORE-132 D4: a doctor outside the care team gets the patient's record — the booker confirms it. -->
+          <div v-if="needsGrant" class="appointment-dialog__grant mb-3" data-testid="appointment-grant">
+            <p class="appointment-dialog__grant-hint">{{ t('user.appointments.form.grantAccessHint', { doctor: chosenDoctorName }) }}</p>
+            <VCheckbox
+              :ref="(el) => setFieldEl('grantAccess', el)"
+              v-model="grantAccess"
+              :label="t('user.appointments.form.grantAccess')"
+              :error-messages="serverError('grantAccess')"
+              :rules="[required]"
+              density="compact"
+              hide-details="auto"
+              data-testid="appointment-grant-checkbox"
+            />
+          </div>
+
           <!-- Date | Time side by side (NEO-132, T2); taken slots of this doctor are struck through. -->
           <AppDateField
             :ref="(el) => setFieldEl('start', el)"
@@ -216,6 +231,48 @@ const patientDefaultPractitionerId = computed(() => {
   return patientOptions.value.find((p) => p.id === patientId.value)?.practitioner_id ?? null;
 });
 
+/**
+ * CORE-132: who is already on the chosen patient's care team (primary doctor included).
+ * null until known — no confirmation is asked for before then; the API still enforces it.
+ */
+const careTeamIds = ref<Set<string> | null>(null);
+const grantAccess = ref(false);
+/** CORE-138: the API said grant_access is required although the team list didn't (failed or stale) — ask now. */
+const grantRequiredByServer = ref(false);
+const needsGrant = computed(
+  () =>
+    !isEdit.value &&
+    !isDoctor.value &&
+    !!practitionerId.value &&
+    (grantRequiredByServer.value || (!!careTeamIds.value && !careTeamIds.value.has(practitionerId.value))),
+);
+const chosenDoctorName = computed(
+  () => fixedPractitioner.value?.name ?? practitionerOptions.value.find((p) => p.id === practitionerId.value)?.name ?? "",
+);
+
+watch(
+  [() => props.modelValue, patientId],
+  async ([open, patient]) => {
+    careTeamIds.value = null;
+    if (!open || !patient || isEdit.value || isDoctor.value) return;
+    try {
+      const res = await apiFetch(`/api/v1/patient/${patient}/care-team`, { handleErrors: false });
+      if (!res.ok || patientId.value !== patient) return;
+      const team: unknown = await res.json();
+      if (Array.isArray(team)) careTeamIds.value = new Set((team as { practitioner_id: string }[]).map((m) => m.practitioner_id));
+    } catch (err) {
+      reportCaught(err, { where: "AppointmentDialog.careTeam" });
+    }
+  },
+  { immediate: true },
+);
+watch(practitionerId, () => {
+  grantAccess.value = false;
+  grantRequiredByServer.value = false;
+  clearServerError("grantAccess");
+});
+watch(grantAccess, () => clearServerError("grantAccess"));
+
 const durationItems = computed(() =>
   APPOINTMENT_DURATIONS.map((m) => ({ value: m, title: t("user.appointments.form.minutes", { n: m }) })),
 );
@@ -230,6 +287,7 @@ const API_TO_FORM_KEY: Record<string, string> = {
   start_local: "start",
   duration_minutes: "duration",
   notes: "notes",
+  grant_access: "grantAccess",
 };
 
 /**
@@ -247,6 +305,9 @@ const errorFields = computed<FormErrorField[]>(() => {
   }
   if (!isEdit.value && !fixedPractitioner.value && !isDoctor.value) {
     fields.push({ key: "practitioner", label: t("user.appointments.form.fieldDoctor"), value: practitionerId.value, rules: [required] });
+  }
+  if (needsGrant.value) {
+    fields.push({ key: "grantAccess", label: t("user.appointments.form.grantAccess"), value: grantAccess.value, rules: [required] });
   }
   fields.push(
     { key: "start", label: t("user.appointments.form.fieldStart"), value: startWall.value, rules: [required] },
@@ -301,6 +362,7 @@ let initialStart: string | null = null;
 
 function reset() {
   problem.value = null;
+  grantRequiredByServer.value = false;
   resetErrors();
   clinicZone.value = null;
   const a = props.appointment;
@@ -440,8 +502,10 @@ async function onSubmit() {
           start_local: startLocal,
           duration_minutes: duration.value,
           ...(isFieldForce.value || !notes.value.trim() ? {} : { notes: notes.value.trim() }),
+          ...(needsGrant.value && grantAccess.value ? { grant_access: true } : {}),
         });
     if (!result.ok || !result.appointment) {
+      if (result.fieldErrors?.grant_access && !isEdit.value) grantRequiredByServer.value = true;
       if (!(result.fieldErrors && showServerErrors(result.fieldErrors))) problem.value = explain(result);
       return;
     }
@@ -472,6 +536,11 @@ async function onSubmit() {
 .appointment-dialog__label {
   font-size: 0.75rem;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.appointment-dialog__grant-hint {
+  font-size: 0.8125rem;
+  margin: 0 0 4px;
 }
 
 .appointment-dialog__tz {

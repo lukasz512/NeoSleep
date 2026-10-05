@@ -3,6 +3,14 @@ import { patientScopeCondition, type PatientScope } from "./patientScope.js";
 import { AppError, DatabaseError } from "../errors.js";
 import { isoDate } from "../routes/utils.js";
 import { formatOptionalDisplayName } from "../utils/personName.js";
+import {
+  PRIORITY_ORDER,
+  TREATMENT_PROGRESS_COLS,
+  TREATMENT_PROGRESS_JOIN,
+  treatmentProgressCte,
+  type TreatmentProgress,
+  type TreatmentQueue,
+} from "./clinicalQueues.js";
 
 export const TREATMENT_PLAN_TYPES = [
   "cpap",
@@ -75,7 +83,12 @@ export interface GetTreatmentPlansFilters {
   search?: string;
   /** Viewer's patient access (CORE-104, db/patientScope.ts); undefined = unrestricted. */
   patientScope?: PatientScope;
+  /** The doctor's list chips (clinicalQueues.ts); set → rows sorted by priority unless another column is asked for. */
+  queue?: TreatmentQueue;
 }
+
+/** A list row: the plan plus where it stands in the care protocol. */
+export type TreatmentPlanListItem = TreatmentPlan & { progress: TreatmentProgress };
 
 export interface TreatmentPlanInsert {
   patient_id: string;
@@ -139,6 +152,19 @@ type TreatmentPlanRow = {
   order_sent_at: Date | null;
   created_at: Date;
   updated_at: Date;
+};
+
+type TreatmentPlanProgressRow = TreatmentPlanRow & {
+  stage: TreatmentProgress["stage"];
+  queue: TreatmentQueue;
+  needs_action: boolean;
+  overdue: boolean;
+  due_at: Date | null;
+  next_visit_at: Date | null;
+  delivered_at: Date | null;
+  advance_level: number | null;
+  ahi_baseline: string | null;
+  ahi_latest: string | null;
 };
 
 const TREATMENT_PLAN_SELECT_COLS = `
@@ -220,21 +246,31 @@ function serialize(row: TreatmentPlanRow): TreatmentPlan {
   };
 }
 
-export async function getTreatmentPlansPaginated(
-  client: PoolClient,
-  filters: GetTreatmentPlansFilters,
-  page: number,
-  limit: number,
-  sortBy = "created_at",
-  sortOrder: "asc" | "desc" = "desc"
-): Promise<{ rows: TreatmentPlan[]; total: number }> {
-  const allowed = ["created_at", "status", "type"];
-  const col = allowed.includes(sortBy) ? sortBy : "created_at";
-  const dir = sortOrder === "asc" ? "ASC" : "DESC";
+function optNum(val: string | null): number | null {
+  return val === null ? null : Number(val);
+}
 
+function serializeListItem(row: TreatmentPlanProgressRow): TreatmentPlanListItem {
+  return {
+    ...serialize(row),
+    progress: {
+      stage: row.stage,
+      queue: row.queue,
+      needs_action: row.needs_action,
+      overdue: row.overdue,
+      due_at: row.due_at ? isoDate(row.due_at) : null,
+      next_visit_at: row.next_visit_at ? isoDate(row.next_visit_at) : null,
+      delivered_at: row.delivered_at ? isoDate(row.delivered_at) : null,
+      advance_level: row.advance_level,
+      ahi_baseline: optNum(row.ahi_baseline),
+      ahi_latest: optNum(row.ahi_latest),
+    },
+  };
+}
+
+/** WHERE for the plan list and its queue counts: every filter but the queue itself. */
+function listWhere(filters: GetTreatmentPlansFilters, params: unknown[]): string {
   const conditions: string[] = ["t.deleted_at IS NULL"];
-  const params: unknown[] = [];
-
   if (filters.patient_id?.trim()) {
     params.push(filters.patient_id.trim());
     conditions.push(`t.patient_id = $${params.length}`);
@@ -253,30 +289,77 @@ export async function getTreatmentPlansPaginated(
   }
   const scoped = patientScopeCondition(filters.patientScope, params, "t.patient_id");
   if (scoped) conditions.push(scoped);
+  return `WHERE ${conditions.join(" AND ")}`;
+}
 
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+function progressCte(where: string): string {
+  return treatmentProgressCte(
+    `SELECT ${TREATMENT_PLAN_SELECT_COLS}, ${TREATMENT_PROGRESS_COLS} ${TREATMENT_PLAN_JOIN} ${TREATMENT_PROGRESS_JOIN} ${where}`
+  );
+}
+
+export async function getTreatmentPlansPaginated(
+  client: PoolClient,
+  filters: GetTreatmentPlansFilters,
+  page: number,
+  limit: number,
+  sortBy = "created_at",
+  sortOrder: "asc" | "desc" = "desc"
+): Promise<{ rows: TreatmentPlanListItem[]; total: number }> {
+  const allowed = ["created_at", "status", "type"];
+  const col = allowed.includes(sortBy) ? sortBy : "created_at";
+  const dir = sortOrder === "asc" ? "ASC" : "DESC";
+  // The list's untouched default (created_at) gives way to priority once a queue chip is picked.
+  const order = filters.queue && col === "created_at" ? PRIORITY_ORDER : `${col} ${dir}, id`;
+
+  const params: unknown[] = [];
+  const cte = progressCte(listWhere(filters, params));
+  let queueWhere = "";
+  if (filters.queue) {
+    params.push(filters.queue);
+    queueWhere = `WHERE queue = $${params.length}`;
+  }
 
   try {
     const countResult = await client.query<{ count: string }>(
-      `SELECT COUNT(*) AS count ${TREATMENT_PLAN_JOIN} ${where}`,
+      `${cte} SELECT COUNT(*) AS count FROM queued ${queueWhere}`,
       params
     );
     const total = parseInt(countResult.rows[0]?.count ?? "0", 10);
 
     const offset = (page - 1) * limit;
     params.push(limit, offset);
-    const dataResult = await client.query<TreatmentPlanRow>(
-      `SELECT ${TREATMENT_PLAN_SELECT_COLS}
-       ${TREATMENT_PLAN_JOIN}
-       ${where}
-       ORDER BY t.${col} ${dir}
+    const dataResult = await client.query<TreatmentPlanProgressRow>(
+      `${cte} SELECT * FROM queued ${queueWhere}
+       ORDER BY ${order}
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params
     );
-    return { rows: dataResult.rows.map(serialize), total };
+    return { rows: dataResult.rows.map(serializeListItem), total };
   } catch (err) {
     if (err instanceof AppError) throw err;
     throw new DatabaseError("getTreatmentPlansPaginated", err);
+  }
+}
+
+/** How many plans sit in each queue chip, under the same filters (search, scope) as the list. */
+export async function getTreatmentPlanQueueCounts(
+  client: PoolClient,
+  filters: Omit<GetTreatmentPlansFilters, "queue">
+): Promise<Record<TreatmentQueue, number>> {
+  const params: unknown[] = [];
+  const cte = progressCte(listWhere(filters, params));
+  try {
+    const { rows } = await client.query<{ queue: TreatmentQueue; count: string }>(
+      `${cte} SELECT queue, COUNT(*) AS count FROM queued GROUP BY queue`,
+      params
+    );
+    const counts: Record<TreatmentQueue, number> = { action: 0, active: 0, follow_up: 0, done: 0 };
+    for (const r of rows) counts[r.queue] = parseInt(r.count, 10);
+    return counts;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getTreatmentPlanQueueCounts", err);
   }
 }
 
@@ -388,6 +471,28 @@ export async function updateTreatmentPlan(
   }
 
   return getTreatmentPlanById(client, id);
+}
+
+/**
+ * Sets (or with null removes) metadata.advance_level, leaving the rest of metadata alone.
+ * Leaves updated_at untouched: for a plan marked completed without a delivery date,
+ * updated_at stands in for the delivery (clinicalQueues.ts), and a level change is not one.
+ */
+export async function setTreatmentPlanAdvanceLevel(client: PoolClient, id: string, level: number | null): Promise<TreatmentPlan> {
+  try {
+    await client.query(
+      `UPDATE treatment_plan
+          SET metadata = CASE WHEN $2::int IS NULL THEN COALESCE(metadata, '{}'::jsonb) - 'advance_level'
+                              ELSE jsonb_set(COALESCE(metadata, '{}'::jsonb), '{advance_level}', to_jsonb($2::int)) END
+        WHERE id = $1 AND deleted_at IS NULL`,
+      [id, level]
+    );
+  } catch (err) {
+    throw new DatabaseError("setTreatmentPlanAdvanceLevel", err);
+  }
+  const plan = await getTreatmentPlanById(client, id);
+  if (!plan) throw new DatabaseError("setTreatmentPlanAdvanceLevel", new Error(`treatment_plan ${id} vanished`));
+  return plan;
 }
 
 /**

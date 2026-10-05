@@ -4,7 +4,8 @@
  * DetailViewTabs with the real PatientDetailsTab in its Details pane, inside
  * a column as wide as the page gives it (720px max, like the detail view).
  * The summary API is answered in the page (window.fetch stub).
- * `?theme=dark`, `?lang=pl|mx|en`, `?summary=empty`, `?rep=1`.
+ * `?theme=dark`, `?lang=pl|mx|en`, `?summary=empty`, `?rep=1`, `?role=admin|manager|rep|doctor`
+ * (care team actions, CORE-132).
  */
 import { createApp, defineComponent, h, ref } from "vue";
 import { createPinia } from "pinia";
@@ -15,6 +16,8 @@ import "../../src/styles/theme.scss";
 import "../../src/styles/app-responsive.scss";
 import DetailViewTabs from "../../src/components/DetailViewTabs.vue";
 import PatientDetailsTab from "../../src/components/patient/PatientDetailsTab.vue";
+import { useAuthStore } from "../../src/stores/auth";
+import { useConfigStore } from "../../src/stores/config";
 
 const params = new URLSearchParams(location.search);
 vuetify.theme.change(params.get("theme") === "dark" ? darkTheme : lightTheme);
@@ -38,18 +41,33 @@ const SUMMARY = empty
       next_appointment: { id: "a-1", start_at: "2026-10-09T15:30:00Z" },
     };
 
+// CORE-132: the care team — primary doctor, an ENT added by a visit, the former primary doctor.
+const CARE_TEAM = [
+  { practitioner_id: "h-1", name: "Dr. Andrzej Testerski", primary_specialty: "dentist", specialties: ["dentist"], primary: true, source: null, appointment_id: null, added_by_name: null, added_at: null },
+  { practitioner_id: "h-2", name: "Dra. Lucía Fernández Ortega", primary_specialty: "ent", specialties: ["ent"], primary: false, source: "appointment", appointment_id: "a-1", added_by_name: "Ana Coordinadora", added_at: "2026-10-04T10:00:00Z" },
+  { practitioner_id: "h-3", name: "Dr. Marco Ruiz", primary_specialty: "sleep_medicine", specialties: ["sleep_medicine"], primary: false, source: "former_primary", appointment_id: null, added_by_name: "Admin NeoSleep", added_at: "2026-09-20T10:00:00Z" },
+];
+
 const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } }));
 const realFetch = window.fetch.bind(window);
 window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   if (url.includes("/summary")) return json(SUMMARY);
+  if (url.includes("/care-team")) return json(CARE_TEAM);
+  if (url.endsWith("/version")) return json({ version: "v1" });
+  // NEO-237's ATM card: unstubbed, its 401 signs the harness user out and the care team loses its actions.
+  if (url.includes("/clinical-records")) return json({ records: [] });
+  if (url.includes("/api/v1/practitioner")) return json({ items: [{ id: "h-4", name: "Dr. Pablo Ortiz" }] });
+  if (url.includes("/clinical-records")) return json({ records: [] });
+  // Any other API call answers empty: a real request gets 401, and a 401 signs the harness user out (role gone).
+  if (url.includes("/api/")) return json({ items: [] });
   return realFetch(input, init);
 };
 
 const Stub = { render: () => null };
 const router = createRouter({
   history: createMemoryHistory(),
-  routes: [{ path: "/", component: Stub }, { path: "/hcp/:id", name: "hcp-detail", component: Stub }],
+  routes: [{ path: "/", component: Stub }, { path: "/hcp/:id", name: "hcp-detail", component: Stub, meta: { roles: ["rep", "kam", "msl", "manager", "admin"] } }, { path: "/calendar", name: "calendar", component: Stub }],
 });
 
 const TABS = [
@@ -96,6 +114,20 @@ style.textContent = `
 `;
 document.head.append(style);
 
-createApp(Harness).use(createPinia()).use(router).use(vuetify).use(i18n).mount("#app");
+const pinia = createPinia();
+const role = params.get("role") ?? (rep ? "rep" : null);
+if (role) useAuthStore(pinia).user = { id: "u-1", email: "qa@neosleepcare.com", role } as NonNullable<ReturnType<typeof useAuthStore>["user"]>;
+// The tenant's specialty lookup, so the care team rows show labels, not codes.
+useConfigStore(pinia).options = {
+  regions: [],
+  organization_types: [],
+  specialties: [
+    { key: "dentist", value: "Dentista" },
+    { key: "ent", value: "Otorrinolaringología" },
+    { key: "sleep_medicine", value: "Medicina del sueño" },
+  ],
+} as ReturnType<typeof useConfigStore>["options"];
+
+createApp(Harness).use(pinia).use(router).use(vuetify).use(i18n).mount("#app");
 // Same as dialog-header.ts: the boot splash vite.config.ts injects isn't dismissed here.
 document.getElementById("boot-splash")?.remove();

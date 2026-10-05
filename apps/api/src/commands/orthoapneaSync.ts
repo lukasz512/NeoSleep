@@ -1,4 +1,12 @@
-import { getPartnerLinksNeedingStatusSync, insertAuditLog, getActiveTenantSlugs, withTenant } from "../db.js";
+import {
+  getPartnerLinksNeedingStatusSync,
+  insertAuditLog,
+  getActiveTenantSlugs,
+  withTenant,
+  insertPartnerSyncRun,
+  finishPartnerSyncRun,
+  type PartnerSyncTrigger,
+} from "../db.js";
 import { getTreatmentPlanById } from "../db/treatmentPlan.js";
 import { getPractitionerById } from "../db/practitioner.js";
 import { notify } from "../notifications/notify.js";
@@ -37,10 +45,37 @@ export interface SyncOrthoApneaTreatmentStatusesResult {
 
 const PARTNER_NAME = "orthoapnea";
 
+/**
+ * Records a partner_sync_run row (admin Dashboard card): inserted before any
+ * lab call, finished with the counts, or with the error message when the run
+ * throws (the error is then rethrown). Each of the two writes is its own
+ * short transaction, never held across the lab calls.
+ */
 export async function SyncOrthoApneaTreatmentStatusesCommand(
   tenantSlug: string,
-  requestId: string
+  requestId: string,
+  trigger: PartnerSyncTrigger,
+  userId?: string
 ): Promise<SyncOrthoApneaTreatmentStatusesResult> {
+  const runId = await withTenant(tenantSlug, (client) =>
+    insertPartnerSyncRun(client, PARTNER_NAME, trigger, userId ?? null)
+  );
+  try {
+    const result = await runStatusSync(tenantSlug, requestId);
+    await withTenant(tenantSlug, (client) => finishPartnerSyncRun(client, runId, result));
+    return result;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    try {
+      await withTenant(tenantSlug, (client) => finishPartnerSyncRun(client, runId, { error: message }));
+    } catch (recordErr) {
+      console.error("[orthoapnea-sync] could not record the failed run:", recordErr);
+    }
+    throw err;
+  }
+}
+
+async function runStatusSync(tenantSlug: string, requestId: string): Promise<SyncOrthoApneaTreatmentStatusesResult> {
   const links = await withTenant(tenantSlug, (client) =>
     getPartnerLinksNeedingStatusSync(client, PARTNER_NAME, "treatment_plan", ORTHOAPNEA_TERMINAL_STATUSES)
   );
@@ -92,6 +127,51 @@ export async function SyncOrthoApneaTreatmentStatusesCommand(
   return { checked: links.length, changed, failed };
 }
 
+/** At most one in-app sync per tenant in this window, however many users have the app open (CORE-67). */
+export const OPEN_APP_SYNC_INTERVAL_MS = 15 * 60_000;
+
+const lastOpenAppSyncAt = new Map<string, number>();
+const openAppSyncInFlight = new Map<string, Promise<SyncOrthoApneaTreatmentStatusesResult>>();
+
+export type SyncOrthoApneaStatusesForOpenAppResult =
+  | ({ ran: true } & SyncOrthoApneaTreatmentStatusesResult)
+  | { ran: false };
+
+/**
+ * The sync the app triggers while someone has it open (every 15 min), on top
+ * of the scheduled job's 4 runs a day (CORE-67). Throttled per tenant here,
+ * not per user: ten open tabs still mean one round of lab calls per window,
+ * and a call that arrives while one is running joins it. The throttle is
+ * in-memory, which holds because the API runs one instance (max-instances=1);
+ * a duplicate across dev and prod is harmless since the status write is
+ * locked (updatePartnerLinkStatus), so the dentist is still notified once.
+ */
+export async function SyncOrthoApneaStatusesForOpenAppCommand(
+  tenantSlug: string,
+  requestId: string,
+  now: number = Date.now()
+): Promise<SyncOrthoApneaStatusesForOpenAppResult> {
+  const running = openAppSyncInFlight.get(tenantSlug);
+  if (running) return { ran: true, ...(await running) };
+
+  const last = lastOpenAppSyncAt.get(tenantSlug);
+  if (last !== undefined && now - last < OPEN_APP_SYNC_INTERVAL_MS) return { ran: false };
+
+  lastOpenAppSyncAt.set(tenantSlug, now);
+  const run = SyncOrthoApneaTreatmentStatusesCommand(tenantSlug, requestId, "app");
+  openAppSyncInFlight.set(tenantSlug, run);
+  try {
+    return { ran: true, ...(await run) };
+  } finally {
+    openAppSyncInFlight.delete(tenantSlug);
+  }
+}
+
+export function __resetOpenAppSyncThrottleForTests(): void {
+  lastOpenAppSyncAt.clear();
+  openAppSyncInFlight.clear();
+}
+
 export interface SyncOrthoApneaTreatmentStatusesAllTenantsResult {
   checked: number;
   changed: number;
@@ -123,7 +203,7 @@ export async function SyncOrthoApneaTreatmentStatusesAllTenantsCommand(
 
   for (const slug of slugs) {
     try {
-      const result = await SyncOrthoApneaTreatmentStatusesCommand(slug, requestId);
+      const result = await SyncOrthoApneaTreatmentStatusesCommand(slug, requestId, "schedule");
       tenants[slug] = result;
       checked += result.checked;
       changed += result.changed;

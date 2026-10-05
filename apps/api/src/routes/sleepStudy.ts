@@ -5,9 +5,11 @@ import { requireStudyRole } from "../middleware/requireClinicalRole.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
+import { requestContextMiddleware } from "../context/requestContext.js";
 import { CreateSleepStudyCommand, UpdateSleepStudyCommand, DeleteSleepStudyCommand } from "../commands/sleepStudy.js";
 import { UploadSleepStudyAttachmentCommand, DeleteSleepStudyAttachmentCommand } from "../commands/sleepStudyAttachment.js";
-import { GetSleepStudyListQuery, GetSleepStudyByIdQuery } from "../queries/sleepStudy.js";
+import { GetSleepStudyListQuery, GetSleepStudyByIdQuery, GetSleepStudyQueueCountsQuery } from "../queries/sleepStudy.js";
+import { isStudyQueue } from "../db/clinicalQueues.js";
 import { GetSleepStudyAttachmentsQuery, GetSleepStudyAttachmentDownloadUrlQuery } from "../queries/sleepStudyAttachment.js";
 import { AuditHealthDataReadCommand } from "../commands/healthDataReadAudit.js";
 import { ValidationError } from "../errors.js";
@@ -106,6 +108,7 @@ sleepStudyRouter.get(
     const patientId = typeof req.query.patient_id === "string" ? req.query.patient_id.trim() : undefined;
     const status = typeof req.query.status === "string" ? req.query.status.trim() : undefined;
     const search = typeof req.query.search === "string" ? req.query.search.trim() : undefined;
+    const queue = typeof req.query.queue === "string" ? req.query.queue.trim() : undefined;
 
     const result = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
@@ -113,6 +116,7 @@ sleepStudyRouter.get(
         patient_id: patientId || undefined,
         status: status || undefined,
         search: search || undefined,
+        queue: isStudyQueue(queue) ? queue : undefined,
         page,
         limit,
         sortBy,
@@ -122,6 +126,23 @@ sleepStudyRouter.get(
       return list;
     });
     res.json(result);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/sleep-study/queues — how many studies per list chip (action/active/done); counts only, no health data
+// ---------------------------------------------------------------------------
+sleepStudyRouter.get(
+  "/sleep-study/queues",
+  requireStudyRole,
+  asyncHandler(async (req: Request, res: Response) => {
+    const slug = tenantSlugFromHost(req.hostname);
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : undefined;
+    const counts = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return GetSleepStudyQueueCountsQuery(ctx, { search: search || undefined });
+    });
+    res.json(counts);
   })
 );
 
@@ -221,6 +242,7 @@ sleepStudyRouter.post(
   "/sleep-study/:id/attachments",
   requireStudyRole,
   upload.single("file"),
+  requestContextMiddleware,
   asyncHandler(async (req: Request, res: Response) => {
     const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing sleep study id");

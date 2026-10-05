@@ -2,8 +2,8 @@ import { test, expect, type Page } from "@playwright/test";
 
 /**
  * CORE-122: the Calendario's layout per width — only a real browser measures
- * the container. Desktop keeps the sidebar beside the grid; a tablet folds it
- * behind a button; a phone gets the two-row glass header, a week that scrolls
+ * the container. Desktop and tablet hide the sidebar for now (the grid takes the
+ * full width); a phone opens it from a toolbar button and gets the two-row glass header, a week that scrolls
  * sideways inside the grid (never the page) and a month with that day's list.
  * Harness: e2e/harness/calendar.ts.
  */
@@ -18,24 +18,46 @@ async function noPageScrollX(page: Page): Promise<void> {
   expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
 }
 
-test("desktop: sidebar beside the grid, the day headers sit below the floating toolbar", async ({ page }) => {
+test("desktop: no sidebar, the grid takes the full width, the day headers sit below the floating toolbar", async ({ page }) => {
   await open(page, 1280, 820);
   await page.locator('[data-testid="calendar-view-week"]').click();
-  await expect(page.locator(".cal__side")).toBeVisible();
+  await expect(page.locator(".cal__side")).toBeHidden();
   await expect(page.locator('[data-testid="calendar-sidebar-toggle"]')).toHaveCount(0);
+  const cal = await page.locator(".cal").boundingBox();
+  const main = await page.locator(".cal__main").boundingBox();
+  expect(main!.width).toBeGreaterThan(cal!.width - 2);
   const toolbar = await page.locator(".cal__toolbar").boundingBox();
   const daynum = await page.locator(".cal-tg__daynum").first().boundingBox();
   expect(daynum!.y).toBeGreaterThanOrEqual(toolbar!.y + toolbar!.height);
   await expect(page.locator('[data-testid="calendar-event"]').first()).toBeVisible();
 });
 
-test("tablet: the sidebar opens as a panel from the toolbar button", async ({ page }) => {
+test("tablet: no sidebar and no toolbar button for it", async ({ page }) => {
   await open(page, 820, 1000);
+  await expect(page.locator('[data-testid="calendar-sidebar-toggle"]')).toHaveCount(0);
+  await expect(page.locator(".cal__side")).toBeHidden();
+});
+
+test("phone: the sidebar still opens as a panel from the toolbar button", async ({ page }) => {
+  await open(page, 390, 844);
   const toggle = page.locator('[data-testid="calendar-sidebar-toggle"]');
   await expect(toggle).toBeVisible();
   await toggle.click();
   await expect(page.locator(".cal--side-open .cal__side")).toBeVisible();
-  await page.locator(".cal__scrim").click({ position: { x: 700, y: 500 } });
+  // On a phone the panel is a bottom sheet across the full width: once it has slid in, tap the scrim just above it.
+  await page.locator(".cal__side").evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+  const scrim = await page.locator(".cal__scrim").boundingBox();
+  const sheet = await page.locator(".cal__side").boundingBox();
+  await page.locator(".cal__scrim").click({ position: { x: scrim!.width / 2, y: sheet!.y - scrim!.y - 24 } });
+  await expect(page.locator(".cal--side-open")).toHaveCount(0);
+});
+
+test("phone → tablet with the panel open: no scrim is left over the grid", async ({ page }) => {
+  await open(page, 390, 844);
+  await page.locator('[data-testid="calendar-sidebar-toggle"]').click();
+  await expect(page.locator(".cal--side-open")).toHaveCount(1);
+  await page.setViewportSize({ width: 820, height: 1000 });
+  await expect(page.locator(".cal__scrim")).toHaveCount(0);
   await expect(page.locator(".cal--side-open")).toHaveCount(0);
 });
 

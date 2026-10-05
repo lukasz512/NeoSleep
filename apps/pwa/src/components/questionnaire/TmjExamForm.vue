@@ -60,7 +60,7 @@
     </div>
 
     <aside class="tmj-form__side-panel">
-      <TmjSkull :marked="tmjMarkedSides(modelValue)" />
+      <TmjSkull :counts="tmjSideCounts(modelValue)" />
     </aside>
   </div>
 </template>
@@ -70,7 +70,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import AppIcon from "../AppIcon.vue";
 import TmjSkull from "./TmjSkull.vue";
-import { TMJ_FINDINGS, TMJ_SIDES, parseTmjOpening, tmjMarkedSides, type TmjSide } from "../../config/questionnaires";
+import { TMJ_FINDINGS, TMJ_SIDES, parseTmjOpening, tmjSideCounts, type TmjSide } from "../../config/questionnaires";
 
 /**
  * "Evaluación del ATM" (NEO-231 D3, Dra. Lorena's mockup): five findings,
@@ -115,10 +115,9 @@ const openingError = computed(() => (parseTmjOpening(props.opening) === "invalid
     align-items: start;
   }
 }
+/* The skull brings its own glass panel (NEO-237). */
 .tmj-form__side-panel {
-  padding: 12px;
-  border-radius: var(--pwa-radius, 12px);
-  background: rgba(var(--v-theme-primary), 0.06);
+  display: grid;
 }
 .tmj-form__head,
 .tmj-form__row {

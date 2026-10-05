@@ -15,6 +15,7 @@
     <AppointmentDialog
       v-model="showAppointmentDialog"
       :patient="appointmentPatient"
+      @saved="onAppointmentSaved"
     />
     <!-- NEO-235: the patient QR, open as a loader from the first tap; the Documentos tab fills in the code. -->
     <QuestionnaireQrDialog v-model="qrDialog.open" :title="qrDialog.title" :url="qrDialog.url" />
@@ -27,7 +28,7 @@
       :back-label="t('app.patients.detail.back')"
       :record-title="patient?.name ?? ''"
       :not-found-label="t('app.patients.detail.notFound')"
-      @retry="loadPatient"
+      @retry="loadPatient()"
     >
       <template v-if="patient" #record-tile>
         <AppAvatar :name="patient.name" entity-type="patient" :first-name="patient.first_name" :last-name="patient.last_name" :size="48" />
@@ -90,7 +91,7 @@
         <DetailViewTabs v-model="activeTab" :tabs="patientTabs">
           <template #details>
             <!-- NEO-206: summary strip + grouped rows; the documents checklist lives in the side panel and on Documentos. -->
-            <PatientDetailsTab :patient="patient" :can-see-studies="canSeeStudies" @open-tab="(tab: string) => (activeTab = tab)" />
+            <PatientDetailsTab :patient="patient" :can-see-studies="canSeeStudies" :active="activeTab === 'details'" @open-tab="(tab: string) => (activeTab = tab)" @open-study="openStudy" />
           </template>
           <template #nextStep>
             <!-- NEO-235: below 1280px the side panel is tab 2 ("Siguiente paso", NEO-205 D1). -->
@@ -182,6 +183,7 @@ import { PATIENT_QR_DIALOG, createQrDialogState, openQrLoader } from "../composa
 import { patientFormFields, patientFormDerive } from "../config/forms/patientForm";
 import { STUDY_ROLES } from "../config/questionnaires";
 import { CHECKLIST_TAB, type ChecklistCategory } from "../composables/usePatientChecklist";
+import { emitPatientChanged } from "../composables/usePatientChanged";
 import { useAuthStore } from "../stores/auth";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 
@@ -310,6 +312,11 @@ function onBookAppointment() {
   showAppointmentDialog.value = true;
 }
 
+/** The Details tab and the side panel stay mounted, so tell them instead of waiting for F5. */
+function onAppointmentSaved() {
+  if (patient.value) emitPatientChanged(patient.value.id, "visits");
+}
+
 async function onPatientSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
   const id = patient.value?.id;
   if (!id) { done(false); return; }
@@ -325,7 +332,10 @@ async function onPatientSubmit(data: Record<string, unknown>, done: (ok: boolean
       icon: "nav-patients",
       context: patient.value?.name,
       errorMessage: t("app.patients.form.errorSave"),
-      onSuccess: () => loadPatient(),
+      onSuccess: async () => {
+        await loadPatient({ silent: true });
+        emitPatientChanged(id, "profile");
+      },
     },
     done,
   );
@@ -345,10 +355,23 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   }
 });
 
-async function loadPatient() {
+/**
+ * `silent` reloads the record that is already on screen (after an edit): no
+ * spinner, no blank screen, and a failure keeps what is shown.
+ */
+async function loadPatient(opts: { silent?: boolean } = {}) {
   const id = route.params.id as string;
   if (!id) {
     loading.value = false;
+    return;
+  }
+  if (opts.silent && patient.value?.id === id) {
+    try {
+      const res = await apiFetch(`/api/v1/patient/${id}`, { handleErrors: false });
+      if (res.ok && route.params.id === id) patient.value = (await res.json()) as PatientDetail;
+    } catch (err) {
+      reportCaught(err, { where: "PatientDetailView.reload", level: "warn" });
+    }
     return;
   }
   loading.value = true;
@@ -375,12 +398,12 @@ async function loadPatient() {
   }
 }
 
-onMounted(loadPatient);
+onMounted(() => loadPatient());
 // The record never came (404 / offline): no Documentos tab to fill the QR loader, so close it.
 watch(loading, (isLoading) => {
   if (!isLoading && !patient.value && !qrDialog.url) qrDialog.open = false;
 });
-watch(() => route.params.id, loadPatient);
+watch(() => route.params.id, () => loadPatient());
 </script>
 
 <style scoped>

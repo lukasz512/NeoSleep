@@ -25,6 +25,11 @@ import { routeParam } from "./utils.js";
 
 export const encounterRouter: RouterType = Router();
 
+/** body.patient_ids as a string[] (non-strings dropped); undefined when the field is absent or not an array. */
+function stringIds(value: unknown): string[] | undefined {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : undefined;
+}
+
 // ---------------------------------------------------------------------------
 // GET /api/v1/encounter — list encounters
 // ---------------------------------------------------------------------------
@@ -42,6 +47,7 @@ encounterRouter.get(
         territory_id: typeof req.query.territory_id === "string" ? req.query.territory_id.trim() : undefined,
         status:       typeof req.query.status      === "string" ? req.query.status.trim()      : undefined,
         userId:       typeof req.query.user_id     === "string" ? req.query.user_id.trim()     : undefined,
+        patient_id:   typeof req.query.patient_id  === "string" ? req.query.patient_id.trim()  : undefined,
       });
     });
     res.json(result);
@@ -89,6 +95,7 @@ encounterRouter.post(
         notes:             typeof body.notes             === "string" ? body.notes.trim()              : null,
         practitioner_id:   typeof body.practitioner_id  === "string" ? body.practitioner_id.trim()    : null,
         organization_id:   typeof body.organization_id  === "string" ? body.organization_id.trim()    : null,
+        patient_ids:       stringIds(body.patient_ids) ?? [],
         region:            typeof body.region            === "string" ? body.region.trim()             : null,
         territory_id:      typeof body.territory_id     === "string" ? body.territory_id.trim()       : null,
         attendees:         Array.isArray(body.attendees) ? body.attendees as string[]                 : [],
@@ -126,6 +133,7 @@ encounterRouter.patch(
         notes:             body.notes             !== undefined ? (body.notes ? String(body.notes) : null) : undefined,
         practitioner_id:   body.practitioner_id   !== undefined ? (body.practitioner_id ? String(body.practitioner_id) : null) : undefined,
         organization_id:   body.organization_id   !== undefined ? (body.organization_id ? String(body.organization_id) : null) : undefined,
+        patient_ids:       stringIds(body.patient_ids),
         region:            body.region            !== undefined ? String(body.region).trim()            : undefined,
         territory_id:      body.territory_id      !== undefined ? (body.territory_id ? String(body.territory_id) : null) : undefined,
         attendees:         Array.isArray(body.attendees) ? body.attendees as string[] : undefined,
