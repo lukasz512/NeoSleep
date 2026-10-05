@@ -169,6 +169,7 @@ export async function PrintChecklistItemCommand(
       patientPhone: pdfContext.patient_phone,
       patientEmail: pdfContext.patient_email,
       birthDate: pdfContext.patient_birth_date,
+      gender: pdfContext.patient_gender,
       today: date,
       history: latest<MedicalHistoryRecord>("medicalHistory"),
       oral: latest<OralExamRecord>("oralExam"),

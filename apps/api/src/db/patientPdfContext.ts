@@ -9,6 +9,8 @@ export interface PatientPdfContext {
   patient_first_name: string;
   /** "YYYY-MM-DD" (read as text: a DATE parsed into a JS Date can shift a day across time zones) — print with formatBirthDate(). */
   patient_birth_date: string | null;
+  /** identities.gender (male | female | other | prefer_not_to_say) — ticks the Sexo box on the Historia clínica (NEO-253). */
+  patient_gender: string | null;
   practitioner_name: string | null;
   organization_name: string | null;
   /** The clinic's own contact email — where a patient exercises their data rights (the clinic is the controller). */
@@ -52,6 +54,7 @@ export async function getPatientPdfContext(
       patient_first_name: string;
       patient_last_name: string;
       patient_birth_date: string | null;
+      patient_gender: string | null;
       practitioner_salutation: string | null;
       practitioner_first_name: string | null;
       practitioner_last_name: string | null;
@@ -68,7 +71,7 @@ export async function getPatientPdfContext(
     }>(
       `SELECT
          pi.title AS patient_salutation, pi.first_name AS patient_first_name, pi.last_name AS patient_last_name,
-         to_char(pi.date_of_birth, 'YYYY-MM-DD') AS patient_birth_date,
+         to_char(pi.date_of_birth, 'YYYY-MM-DD') AS patient_birth_date, pi.gender AS patient_gender,
          pi.email AS patient_email, pi.phone AS patient_phone, pi.language AS patient_language, pi.region AS patient_region,
          pri.title AS practitioner_salutation, pri.first_name AS practitioner_first_name, pri.last_name AS practitioner_last_name,
          o.name AS organization_name, o.email AS organization_email,
@@ -104,6 +107,7 @@ export async function getPatientPdfContext(
     return {
       patient_first_name: row.patient_first_name,
       patient_birth_date: row.patient_birth_date,
+      patient_gender: row.patient_gender,
       patient_name: formatDisplayName({
         salutation: row.patient_salutation,
         first_name: row.patient_first_name,
