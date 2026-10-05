@@ -226,8 +226,9 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
     expect(alerts(wrapper)).toEqual(["Tick the box above to confirm you have read the document."]);
     expect(apiFetch).toHaveBeenCalledTimes(1);
 
-    // The accept box names the document it accepts (the privacy box above names its own).
-    expect(wrapper.find("[data-testid='consent-accept']").text()).toBe('I have read "Informed consent" and accept its content.');
+    // The accept box lists the documents it accepts, bold and unquoted (CORE-156); the privacy box above names its own.
+    expect(wrapper.find("[data-testid='consent-accept']").text()).toBe("I have read Informed consent and accept its content.");
+    expect(wrapper.findAll("[data-testid='consent-accept'] strong").map((s) => s.text())).toEqual(["Informed consent"]);
     await wrapper.find("[data-testid='consent-accept'] input").setValue(true);
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 201, { step: "informedConsent", completed: false }));
     await wrapper.find("form").trigger("submit");
@@ -312,6 +313,14 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     expect(click).toHaveBeenCalledTimes(1);
     click.mockRestore();
+  });
+
+  it("the accept wording turns plural when one signature covers several documents (CORE-156)", () => {
+    const { t } = createI18n({ legacy: false, locale: "en", messages: { en } }).global;
+    const documents = new Intl.ListFormat("en-GB", { type: "conjunction" }).format(["Informed consent", "Privacy notice"]);
+    expect(t("app.questionnaire.consentStep.accept", { documents }, 2)).toBe(
+      "I have read Informed consent and Privacy notice and accept their content.",
+    );
   });
 
   it("a link whose steps are all done already shows the thank-you screen", async () => {

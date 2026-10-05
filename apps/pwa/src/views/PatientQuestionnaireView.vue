@@ -146,7 +146,14 @@
                   <template #label>{{ t("app.questionnaire.consentStep.privacyAccept") }}</template>
                 </VCheckbox>
                 <VCheckbox v-model="accepted" hide-details class="patient-questionnaire__consent" data-testid="consent-accept">
-                  <template #label>{{ t("app.questionnaire.consentStep.accept", { document: stepTitle(step) }) }}</template>
+                  <template #label>
+                    <!-- CORE-156: names every document this signature covers, bold and unquoted, joined the locale's way ("A y B"). -->
+                    <Translation keypath="app.questionnaire.consentStep.accept" :plural="signedDocuments.length" scope="global">
+                      <template #documents>
+                        <template v-for="(part, i) in signedDocumentParts" :key="i"><strong v-if="part.type === 'element'">{{ part.value }}</strong><template v-else>{{ part.value }}</template></template>
+                      </template>
+                    </Translation>
+                  </template>
                 </VCheckbox>
                 <!-- The patient's own request for a copy (legal, 2026-09-28): unticked by default, offered only for an address that is theirs alone. -->
                 <VCheckbox
@@ -280,7 +287,7 @@
 import { reportCaught, reportFailedResponse } from "@api";
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import { useI18n } from "vue-i18n";
+import { Translation, useI18n } from "vue-i18n";
 import { AuthCard } from "@ui";
 import AppButton from "../components/AppButton.vue";
 import AppIcon from "../components/AppIcon.vue";
@@ -449,6 +456,12 @@ function downloadCopy(copy: SignedCopy) {
 function stepTitle(s: PublicStep): string {
   return checklistItemTitle(t, s.key, s.label);
 }
+
+/** The documents the current signature accepts: one per consent step today, a list so one signature can cover several. */
+const signedDocuments = computed(() => (step.value?.type === "consent" ? [stepTitle(step.value)] : []));
+const signedDocumentParts = computed(() =>
+  new Intl.ListFormat(DATE_LOCALES[locale.value as string] ?? "es-MX", { type: "conjunction" }).formatToParts(signedDocuments.value),
+);
 
 const cardTitle = computed(() => {
   if (phase.value === "invalid") return t("app.questionnaire.invalid.title");
