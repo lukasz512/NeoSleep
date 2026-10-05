@@ -226,6 +226,18 @@ describe("document system (header, title, banner, sections, signatures, footer)"
     expect(html).toContain("Sí = 1 punto");
   });
 
+  it("Historia clínica draws the ATM skull and the STOP-Bang gauge once each, both on page 2 next to their tables (NEO-251)", () => {
+    const html = renderDocumentHtml("historiaEndo", "mx", "<p>x</p>");
+    const body = html.slice(html.indexOf("<body>"));
+    const page2 = body.indexOf('<div class="hc-p2">');
+    expect(body.match(/<svg class="hc-skull"/g)).toHaveLength(1);
+    expect(body.match(/<svg class="hc-gauge"/g)).toHaveLength(1);
+    expect(body.indexOf('<svg class="hc-skull"')).toBeGreaterThan(page2);
+    const total = body.indexOf('<div class="hc-sb-t">');
+    expect(body.indexOf('<svg class="hc-gauge"')).toBeGreaterThan(total);
+    expect(body.indexOf('<svg class="hc-gauge"')).toBeLessThan(body.indexOf('<p class="hc-sb-note">'));
+  });
+
   it("footer escapes names typed into the app", () => {
     const html = renderDocumentFooterHtml("NSL-SB v1", "mx", { subject: '<img src=x onerror="alert(1)">', issuer: ["A & B <Clinic>"] });
     expect(html).not.toContain("<img");
