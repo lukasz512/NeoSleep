@@ -86,6 +86,8 @@ export const routes: RouteRecordRaw[] = [
   // narrow reference-data CRUD inside the existing app, not a separate portal/admin deployment.
   { path: "/territories", name: "territories", component: () => import("../views/TerritoriesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin"] } },
   // Admin: reports from users (tenant admin) and grouped production errors (platform admin, second tab).
+  // Every signed-in user: their own reports and what happened to them. Opened from the user menu, not the nav.
+  { path: "/my-reports", name: "my-reports", component: () => import("../views/MyReportsView.vue"), meta: { layout: "app", requiresAuth: true, hidden: true } },
   { path: "/issues", name: "issues", component: () => import("../views/IssuesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin"] } },
   { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
 ];

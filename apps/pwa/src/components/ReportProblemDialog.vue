@@ -59,6 +59,7 @@
         <span class="report-dialog__ref-chip">{{ t("report.reference", { id: requestRef }) }}</span>
       </p>
 
+      <p v-if="draftRestored" class="report-dialog__draft" role="status" data-testid="report-draft-restored">{{ t("report.draftRestored") }}</p>
       <p class="report-dialog__note">{{ t("report.autoAttached") }}</p>
       <p v-if="submitError" class="report-dialog__error" role="alert" data-testid="report-submit-error">{{ submitError }}</p>
     </form>
@@ -80,7 +81,7 @@ import AppFormDialog from "./AppFormDialog.vue";
 import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
 import ChoiceChipsField from "./ChoiceChipsField.vue";
-import { useReportProblem } from "../composables/useReportProblem";
+import { clearReportDraft, readReportDraft, saveReportDraft, useReportProblem } from "../composables/useReportProblem";
 import { useNotifications } from "../composables/useNotifications";
 import type { ProblemKind } from "../types/issues";
 
@@ -106,6 +107,8 @@ const fileError = ref("");
 const submitError = ref("");
 const attempted = ref(false);
 const sending = ref(false);
+/** An unsent report from an earlier try was put back into the form. */
+const draftRestored = ref(false);
 
 // One name for every role (decision form core-141-decisions, D3): the kind chips say whether it's a problem.
 const title = computed(() => t("report.title.feedback"));
@@ -122,13 +125,15 @@ const descriptionError = computed(() => {
   return "";
 });
 
-// Every opening starts from a clean form.
+// Every opening starts from a clean form, or from the report that could not be sent last time.
 watch(
   () => state.open,
   (open) => {
     if (!open) return;
-    kind.value = "problem";
-    description.value = "";
+    const draft = readReportDraft();
+    draftRestored.value = !!draft;
+    kind.value = draft?.kind ?? "problem";
+    description.value = draft?.description ?? "";
     file.value = null;
     fileError.value = "";
     submitError.value = "";
@@ -178,11 +183,16 @@ async function onSubmit() {
   });
   sending.value = false;
   if (result.ok) {
-    notifications.show(t("report.sent", { number: result.number }), "success", undefined, { icon: "message" });
+    clearReportDraft();
+    draftRestored.value = false;
+    notifications.show(t("report.sentTracked", { number: result.number }), "success", undefined, { icon: "message" });
     close();
     return;
   }
-  submitError.value = result.status === 429 ? t("report.rateLimited") : t("report.failed");
+  // Kept on the device so closing the dialog doesn't lose it; a 4xx other than 429 is a form problem.
+  const retryable = result.status === null || result.status === 429 || result.status >= 500;
+  const kept = retryable && saveReportDraft({ kind: kind.value, description: description.value });
+  submitError.value = result.status === 429 ? t("report.rateLimited") : t(kept ? "report.failedKept" : "report.failed");
 }
 </script>
 
@@ -191,6 +201,14 @@ async function onSubmit() {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.report-dialog__draft {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 0.8125rem;
+  background: rgba(var(--v-theme-info), 0.1);
 }
 
 .report-dialog__file {

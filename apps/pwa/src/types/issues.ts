@@ -27,6 +27,10 @@ export interface ProblemReport {
   attachment_size: number | null;
   has_attachment: boolean;
   admin_note: string | null;
+  /** The ticket it was filed under (e.g. CORE-123), typed in by an admin. */
+  tracker_ref: string | null;
+  /** PHI-free reply the reporter reads (and gets by email when the report is closed). */
+  reporter_reply: string | null;
   resolved_at: string | null;
   created_at: string;
   updated_at: string;
@@ -53,4 +57,20 @@ export interface DiagnosticGroup {
 export interface ProblemReportPatch {
   status?: ProblemStatus;
   admin_note?: string;
+  tracker_ref?: string | null;
+  reporter_reply?: string | null;
+}
+
+/** What a reporter sees of their own report (GET /problem-reports/mine): no internal note, no context. */
+export interface MyProblemReport {
+  id: string;
+  number: number;
+  kind: ProblemKind;
+  description: string;
+  status: ProblemStatus;
+  tracker_ref: string | null;
+  reporter_reply: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
 }

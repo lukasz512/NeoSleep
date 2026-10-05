@@ -59,20 +59,43 @@
         hide-details
         data-testid="report-status"
       />
+      <VTextField
+        v-model="trackerRef"
+        :label="t('issues.detail.trackerRef')"
+        :hint="t('issues.detail.trackerRefHint')"
+        :error-messages="trackerRefError"
+        placeholder="CORE-123"
+        variant="outlined"
+        persistent-hint
+        data-testid="report-tracker-ref"
+      />
+      <VTextarea
+        v-model="reply"
+        :label="t('issues.detail.reporterReply')"
+        :hint="t('issues.detail.reporterReplyHint')"
+        :counter="REPLY_MAX"
+        :maxlength="REPLY_MAX"
+        variant="outlined"
+        rows="2"
+        auto-grow
+        persistent-hint
+        data-testid="report-reply"
+      />
       <VTextarea
         v-model="note"
         :label="t('issues.detail.note')"
+        :hint="t('issues.detail.noteHint')"
         variant="outlined"
         rows="3"
         auto-grow
-        hide-details
+        persistent-hint
         data-testid="report-note"
       />
     </div>
     <template #actions>
       <VSpacer />
       <AppButton variant="text" @click="emit('close')">{{ t("app.common.close") }}</AppButton>
-      <AppButton color="primary" variant="flat" :loading="saving" :disabled="!dirty" data-testid="report-save" @click="save">
+      <AppButton color="primary" variant="flat" :loading="saving" :disabled="!dirty || !!trackerRefError" data-testid="report-save" @click="save">
         {{ t("issues.detail.save") }}
       </AppButton>
     </template>
@@ -103,6 +126,8 @@ const notifications = useNotifications();
 const shown = ref<ProblemReport | null>(props.report);
 const status = ref<ProblemStatus>("new");
 const note = ref("");
+const trackerRef = ref("");
+const reply = ref("");
 const saving = ref(false);
 const opening = ref(false);
 
@@ -113,6 +138,8 @@ watch(
     shown.value = report;
     status.value = report.status;
     note.value = report.admin_note ?? "";
+    trackerRef.value = report.tracker_ref ?? "";
+    reply.value = report.reporter_reply ?? "";
   },
   { immediate: true },
 );
@@ -125,7 +152,23 @@ const reporter = computed(() => {
   if (!r) return "";
   return [r.reporter_name, r.reporter_email, r.reporter_role].filter(Boolean).join(" · ") || t("issues.reporterUnknown");
 });
-const dirty = computed(() => !!shown.value && (status.value !== shown.value.status || note.value !== (shown.value.admin_note ?? "")));
+const REPLY_MAX = 1000;
+/** Same rule as the API: a tracker key like CORE-123 (D2, typed in by hand). */
+const TRACKER_REF_RE = /^[A-Z][A-Z0-9]{1,9}-\d{1,6}$/;
+const normalizedTrackerRef = computed(() => trackerRef.value.trim().toUpperCase());
+const trackerRefError = computed(() =>
+  normalizedTrackerRef.value && !TRACKER_REF_RE.test(normalizedTrackerRef.value) ? t("issues.detail.trackerRefInvalid") : "",
+);
+const dirty = computed(() => {
+  const r = shown.value;
+  if (!r) return false;
+  return (
+    status.value !== r.status ||
+    note.value !== (r.admin_note ?? "") ||
+    normalizedTrackerRef.value !== (r.tracker_ref ?? "") ||
+    reply.value.trim() !== (r.reporter_reply ?? "")
+  );
+});
 
 function describeEntry(entry: Record<string, unknown>): string {
   return Object.entries(entry)
@@ -139,7 +182,12 @@ async function save(): Promise<void> {
   if (!current || saving.value) return;
   saving.value = true;
   try {
-    const updated = await patchReport(current.id, { status: status.value, admin_note: note.value });
+    const updated = await patchReport(current.id, {
+      status: status.value,
+      admin_note: note.value,
+      tracker_ref: normalizedTrackerRef.value || null,
+      reporter_reply: reply.value.trim() || null,
+    });
     notifications.show(t("issues.detail.saved", { number: current.number }), "success");
     emit("saved", updated);
   } catch (err) {

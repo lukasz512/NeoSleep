@@ -8,6 +8,7 @@ import { apiFetch } from "./useApi";
 import type {
   DiagnosticGroup,
   DiagnosticStatus,
+  MyProblemReport,
   ProblemReport,
   ProblemReportPatch,
   ProblemStatus,
@@ -45,6 +46,11 @@ export async function fetchPlatformAdmin(): Promise<boolean> {
 export async function fetchReports(status: ProblemStatus | "all"): Promise<ProblemReport[]> {
   const query = status === "all" ? "" : `?status=${status}`;
   return unwrapItems(await request<{ items?: ProblemReport[] } | ProblemReport[]>("useIssues.reports", `/api/v1/admin/problem-reports${query}`));
+}
+
+/** The signed-in user's own reports ("My reports"), any role. */
+export async function fetchMyReports(): Promise<MyProblemReport[]> {
+  return unwrapItems(await request<{ items?: MyProblemReport[] } | MyProblemReport[]>("useIssues.myReports", "/api/v1/problem-reports/mine"));
 }
 
 export function patchReport(id: string, patch: ProblemReportPatch): Promise<ProblemReport> {

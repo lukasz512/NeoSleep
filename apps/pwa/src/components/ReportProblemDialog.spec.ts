@@ -7,7 +7,8 @@ import * as vuetifyComponents from "vuetify/components";
 import * as vuetifyDirectives from "vuetify/directives";
 import en from "@i18n/en.json";
 import { useAuthStore } from "../stores/auth";
-import { closeReportProblem, openReportProblem } from "../composables/useReportProblem";
+import { clearReportDraft, closeReportProblem, openReportProblem } from "../composables/useReportProblem";
+import { setPrefsIdentity } from "@prefs";
 import ReportProblemDialog from "./ReportProblemDialog.vue";
 
 const apiFetch = vi.fn();
@@ -22,6 +23,8 @@ const wrappers: VueWrapper[] = [];
 afterEach(() => {
   for (const w of wrappers.splice(0)) w.unmount();
   closeReportProblem();
+  clearReportDraft();
+  setPrefsIdentity(null);
   apiFetch.mockReset();
   notify.mockReset();
   document.body.innerHTML = "";
@@ -30,6 +33,7 @@ afterEach(() => {
 async function open(role = "rep", prefill: { requestId?: string } = {}) {
   setActivePinia(createPinia());
   useAuthStore().user = { id: "u-1", email: "qa@clinic.test", role } as ReturnType<typeof useAuthStore>["user"];
+  setPrefsIdentity({ tenant: "neosleep", userId: "u-1" });
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
   const wrapper = mount(ReportProblemDialog, { global: { plugins: [i18n, vuetify] }, attachTo: document.body });
@@ -71,7 +75,7 @@ describe("ReportProblemDialog", () => {
     expect(init.body.get("kind")).toBe("problem");
     expect(init.body.get("description")).toBe("The patient list never finishes loading");
     expect(JSON.parse(String(init.body.get("request_ids")))).toContain("abcdef1234567890");
-    expect(notify).toHaveBeenCalledWith("Thanks — report #123 sent", "success", undefined, expect.anything());
+    expect(notify).toHaveBeenCalledWith("Thanks — report #123 sent. We'll keep you posted here and by email.", "success", undefined, expect.anything());
   });
 
   it("words a rate limit in plain language", async () => {
@@ -87,5 +91,53 @@ describe("ReportProblemDialog", () => {
   it("is called Feedback for every role (D3)", async () => {
     await open("rep");
     expect(byTestId("app-dialog-header-title")?.textContent).toBe("Feedback");
+  });
+
+  describe("an unsent report never vanishes (trackable reports)", () => {
+    async function failOffline() {
+      await type("The patient list never finishes loading");
+      apiFetch.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+      byTestId("report-submit")!.click();
+      await flushPromises();
+    }
+
+    it("keeps it on the device when offline and says so", async () => {
+      await open();
+      await failOffline();
+      expect(byTestId("report-submit-error")?.textContent).toContain("saved on this device");
+    });
+
+    it("brings it back on the next opening, and drops it once sent", async () => {
+      await open();
+      await failOffline();
+      closeReportProblem();
+      await flushPromises();
+
+      openReportProblem({});
+      await flushPromises();
+      expect(byTestId("report-draft-restored")).not.toBeNull();
+      expect(byTestId("report-description")!.querySelector("textarea")!.value).toBe("The patient list never finishes loading");
+
+      apiFetch.mockResolvedValueOnce({ ok: true, status: 201, json: async () => ({ id: "r-1", number: 5 }) } as Response);
+      byTestId("report-submit")!.click();
+      await flushPromises();
+      openReportProblem({});
+      await flushPromises();
+      expect(byTestId("report-draft-restored")).toBeNull();
+      expect(byTestId("report-description")!.querySelector("textarea")!.value).toBe("");
+    });
+
+    it("does not keep a report the server refused as invalid (400)", async () => {
+      await open();
+      await type("The patient list never finishes loading");
+      apiFetch.mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({}) } as Response);
+      byTestId("report-submit")!.click();
+      await flushPromises();
+      closeReportProblem();
+      await flushPromises();
+      openReportProblem({});
+      await flushPromises();
+      expect(byTestId("report-draft-restored")).toBeNull();
+    });
   });
 });

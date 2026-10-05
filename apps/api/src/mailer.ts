@@ -192,6 +192,67 @@ export async function sendPasswordResetEmail(to: string, resetLink: string, reci
   });
 }
 
+/** Trackable reports: which reporter email — the receipt, or the closing one (D3). */
+export type ProblemReportEmailKind = "received" | "resolved" | "dismissed";
+
+export interface ProblemReportEmail {
+  kind: ProblemReportEmailKind;
+  number: number | string;
+  /** The ticket it was filed under (e.g. CORE-123), when an admin linked one. */
+  trackerRef: string | null;
+  /** The admin's PHI-free reply to the reporter; never the internal admin note. */
+  reply: string | null;
+  /** "My reports", opened on this report. */
+  link: string;
+}
+
+/**
+ * Trackable reports: the email the reporter gets when a report arrives and
+ * when it is resolved or won't be fixed. Never carries the report's own text
+ * (it may hold patient data): only its number, the linked ticket and the
+ * admin's reply. Pure, so the copy is testable without Resend.
+ */
+export function buildProblemReportEmail(to: string, recipient: EmailRecipient, report: ProblemReportEmail): { subject: string; html: string } {
+  const locale = recipient.language;
+  const t = (key: string, params?: Record<string, string>) => emailT(locale, `email.problemReport.${report.kind}.${key}`, params);
+  const number = String(report.number);
+  const muted = (text: string) => `<p style="margin:0 0 16px;font-size:13px;color:#7a827e;">${escapeHtml(text)}</p>`;
+
+  const bodyHtml = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(t("title", { number }))}</h1>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: formatGreetingName(recipient, to) }))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(t("body", { number }))}</p>${
+    report.trackerRef ? `
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.problemReport.ticket", { ticket: report.trackerRef }))}</p>` : ""}${
+    report.reply ? `
+    <p style="margin:0 0 4px;font-weight:bold;">${escapeHtml(emailT(locale, "email.problemReport.replyLabel"))}</p>
+    <p style="margin:0 0 16px;white-space:pre-line;">${escapeHtml(report.reply)}</p>` : ""}
+    ${muted(emailT(locale, "email.problemReport.track"))}`;
+
+  const socials = getSocialsForRegion(recipient.region);
+  const html = renderEmailLayout({
+    preheader: t("title", { number }),
+    bodyHtml,
+    cta: { text: emailT(locale, "email.problemReport.cta"), href: report.link },
+    footerTagline: emailT(locale, "email.footer.tagline"),
+    footerCities: emailT(locale, "email.footer.cities"),
+    footerCopyright: emailT(locale, "email.footer.copyright", { year: String(new Date().getFullYear()) }),
+    supportLeadIn: emailT(locale, "email.footer.support"),
+    socials,
+  });
+  return { subject: t("subject", { number }), html };
+}
+
+export async function sendProblemReportEmail(to: string, recipient: EmailRecipient, report: ProblemReportEmail): Promise<void> {
+  const { subject, html } = buildProblemReportEmail(to, recipient, report);
+  await sendEmail(`problem report ${report.kind} email`, {
+    to,
+    subject,
+    html,
+    attachments: getEmailAttachments(getSocialsForRegion(recipient.region)),
+  });
+}
+
 /**
  * The patient's personal link to their open questionnaires — returns whether it was actually handed to Resend (docs/stories/
  * clinical-questionnaire-capture-redesign.md). Deliberately says nothing

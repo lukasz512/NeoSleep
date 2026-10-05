@@ -30,6 +30,10 @@ export const NOTIFICATION_TYPE_VIEWS: Readonly<Record<string, NotificationTypeVi
   device_order_placed: { icon: "nav-treatment-plans", tone: "order" },
   questionnaire_submitted: { icon: "form-screening", tone: "form" },
   practitioner_invite_accepted: { icon: "nav-hcp", tone: "person" },
+  problem_report_received: { icon: "feedback", tone: "neutral" },
+  problem_report_new: { icon: "feedback", tone: "attention" },
+  problem_report_in_progress: { icon: "feedback", tone: "neutral" },
+  problem_report_closed: { icon: "check-circle", tone: "neutral" },
 };
 
 const FALLBACK: NotificationTypeView = { icon: "bell", tone: "neutral" };
