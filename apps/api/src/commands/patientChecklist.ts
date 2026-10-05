@@ -15,7 +15,8 @@ import { INFORMED_CONSENT_KEY } from "../db/informedConsentState.js";
 import { renderDocumentHtml, renderDocumentFooterHtml, getDocumentRefCode, documentT, DOCUMENT_MANIFEST } from "@neo/documents";
 import { renderHtmlToPdf, type ChoiceField } from "../services/documentRenderer.js";
 import { formatFormDate, formatFormDateTime } from "../utils/formDate.js";
-import { uploadPartnerDocument, deletePartnerDocument, getPartnerDocumentSignedUrl } from "../services/partnerDocuments.js";
+import { uploadPartnerDocument, deletePartnerDocument, downloadPartnerDocument, getPartnerDocumentSignedUrl } from "../services/partnerDocuments.js";
+import { listConsentsForEntity } from "../db/consent.js";
 import { NotFoundError, ValidationError } from "../errors.js";
 import { MEDICAL_HISTORY_QUESTIONS, ORAL_EXAM_QUESTIONS, STOP_QUESTIONS, BANG_QUESTIONS, TMJ_FINDINGS } from "./clinicalRecordFields.js";
 import { historiaClinicaPrintFields, formatMeasure } from "./historiaClinicaPrint.js";
@@ -95,6 +96,22 @@ export type PrintResult =
   /** An already stored document (a consent the patient signed) — a short-lived signed URL to it. */
   | { kind: "stored"; url: string };
 
+/**
+ * The drawn signature stored next to a consent signed through the patient link (consent.metadata.signature_path), as a PNG data URL.
+ * Null when there is none (signed before NEO-252) or storage can't serve it: the print then keeps the stamp alone.
+ */
+async function consentSignatureDataUrl(ctx: TenantContext, patientId: string, consentId: string): Promise<string | null> {
+  const consent = (await listConsentsForEntity(ctx.client, "patient", patientId)).find((c) => c.id === consentId);
+  const path = consent?.metadata?.signature_path;
+  if (typeof path !== "string") return null;
+  try {
+    return `data:image/png;base64,${Buffer.from(await downloadPartnerDocument(path)).toString("base64")}`;
+  } catch (err) {
+    console.error(`[patientChecklist] could not load the consent signature ${path}:`, err);
+    return null;
+  }
+}
+
 function recordOf<T>(item: ChecklistItem, recordId: string | undefined): T | null {
   const entries = item.history.filter((h) => h.type === "record" && h.record);
   const entry = recordId ? entries.find((h) => h.id === recordId) : entries[0];
@@ -127,6 +144,7 @@ export async function PrintChecklistItemCommand(
   const fields: Record<string, string> = {};
   const choices: Record<string, ChoiceField> = {};
   const states: Record<string, string> = {};
+  const images: Record<string, string> = {};
 
   if (key === "medicalHistory" || key === "historiaEndo") {
     const history =
@@ -180,6 +198,11 @@ export async function PrintChecklistItemCommand(
     fields.consent_stamp = signedConsent
       ? documentT(locale, "documents.historiaEndo.consentSignedStamp", { date: formatFormDate(signedConsent.created_at, locale) })
       : "";
+    // NEO-252: and the patient's drawn signature above it, when it was stored on its own (signed after NEO-252).
+    if (signedConsent) {
+      const signature = await consentSignatureDataUrl(ctx, patientId, signedConsent.id);
+      if (signature) images.firma_paciente = signature;
+    }
     Object.assign(fields, print.fields);
     Object.assign(choices, print.choices);
     Object.assign(states, print.states);
@@ -227,6 +250,7 @@ export async function PrintChecklistItemCommand(
     },
     choiceFields: choices,
     stateFields: states,
+    dataImages: images,
   });
 
   await insertAuditLog(ctx.client, {

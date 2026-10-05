@@ -104,7 +104,9 @@ table.checklist:has(+ .doc-notes) { margin-bottom: 0; }
  * A questionnaire the patient answered through their personal link carries
  * an attribution stamp instead of a drawn signature (signature model A):
  * when .sig-stamp has text, it replaces the signing line. On a blank paper
- * form the stamp is empty and the line is there to sign by hand.
+ * form the stamp is empty and the line is there to sign by hand. With a
+ * drawn signature too, both print: the signature on its line, the stamp
+ * under it as the "signed electronically" note.
  */
 .sig-panels {
   display: grid;
@@ -153,7 +155,20 @@ table.checklist:has(+ .doc-notes) { margin-bottom: 0; }
   line-height: 1.4;
 }
 .sig-stamp:empty { display: none; }
-.sig-panel:has(.sig-stamp:not(:empty)) .sig-area { display: none; }
+.sig-panel:has(.sig-stamp:not(:empty)) .sig-area:not(:has(img)) { display: none; }
+/* Stamp + drawn signature (a consent signed through the link, NEO-252): the signature sits on its line, the stamp becomes the note under it. */
+.sig-panel:has(.sig-area img) .sig-stamp:not(:empty) {
+  order: 3;
+  height: auto;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 7pt;
+  font-weight: 500;
+  color: var(--primary);
+}
+.sig-panel:has(.sig-stamp:not(:empty)) .sig-e-note { display: none; }
 .sig-details {
   order: 2;
   margin: 4px 0 0;
