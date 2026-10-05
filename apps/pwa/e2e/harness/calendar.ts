@@ -4,9 +4,9 @@
  * inside a sheet shaped like AppLayout's (padded, viewport-tall). The
  * /api/v1/calendar answer is built in the page (window.fetch stub): a week of
  * appointments and events around today, so the grid looks like a working week.
- * `?theme=dark`, `?lang=pl|mx|en`.
+ * `?theme=dark`, `?lang=pl|mx|en`, `?header=1` adds AppLayout's page-header row (title + actions slot, CORE-153).
  */
-import { createApp, defineComponent, h } from "vue";
+import { createApp, defineComponent, h, ref } from "vue";
 import { createPinia } from "pinia";
 import { createRouter, createMemoryHistory } from "vue-router";
 import vuetify, { lightTheme, darkTheme } from "../../src/plugins/vuetify";
@@ -14,6 +14,7 @@ import { i18n, loadLocale } from "../../src/plugins/i18n";
 import "../../src/styles/theme.scss";
 import "../../src/styles/app-responsive.scss";
 import CalendarView from "../../src/views/CalendarView.vue";
+import { providePageHeader, PAGE_HEADER_ACTIONS_ID } from "../../src/composables/usePageHeader";
 
 const params = new URLSearchParams(location.search);
 vuetify.theme.change(params.get("theme") === "dark" ? darkTheme : lightTheme);
@@ -112,9 +113,14 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
 const Stub = { render: () => null };
 const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/:any(.*)*", component: Stub }] });
 
+const withHeader = params.get("header") === "1";
 const Harness = defineComponent({
   setup() {
-    return () => h("main", { class: "harness-sheet" }, [h(CalendarView)]);
+    providePageHeader(ref(withHeader));
+    const header = withHeader
+      ? [h("div", { class: "harness-header" }, [h("h1", { class: "harness-title" }, "Calendario"), h("div", { id: PAGE_HEADER_ACTIONS_ID, class: "harness-actions" })])]
+      : [];
+    return () => h("main", { class: "harness-sheet" }, [...header, h(CalendarView)]);
   },
 });
 
@@ -126,6 +132,10 @@ style.textContent = `
     min-height: calc(100dvh - 24px); padding: var(--layout-card-inset); background: var(--pwa-sheet); border-radius: var(--pwa-sheet-radius, 16px);
     box-shadow: var(--pwa-sheet-shadow); }
   .harness-sheet > * { flex: 1 1 auto; min-height: 0; }
+  /* Stand-in for AppLayout's page-header row: title left, actions slot right. */
+  .harness-sheet > .harness-header { flex: 0 0 auto; display: flex; align-items: center; min-height: 48px; margin-bottom: 16px; }
+  .harness-title { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.01em; }
+  .harness-actions { flex: 1 1 auto; display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
 `;
 document.head.append(style);
 
