@@ -47,7 +47,7 @@ pseudonymised user, 30-day retention, platform-admin only).
   admin gets 403 on the errors endpoints.
 
 ## Data
-Platform schema (cross-tenant by nature, like `diagnostics`), migration 051:
+Platform schema (cross-tenant by nature, like `diagnostics`), migration 053:
 `platform.problem_report` (tenant_slug, number, kind, description, status, reporter,
 context, attachment, admin_note) + dedup index on `platform.diagnostics`.
 Platform admin = an active `platform.users` row with role owner/admin matching the

@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 052: "Report a problem" + admin Issues view
+-- Migration 053: "Report a problem" + admin Issues view
 --
 -- docs/stories/report-problem-and-admin-issues.md (decision form
 -- report-problem-r1). Platform schema only, no tenant table changes, so
