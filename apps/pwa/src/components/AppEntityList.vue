@@ -185,8 +185,10 @@
       :text="t('app.common.offlineShowingCached')"
     />
 
-    <!-- Queue chips (the doctor's Estudios / Tratamientos): what waits on me / in progress / done, with counts. -->
-    <div v-if="queues && queueCounts && !isTrulyEmpty && !loadError" class="app-entity-list__queues" data-testid="entity-list-queues">
+    <!-- Queue chips (the doctor's Estudios / Tratamientos): what waits on me / in progress / done, with counts.
+         Their labels are static, so they paint with the skeleton and stay over an empty list; only the
+         numbers wait for the counts request (a breathing placeholder of the same size until then). -->
+    <div v-if="queues && !loadError" class="app-entity-list__queues" data-testid="entity-list-queues">
       <AppSegmentedTabs
         fit
         :aria-label="t(queues.ariaLabelKey)"
@@ -198,6 +200,13 @@
           <span class="app-entity-list__queue-tab">
             {{ option.label }}
             <span
+              v-if="!queueCounts"
+              class="app-entity-list__queue-count app-entity-list__queue-count--pending"
+              data-testid="entity-list-queue-count-pending"
+              aria-hidden="true"
+            />
+            <span
+              v-else
               class="app-entity-list__queue-count"
               :class="{ 'app-entity-list__queue-count--attention': option.value === queues.attentionValue && (queueCounts[option.value] ?? 0) > 0 }"
               :data-testid="`entity-list-queue-count-${option.value}`"

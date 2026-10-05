@@ -60,7 +60,9 @@ async function mountEntityList(opts: {
   items?: Record<string, unknown>[];
   showAddButton?: boolean;
   /** Replace the default successful list response (NEO-81 error-state tests). */
-  fetchImpl?: () => Promise<Response>;
+  fetchImpl?: (url: string) => Promise<Response>;
+  /** Queue chips (the doctor's Estudios / Tratamientos). */
+  queues?: { endpoint: string; options: { value: string; labelKey: string }[]; ariaLabelKey: string; attentionValue?: string };
   /** Viewport width useDisplay() sees; this test Vuetify keeps its default mobile breakpoint (1280). */
   width?: number;
 } = {}) {
@@ -90,6 +92,7 @@ async function mountEntityList(opts: {
       i18n: I18N,
       showAddButton: opts.showAddButton ?? true,
       cacheable: false,
+      ...(opts.queues ? { queues: opts.queues } : {}),
     },
     global: { plugins: [i18n, vuetify, router], stubs: { transition: false, "transition-group": false } },
   });
@@ -105,11 +108,72 @@ async function mountEntityList(opts: {
 }
 
 // Minimal manual fetch stub (avoids pulling in vi.stubGlobal timing issues with top-level await in mount()).
-function vi_stubFetch(impl: () => Promise<Response>) {
+function vi_stubFetch(impl: (url: string) => Promise<Response>) {
   (globalThis as unknown as { fetch: typeof fetch }).fetch = impl as unknown as typeof fetch;
 }
 
+function jsonResponse(body: unknown) {
+  return {
+    ok: true,
+    status: 200,
+    clone() {
+      return this;
+    },
+    json: () => Promise.resolve(body),
+    text: () => Promise.resolve(JSON.stringify(body)),
+  } as unknown as Response;
+}
+
+const QUEUES = {
+  endpoint: "/api/v1/sleep-study/queues",
+  options: [
+    { value: "action", labelKey: "app.clinicalQueues.queue.action" },
+    { value: "active", labelKey: "app.clinicalQueues.queue.active" },
+    { value: "done", labelKey: "app.clinicalQueues.queue.done" },
+  ],
+  ariaLabelKey: "app.clinicalQueues.ariaLabel",
+  attentionValue: "action",
+};
+
 describe("AppEntityList", () => {
+  // The doctor's Estudios / Tratamientos: the chips are part of the page's
+  // frame, not of its data — they paint with the skeleton and stay over an
+  // empty list instead of popping in after the counts request.
+  describe("queue chips while loading", () => {
+    it("are on screen with the skeleton before any count has arrived, numbers held by placeholders", async () => {
+      const wrapper = await mountEntityList({ queues: QUEUES, fetchImpl: () => new Promise<Response>(() => {}) });
+      expect(wrapper.find(".app-entity-list__skeleton").exists()).toBe(true);
+      const chips = wrapper.find("[data-testid='entity-list-queues']");
+      expect(chips.exists()).toBe(true);
+      expect(chips.text()).toContain(en["app.clinicalQueues.queue.action"]);
+      expect(chips.text()).toContain(en["app.clinicalQueues.queue.done"]);
+      expect(wrapper.findAll("[data-testid='entity-list-queue-count-pending']")).toHaveLength(3);
+      expect(wrapper.find("[data-testid='entity-list-queue-count-action']").exists()).toBe(false);
+    });
+
+    it("stay over an empty list, with their zero counts", async () => {
+      const wrapper = await mountEntityList({
+        queues: QUEUES,
+        fetchImpl: (url) =>
+          Promise.resolve(url.includes("/queues") ? jsonResponse({ action: 0, active: 0, done: 0 }) : fakeListResponse([])),
+      });
+      expect(wrapper.find(".app-entity-list__empty-wrap").exists()).toBe(true);
+      expect(wrapper.find("[data-testid='entity-list-queues']").exists()).toBe(true);
+      expect(wrapper.find("[data-testid='entity-list-queue-count-action']").text()).toBe("0");
+      expect(wrapper.find("[data-testid='entity-list-queue-count-pending']").exists()).toBe(false);
+    });
+
+    it("show the numbers once they arrive", async () => {
+      const wrapper = await mountEntityList({
+        queues: QUEUES,
+        fetchImpl: (url) =>
+          Promise.resolve(url.includes("/queues") ? jsonResponse({ action: 2, active: 5, done: 1 }) : fakeListResponse()),
+      });
+      expect(wrapper.find("[data-testid='entity-list-queue-count-active']").text()).toBe("5");
+      expect(wrapper.find("[data-testid='entity-list-queue-count-action']").classes()).toContain("app-entity-list__queue-count--attention");
+    });
+  });
+
   // NEO-152: the skeleton has the table's header row (its green rule) so the
   // rule stays exactly where it is when the rows arrive, and the list that
   // replaces it doesn't fade or rise in.
