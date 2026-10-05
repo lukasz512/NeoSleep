@@ -44,7 +44,11 @@ test("phone: the sidebar still opens as a panel from the toolbar button", async 
   await expect(toggle).toBeVisible();
   await toggle.click();
   await expect(page.locator(".cal--side-open .cal__side")).toBeVisible();
-  await page.locator(".cal__scrim").click({ position: { x: 350, y: 600 } });
+  // On a phone the panel is a bottom sheet across the full width: once it has slid in, tap the scrim just above it.
+  await page.locator(".cal__side").evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+  const scrim = await page.locator(".cal__scrim").boundingBox();
+  const sheet = await page.locator(".cal__side").boundingBox();
+  await page.locator(".cal__scrim").click({ position: { x: scrim!.width / 2, y: sheet!.y - scrim!.y - 24 } });
   await expect(page.locator(".cal--side-open")).toHaveCount(0);
 });
 
