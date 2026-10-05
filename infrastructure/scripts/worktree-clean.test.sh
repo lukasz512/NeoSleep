@@ -16,6 +16,13 @@ check() {  # check <description> <command...>
 }
 status_of() { jq -r --arg b "$1" '.[] | select(.branch == $b) | .status' "$SANDBOX/report.json"; }
 is_status() { [ "$(status_of "$1")" = "$2" ]; }
+test_db_called() { grep -qx "$1" "$SANDBOX/test-db.log"; }
+test_db_not_called() { ! test_db_called "$1"; }
+
+# test-db.sh stand-in (CORE-150): records its calls instead of touching Docker.
+export WORKTREE_CLEAN_TEST_DB="$SANDBOX/test-db-stub.sh"
+printf '#!/usr/bin/env bash\necho "$*" >> "%s/test-db.log"\n' "$SANDBOX" > "$WORKTREE_CLEAN_TEST_DB"
+: > "$SANDBOX/test-db.log"
 
 echo "ticket IDs from branch names (CORE-23, keys in .claude/ticket-teams)"
 # shellcheck source=../../.claude/hooks/lib/ticket.sh
@@ -140,6 +147,9 @@ check "--auto kept the unmerged worktree"            test -d ../wt-unmerged
 check "--auto kept the fresh worktree"               test -d ../wt-fresh
 check "--auto kept the locked worktree"              test -d ../wt-locked
 check "--auto kept dev"                              test -n "$(git ls-remote --heads origin dev)"
+check "--auto dropped the removed worktree's test DB" test_db_called "down wt-squashed"
+check "--auto keeps a kept worktree's test DB"       test_db_not_called "down wt-unmerged"
+check "--auto prunes orphan test DBs/containers"     test_db_called "prune"
 
 if [ "$FAILS" -gt 0 ]; then
   cat "$SANDBOX/auto.log" 2>/dev/null
