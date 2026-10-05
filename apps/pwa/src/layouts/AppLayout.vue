@@ -12,7 +12,8 @@
     <AppOfflineBar />
     <!-- NEO-87: "Add NeoSleep to this device" — opens once after login, and from the avatar menu. -->
     <AppInstallCard />
-    <ReportProblemDialog />
+    <!-- Loaded on first open: keeps the dialog (and its form fields) out of the shell bundle. -->
+    <ReportProblemDialog v-if="reportDialogMounted" />
 
     <AppShell
       :rail-collapsed="sidebarCollapsed"
@@ -231,7 +232,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, type ComponentPublicInstance } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted, defineAsyncComponent, type ComponentPublicInstance } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { navTitleKey, navIconName, navParentName } from "../router/routes";
 import { pageTransitionsSupported } from "../router/pageTransitions";
@@ -262,13 +263,24 @@ import {
 import AppButton from "../components/AppButton.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppNotificationCenter from "../components/AppNotificationCenter.vue";
-import ReportProblemDialog from "../components/ReportProblemDialog.vue";
-import { openReportProblem } from "../composables/useReportProblem";
+import { openReportProblem, useReportProblem } from "../composables/useReportProblem";
+
 import { useNotificationCenter } from "../composables/useNotificationCenter";
 import { useLabOrderStatusSync } from "../composables/useLabOrderStatusSync";
 import { onAppReady, markAppReady } from "../composables/useAppReady";
 import { usePartnerResources } from "../composables/usePartnerResources";
 import { SIDEBAR_COLLAPSE_ENABLED } from "../config/layout";
+
+const ReportProblemDialog = defineAsyncComponent(() => import("../components/ReportProblemDialog.vue"));
+const { state: reportProblemState } = useReportProblem();
+// Stays mounted after the first open so closing keeps its animation.
+const reportDialogMounted = ref(reportProblemState.open);
+watch(
+  () => reportProblemState.open,
+  (open) => {
+    if (open) reportDialogMounted.value = true;
+  },
+);
 
 const route = useRoute();
 const router = useRouter();
