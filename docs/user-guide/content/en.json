@@ -1,0 +1,244 @@
+{
+  "meta": {
+    "date": "2026-10-07",
+    "file": "user-guide-neosleep.pdf",
+    "title": "User guide",
+    "subtitle": "The NeoSleep app for doctors",
+    "edition": "Edition {date}",
+    "toc": "Contents",
+    "chapterLabel": "Chapter {n}",
+    "upcoming": "coming soon",
+    "footer": "NeoSleep · User guide",
+    "quoteLabel": "From the care protocol"
+  },
+  "chapters": {
+    "access": {
+      "title": "Signing in",
+      "lead": "Sign in, stay signed in, and get back in when you forget your password."
+    },
+    "patients": {
+      "title": "Patients",
+      "lead": "Add a patient, record the polysomnography, book visits and complete the record."
+    },
+    "device": {
+      "title": "Device order (DAM)",
+      "lead": "Order the mandibular advancement device and follow it until delivery."
+    },
+    "calendar": {
+      "title": "Calendar",
+      "lead": "Your visits by day, week and month."
+    },
+    "panel": {
+      "title": "Panel",
+      "lead": "What is waiting for you today, at a glance."
+    },
+    "faq": {
+      "title": "Frequently asked questions",
+      "lead": "Quick answers to the most common questions."
+    }
+  },
+  "slides": {
+    "login": {
+      "title": "Sign in",
+      "lead": "Open the app address in your browser. Your account was created by NeoSleep: use the email you were invited with.",
+      "steps": [
+        "Type your email.",
+        "Type your password. The eye icon shows what you typed.",
+        "Leave “Remember me” ticked on your own device so you don't have to sign in every day. Untick it on a shared computer.",
+        "Tap “Sign in”."
+      ],
+      "tip": "Tip: add the app to your phone's home screen from the browser menu (“Add to Home screen”)."
+    },
+    "forgot": {
+      "title": "Forgot your password",
+      "lead": "On the sign-in screen tap “Forgot your password?”.",
+      "steps": [
+        "Type the email of your account.",
+        "Tap “Send reset link”. Within a few minutes you will receive an email with a link."
+      ],
+      "tip": "No email? Check your spam folder. For security the app doesn't say whether the address exists."
+    },
+    "reset": {
+      "title": "Set a new password",
+      "lead": "The link in the email opens this screen. It is valid for 1 hour and works once.",
+      "steps": [
+        "Type the new password.",
+        "Type it again to confirm.",
+        "Save it. From now on sign in with the new password."
+      ],
+      "tip": "Link expired? Request a new one from “Forgot your password?”."
+    },
+    "patients": {
+      "title": "Your patients",
+      "lead": "“Patients” in the menu lists the patients assigned to you. Each row shows their documents, studies and the next step.",
+      "steps": [
+        "Search by name.",
+        "Add a new patient.",
+        "Open a patient's record by tapping the name.",
+        "The button under “Next step” takes you straight to what's missing: the patient's QR, or the device tracking."
+      ]
+    },
+    "patientAdd": {
+      "title": "Add a patient",
+      "lead": "Tap + on the patient list. The panel on the left fills in as you type.",
+      "steps": [
+        "First name and last name.",
+        "Sex.",
+        "Date of birth.",
+        "Email and phone: the patient receives forms and visit reminders there.",
+        "Tap “Add patient”."
+      ],
+      "tip": "You only need the name to save. Complete the rest later with the pencil in the record."
+    },
+    "patientDetail": {
+      "title": "The patient record",
+      "lead": "Everything about one patient on one screen.",
+      "steps": [
+        "Tabs: Details, Notes, Documents, Studies, Device and History.",
+        "“Next step” tells you what is pending and offers the action to resolve it.",
+        "“Documents and studies” shows how complete the record is.",
+        "Book a visit (calendar icon). The pencil next to it edits the patient's data."
+      ]
+    },
+    "psgFill": {
+      "title": "Polysomnography: record the results",
+      "lead": "Must have: without polysomnography there is no diagnosis or treatment plan. In the record open “Studies” and tap “Fill in” on Polysomnography.",
+      "steps": [
+        "Study date (it cannot be in the future).",
+        "Status: from “Ordered” to “Results received” and “Interpreted”.",
+        "AHI score, minimum SpO2 (%) and ODI from the report.",
+        "Your interpretation.",
+        "Tap “Save”."
+      ],
+      "quote": "Polisomnografía: confirma el diagnóstico y su severidad.",
+      "quoteSource": "Care protocol, slide 9 (AADSM Standards 2022)"
+    },
+    "psgResult": {
+      "title": "Polysomnography: the result",
+      "lead": "Once saved, the study appears in “Studies” with its values and the severity on the AHI scale.",
+      "steps": [
+        "Attach the lab report (PDF, JPG or PNG) with +. Attached to the study, the file completes it.",
+        "The study card: date, AHI, minimum SpO2 and ODI.",
+        "The severity: <5 normal, 5–15 mild, 15–30 moderate, >30 severe."
+      ],
+      "tip": "The clinical criteria are in the Care protocol, in Resources."
+    },
+    "visit": {
+      "title": "Book a visit",
+      "lead": "In the record tap the calendar icon (“Book visit”). The patient and you as the doctor are already filled in.",
+      "steps": [
+        "Date.",
+        "Time, in your clinic's time zone.",
+        "Duration.",
+        "Notes for the visit (optional).",
+        "Tap “Book”."
+      ],
+      "tip": "If the patient has an email, they receive a confirmation and a reminder, and can confirm or say they can't attend. You see their answer in the Panel."
+    },
+    "qr": {
+      "title": "QR for the patient",
+      "lead": "The patient fills in their own forms on their phone: consent, medical history and the STOP-Bang questionnaire. Tap “QR for the patient” in the record.",
+      "steps": [
+        "The forms the QR includes: only the ones still pending.",
+        "The patient scans the code with the phone camera.",
+        "“Copy link” to send it by message instead."
+      ],
+      "tip": "The link works once and expires in 24 hours. If it expires, create a new QR."
+    },
+    "documents": {
+      "title": "Documents: where to fill in what",
+      "lead": "The “Documents” tab gathers the consent and the medical history. Done items get a green tick.",
+      "steps": [
+        "The progress: how many documents are complete.",
+        "Informed consent: by QR, printed, or upload the signed scan.",
+        "The medical history has 4 sections: History, STOP-BANG, Examination and TMJ.",
+        "“Fill in” to complete a section yourself during the visit.",
+        "Send the patient everything pending by email (the link works for 7 days)."
+      ],
+      "tip": "Complete = every item ticked in “Documents and studies”."
+    },
+    "order": {
+      "title": "Order the device (DAM)",
+      "lead": "In the record open “Device” and tap +. The order has 3 steps.",
+      "steps": [
+        "The steps: treatment set-up, dental records (scans) and summary.",
+        "Maximum retrusion (MR), in mm.",
+        "Maximum protrusion (MP), in mm.",
+        "The mandibular advance range is calculated for you.",
+        "Go on with the arrow. In the summary check everything and send."
+      ],
+      "tip": "If your clinic's address is incomplete, the order says so at the top: contact NeoSleep to fix it before ordering."
+    },
+    "tracking": {
+      "title": "Track the order",
+      "lead": "In “Device” each order shows its number and where it is. The patient list shows the same under “Next step”.",
+      "steps": [
+        "The order number.",
+        "“Ordered”: the lab is making the device.",
+        "“Received”: the device has arrived and you can book the delivery visit."
+      ],
+      "tip": "The lab gives the delivery date, usually about 15 days after the dental records (Care protocol)."
+    },
+    "calendar": {
+      "title": "Calendar",
+      "lead": "All your visits, with the patient and the time.",
+      "steps": [
+        "Month calendar: tap a day to go to it.",
+        "Switch between day, week and month.",
+        "“Today” takes you back to the current day.",
+        "Tap a visit to see it, move it or cancel it.",
+        "+ books a new visit."
+      ]
+    },
+    "panel": {
+      "title": "Panel",
+      "lead": "Your home screen: what is waiting for you today.",
+      "steps": [
+        "Search for any of your patients.",
+        "Today's visits, studies to interpret, incomplete records and patients in treatment.",
+        "Your patients by stage, from new to in treatment.",
+        "Upcoming visits.",
+        "“Needs your action”: results to interpret, unsigned consents, patients who can't attend."
+      ],
+      "tip": "The Panel is being switched on account by account. If you don't see it yet, the app opens on “Patients”."
+    }
+  },
+  "faq": {
+    "faq1": [
+      {
+        "q": "The password reset email doesn't arrive.",
+        "a": "Check spam. The link works for 1 hour; request a new one from “Forgot your password?”. If it still doesn't arrive, contact NeoSleep."
+      },
+      {
+        "q": "I can't find a patient.",
+        "a": "You only see the patients assigned to you. Search by first or last name, and check that no filter is on."
+      },
+      {
+        "q": "The patient says the QR doesn't work.",
+        "a": "The QR works once and for 24 hours. Create a new one with “QR for the patient”, or use “Copy link” and send it by message."
+      },
+      {
+        "q": "Can I use the app on my phone?",
+        "a": "Yes, in the browser. Add it to the home screen to open it like an app."
+      }
+    ],
+    "faq2": [
+      {
+        "q": "Where do I enter the polysomnography?",
+        "a": "In the record, “Studies” tab → “Fill in” on Polysomnography. Attach the lab report with “Upload file”."
+      },
+      {
+        "q": "Where do I see how the device order is going?",
+        "a": "In the record, “Device” tab, or under “Next step” in the patient list."
+      },
+      {
+        "q": "The order says my clinic's address is incomplete.",
+        "a": "Contact NeoSleep: the clinic's address, postal code, phone and email are needed to deliver the device."
+      },
+      {
+        "q": "Does the patient find out about the visit?",
+        "a": "Yes, if they have an email: they receive a confirmation and a reminder, and their answer shows up in the Panel."
+      }
+    ]
+  }
+}

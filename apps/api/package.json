@@ -15,7 +15,8 @@
     "oa:smoke": "tsx --env-file=../../.env scripts/oa-smoke.ts",
     "oa:test-order": "tsx --env-file=../../.env scripts/oa-test-order.ts",
     "seed:e2e-user": "tsx --env-file=../../.env scripts/seed-e2e-user.ts",
-    "seed:qa-user": "tsx --env-file=../../.env scripts/seed-qa-user.ts"
+    "seed:qa-user": "tsx --env-file=../../.env scripts/seed-qa-user.ts",
+    "seed:guide": "tsx --env-file=../../.env scripts/seed-guide-data.ts"
   },
   "dependencies": {
     "@neo/device-order": "workspace:*",
