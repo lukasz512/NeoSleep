@@ -85,6 +85,8 @@ export const routes: RouteRecordRaw[] = [
   // Geographic hierarchy (country > region > city > village > district) data entry — admin-only,
   // narrow reference-data CRUD inside the existing app, not a separate portal/admin deployment.
   { path: "/territories", name: "territories", component: () => import("../views/TerritoriesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin"] } },
+  // Admin: reports from users (tenant admin) and grouped production errors (platform admin, second tab).
+  { path: "/issues", name: "issues", component: () => import("../views/IssuesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin"] } },
   { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
 ];
 

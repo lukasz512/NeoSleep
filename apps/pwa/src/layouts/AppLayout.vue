@@ -12,6 +12,7 @@
     <AppOfflineBar />
     <!-- NEO-87: "Add NeoSleep to this device" — opens once after login, and from the avatar menu. -->
     <AppInstallCard />
+    <ReportProblemDialog />
 
     <AppShell
       :rail-collapsed="sidebarCollapsed"
@@ -114,6 +115,7 @@
             @set-theme="setThemePreference"
             @change-locale="(lang) => setLocale(lang as 'en' | 'pl' | 'mx')"
             @change-password="router.push({ name: 'change-password', query: { from: CHANGE_PASSWORD_FROM_MENU } })"
+            @report-problem="openReportProblem({ where: String(route.name ?? '') })"
             @logout="onLogout"
             @close="menuOpen = false"
           />
@@ -260,6 +262,8 @@ import {
 import AppButton from "../components/AppButton.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppNotificationCenter from "../components/AppNotificationCenter.vue";
+import ReportProblemDialog from "../components/ReportProblemDialog.vue";
+import { openReportProblem } from "../composables/useReportProblem";
 import { useNotificationCenter } from "../composables/useNotificationCenter";
 import { useLabOrderStatusSync } from "../composables/useLabOrderStatusSync";
 import { onAppReady, markAppReady } from "../composables/useAppReady";

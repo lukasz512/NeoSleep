@@ -65,6 +65,13 @@ describe("navRoutesForRole", () => {
     }
   });
 
+  it("only admin sees /issues — rep/kam/msl/doctor/manager do not", () => {
+    for (const role of ["rep", "kam", "msl", "doctor", "manager"] as const) {
+      expect(navRoutesForRole(role).some((r) => r.path === "/issues")).toBe(false);
+    }
+    expect(navRoutesForRole("admin").some((r) => r.path === "/issues")).toBe(true);
+  });
+
   it("manager and admin see /documents", () => {
     expect(navRoutesForRole("manager").some((r) => r.path === "/documents")).toBe(true);
     expect(navRoutesForRole("admin").some((r) => r.path === "/documents")).toBe(true);

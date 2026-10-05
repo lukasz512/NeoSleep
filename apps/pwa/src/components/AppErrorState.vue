@@ -28,14 +28,28 @@
         >
           {{ secondaryLabel }}
         </AppButton>
+        <AppButton
+          v-else
+          variant="text"
+          class="app-error-state__secondary"
+          data-testid="error-state-report"
+          :aria-label="t('app.errorState.report')"
+          @click="onReport"
+        >
+          {{ t("app.errorState.report") }}
+        </AppButton>
       </div>
     </template>
   </AppStateView>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, inject } from "vue";
+import { routeLocationKey } from "vue-router";
+import { useI18n } from "vue-i18n";
+import { isApiError } from "@api";
 import { AppStateView, useErrorText } from "@ui";
+import { openReportProblem } from "../composables/useReportProblem";
 import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
 
@@ -59,6 +73,18 @@ const props = withDefaults(
   }>(),
   { loading: false, title: undefined, subtitle: undefined, error: undefined },
 );
+
+const { t } = useI18n();
+// Optional so the component also mounts in a router-less test.
+const currentRoute = inject(routeLocationKey, null);
+
+/** "Report this problem": opens the shared dialog with the failing request already attached (D2). */
+function onReport() {
+  openReportProblem({
+    requestId: isApiError(props.error) ? props.error.requestId : null,
+    where: String(currentRoute?.name ?? ""),
+  });
+}
 
 const describeError = useErrorText();
 const errorText = computed(() => (props.error == null ? null : describeError(props.error)));

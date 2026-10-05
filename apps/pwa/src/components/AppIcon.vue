@@ -340,6 +340,22 @@ const ICONS = {
             <path d="M3 8v8l9 5 9-5V8" />
             <line x1="12" y1="13" x2="12" y2="21" />`,
   },
+  "nav-issues": {
+    strokeWidth: 2,
+    paths: `<path d="M4 21V4" />
+            <path d="M4 4h12l-2 4 2 4H4" />`,
+  },
+  // Speech bubble with an exclamation mark — "report a problem / feedback" in the account menu.
+  "feedback": {
+    strokeWidth: 2,
+    paths: `<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="15.5" x2="12" y2="15.5" />`,
+  },
+  "paperclip": {
+    strokeWidth: 2,
+    paths: `<path d="M21 11.5l-8.6 8.6a5 5 0 0 1-7.1-7.1l8.6-8.6a3.3 3.3 0 0 1 4.7 4.7l-8.6 8.6a1.7 1.7 0 0 1-2.4-2.4l7.9-7.9" />`,
+  },
   "nav-territories": {
     strokeWidth: 2,
     paths: `<path d="M12 21s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z" />
