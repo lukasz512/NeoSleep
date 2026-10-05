@@ -194,6 +194,27 @@ describe("mailer — configured", () => {
     expect(call.attachments).toEqual(expect.arrayContaining([expect.objectContaining({ filename: "agreement.pdf" })]));
   });
 
+  it("sendPartnerInviteEmail addresses the doctor formally like the signed-documents email, no casual greeting", async () => {
+    const { sendPartnerInviteEmail } = await importMailer(true);
+
+    await sendPartnerInviteEmail("tadeusz@example.com", "https://pwa.neosleepcare.com/register?token=abc", { ...RECIPIENT, language: "mx", region: "MX", title: null, firstName: "Tadeusz", lastName: "Nowak" }, SENDER);
+
+    const call = sendMock.mock.calls[0]![0];
+    expect(call.html).toContain("Dr. Tadeusz Nowak,");
+    expect(call.html).not.toContain("Hola");
+    expect(call.html).not.toContain("Gracias por tu interés en colaborar con nosotros");
+  });
+
+  it("the MX formal address ends with a comma, not a colon", async () => {
+    const { sendSignedDocumentsEmail } = await importMailer(true);
+
+    await sendSignedDocumentsEmail("tadeusz@example.com", { ...RECIPIENT, language: "mx", region: "MX", title: null, firstName: "Tadeusz", lastName: "Nowak" }, [], "https://pwa.neosleepcare.com/login");
+
+    const call = sendMock.mock.calls[0]![0];
+    expect(call.html).toContain("Dr. Tadeusz Nowak,");
+    expect(call.html).not.toContain("Nowak:");
+  });
+
   it("logs and rethrows when Resend returns an API error", async () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     sendMock.mockResolvedValue({
