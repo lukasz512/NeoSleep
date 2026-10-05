@@ -131,6 +131,12 @@
               <span v-if="step.note">{{ step.note }}</span>
             </li>
           </ol>
+          <AdvanceLevelField
+            v-if="canSetAdvance && row.state === 'received'"
+            :plan-id="row.plan.id"
+            :level="advanceLevelOf(row.plan)"
+            @saved="(level) => onAdvanceSaved(row.plan, level)"
+          />
         </template>
 
         <template #actions>
@@ -187,6 +193,7 @@ import AppErrorState from "../AppErrorState.vue";
 import AppEmptyState from "../AppEmptyState.vue";
 import AppStatusRow from "../AppStatusRow.vue";
 import EntityLink from "../EntityLink.vue";
+import AdvanceLevelField from "./AdvanceLevelField.vue";
 import { useIdentity } from "../../composables/useIdentity";
 import { hcpDetailLink } from "../../utils/entityLinks";
 import { apiFetch } from "../../composables/useApi";
@@ -237,6 +244,20 @@ const authStore = useAuthStore();
 const isAdmin = computed(() => authStore.user?.role === "admin");
 /** Placing a real, billable lab order: admin / doctor / manager only (NEO-199); the API enforces the same. */
 const canOrder = computed(() => STUDY_ROLES.includes(authStore.user?.role ?? ""));
+/** The advance level is the treating doctor's call (protocol visits 4–5); the API allows admin + doctor. */
+const canSetAdvance = computed(() => authStore.user?.role === "doctor" || isAdmin.value);
+
+function advanceLevelOf(plan: TreatmentPlanItem): number | null {
+  const level = plan.metadata?.advance_level;
+  return typeof level === "number" ? level : null;
+}
+
+function onAdvanceSaved(plan: TreatmentPlanItem, level: number | null) {
+  const metadata = { ...(plan.metadata ?? {}) };
+  if (level === null) delete metadata.advance_level;
+  else metadata.advance_level = level;
+  plan.metadata = metadata;
+}
 
 const plans = ref<TreatmentPlanItem[]>([]);
 const loading = ref(false);

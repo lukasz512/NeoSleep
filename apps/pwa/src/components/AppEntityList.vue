@@ -185,6 +185,28 @@
       :text="t('app.common.offlineShowingCached')"
     />
 
+    <!-- Queue chips (the doctor's Estudios / Tratamientos): what waits on me / in progress / done, with counts. -->
+    <div v-if="queues && queueCounts && !isTrulyEmpty && !loadError" class="app-entity-list__queues" data-testid="entity-list-queues">
+      <AppSegmentedTabs
+        fit
+        :aria-label="t(queues.ariaLabelKey)"
+        :model-value="queue"
+        :options="queueOptions"
+        @update:model-value="setQueue"
+      >
+        <template #tab="{ option }">
+          <span class="app-entity-list__queue-tab">
+            {{ option.label }}
+            <span
+              class="app-entity-list__queue-count"
+              :class="{ 'app-entity-list__queue-count--attention': option.value === queues.attentionValue && (queueCounts[option.value] ?? 0) > 0 }"
+              :data-testid="`entity-list-queue-count-${option.value}`"
+            >{{ queueCounts[option.value] ?? 0 }}</span>
+          </span>
+        </template>
+      </AppSegmentedTabs>
+    </div>
+
     <!-- One element at a time (error / empty / skeleton / list), cross-faded
          so the list never pops in or snaps between states. -->
     <Transition name="app-entity-list-swap" mode="out-in">
@@ -393,7 +415,17 @@ import { usePageHeaderTeleport, usePageHeaderRow } from "../composables/usePageH
 import { useHeaderToolsFold } from "../composables/useHeaderToolsFold";
 import { useCompactSearch } from "../composables/useCompactSearch";
 import { listCountKey, type ListCountNoun } from "../utils/listCountLabel";
-import { AppInlineAlert } from "@ui";
+import { AppInlineAlert, AppSegmentedTabs, type AppSegmentedTabOption } from "@ui";
+
+/** Queue chips over the list — see EntityListQueues (useEntityList.ts). */
+export interface AppEntityListQueues {
+  endpoint: string;
+  /** In display order; the label is an i18n key. */
+  options: { value: string; labelKey: string }[];
+  ariaLabelKey: string;
+  /** The chip whose count is drawn in the attention colour when non-zero ("needs you"). */
+  attentionValue?: string;
+}
 
 export interface AppEntityListHeader {
   title: string;
@@ -438,6 +470,8 @@ const props = withDefaults(
     /** Offline read cache (see docs/ADR-013-offline-read-cache.md) — set false for entities
      *  that must not be persisted client-side (`patient`, GDPR Art. 9 data). */
     cacheable?: boolean;
+    /** Queue chips above the list, each with its count (the doctor's Estudios / Tratamientos). */
+    queues?: AppEntityListQueues;
   }>(),
   {
     showAddButton: false,
@@ -447,6 +481,7 @@ const props = withDefaults(
     sortColumns: undefined,
     loadingItemId: null,
     cacheable: true,
+    queues: undefined,
   }
 );
 
@@ -476,6 +511,7 @@ const {
   hasActiveFiltersOrSearch, isTrulyEmpty, hasCompletedInitialLoad,
   onFilterStateUpdate, onFiltersClear, onSearchClear, isTableAtDefault, onTableReset,
   onOptionsUpdate, rowProps, onRowClick, loadData, loadMoreMobile,
+  queue, queueCounts, setQueue,
 } = useEntityList({
   viewId: props.viewId,
   apiEndpoint: props.apiEndpoint,
@@ -487,7 +523,12 @@ const {
   filterParamKeys: props.filterParamKeys,
   searchParamKey: props.searchParamKey,
   cacheable: props.cacheable,
+  queues: props.queues ? { endpoint: props.queues.endpoint, values: props.queues.options.map((o) => o.value) } : undefined,
 });
+
+const queueOptions = computed<AppSegmentedTabOption[]>(() =>
+  (props.queues?.options ?? []).map((o) => ({ value: o.value, label: t(o.labelKey) })),
+);
 
 const loadMoreSentinelRef = ref<HTMLElement | null>(null);
 useIntersectionObserver(loadMoreSentinelRef, ([entry]) => {

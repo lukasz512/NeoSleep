@@ -498,6 +498,35 @@
   margin: 0 0 12px;
 }
 
+/* Queue chips: one row, scrolls sideways on a narrow phone rather than wrapping. */
+.app-entity-list__queues {
+  flex: 0 0 auto;
+  margin: 0 0 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.app-entity-list__queue-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.app-entity-list__queue-count {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  line-height: 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  background: rgba(var(--v-theme-on-surface), 0.08);
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.app-entity-list__queue-count--attention {
+  background: rgba(var(--v-theme-warning), 0.16);
+  color: rgb(var(--v-theme-warning));
+}
+
 /* Height follows the rows: a short list ends right after its last row with
    the pagination footer directly underneath, a long one grows until the
    page runs out and then scrolls inside (.v-table__wrapper below) while the
