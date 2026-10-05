@@ -104,28 +104,41 @@
         >
           <AppIcon name="calendar" />
         </button>
+        <!-- CORE-153: wide screens read ‹ › · month · Hoy … Día/Semana/Mes; the phone places these by grid area. -->
+        <div class="cal__nav">
+          <button type="button" class="cal__icon-btn" :aria-label="t('user.planner.prev')" data-testid="calendar-prev" @click="step(-1)">
+            <AppIcon name="chevron-left" />
+          </button>
+          <button type="button" class="cal__icon-btn" :aria-label="t('user.planner.next')" data-testid="calendar-next" @click="step(1)">
+            <AppIcon name="chevron-right" />
+          </button>
+        </div>
         <h2 class="cal__title" data-testid="calendar-title">
           <strong>{{ titleParts[0] }}</strong> <span>{{ titleParts[1] }}</span>
         </h2>
+        <button type="button" class="cal__today" data-testid="calendar-today" @click="goToday">{{ t("user.planner.today") }}</button>
         <AppSegmentedTabs
           class="cal__seg"
           :aria-label="t('user.calendar.viewSwitch')"
           :model-value="calendarType"
           :options="viewOptions"
+          :fit="!phone"
           @update:model-value="(v: string) => navigate(v as CalendarViewType, calendarValue)"
         />
-        <div class="cal__nav">
-          <button type="button" class="cal__icon-btn" :aria-label="t('user.planner.prev')" data-testid="calendar-prev" @click="step(-1)">
-            <AppIcon name="chevron-left" />
+        <!-- CORE-153: on wide screens "+" sits in the page header, where the lists keep theirs. -->
+        <Teleport :to="pageHeader.to" defer :disabled="headerAddOff">
+          <button
+            type="button"
+            class="cal__add"
+            :class="{ 'cal__add--header': !headerAddOff }"
+            data-testid="calendar-add"
+            :aria-label="t('user.calendar.add')"
+            :title="t('user.calendar.add')"
+            @click="openAdd()"
+          >
+            <AppIcon name="plus" />
           </button>
-          <button type="button" class="cal__today" data-testid="calendar-today" @click="goToday">{{ t("user.planner.today") }}</button>
-          <button type="button" class="cal__icon-btn" :aria-label="t('user.planner.next')" data-testid="calendar-next" @click="step(1)">
-            <AppIcon name="chevron-right" />
-          </button>
-        </div>
-        <button type="button" class="cal__add" data-testid="calendar-add" :aria-label="t('user.calendar.add')" :title="t('user.calendar.add')" @click="openAdd()">
-          <AppIcon name="plus" />
-        </button>
+        </Teleport>
         <VProgressLinear v-if="loading" indeterminate absolute location="bottom" height="2" color="primary" class="cal__progress" />
       </div>
 
@@ -183,6 +196,7 @@ import {
   type CalendarViewType,
 } from "../utils/calendarLayout";
 import { fieldErrorsFromResponse } from "../composables/useFormErrors";
+import { usePageHeaderTeleport } from "../composables/usePageHeader";
 import type { SubmitDone } from "../composables/useEntitySubmit";
 import type { EventFormInitialData, EventSubmitPayload } from "../components/EventForm.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
@@ -234,7 +248,10 @@ const bodyEl = ref<HTMLElement | null>(null);
 const toolbarEl = ref<HTMLElement | null>(null);
 const containerWidth = ref(smAndUp.value ? 1200 : 400);
 const narrow = computed(() => containerWidth.value < NARROW_PX);
+const pageHeader = usePageHeaderTeleport();
 const phone = computed(() => containerWidth.value < PHONE_PX);
+/** The phone bar keeps its own "+" (it is that screen's only header); elsewhere it moves to the page header. */
+const headerAddOff = computed(() => phone.value || pageHeader.disabled.value);
 const showSide = computed(() => SIDEBAR_ON_WIDE || phone.value);
 const sideOpen = ref(false);
 const toolbarBottom = ref(72);
@@ -998,6 +1015,59 @@ function onEntryClick(entry: CalendarEntry) {
   background: rgb(var(--v-theme-primary));
   color: rgb(var(--v-theme-on-primary));
   box-shadow: 0 4px 12px -4px rgb(var(--v-theme-primary));
+}
+
+/* ── CORE-153: tablet and desktop — a flat line under the page header, not a floating glass bar ── */
+.cal:not(.cal--phone) .cal__toolbar.cal-glass {
+  top: 0;
+  left: 0;
+  right: 0;
+  gap: 8px;
+  padding: 6px 12px 6px 8px;
+  border-radius: 0;
+  border-bottom: 0.5px solid var(--cal-line);
+  background: var(--pwa-sheet, rgb(var(--v-theme-surface)));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.cal:not(.cal--phone) .cal__title {
+  flex: 0 1 auto;
+}
+
+.cal:not(.cal--phone) .cal__today {
+  min-height: 28px;
+  border: 1px solid var(--cal-line-strong);
+  border-radius: 8px;
+}
+
+.cal:not(.cal--phone) .cal__seg {
+  margin-left: auto;
+}
+
+/* "+" off the phone wears the lists' add button: plain teal glyph, teal tint on hover (AppEntityList.css).
+   --header is the copy teleported into the page header, outside .cal. */
+.cal:not(.cal--phone) .cal__add,
+.cal__add.cal__add--header {
+  flex-shrink: 0;
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 50%;
+  background: transparent;
+  color: rgb(var(--v-theme-primary));
+  box-shadow: none;
+}
+
+.cal:not(.cal--phone) .cal__add:hover,
+.cal__add.cal__add--header:hover {
+  background: rgba(var(--v-theme-primary), 0.12);
+}
+
+.cal:not(.cal--phone) .cal__add :deep(svg),
+.cal__add.cal__add--header :deep(svg) {
+  width: 22px;
+  height: 22px;
 }
 
 .cal__icon-btn:focus-visible,

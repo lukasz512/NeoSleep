@@ -146,7 +146,7 @@
                   <template #label>{{ t("app.questionnaire.consentStep.privacyAccept") }}</template>
                 </VCheckbox>
                 <VCheckbox v-model="accepted" hide-details class="patient-questionnaire__consent" data-testid="consent-accept">
-                  <template #label>{{ t("app.questionnaire.consentStep.accept") }}</template>
+                  <template #label>{{ t("app.questionnaire.consentStep.accept", { document: stepTitle(step) }) }}</template>
                 </VCheckbox>
                 <!-- The patient's own request for a copy (legal, 2026-09-28): unticked by default, offered only for an address that is theirs alone. -->
                 <VCheckbox

@@ -226,6 +226,8 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
     expect(alerts(wrapper)).toEqual(["Tick the box above to confirm you have read the document."]);
     expect(apiFetch).toHaveBeenCalledTimes(1);
 
+    // The accept box names the document it accepts (the privacy box above names its own).
+    expect(wrapper.find("[data-testid='consent-accept']").text()).toBe('I have read "Informed consent" and accept its content.');
     await wrapper.find("[data-testid='consent-accept'] input").setValue(true);
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 201, { step: "informedConsent", completed: false }));
     await wrapper.find("form").trigger("submit");

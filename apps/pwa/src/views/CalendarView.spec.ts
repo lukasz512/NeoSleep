@@ -6,6 +6,7 @@ import { createVuetify } from "vuetify";
 import * as vuetifyComponents from "vuetify/components";
 import * as vuetifyDirectives from "vuetify/directives";
 import { createRouter, createMemoryHistory } from "vue-router";
+import { defineComponent, h, ref } from "vue";
 import en from "@i18n/en.json";
 import { routes, navRoutesForRole } from "../router/routes";
 import { useAuthStore } from "../stores/auth";
@@ -13,6 +14,7 @@ import "../components/EventForm.vue";
 import "../components/AppointmentDialog.vue";
 import "../components/AppointmentDetailDialog.vue";
 import CalendarView from "./CalendarView.vue";
+import { providePageHeader, PAGE_HEADER_ACTIONS_ID } from "../composables/usePageHeader";
 
 /**
  * CORE-117: CalendarView merges the old PlannerView (encounters) and
@@ -44,7 +46,7 @@ afterEach(() => {
   apiFetch.mockReset();
 });
 
-async function mountView(role: string, path = "/calendar") {
+async function mountView(role: string, path = "/calendar", opts: { pageHeader?: boolean } = {}) {
   setActivePinia(createPinia());
   useAuthStore().user = { id: "u-1", email: "qa@clinic.test", role } as ReturnType<typeof useAuthStore>["user"];
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
@@ -52,7 +54,16 @@ async function mountView(role: string, path = "/calendar") {
   const router = createRouter({ history: createMemoryHistory(), routes });
   await router.push(path);
   await router.isReady();
-  const wrapper = mount(CalendarView, { global: { plugins: [i18n, vuetify, router] } });
+  // With pageHeader, stand in for AppLayout: its header-actions slot is shown, so "+" can move there (CORE-153).
+  const Host = defineComponent({
+    setup() {
+      providePageHeader(ref(true));
+      return () => h("div", [h("div", { id: PAGE_HEADER_ACTIONS_ID }), h(CalendarView)]);
+    },
+  });
+  const wrapper = opts.pageHeader
+    ? mount(Host, { attachTo: document.body, global: { plugins: [i18n, vuetify, router] } })
+    : mount(CalendarView, { global: { plugins: [i18n, vuetify, router] } });
   wrappers.push(wrapper);
   await flushPromises();
   return Object.assign(wrapper, { router });
@@ -343,5 +354,43 @@ describe("CalendarView (CORE-117)", () => {
       vi.useRealTimers();
       process.env.TZ = tz;
     }
+  });
+  describe("CORE-153: calmer toolbar", () => {
+    it("on a wide screen \"+\" moves into the page header, in the lists' plain style", async () => {
+      apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
+      const wrapper = await mountView("manager", "/calendar", { pageHeader: true });
+      const add = document.getElementById(PAGE_HEADER_ACTIONS_ID)!.querySelector('[data-testid="calendar-add"]');
+      expect(add).not.toBeNull();
+      expect(add!.classList).toContain("cal__add--header");
+      expect(wrapper.find(".cal__toolbar [data-testid=\"calendar-add\"]").exists()).toBe(false);
+    });
+
+    it("on a wide screen the view switch is fitted to its labels, so \"Week\" is never cut", async () => {
+      apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
+      const wrapper = await mountView("manager");
+      expect(wrapper.find(".cal__seg").classes()).toContain("app-segmented-tabs--fit");
+    });
+
+    it("the toolbar reads arrows, month, Today, then the view switch", async () => {
+      apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
+      const wrapper = await mountView("manager");
+      const order = Array.from(wrapper.find(".cal__toolbar").element.children).map((el) => ["cal__nav", "cal__title", "cal__today", "cal__seg"].find((c) => el.classList.contains(c)));
+      expect(order.slice(0, 4)).toEqual(["cal__nav", "cal__title", "cal__today", "cal__seg"]);
+    });
+
+    it("a phone keeps \"+\" in its own bar and equal-width view tabs (CORE-129 unchanged)", async () => {
+      const innerWidth = window.innerWidth;
+      window.innerWidth = 390;
+      try {
+        apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
+        const wrapper = await mountView("manager", "/calendar", { pageHeader: true });
+        const add = wrapper.find(".cal__toolbar [data-testid=\"calendar-add\"]");
+        expect(add.exists()).toBe(true);
+        expect(add.classes()).not.toContain("cal__add--header");
+        expect(wrapper.find(".cal__seg").classes()).not.toContain("app-segmented-tabs--fit");
+      } finally {
+        window.innerWidth = innerWidth;
+      }
+    });
   });
 });

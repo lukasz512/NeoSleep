@@ -3,7 +3,7 @@ import type { InjectionKey } from "vue";
 /** Where a build is running: "prod" and "dev" are CI deploys, "local" is a developer machine. */
 export type AppReleaseChannel = "prod" | "dev" | "local";
 
-/** Human-facing app version, e.g. 1.0.0 (build 12). `build` is null outside CI. */
+/** Human-facing app version, e.g. 1.1.0.12. `build` is null outside CI. */
 export interface AppVersionInfo {
   version: string;
   build: number | null;

@@ -35,6 +35,9 @@ jobs:
     # the dev→prod promote PR: the dev push run already tests that same commit.
     if: github.event_name != 'pull_request' || !(startsWith(github.head_ref, 'worktree-') || startsWith(github.head_ref, 'worker/') || startsWith(github.head_ref, 'claude/') || github.head_ref == 'dev')
     runs-on: ubuntu-latest
+    # CORE-151: a hung e2e used to hold the job (and the session waiting on it) for up
+    # to an hour; the default limit is 6 h. A full 3-engine run takes ~20-30 min.
+    timeout-minutes: 45
 
     services:
       postgres:
@@ -69,6 +72,10 @@ jobs:
       # default for local runs, but this is the one CI actually depends on.
       ORTHOAPNEA_EMAIL: qa-orthoapnea@neosleepcare.com
       ORTHOAPNEA_PASSWORD: test-only-not-a-real-credential
+      # CORE-151: the 3-engine e2e is ~14 of the job's ~20 min. Work-branch pushes run
+      # Chromium only; dev/prod pushes and PRs (renovate, the promote PR) keep all three,
+      # so a Firefox/WebKit-only break still surfaces before prod.
+      E2E_BROWSERS: ${{ (github.event_name == 'pull_request' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/prod') && 'chromium firefox webkit' || 'chromium' }}
 
     steps:
       - name: Checkout
@@ -160,7 +167,7 @@ jobs:
       # scoped coverage — blocking from day one, not inheriting the informational
       # status of the legacy `pnpm --filter @neo/pwa test` step above.
       - name: Install Playwright browsers
-        run: pnpm --filter @neo/pwa exec playwright install --with-deps chromium firefox webkit
+        run: pnpm --filter @neo/pwa exec playwright install --with-deps $E2E_BROWSERS
 
       # apps/api's dev script (which Playwright's webServer starts) reads
       # ../../.env via tsx --env-file — that file doesn't exist in CI (the
@@ -175,7 +182,10 @@ jobs:
           EOF
 
       - name: Test — pwa e2e (blocking)
-        run: pnpm --filter @neo/pwa test:e2e
+        timeout-minutes: 25
+        run: |
+          echo "e2e browsers: $E2E_BROWSERS"
+          pnpm --filter @neo/pwa test:e2e $(for b in $E2E_BROWSERS; do printf -- '--project=%s ' "$b"; done)
 
       # Page snapshot + trace of each failing e2e test — the log alone only
       # says "element not found", not what the page showed instead.
@@ -228,3 +238,4 @@ jobs:
           node --test .claude/skills/ship-artifact/ticket.test.mjs
           bash .claude/hooks/pre-tool-linear-ticket-format.test.sh
           bash infrastructure/scripts/worktree-clean.test.sh
+          bash infrastructure/scripts/test-db.test.sh
