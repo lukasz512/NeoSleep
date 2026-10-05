@@ -517,7 +517,7 @@ describe("SyncOrthoApneaTreatmentStatusesCommand", () => {
     // may also get (correctly) polled and marked changed here. Only this
     // test's own plan/link is asserted on below — the aggregate count just
     // needs to include ours.
-    const result = await SyncOrthoApneaTreatmentStatusesCommand(TENANT_SLUG, ctx.requestId);
+    const result = await SyncOrthoApneaTreatmentStatusesCommand(TENANT_SLUG, ctx.requestId, "manual");
     expect(result.changed).toBeGreaterThanOrEqual(1);
     expect(result.failed).toBe(0);
 
@@ -540,7 +540,7 @@ describe("SyncOrthoApneaTreatmentStatusesCommand", () => {
     expect(auditEntries.some((e) => e.action === "status_change")).toBe(true);
 
     // Running again with the same (now-current) status should not double-notify.
-    const secondResult = await SyncOrthoApneaTreatmentStatusesCommand(TENANT_SLUG, ctx.requestId);
+    const secondResult = await SyncOrthoApneaTreatmentStatusesCommand(TENANT_SLUG, ctx.requestId, "manual");
     expect(secondResult.changed).toBe(0);
   });
 });
@@ -593,7 +593,7 @@ describe("SyncOrthoApneaTreatmentStatusesCommand — status mapping gap (NEO-210
       "/api/treatments/DTO": () => ({ status: 200, body: { ...treatmentDtoFixture, statusId: UNMAPPED_STATUS_ID } }),
     });
 
-    const result = await SyncOrthoApneaTreatmentStatusesCommand(TENANT_SLUG, ctx.requestId);
+    const result = await SyncOrthoApneaTreatmentStatusesCommand(TENANT_SLUG, ctx.requestId, "manual");
     expect(result.failed).toBe(0); // no crash
     expect(result.changed).toBeGreaterThanOrEqual(1);
 
@@ -608,7 +608,7 @@ describe("SyncOrthoApneaTreatmentStatusesCommand — status mapping gap (NEO-210
     expect(notificationsAfterFirst).toHaveLength(1); // exactly one, not zero (crash-safe) and not more than one
 
     // Polling again with the SAME (now current, still unmapped) status must not double-notify.
-    const second = await SyncOrthoApneaTreatmentStatusesCommand(TENANT_SLUG, ctx.requestId);
+    const second = await SyncOrthoApneaTreatmentStatusesCommand(TENANT_SLUG, ctx.requestId, "manual");
     expect(second.changed).toBe(0);
 
     const notificationsAfterSecond = await query<{ id: string }>(
