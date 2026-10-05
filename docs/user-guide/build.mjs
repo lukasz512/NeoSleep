@@ -4,6 +4,7 @@
  *
  *   node docs/user-guide/build.mjs [--locale mx] [--date 2026-10-05] [--png <dir>]
  *
+ * meta.date in the content file is the edition date (override with --date).
  * Writes apps/pwa/public/files/<meta.file>; --png also saves one PNG per slide (for review).
  */
 import fs from "node:fs";
@@ -14,15 +15,20 @@ import { REPO, arg, fill, loadPlaywright } from "./lib.mjs";
 
 const HERE = path.join(REPO, "docs/user-guide");
 const LOCALE = arg("locale", "mx");
-const DATE = arg("date", new Date().toISOString().slice(0, 10));
+const DATE_ARG = arg("date", "");
 const PNG_DIR = arg("png", "");
 const INTL = { mx: "es-MX", en: "en-US", pl: "pl-PL" }[LOCALE] ?? LOCALE;
 
 const content = JSON.parse(fs.readFileSync(path.join(HERE, "content", `${LOCALE}.json`), "utf8"));
 const { meta } = content;
+const DATE = DATE_ARG || meta.date || new Date().toISOString().slice(0, 10);
 const edition = fill(meta.edition, {
   date: new Intl.DateTimeFormat(INTL, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${DATE}T00:00:00Z`)),
 });
+
+/** Decorative rings as SVG: PDF viewers distort large CSS border-radius circles. */
+const ring = (cls, filled) => `<svg class="ring ${cls}" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="49.6" ${filled ? 'class="fill"' : 'class="line" vector-effect="non-scaling-stroke"'}/></svg>`;
+const RINGS = { r1: () => ring("r1", true), r2: () => ring("r2", false), r3: () => ring("r3", true) };
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const fileUrl = (p) => pathToFileURL(p).href;
@@ -47,7 +53,7 @@ function footer(page, total, chapterId) {
 function cover() {
   const visual = shot("login");
   return `<section class="slide cover">
-    <div class="ring r1"></div><div class="ring r2"></div><div class="ring r3"></div>
+    ${RINGS.r1()}${RINGS.r2()}${RINGS.r3()}
     <div class="cover-text">
       <img class="cover-logo" src="${LOGO_ON_DARK}" alt="NeoSleep">
       <h1>${esc(meta.title)}</h1>
@@ -73,7 +79,7 @@ function toc(page, total) {
 function chapter(slide, page, total) {
   const c = content.chapters[slide.id];
   return `<section class="slide chapter" id="ch-${slide.id}">
-    <div class="ring r1"></div><div class="ring r2"></div>
+    ${RINGS.r1()}${RINGS.r2()}
     <p class="chapter-label">${esc(fill(meta.chapterLabel, { n: chapterNo(slide.id) }))}</p>
     <h2>${esc(c.title)}</h2>
     <p class="chapter-lead">${esc(c.lead)}</p>

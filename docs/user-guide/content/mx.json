@@ -1,5 +1,6 @@
 {
   "meta": {
+    "date": "2026-10-07",
     "file": "guia-uso-neosleep.pdf",
     "title": "Guía de uso",
     "subtitle": "La aplicación NeoSleep para médicos",
@@ -10,12 +11,30 @@
     "footer": "NeoSleep · Guía de uso"
   },
   "chapters": {
-    "access": { "title": "Acceso", "lead": "Inicia sesión, mantén tu sesión abierta y recupera el acceso si olvidas tu contraseña." },
-    "patients": { "title": "Pacientes", "lead": "Agrega un paciente, registra la polisomnografía, agenda citas y completa el expediente." },
-    "device": { "title": "Solicitud de dispositivo (DAM)", "lead": "Solicita el dispositivo de avance mandibular y sigue su estado hasta la entrega." },
-    "calendar": { "title": "Calendario", "lead": "Tus citas por día, semana y mes." },
-    "panel": { "title": "Panel", "lead": "Lo que te espera hoy, de un vistazo." },
-    "faq": { "title": "Preguntas frecuentes", "lead": "Respuestas rápidas a las dudas más comunes." }
+    "access": {
+      "title": "Acceso",
+      "lead": "Inicia sesión, mantén tu sesión abierta y recupera el acceso si olvidas tu contraseña."
+    },
+    "patients": {
+      "title": "Pacientes",
+      "lead": "Agrega un paciente, registra la polisomnografía, agenda citas y completa el expediente."
+    },
+    "device": {
+      "title": "Solicitud de dispositivo (DAM)",
+      "lead": "Solicita el dispositivo de avance mandibular y sigue su estado hasta la entrega."
+    },
+    "calendar": {
+      "title": "Calendario",
+      "lead": "Tus citas por día, semana y mes."
+    },
+    "panel": {
+      "title": "Panel",
+      "lead": "Lo que te espera hoy, de un vistazo."
+    },
+    "faq": {
+      "title": "Preguntas frecuentes",
+      "lead": "Respuestas rápidas a las dudas más comunes."
+    }
   },
   "slides": {
     "login": {

@@ -1,5 +1,6 @@
 {
   "meta": {
+    "date": "2026-10-07",
     "file": "user-guide-neosleep.pdf",
     "title": "User guide",
     "subtitle": "The NeoSleep app for doctors",
@@ -10,12 +11,30 @@
     "footer": "NeoSleep · User guide"
   },
   "chapters": {
-    "access": { "title": "Signing in", "lead": "Sign in, stay signed in, and get back in when you forget your password." },
-    "patients": { "title": "Patients", "lead": "Add a patient, record the polysomnography, book visits and complete the record." },
-    "device": { "title": "Device order (DAM)", "lead": "Order the mandibular advancement device and follow it until delivery." },
-    "calendar": { "title": "Calendar", "lead": "Your visits by day, week and month." },
-    "panel": { "title": "Panel", "lead": "What is waiting for you today, at a glance." },
-    "faq": { "title": "Frequently asked questions", "lead": "Quick answers to the most common questions." }
+    "access": {
+      "title": "Signing in",
+      "lead": "Sign in, stay signed in, and get back in when you forget your password."
+    },
+    "patients": {
+      "title": "Patients",
+      "lead": "Add a patient, record the polysomnography, book visits and complete the record."
+    },
+    "device": {
+      "title": "Device order (DAM)",
+      "lead": "Order the mandibular advancement device and follow it until delivery."
+    },
+    "calendar": {
+      "title": "Calendar",
+      "lead": "Your visits by day, week and month."
+    },
+    "panel": {
+      "title": "Panel",
+      "lead": "What is waiting for you today, at a glance."
+    },
+    "faq": {
+      "title": "Frequently asked questions",
+      "lead": "Quick answers to the most common questions."
+    }
   },
   "slides": {
     "login": {
