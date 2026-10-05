@@ -24,7 +24,7 @@ import { COMPLETE_HCO, setup, TENANT_SLUG, validOrder, type Setup } from "./fixt
  * outright).
  *
  * Covers, specifically:
- *  1. Audit reconstruction release gate — can audit_log + request_log +
+ *  1. Audit reconstruction release gate — can audit_log +
  *     partner_transaction alone reconstruct the sent JSON, the acting user,
  *     and the timestamp?
  *  2. The ambiguous-timeout path (orthoapnea.ts ~1441/1455): the link must
@@ -106,7 +106,7 @@ async function prewarmOaCallGraph(s: Setup, productCode = "002"): Promise<void> 
 }
 
 describe("audit reconstruction release gate (NEO-210)", () => {
-  it("audit_log + partner_transaction reconstruct the exact sent JSON, the acting user id + role, client and timestamp; request_log contributes nothing", async () => {
+  it("audit_log + partner_transaction reconstruct the exact sent JSON, the acting user id + role, client and timestamp; request_log no longer exists", async () => {
     const s = await setup();
     const res = await submit(s);
     expect(res.status).toBe(201);
@@ -114,18 +114,18 @@ describe("audit reconstruction release gate (NEO-210)", () => {
 
     const sentDto = replica.requests.find((r) => r.method === "POST" && r.path === TREATMENTS)!.body as Record<string, unknown>;
 
-    const { auditRows, requestLogCount, link, transactions } = await withTenant(TENANT_SLUG, async (client) => {
+    const { auditRows, requestLogTable, link, transactions } = await withTenant(TENANT_SLUG, async (client) => {
       const audit = await client.query(
         `SELECT * FROM audit_log WHERE entity_type = 'PartnerOrder' AND entity_id = $1 AND action = 'create'`,
         [s.planId]
       );
-      const requestLog = await client.query(`SELECT count(*)::int AS n FROM request_log`);
+      const requestLog = await client.query(`SELECT to_regclass('request_log')::text AS t`);
       const linkRow = await getPartnerLink(client, "orthoapnea", "treatment_plan", s.planId);
       const tx = await client.query(
         `SELECT * FROM partner_transaction WHERE partner_link_id = $1 AND action = 'create_treatment'`,
         [linkRow!.id]
       );
-      return { auditRows: audit.rows, requestLogCount: requestLog.rows[0].n as number, link: linkRow!, transactions: tx.rows };
+      return { auditRows: audit.rows, requestLogTable: requestLog.rows[0].t as string | null, link: linkRow!, transactions: tx.rows };
     });
 
     // --- What IS reconstructable from audit_log alone ---------------------
@@ -147,15 +147,14 @@ describe("audit reconstruction release gate (NEO-210)", () => {
     expect(transactions[0]!.request_payload).toEqual(sentDto);
     expect(transactions[0]!.success).toBe(true);
 
-    // --- FINDING 1: request_log is dead code. Nothing in apps/api/src ever
-    // inserts into it (confirmed by code search) — it exists in every
-    // tenant schema migration but contributes zero rows to any
-    // reconstruction, release gate or otherwise.
-    expect(requestLogCount).toBe(0);
+    // --- Fixed by migration 054 (was finding 1): request_log was dead code,
+    // never written by apps/api/src. audit_log rows carry the request
+    // context themselves now, and the table is dropped.
+    expect(requestLogTable).toBeNull();
 
     // --- FINDING 2: partner_transaction has no entity-level foreign key —
     // only partner_link_id. Joining it back to "this order" requires reading
-    // partner_link, a FOURTH table outside the audit_log/request_log/
+    // partner_link, a FOURTH table outside the audit_log/
     // partner_transaction set the release gate is specified against. Without
     // partner_link, partner_transaction's rows cannot be attributed to any
     // treatment_plan/patient at all.

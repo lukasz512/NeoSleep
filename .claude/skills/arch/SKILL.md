@@ -227,7 +227,7 @@ Verified against `platform.companies`/`platform.tenants` seed data (`apps/api/mi
 - **TPT (Table Per Type)** — `identities` table as interface, `practitioner`/`patient`/`lead`/`users` extend it via `identity_id FK UNIQUE`
 - **`metadata JSONB DEFAULT '{}'`** — on all main entity tables for extensibility without migrations
 - **`lookups`** — two-layer: `platform.lookups` (global, locked), `{tenant}.lookup` (overrides + custom)
-- **Soft delete** — `deleted_at TIMESTAMPTZ` on all user-facing data; `audit_log`/`request_log`/consent-relevant records: NEVER delete
+- **Soft delete** — `deleted_at TIMESTAMPTZ` on all user-facing data; `audit_log`/consent-relevant records: NEVER delete
 - **Monthly partitions** on `encounter` by `created_at` (use `pg_partman`)
 - **No `tbl_` prefix** anywhere — clean table names
 

@@ -77,7 +77,7 @@ psql $DATABASE_URL -c "
 - `id UUID PRIMARY KEY DEFAULT gen_random_uuid()` — no serial/integer PKs
 - `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`, `updated_at TIMESTAMPTZ NOT NULL DEFAULT now()`
 - `deleted_at TIMESTAMPTZ` — soft delete on all user-facing tables
-- **Never**: `audit_log`, `request_log`, `consent`, `efpia_disclosure` — no `deleted_at`, NEVER hard delete
+- **Never**: `audit_log`, `consent`, `efpia_disclosure` — no `deleted_at`, NEVER hard delete
 - `metadata JSONB NOT NULL DEFAULT '{}'` — on all main entity tables
 - No `tbl_` prefix, no plural table names
 - Every FK column → index required
