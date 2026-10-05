@@ -5,10 +5,10 @@
   <div
     ref="rootEl"
     class="view-calendar cal"
-    :class="{ 'cal--narrow': narrow, 'cal--phone': phone, 'cal--side-open': sideOpen }"
+    :class="{ 'cal--narrow': narrow, 'cal--phone': phone, 'cal--side-open': sideOpen, 'cal--no-side': !showSide }"
     :style="{ '--cal-top': `${toolbarBottom}px` }"
   >
-    <aside class="cal__side" :aria-hidden="narrow && !sideOpen ? 'true' : undefined" :inert="narrow && !sideOpen ? true : undefined">
+    <aside v-show="showSide" class="cal__side" data-testid="calendar-sidebar" :aria-hidden="narrow && !sideOpen ? 'true' : undefined" :inert="narrow && !sideOpen ? true : undefined">
       <CalendarMiniMonth
         :month="miniMonth"
         :today="today"
@@ -94,7 +94,7 @@
       <!-- After the body in the DOM so its View Transition snapshot paints above the sliding grid. -->
       <div ref="toolbarEl" class="cal__toolbar cal-glass">
         <button
-          v-if="narrow"
+          v-if="narrow && showSide"
           type="button"
           class="cal__icon-btn cal__side-toggle"
           :aria-label="t('user.calendar.toggleSidebar')"
@@ -211,6 +211,8 @@ const viewOptions = computed(() => VIEWS.map((v) => ({ value: v, label: t(VIEW_L
 /** Container widths (not the window's): the sidebar folds below NARROW_PX, the phone layout starts below PHONE_PX. */
 const NARROW_PX = 900;
 const PHONE_PX = 600;
+/** Mini month + calendars are hidden on tablet and desktop for now; a phone still opens them from the toolbar. */
+const SIDEBAR_ON_WIDE = false;
 /** Grid starts scrolled to 07:00; the whole day stays reachable. */
 const FIRST_VISIBLE_HOUR = 7;
 /** Longest a period change waits for its data before the slide starts (the screen is frozen meanwhile). */
@@ -233,6 +235,7 @@ const toolbarEl = ref<HTMLElement | null>(null);
 const containerWidth = ref(smAndUp.value ? 1200 : 400);
 const narrow = computed(() => containerWidth.value < NARROW_PX);
 const phone = computed(() => containerWidth.value < PHONE_PX);
+const showSide = computed(() => SIDEBAR_ON_WIDE || phone.value);
 const sideOpen = ref(false);
 const toolbarBottom = ref(72);
 
@@ -267,8 +270,8 @@ onBeforeUnmount(() => {
   clearInterval(clock);
   window.removeEventListener("keydown", onKey);
 });
-watch(narrow, (isNarrow) => {
-  if (!isNarrow) sideOpen.value = false;
+watch([narrow, showSide], ([isNarrow, hasSide]) => {
+  if (!isNarrow || !hasSide) sideOpen.value = false;
 });
 watch([calendarType, phone, narrow, locale], () => void nextTick(measure), { flush: "post" });
 
@@ -416,7 +419,7 @@ const shownEntries = computed(() => {
 const gridEvents = computed<CalendarGridEvent[]>(() => {
   const now = Date.now();
   return shownEntries.value
-    .filter((e) => visibleKinds[e.kind])
+    .filter((e) => !showSide.value || visibleKinds[e.kind])
     .map((e) => {
       const start = parseWallTime(toZonedCalendarDateTime(e.start_at, e.timezone));
       const end = parseWallTime(toZonedCalendarDateTime(e.end_at, e.timezone));
@@ -1013,7 +1016,8 @@ function onEntryClick(entry: CalendarEntry) {
 }
 
 /* ── narrow (tablet): the sidebar floats as a glass panel ── */
-.cal--narrow {
+.cal--narrow,
+.cal--no-side {
   grid-template-columns: minmax(0, 1fr);
 }
 

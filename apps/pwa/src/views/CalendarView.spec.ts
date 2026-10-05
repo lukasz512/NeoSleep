@@ -230,15 +230,41 @@ describe("CalendarView (CORE-117)", () => {
     expect(Math.round((nextStart.getTime() - firstStart.getTime()) / 86_400_000)).toBe(7);
   });
 
-  it("CORE-122: unticking a calendar hides its entries", async () => {
+  it("hides the sidebar (mini month + calendars) and its toggle on tablet and desktop", async () => {
+    apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
+    const wrapper = await mountView("manager");
+    expect(wrapper.find('[data-testid="calendar-sidebar"]').isVisible()).toBe(false);
+    expect(wrapper.find('[data-testid="calendar-sidebar-toggle"]').exists()).toBe(false);
+  });
+
+  it("CORE-122: unticking a calendar hides its entries (phone, where the sidebar still lives)", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2032, 0, 1, 9, 0));
+    const innerWidth = window.innerWidth;
+    window.innerWidth = 390;
+    try {
+      apiFetch.mockResolvedValue(jsonResponse(true, 200, TWO_KINDS));
+      const wrapper = await mountView("manager");
+      expect(wrapper.text()).toContain("HCO visit");
+      await wrapper.find('[data-testid="calendar-filter-encounter"]').setValue(false);
+      // A phone opens on the month with that day's list.
+      expect(wrapper.text()).toContain("Jane Doe");
+      expect(wrapper.text()).not.toContain("HCO visit");
+    } finally {
+      window.innerWidth = innerWidth;
+      vi.useRealTimers();
+    }
+  });
+
+  it("CORE-145: with the sidebar hidden, a calendar unticked on a phone does not keep hiding entries on a wider screen", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2032, 0, 1, 9, 0));
     try {
       apiFetch.mockResolvedValue(jsonResponse(true, 200, TWO_KINDS));
       const wrapper = await mountView("manager");
+      // The checkbox stays in the DOM under v-show: this stands in for a filter left unticked before the screen widened.
       await wrapper.find('[data-testid="calendar-filter-encounter"]').setValue(false);
-      expect(wrapper.findAll('[data-testid="calendar-event"]')).toHaveLength(1);
-      expect(wrapper.text()).not.toContain("HCO visit");
+      expect(wrapper.findAll('[data-testid="calendar-event"]')).toHaveLength(2);
     } finally {
       vi.useRealTimers();
     }
