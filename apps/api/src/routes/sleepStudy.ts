@@ -5,6 +5,7 @@ import { requireStudyRole } from "../middleware/requireClinicalRole.js";
 import { requireRole } from "../middleware/requireRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
+import { requestContextMiddleware } from "../context/requestContext.js";
 import { CreateSleepStudyCommand, UpdateSleepStudyCommand, DeleteSleepStudyCommand } from "../commands/sleepStudy.js";
 import { UploadSleepStudyAttachmentCommand, DeleteSleepStudyAttachmentCommand } from "../commands/sleepStudyAttachment.js";
 import { GetSleepStudyListQuery, GetSleepStudyByIdQuery } from "../queries/sleepStudy.js";
@@ -221,6 +222,7 @@ sleepStudyRouter.post(
   "/sleep-study/:id/attachments",
   requireStudyRole,
   upload.single("file"),
+  requestContextMiddleware,
   asyncHandler(async (req: Request, res: Response) => {
     const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing sleep study id");

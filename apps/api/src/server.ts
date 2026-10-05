@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import helmet from "helmet";
 import cors from "cors";
 import { REQUEST_ID_HEADER, requestIdMiddleware } from "./middleware/requestId.js";
+import { requestContextMiddleware } from "./context/requestContext.js";
 import { FRONTEND_URLS } from "./env.js";
 import { authRouter, ensureInitialUserPasswords } from "./auth.js";
 import { leadsRouter } from "./routes/leads.js";
@@ -146,6 +147,9 @@ app.use((req, _res, next) => {
   if (req.body === undefined) req.body = {};
   next();
 });
+// After the body parsers, so audit rows written anywhere in the handler (also
+// after the response) know the request id, IP, user agent and actor country.
+app.use(requestContextMiddleware);
 app.use(apiLimiter);
 
 // Every /api/v1 response is per-request-credential (keyed off the Authorization bearer
