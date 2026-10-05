@@ -158,6 +158,12 @@ const pdfPath = path.join(REPO, "apps/pwa/public/files", meta.file);
 await page.pdf({ path: pdfPath, width: "1280px", height: "720px", printBackground: true, preferCSSPageSize: true });
 console.log(`[guide] ${path.relative(REPO, pdfPath)} (${DECK.length} slides, ${Math.round(fs.statSync(pdfPath).size / 1024)} KB)`);
 
+// The Resources card shows this cover (same name as the PDF, .cover.jpg).
+const coverPath = pdfPath.replace(/\.pdf$/, ".cover.jpg");
+await page.setViewportSize({ width: 1280, height: 720 });
+await page.locator("section.slide").first().screenshot({ path: coverPath, type: "jpeg", quality: 80, scale: "css" });
+console.log(`[guide] ${path.relative(REPO, coverPath)}`);
+
 if (PNG_DIR) {
   fs.mkdirSync(PNG_DIR, { recursive: true });
   const slides = page.locator("section.slide");
