@@ -1610,7 +1610,7 @@
   "app.questionnaire.consentStep.readCta": "Leer el documento",
   "app.questionnaire.consentStep.signer": "Firmas como {name} · {date}",
   "app.questionnaire.consentStep.signerNote": "Tu firma se añade al documento y se guarda en tu expediente de la clínica.",
-  "app.questionnaire.consentStep.accept": "He leído el documento y acepto su contenido.",
+  "app.questionnaire.consentStep.accept": "He leído «{document}» y acepto su contenido.",
   "app.questionnaire.consentStep.missingAccept": "Marca la casilla de arriba para confirmar que leíste el documento.",
   "app.questionnaire.consentStep.sign": "Firmo el documento",
   "app.questionnaire.consentStep.privacyLink": "Leer el aviso de privacidad de {clinic}",
