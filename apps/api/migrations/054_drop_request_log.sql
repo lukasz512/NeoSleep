@@ -7,8 +7,8 @@
 --
 -- Decision D2 (Łukasz, 2026-10-05): drop request_log and the
 -- audit_log_session_id_fkey together; audit_log.session_id stays as a plain
--- column, so an audit row outlives the session it was written in instead of
--- losing the reference when user_session rows are cleaned up.
+-- column. user_session is never written (0 rows), so the FK could only ever
+-- reject a session id, never resolve one.
 --
 -- Safety: request_log is dropped only when it is empty. A tenant with rows
 -- keeps the table and logs a NOTICE, so no audit data is ever deleted here.
