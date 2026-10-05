@@ -346,11 +346,13 @@ const ICONS = {
             <path d="M4 4h12l-2 4 2 4H4" />`,
   },
   // Speech bubble with an exclamation mark — "report a problem / feedback" in the account menu.
+  // The bubble is a circle around the viewBox centre (12, 12) with its tail at the lower left,
+  // so the "!" sits in its middle (CORE-158).
   "feedback": {
     strokeWidth: 2,
-    paths: `<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />
+    paths: `<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22z" />
             <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="15.5" x2="12" y2="15.5" />`,
+            <line x1="12" y1="16" x2="12.01" y2="16" />`,
   },
   "paperclip": {
     strokeWidth: 2,

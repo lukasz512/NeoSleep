@@ -4,7 +4,7 @@ import { ApiError, configureErrorReporting, reportCaught, resetErrorReportingFor
 vi.mock("./useApi", () => ({ apiFetch: vi.fn() }));
 
 import { apiFetch } from "./useApi";
-import { buildReportFormData, openReportProblem, useReportProblem } from "./useReportProblem";
+import { buildReportFormData, loadHasReports, openReportProblem, useReportProblem } from "./useReportProblem";
 
 beforeEach(() => {
   resetErrorReportingForTests();
@@ -52,5 +52,21 @@ describe("useReportProblem", () => {
     expect(await submit(form)).toEqual({ ok: false, status: 429 });
     vi.mocked(apiFetch).mockRejectedValueOnce(new Error("offline"));
     expect(await submit(form)).toEqual({ ok: false, status: null });
+  });
+
+  it("knows whether the user has reports: none, some, a failed check, then a sent one (CORE-158)", async () => {
+    const { hasReports, submit } = useReportProblem();
+    vi.mocked(apiFetch).mockResolvedValueOnce(new Response(JSON.stringify({ items: [] }), { status: 200 }));
+    await loadHasReports();
+    expect(hasReports.value).toBe(false);
+    vi.mocked(apiFetch).mockResolvedValueOnce(new Response(JSON.stringify({ items: [{ id: "1", number: 3 }] }), { status: 200 }));
+    await loadHasReports();
+    expect(hasReports.value).toBe(true);
+    vi.mocked(apiFetch).mockResolvedValueOnce(new Response("{}", { status: 500 }));
+    await loadHasReports();
+    expect(hasReports.value).toBe(false);
+    vi.mocked(apiFetch).mockResolvedValueOnce(new Response(JSON.stringify({ id: "2", number: 4 }), { status: 201 }));
+    await submit({ kind: "problem", description: "long enough text", appVersion: "v" });
+    expect(hasReports.value).toBe(true);
   });
 });

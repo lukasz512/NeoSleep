@@ -23,6 +23,7 @@ function mountPanel(overrides: Partial<{
   canChangePassword: boolean;
   channel: string | null;
   version: string;
+  hasReports: boolean;
 }> = {}) {
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
@@ -129,8 +130,14 @@ describe("AppUserMenuPanel — NEO-102 account menu (icon rows + action pair)", 
     expect(on[0].classes()).toContain("user-menu__choice--on");
   });
 
-  it("My reports sits under Feedback for every signed-in user and emits my-reports then close", async () => {
+  it("hides My reports until the user has sent a report (CORE-158)", () => {
     const wrapper = mountPanel();
+    expect(wrapper.find('[data-testid="user-menu-report-problem"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="user-menu-my-reports"]').exists()).toBe(false);
+  });
+
+  it("My reports sits under Feedback once the user has reports and emits my-reports then close", async () => {
+    const wrapper = mountPanel({ hasReports: true });
     const rows = wrapper.findAll(".user-menu__row").map((r) => r.attributes("data-testid"));
     expect(rows.indexOf("user-menu-my-reports")).toBe(rows.indexOf("user-menu-report-problem") + 1);
     await wrapper.get('[data-testid="user-menu-my-reports"]').trigger("click");

@@ -113,6 +113,7 @@
             :can-change-password="user.canChangePassword"
             :version="appVersion.version"
             :channel="appVersion.channel"
+            :has-reports="hasReports"
             @set-theme="setThemePreference"
             @change-locale="(lang) => setLocale(lang as 'en' | 'pl' | 'mx')"
             @change-password="router.push({ name: 'change-password', query: { from: CHANGE_PASSWORD_FROM_MENU } })"
@@ -264,7 +265,7 @@ import {
 import AppButton from "../components/AppButton.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppNotificationCenter from "../components/AppNotificationCenter.vue";
-import { openReportProblem, useReportProblem } from "../composables/useReportProblem";
+import { loadHasReports, openReportProblem, useReportProblem } from "../composables/useReportProblem";
 
 import { useNotificationCenter } from "../composables/useNotificationCenter";
 import { useLabOrderStatusSync } from "../composables/useLabOrderStatusSync";
@@ -273,7 +274,7 @@ import { usePartnerResources } from "../composables/usePartnerResources";
 import { SIDEBAR_COLLAPSE_ENABLED } from "../config/layout";
 
 const ReportProblemDialog = defineAsyncComponent(() => import("../components/ReportProblemDialog.vue"));
-const { state: reportProblemState } = useReportProblem();
+const { state: reportProblemState, hasReports } = useReportProblem();
 // Stays mounted after the first open so closing keeps its animation.
 const reportDialogMounted = ref(reportProblemState.open);
 watch(
@@ -333,6 +334,8 @@ useLabOrderStatusSync();
 // (rate-limited) feedback if it's still down.
 const { load: loadPartnerResources } = usePartnerResources();
 onAppReady(() => void loadPartnerResources(locale.value));
+// "My reports" in the account menu shows only once the user has sent one (CORE-158).
+onAppReady(() => void loadHasReports());
 onMounted(markAppReady);
 
 const menuOpen = ref(false);

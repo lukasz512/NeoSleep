@@ -120,7 +120,7 @@
     </button>
 
     <button
-      v-if="accountActions"
+      v-if="accountActions && hasReports"
       type="button"
       class="user-menu__row"
       data-motion="row"
@@ -193,7 +193,9 @@ withDefaults(defineProps<{
   avatarSize?: number;
   /** Password / log out / install app — false for someone without an account (the patient on a QR link, NEO-126). */
   accountActions?: boolean;
-}>(), { email: undefined, region: undefined, role: null, avatarSize: 56, accountActions: true });
+  /** The user has sent at least one report — "My reports" is hidden until then (CORE-158). */
+  hasReports?: boolean;
+}>(), { email: undefined, region: undefined, role: null, avatarSize: 56, accountActions: true, hasReports: false });
 
 const emit = defineEmits<{
   "set-theme": [preference: ThemePreference];
