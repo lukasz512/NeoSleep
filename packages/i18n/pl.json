@@ -1610,7 +1610,7 @@
   "app.questionnaire.consentStep.readCta": "Przeczytaj dokument",
   "app.questionnaire.consentStep.signer": "Podpisujesz jako {name} · {date}",
   "app.questionnaire.consentStep.signerNote": "Podpis zostanie dołączony do dokumentu i zapisany w Twojej dokumentacji w klinice.",
-  "app.questionnaire.consentStep.accept": "Przeczytałem/-am „{document}” i akceptuję jego treść.",
+  "app.questionnaire.consentStep.accept": "Przeczytałem/-am {documents} i akceptuję jego treść. | Przeczytałem/-am {documents} i akceptuję ich treść.",
   "app.questionnaire.consentStep.missingAccept": "Zaznacz pole powyżej, aby potwierdzić, że dokument został przeczytany.",
   "app.questionnaire.consentStep.sign": "Podpisuję dokument",
   "app.questionnaire.consentStep.privacyLink": "Przeczytaj informację o prywatności: {clinic}",
