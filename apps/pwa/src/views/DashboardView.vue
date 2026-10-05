@@ -7,6 +7,7 @@
     </div>
     <DeviceOrderReconciliationCard mode="full" />
     <LabOrdersSwitchCard v-if="isAdmin" />
+    <LabOrderSyncCard v-if="isAdmin" />
     <DeviceOrderCommentsCard v-if="isAdmin" />
   </div>
 </template>
@@ -16,6 +17,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import DeviceOrderReconciliationCard from "../components/DeviceOrderReconciliationCard.vue";
 import DeviceOrderCommentsCard from "../components/dashboard/DeviceOrderCommentsCard.vue";
+import LabOrderSyncCard from "../components/dashboard/LabOrderSyncCard.vue";
 import LabOrdersSwitchCard from "../components/dashboard/LabOrdersSwitchCard.vue";
 import DoctorPanel from "../components/doctorPanel/DoctorPanel.vue";
 import { useAuthStore } from "../stores/auth";

@@ -271,7 +271,7 @@ describe("PHI discipline in console output", () => {
 
       // Also exercise the status-sync path (a second surface that reads/writes partner_link + notifies).
       const { SyncOrthoApneaTreatmentStatusesCommand } = await import("../../src/commands/orthoapneaSync.js");
-      await SyncOrthoApneaTreatmentStatusesCommand(TENANT_SLUG, `test-${Date.now()}`);
+      await SyncOrthoApneaTreatmentStatusesCommand(TENANT_SLUG, `test-${Date.now()}`, "manual");
     } finally {
       const allCalls = [...logSpy.mock.calls, ...warnSpy.mock.calls, ...errorSpy.mock.calls];
       logSpy.mockRestore();
