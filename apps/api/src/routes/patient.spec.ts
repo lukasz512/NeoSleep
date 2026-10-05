@@ -586,6 +586,33 @@ describe("Estudios live refresh + Nuevo (NEO-173)", () => {
   });
 });
 
+describe("GET /api/v1/patient/:id/version (patient card live refresh)", () => {
+  it("is a stable fingerprint that moves when the record or its visits change, and leaves no read audit row", async () => {
+    const { auth, patientId } = await authAndPatient("doctor");
+    const v1 = await request(app).get(`/api/v1/patient/${patientId}/version`).set("Authorization", auth);
+    const v2 = await request(app).get(`/api/v1/patient/${patientId}/version`).set("Authorization", auth);
+    expect(v1.status).toBe(200);
+    expect(v1.body.version).toMatch(/^[0-9a-f]{32}$/);
+    expect(v2.body.version).toBe(v1.body.version);
+
+    await withTenant(TENANT_SLUG, (client) => client.query(`UPDATE patient SET medical_record = 'EXP-1' WHERE id = $1`, [patientId]));
+    const v3 = await request(app).get(`/api/v1/patient/${patientId}/version`).set("Authorization", auth);
+    expect(v3.body.version).not.toBe(v1.body.version);
+
+    const reads = await withTenant(TENANT_SLUG, (client) =>
+      client.query(`SELECT 1 FROM audit_log WHERE action = 'read' AND metadata->>'patient_id' = $1`, [patientId]),
+    );
+    expect(reads.rowCount).toBe(0);
+  });
+
+  it("any staff role may poll it (no health data); an unknown patient is a 404", async () => {
+    const rep = await authAndPatient("rep");
+    const ok = await request(app).get(`/api/v1/patient/${rep.patientId}/version`).set("Authorization", rep.auth);
+    const missing = await request(app).get(`/api/v1/patient/${crypto.randomUUID()}/version`).set("Authorization", rep.auth);
+    expect([ok.status, missing.status]).toEqual([200, 404]);
+  });
+});
+
 describe("GET /api/v1/patient/:id/summary (Detalles strip, NEO-206)", () => {
   it("returns profile extras, the latest study with results, the next scheduled visit; audits the study read", async () => {
     const { auth, patientId } = await authAndPatient("doctor");

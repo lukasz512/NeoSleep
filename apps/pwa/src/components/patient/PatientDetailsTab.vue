@@ -9,10 +9,11 @@
     <section v-if="tiles.length" class="patient-details__tiles" :aria-label="t('app.patients.detail.summaryLabel')" data-testid="summary-strip">
       <template v-for="tile in tiles" :key="tile.key">
         <component
-          :is="tile.tab ? 'button' : 'div'"
+          :is="tile.to ? RouterLink : tile.tab ? 'button' : 'div'"
+          :to="tile.to"
           :type="tile.tab ? 'button' : undefined"
           class="patient-details__tile"
-          :class="{ 'patient-details__tile--link': tile.tab }"
+          :class="{ 'patient-details__tile--link': tile.tab || tile.to }"
           :data-testid="`tile-${tile.key}`"
           @click="tile.tab && emit('open-tab', tile.tab)"
         >
@@ -85,7 +86,7 @@
             <dt>{{ t("app.patients.detail.practitioner") }}</dt>
             <dd>
               <EntityLink
-                :to="patient.practitioner_id ? { name: 'hcp-detail', params: { id: patient.practitioner_id } } : null"
+                :to="patient.practitioner_id && canOpenHcp ? { name: 'hcp-detail', params: { id: patient.practitioner_id } } : null"
                 :label="patient.practitioner_name"
                 entity-type="hcp"
                 :specialty="patient.practitioner_specialty"
@@ -127,7 +128,7 @@
           >
             <dt>{{ formatDayLabel(a.start_at, a.timezone, intlLocale(locale)) }}</dt>
             <dd>
-              {{ formatTimeRange(a.start_at, a.end_at, a.timezone, intlLocale(locale)) }}<template v-if="a.practitioner_name"> · {{ a.practitioner_name }}</template>
+              <RouterLink :to="calendarLink(a.id)" class="patient-details__link">{{ formatTimeRange(a.start_at, a.end_at, a.timezone, intlLocale(locale)) }}</RouterLink><template v-if="a.practitioner_name"> · {{ a.practitioner_name }}</template>
               <VChip v-if="a.status !== 'scheduled'" size="x-small" variant="tonal" class="ml-1">{{ t(`user.appointments.status.${a.status}`) }}</VChip>
             </dd>
           </div>
@@ -168,7 +169,7 @@
             <dt>{{ accessLine(member) }}</dt>
             <dd>
               <EntityLink
-                :to="{ name: 'hcp-detail', params: { id: member.practitioner_id } }"
+                :to="canOpenHcp ? { name: 'hcp-detail', params: { id: member.practitioner_id } } : null"
                 :label="member.name"
                 entity-type="hcp"
                 :specialty="member.primary_specialty"
@@ -254,6 +255,7 @@
 <script setup lang="ts">
 import { reportCaught, reportFailedResponse } from "@api";
 import { computed, onMounted, ref, toRef, watch } from "vue";
+import { RouterLink, useRouter, type RouteLocationRaw } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { VAutocomplete, VChip } from "vuetify/components";
 import { intlLocale } from "@i18n/language-options";
@@ -262,7 +264,10 @@ import AppButton from "../AppButton.vue";
 import AppConfirmDialog from "../AppConfirmDialog.vue";
 import AppIcon from "../AppIcon.vue";
 import PatientTmjCard from "./PatientTmjCard.vue";
-import type { ChecklistCategory } from "../../composables/usePatientChecklist";
+import { onPatientChecklistUpdated, type ChecklistCategory } from "../../composables/usePatientChecklist";
+import { onPatientChanged } from "../../composables/usePatientChanged";
+import { useVisiblePolling } from "../../composables/useVisiblePolling";
+import { useAuthStore } from "../../stores/auth";
 import EntityLink from "../EntityLink.vue";
 import { apiFetch } from "../../composables/useApi";
 import { usePatientCareTeam, type CareTeamMember } from "../../composables/usePatientCareTeam";
@@ -290,17 +295,30 @@ interface Tile {
   ahi?: number;
   /** Clicking the tile opens this tab. */
   tab?: string;
+  /** …or this route (the next visit, in the calendar). */
+  to?: RouteLocationRaw;
 }
 
 const props = defineProps<{
   patient: PatientDetailsTabPatient;
   /** Diagnosis is health data — same roles as Documentos/Estudios (NEO-83). */
   canSeeStudies: boolean;
+  /** Details is the open tab — tabs stay mounted (NEO-153), so coming back to it reloads. */
+  active?: boolean;
 }>();
 const emit = defineEmits<{ "open-tab": [tab: string]; "open-study": [itemKey: string, category: ChecklistCategory] }>();
 
 const { t, locale } = useI18n();
 const { specialtySet } = useIdentity();
+const router = useRouter();
+const authStore = useAuthStore();
+
+/** HCP names link only for roles the HCP record is open to (a doctor has none) — read from the route itself. */
+const canOpenHcp = computed(() => {
+  const roles = router.resolve({ name: "hcp-detail", params: { id: "_" } }).meta.roles as string[] | undefined;
+  return !roles || roles.includes(authStore.user?.role ?? "");
+});
+const calendarLink = (appointmentId: string): RouteLocationRaw => ({ name: "calendar", query: { appointment: appointmentId } });
 
 const summary = ref<PatientSummary | null>(null);
 
@@ -403,12 +421,44 @@ async function onRemove(): Promise<void> {
   if (await careTeam.remove(removing.value.practitioner_id)) removing.value = null;
 }
 
-onMounted(() => {
-  void load();
-  void loadAppointments();
-  void loadEvents();
-  void careTeam.load();
+/**
+ * Reloads what Details shows while keeping it on screen: every loader only
+ * replaces its data on success, so a failed refresh leaves the old values.
+ */
+async function refresh(): Promise<void> {
+  await Promise.all([load(), loadAppointments(), loadEvents(), careTeam.load()]);
+}
+
+/** Fingerprint of the card (GET /patient/:id/version) — compared to know when someone else changed it. */
+let version: string | null = null;
+async function fetchVersion(): Promise<string | null> {
+  const res = await apiFetch(`/api/v1/patient/${props.patient.id}/version`, { handleErrors: false });
+  return res.ok ? ((await res.json()) as { version: string }).version : null;
+}
+async function refreshIfChanged(): Promise<void> {
+  try {
+    const next = await fetchVersion();
+    if (!next || next === version) return;
+    version = next;
+    await refresh();
+  } catch (err) {
+    reportCaught(err, { where: "PatientDetailsTab.refreshIfChanged", level: "warn" });
+  }
+}
+
+onMounted(async () => {
+  await refresh();
+  // benign: without a baseline the first poll only records the fingerprint.
+  version = await fetchVersion().catch(() => null);
 });
+// A visit booked or the record edited on this card; a study or document saved (NEO-173).
+onPatientChanged(() => props.patient.id, () => void refresh());
+onPatientChecklistUpdated(() => props.patient.id, () => void load());
+watch(() => props.active, (active, was) => {
+  if (active && was === false) void refresh();
+});
+// Someone else changed the patient: checked every minute while visible and on return to the app.
+useVisiblePolling(() => (props.active === false ? null : 60_000), refreshIfChanged);
 watch(
   () => props.patient.id,
   () => {
@@ -417,6 +467,7 @@ watch(
     eventItems.value = [];
     careTeam.members.value = [];
     adding.value = false;
+    version = null;
     void load();
     void loadAppointments();
     void loadEvents();
@@ -520,6 +571,7 @@ const tiles = computed<Tile[]>(() => {
       label: t("app.patients.detail.summary.nextAppointment"),
       value: start.toLocaleDateString(intlLocale(locale.value), { day: "numeric", month: "short", timeZone }),
       sub: start.toLocaleTimeString(intlLocale(locale.value), { hour: "2-digit", minute: "2-digit", timeZone }),
+      to: calendarLink(visit.id),
     });
   }
   return out;
@@ -578,6 +630,7 @@ const tiles = computed<Tile[]>(() => {
 }
 .patient-details__tile--link {
   cursor: pointer;
+  text-decoration: none;
   transition: background-color 150ms ease;
 }
 .patient-details__tile--link:hover {

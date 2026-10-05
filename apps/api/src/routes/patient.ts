@@ -19,6 +19,7 @@ import { isClinicalRecordKind, type ClinicalRecordKind } from "../commands/clini
 import { ListClinicalRecordsQuery } from "../queries/clinicalRecords.js";
 import { GetLatestSleepStudyRefQuery } from "../queries/sleepStudy.js";
 import { GetPatientSummaryQuery } from "../queries/patientSummary.js";
+import { GetPatientCardVersionQuery } from "../queries/patientCardVersion.js";
 import {
   CreateQuestionnaireRequestCommand,
   CancelQuestionnaireRequestCommand,
@@ -113,6 +114,22 @@ patientRouter.get(
     });
 
     res.json(history);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/patient/:id/version: the open patient card polls this and
+// reloads only when it moved. Any staff role; a fingerprint without health
+// data, so no read audit row (same as /checklist/version, NEO-173).
+// ---------------------------------------------------------------------------
+patientRouter.get(
+  "/patient/:id/version",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = uuidParam(req, "id");
+    const slug = tenantSlugFromHost(req.hostname);
+    const version = await withTenant(slug, async (client) => GetPatientCardVersionQuery(await buildContext(req, client, slug), id));
+    res.json({ version });
   })
 );
 
