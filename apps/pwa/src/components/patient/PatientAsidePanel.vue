@@ -46,7 +46,13 @@
       </div>
       <p v-if="checklistApi.loadError.value" class="patient-aside__muted">{{ t("app.clinical.errorLoad") }}</p>
       <template v-else-if="checklist">
-        <AppSegmentProgress :segments="checklistSegments(checklist.items)" :label="t('app.clinical.progress', checklist.summary)" />
+        <AppSegmentProgress
+          v-for="bar in progressBars"
+          :key="bar.category"
+          :data-category="bar.category"
+          :segments="bar.segments"
+          :label="t(bar.labelKey, bar.summary)"
+        />
         <ul class="patient-aside__studies">
           <li v-for="item in shownDocs" :key="item.key">
             <button type="button" class="patient-aside__study" @click="$emit('open-study', item.openKey, item.category)">
@@ -111,7 +117,7 @@ import AppIcon from "../AppIcon.vue";
 import AppSegmentProgress from "../AppSegmentProgress.vue";
 import NoteComposer from "../NoteComposer.vue";
 import ChecklistStatusIcon from "../questionnaire/ChecklistStatusIcon.vue";
-import { CHECKLIST_TAB, checklistSegments, usePatientChecklist, type ChecklistCategory, type ChecklistItem } from "../../composables/usePatientChecklist";
+import { CHECKLIST_TAB, categoryProgress, usePatientChecklist, type ChecklistCategory, type ChecklistItem } from "../../composables/usePatientChecklist";
 import { useVisiblePolling } from "../../composables/useVisiblePolling";
 import { checklistItemTitle } from "../../config/questionnaires";
 import { HC_PRINTABLE_KEY, splitHistoriaClinica } from "../../config/historiaClinica";
@@ -159,6 +165,18 @@ const checklist = computed(() => checklistApi.checklist.value);
 const patientItems = computed(
   () => checklist.value?.items.filter((item) => item.actions.qr && (item.status === "missing" || item.status === "pending_patient")) ?? [],
 );
+/** Documents and studies each get their own bar; studies only once there's more than one. */
+const progressBars = computed(() => {
+  const items = checklist.value?.items ?? [];
+  const bars = [
+    { category: "document" as const, labelKey: "app.clinical.progressDocuments" },
+    { category: "study" as const, labelKey: "app.clinical.progressStudies" },
+  ];
+  return bars.flatMap((bar) => {
+    const progress = categoryProgress(items, bar.category);
+    return progress ? [{ ...bar, ...progress }] : [];
+  });
+});
 /** Unfinished first (stable within each half), cut to DOC_ROWS. */
 const shownDocs = computed(() => {
   const all = checklist.value?.items ?? [];

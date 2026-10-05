@@ -145,6 +145,17 @@ export function checklistSegments(items: ChecklistItem[]): Array<(typeof SEGMENT
   return items.map((item) => SEGMENT_BY_STATUS[item.status]);
 }
 
+/**
+ * One category's own progress bar — documents and studies are never counted
+ * together. Null while the category has a single item: a one-segment bar says
+ * nothing its row doesn't; the bar appears once a second item does.
+ */
+export function categoryProgress(items: ChecklistItem[], category: ChecklistCategory) {
+  const own = items.filter((item) => item.category === category);
+  if (own.length < 2) return null;
+  return { segments: checklistSegments(own), summary: { done: own.filter((item) => item.status === "done").length, total: own.length } };
+}
+
 export const CHECKLIST_UPDATED = "patient-checklist-updated";
 interface ChecklistUpdated {
   patientId: string;
