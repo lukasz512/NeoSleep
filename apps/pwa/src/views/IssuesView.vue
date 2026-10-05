@@ -1,9 +1,5 @@
 <template>
   <div class="view-issues">
-    <div class="view-issues__header">
-      <h1 class="view-issues__title">{{ t("user.issues.title") }}</h1>
-    </div>
-
     <AppLoadingState v-if="loading" />
     <DetailViewTabs v-else v-model="activeTab" :tabs="tabs">
       <template #reports>
@@ -19,7 +15,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { useI18n } from "vue-i18n";
 import AppLoadingState from "../components/AppLoadingState.vue";
 import DetailViewTabs, { type DetailViewTab } from "../components/DetailViewTabs.vue";
 import ReportsPanel from "../components/issues/ReportsPanel.vue";
@@ -31,7 +26,6 @@ import { fetchPlatformAdmin } from "../composables/useIssues";
  * admins only, the grouped production errors. ?tab=errors and ?report=<id> deep-link into it
  * (the report email and the Errors tab's linked reports use them).
  */
-const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 
@@ -79,13 +73,4 @@ onMounted(async () => {
   flex-direction: column;
 }
 
-.view-issues__header {
-  margin-bottom: 16px;
-}
-
-.view-issues__title {
-  font-size: 1.375rem;
-  font-weight: 600;
-  margin: 0 0 4px;
-}
 </style>
