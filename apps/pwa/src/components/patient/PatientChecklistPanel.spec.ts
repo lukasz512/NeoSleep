@@ -195,7 +195,9 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
     // NEO-237: the ATM result reads per side, not as a yes/no questionnaire.
     const result = tmj.find(".checklist-result--tmj");
     expect(result.exists()).toBe(true);
-    expect(result.text()).toContain("Right 1 · Left 0");
+    const heads = result.findAll("thead th").map((th) => th.text());
+    expect(heads.slice(1)).toEqual(["Right 1", "Left 0"]);
+    expect(result.find("td[data-finding='pain_palpation'][data-side='right'] .tmj-mini__mark--on").exists()).toBe(true);
     expect(result.text()).toContain("38 mm");
     expect(tmj.text()).not.toContain("of 14 questions");
     // NEO-240: the ATM tab title is text only; the result body keeps its mini skull.
