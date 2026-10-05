@@ -270,8 +270,8 @@ onBeforeUnmount(() => {
   clearInterval(clock);
   window.removeEventListener("keydown", onKey);
 });
-watch(narrow, (isNarrow) => {
-  if (!isNarrow) sideOpen.value = false;
+watch([narrow, showSide], ([isNarrow, hasSide]) => {
+  if (!isNarrow || !hasSide) sideOpen.value = false;
 });
 watch([calendarType, phone, narrow, locale], () => void nextTick(measure), { flush: "post" });
 
@@ -419,7 +419,7 @@ const shownEntries = computed(() => {
 const gridEvents = computed<CalendarGridEvent[]>(() => {
   const now = Date.now();
   return shownEntries.value
-    .filter((e) => visibleKinds[e.kind])
+    .filter((e) => !showSide.value || visibleKinds[e.kind])
     .map((e) => {
       const start = parseWallTime(toZonedCalendarDateTime(e.start_at, e.timezone));
       const end = parseWallTime(toZonedCalendarDateTime(e.end_at, e.timezone));

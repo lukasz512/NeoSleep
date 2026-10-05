@@ -52,6 +52,15 @@ test("phone: the sidebar still opens as a panel from the toolbar button", async 
   await expect(page.locator(".cal--side-open")).toHaveCount(0);
 });
 
+test("phone → tablet with the panel open: no scrim is left over the grid", async ({ page }) => {
+  await open(page, 390, 844);
+  await page.locator('[data-testid="calendar-sidebar-toggle"]').click();
+  await expect(page.locator(".cal--side-open")).toHaveCount(1);
+  await page.setViewportSize({ width: 820, height: 1000 });
+  await expect(page.locator(".cal__scrim")).toHaveCount(0);
+  await expect(page.locator(".cal--side-open")).toHaveCount(0);
+});
+
 test("phone: the week scrolls inside the grid, the month shows that day's list", async ({ page }) => {
   await open(page, 390, 844);
   await page.locator('[data-testid="calendar-view-week"]').click();
