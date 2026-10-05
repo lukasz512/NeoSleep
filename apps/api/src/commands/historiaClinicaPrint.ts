@@ -13,7 +13,9 @@ import { ORAL_EXAM_QUESTIONS, STOP_QUESTIONS, BANG_QUESTIONS, TMJ_FINDINGS } fro
  */
 
 export interface HistoriaClinicaInput {
-  organizationName: string | null;
+  /** The patient's own contact details, printed in the banner (NEO-249); blank → a write-in line. */
+  patientPhone: string | null;
+  patientEmail: string | null;
   /** "YYYY-MM-DD" */
   birthDate: string | null;
   today: Date;
@@ -43,21 +45,10 @@ const SB_STATE: Record<(typeof STOP_QUESTIONS)[number] | (typeof BANG_QUESTIONS)
   neck_circumference_over_40cm: "sb_neck_over_40",
   is_male: "sb_is_male",
 };
-/** Words in a clinic's name that don't identify it (left out of the monogram). */
-const GENERIC_WORDS = new Set(["consultorio", "clínica", "clinica", "centro", "dental", "dentista", "hospital", "odontología", "odontologia", "de", "del", "la", "el", "y"]);
-
 /** A measurement as printed on the form: one decimal, dropped when whole, decimal comma except for English. */
 export function formatMeasure(value: number, locale: string): string {
   const text = Number.isInteger(value) ? String(value) : value.toFixed(1);
   return locale === "en" ? text : text.replace(".", ",");
-}
-
-/** The letterhead monogram: the initials of the last two identifying words ("Consultorio Dra. Lorena González" → "LG"). */
-export function clinicInitials(name: string | null): string {
-  const words = (name ?? "").trim().split(/\s+/).filter(Boolean);
-  const own = words.filter((w) => /^\p{Lu}/u.test(w) && !w.endsWith(".") && !GENERIC_WORDS.has(w.toLowerCase()));
-  const picked = own.length ? own.slice(-2) : words.slice(0, 1);
-  return picked.map((w) => w[0]!.toUpperCase()).join("");
 }
 
 /** Whole years between a "YYYY-MM-DD" birth date and `today` (read as text: no time-zone shift). */
@@ -72,7 +63,8 @@ export function historiaClinicaPrintFields(locale: string, input: HistoriaClinic
   const states: Record<string, string> = {};
   const sexOptions = [documentT(locale, "documents.historiaEndo.sex.female"), documentT(locale, "documents.historiaEndo.sex.male"), documentT(locale, "documents.historiaEndo.sex.other")];
   const fields: Record<string, string> = {
-    clinic_initials: clinicInitials(input.organizationName),
+    telefono: input.patientPhone ?? "",
+    email: input.patientEmail ?? "",
     edad: input.birthDate ? documentT(locale, "documents.historiaEndo.ageYears", { n: String(ageOn(input.birthDate, input.today)) }) : "",
     expediente: "",
     score_zone_label: "",

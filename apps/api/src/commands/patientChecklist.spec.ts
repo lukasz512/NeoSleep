@@ -7,6 +7,7 @@ import { ValidationError } from "../errors.js";
 import { RecordClinicalQuestionnaireCommand } from "./clinicalRecords.js";
 import { PrintChecklistItemCommand, UploadPatientStudyCommand, DeletePatientStudyUploadCommand } from "./patientChecklist.js";
 import { GetPatientChecklistQuery } from "../queries/patientChecklist.js";
+import { GetCurrentDocumentContentQuery } from "../queries/documentContent.js";
 
 /**
  * Patient Estudios checklist (ADR-024) — real Postgres, real PDF rendering;
@@ -195,6 +196,21 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
       await expect(PrintChecklistItemCommand(ctx, patient.id, "polysomnography")).rejects.toThrow(ValidationError);
     });
   }, 90000);
+
+  it("the Historia clínica prints the patient's phone + email and the current informed consent as its last page, for any patient (NEO-249)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await insertPatient(client, { first_name: "Ana", last_name: `Contact-${uniqueSuffix()}`, phone: "+52 55 1234 5678", email: `ana-${uniqueSuffix()}@example.mx` });
+      const consent = (await GetCurrentDocumentContentQuery("informedConsent", "mx")).content_html;
+
+      renderSpy.mockClear();
+      await PrintChecklistItemCommand(ctx, patient.id, "historiaEndo");
+      const [html, options] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string> }];
+      expect(options.dataFields.telefono).toBe("+52 55 1234 5678");
+      expect(options.dataFields.email).toMatch(/^ana-.*@example\.mx$/);
+      expect(html.slice(html.indexOf('<div class="hc-p3">'))).toContain(consent);
+    });
+  }, 60000);
 
   const PATIENT_FORMS = ["medicalHistory", "oralExam", "tmjExam", "historiaEndo", "informedConsent", "stopBang"];
 

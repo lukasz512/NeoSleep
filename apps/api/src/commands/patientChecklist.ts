@@ -11,6 +11,7 @@ import {
 } from "../queries/patientChecklist.js";
 import { AuditHealthDataReadCommand } from "./healthDataReadAudit.js";
 import { GetCurrentDocumentContentQuery } from "../queries/documentContent.js";
+import { INFORMED_CONSENT_KEY } from "../db/informedConsentState.js";
 import { renderDocumentHtml, renderDocumentFooterHtml, getDocumentRefCode, documentT, DOCUMENT_MANIFEST } from "@neo/documents";
 import { renderHtmlToPdf, type ChoiceField } from "../services/documentRenderer.js";
 import { formatFormDate, formatFormDateTime } from "../utils/formDate.js";
@@ -165,7 +166,8 @@ export async function PrintChecklistItemCommand(
     fields.score = screening?.score == null ? "" : String(screening.score);
     Object.assign(fields, measurementDetails(locale, screening));
     const print = historiaClinicaPrintFields(locale, {
-      organizationName: pdfContext.organization_name,
+      patientPhone: pdfContext.patient_phone,
+      patientEmail: pdfContext.patient_email,
       birthDate: pdfContext.patient_birth_date,
       today: date,
       history: latest<MedicalHistoryRecord>("medicalHistory"),
@@ -196,9 +198,11 @@ export async function PrintChecklistItemCommand(
   } catch (err) {
     if (!(err instanceof NotFoundError)) throw err;
   }
+  // The Historia clínica carries the full Consentimiento informado as its last page, for every patient (NEO-249).
+  const slots = key === "historiaEndo" ? { informedConsent: (await GetCurrentDocumentContentQuery(INFORMED_CONSENT_KEY, locale)).content_html } : undefined;
   let html: string;
   try {
-    html = renderDocumentHtml(key, locale, content);
+    html = renderDocumentHtml(key, locale, content, slots);
   } catch {
     html = renderDocumentHtml(key, locale); // content exists but this template has no slot for it
   }

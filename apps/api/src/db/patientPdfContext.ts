@@ -18,8 +18,10 @@ export interface PatientPdfContext {
   organization_phone: string | null;
   /** The clinic's own aviso de privacidad (organization.privacy_notice_url, CORE-113) — the clinic is the data controller. */
   organization_privacy_notice_url: string | null;
-  /** Where the questionnaire link email goes (never printed on a form). */
+  /** Where the questionnaire link email goes; printed only in the Historia clínica banner (NEO-249). */
   patient_email: string | null;
+  /** identities.phone — printed in the Historia clínica banner (NEO-249). */
+  patient_phone: string | null;
   /** identities.language / region — pick the email's language. */
   patient_language: string | null;
   patient_region: string | null;
@@ -60,13 +62,14 @@ export async function getPatientPdfContext(
       organization_phone: string | null;
       organization_privacy_notice_url: string | null;
       patient_email: string | null;
+      patient_phone: string | null;
       patient_language: string | null;
       patient_region: string | null;
     }>(
       `SELECT
          pi.title AS patient_salutation, pi.first_name AS patient_first_name, pi.last_name AS patient_last_name,
          to_char(pi.date_of_birth, 'YYYY-MM-DD') AS patient_birth_date,
-         pi.email AS patient_email, pi.language AS patient_language, pi.region AS patient_region,
+         pi.email AS patient_email, pi.phone AS patient_phone, pi.language AS patient_language, pi.region AS patient_region,
          pri.title AS practitioner_salutation, pri.first_name AS practitioner_first_name, pri.last_name AS practitioner_last_name,
          o.name AS organization_name, o.email AS organization_email,
          o.address_line1 AS organization_address_line1, o.city AS organization_city, o.phone AS organization_phone,
@@ -117,6 +120,7 @@ export async function getPatientPdfContext(
       organization_phone: row.organization_phone,
       organization_privacy_notice_url: row.organization_privacy_notice_url?.trim() || null,
       patient_email: row.patient_email,
+      patient_phone: row.patient_phone,
       patient_language: row.patient_language,
       patient_region: row.patient_region,
       patient_salutation: row.patient_salutation,

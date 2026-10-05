@@ -226,6 +226,23 @@ describe("document system (header, title, banner, sections, signatures, footer)"
     expect(html).toContain("Sí = 1 punto");
   });
 
+  it("Historia clínica (NEO-249): the consent's header, phone + email in the banner, oral exam on page 2, the full informed consent on page 3", () => {
+    const html = renderDocumentHtml("historiaEndo", "mx", "<p>historia</p>", { informedConsent: "<p>CONSENT-DAM-BODY</p>" });
+    const body = html.slice(html.indexOf("<body>"));
+    const page2 = body.indexOf('<div class="hc-p2">');
+    const page3 = body.indexOf('<div class="hc-p3">');
+    expect(body.slice(0, body.indexOf("</header>"))).toContain('<span class="logo">');
+    expect(body).not.toContain("hc-mono");
+    expect(body).toContain('data-field="telefono"');
+    expect(body).toContain('data-field="email"');
+    expect(body).not.toMatch(/Ocupación|Estado civil/);
+    expect(body.indexOf("Exploración de Cavidad Oral")).toBeGreaterThan(page2);
+    expect(page3).toBeGreaterThan(page2);
+    expect(body.indexOf("CONSENT-DAM-BODY")).toBeGreaterThan(page3);
+    expect(body.slice(page3)).toContain('<span class="doc-cat">Consentimiento informado</span>');
+    expect(body.slice(page3)).toContain('data-field="firma_paciente"');
+  });
+
   it("footer escapes names typed into the app", () => {
     const html = renderDocumentFooterHtml("NSL-SB v1", "mx", { subject: '<img src=x onerror="alert(1)">', issuer: ["A & B <Clinic>"] });
     expect(html).not.toContain("<img");
