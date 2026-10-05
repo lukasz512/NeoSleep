@@ -117,6 +117,7 @@
             @change-locale="(lang) => setLocale(lang as 'en' | 'pl' | 'mx')"
             @change-password="router.push({ name: 'change-password', query: { from: CHANGE_PASSWORD_FROM_MENU } })"
             @report-problem="openReportProblem({ where: String(route.name ?? '') })"
+            @my-reports="router.push({ name: 'my-reports' })"
             @logout="onLogout"
             @close="menuOpen = false"
           />

@@ -13,6 +13,7 @@ import {
   insertProblemReport,
   isPlatformAdmin,
   listDiagnostics,
+  listMyProblemReports,
   listProblemReports,
   setDiagnosticStatus,
   setProblemReportAttachment,
@@ -25,6 +26,7 @@ import {
 import { ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
 import { getPartnerDocumentSignedUrl, uploadPartnerDocument } from "../services/partnerDocuments.js";
 import { pwaBaseUrl } from "../services/issueNotifications.js";
+import { notifyProblemReportCreated, notifyProblemReportStatusChanged } from "../services/problemReportNotifications.js";
 import { sendContactEmail } from "../mailer.js";
 import { routeParam } from "./utils.js";
 
@@ -44,6 +46,9 @@ const MAX_REQUEST_IDS = 20;
 const MAX_REQUEST_ID_LENGTH = 128;
 const MAX_RECENT_ERRORS = 10;
 const MAX_RECENT_ERRORS_BYTES = 20 * 1024;
+const MAX_REPORTER_REPLY = 1000;
+/** A tracker key like CORE-123 or NEO-45 (D2: typed in by hand, no Linear API). */
+const TRACKER_REF_RE = /^[A-Z][A-Z0-9]{1,9}-\d{1,6}$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FILE_BYTES, files: 1 } });
@@ -211,9 +216,47 @@ problemReportRouter.post(
       ["Open", `${pwaBaseUrl()}/issues?report=${reportId}`],
     ]).catch((err) => console.error("problem report email failed:", err));
 
+    // Receipt for the reporter (in-app + email) and an in-app heads-up for the tenant's admins.
+    await notifyProblemReportCreated({
+      tenantSlug: slug,
+      reportId,
+      number,
+      reporterUserId: user.sub,
+      reporterEmail: user.email ?? null,
+    });
+
     res.status(201).json({ id: reportId, number });
   })
 );
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/problem-reports/mine — the signed-in user's own reports ("My reports")
+// ---------------------------------------------------------------------------
+problemReportRouter.get(
+  "/problem-reports/mine",
+  requireAuth,
+  asyncHandler(async (req: Request, res: Response) => {
+    const items = await listMyProblemReports(tenantSlugFromHost(req.hostname), req.user!.sub);
+    res.json({ items });
+  })
+);
+
+/** undefined = leave as is; null = clear; otherwise the trimmed, upper-cased key. */
+function parseTrackerRef(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || (typeof value === "string" && !value.trim())) return null;
+  const ref = typeof value === "string" ? value.trim().toUpperCase() : "";
+  if (!TRACKER_REF_RE.test(ref)) throw new ValidationError("tracker_ref must look like CORE-123", "tracker_ref");
+  return ref;
+}
+
+function parseReporterReply(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value !== null && (typeof value !== "string" || value.length > MAX_REPORTER_REPLY)) {
+    throw new ValidationError(`reporter_reply must be text of at most ${MAX_REPORTER_REPLY} characters`, "reporter_reply");
+  }
+  return typeof value === "string" ? value.trim() || null : null;
+}
 
 // ---------------------------------------------------------------------------
 // GET /api/v1/admin/issues/access — does this admin also see the Errors tab?
@@ -240,7 +283,7 @@ problemReportRouter.get(
 );
 
 // ---------------------------------------------------------------------------
-// PATCH /api/v1/admin/problem-reports/:id — status and/or admin note
+// PATCH /api/v1/admin/problem-reports/:id — status, internal note, ticket, reply to the reporter
 // ---------------------------------------------------------------------------
 problemReportRouter.patch(
   "/admin/problem-reports/:id",
@@ -249,19 +292,27 @@ problemReportRouter.patch(
     const id = requireUuid(req, "ProblemReport");
     const statusRaw = field(req.body, "status");
     const noteRaw = field(req.body, "admin_note");
-    if (statusRaw === undefined && noteRaw === undefined) throw new ValidationError("status or admin_note is required");
+    const trackerRef = parseTrackerRef(field(req.body, "tracker_ref"));
+    const reporterReply = parseReporterReply(field(req.body, "reporter_reply"));
+    if (statusRaw === undefined && noteRaw === undefined && trackerRef === undefined && reporterReply === undefined) {
+      throw new ValidationError("status, admin_note, tracker_ref or reporter_reply is required");
+    }
     if (statusRaw !== undefined && !(PROBLEM_REPORT_STATUSES as readonly unknown[]).includes(statusRaw)) {
       throw new ValidationError(`status must be one of: ${PROBLEM_REPORT_STATUSES.join(", ")}`, "status");
     }
     if (noteRaw !== undefined && noteRaw !== null && (typeof noteRaw !== "string" || noteRaw.length > 5000)) {
       throw new ValidationError("admin_note must be text of at most 5000 characters", "admin_note");
     }
-    const row = await updateProblemReport(tenantSlugFromHost(req.hostname), id, {
+    const slug = tenantSlugFromHost(req.hostname);
+    const updated = await updateProblemReport(slug, id, {
       status: statusRaw as ProblemReportStatus | undefined,
       admin_note: noteRaw === undefined ? undefined : typeof noteRaw === "string" ? noteRaw.trim() || null : null,
+      tracker_ref: trackerRef,
+      reporter_reply: reporterReply,
     });
-    if (!row) throw new NotFoundError("ProblemReport", id);
-    res.json(row);
+    if (!updated) throw new NotFoundError("ProblemReport", id);
+    await notifyProblemReportStatusChanged({ tenantSlug: slug, ...updated, actorUserId: req.user!.sub });
+    res.json(updated.row);
   })
 );
 

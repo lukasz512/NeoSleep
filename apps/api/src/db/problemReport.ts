@@ -32,7 +32,7 @@ export interface ProblemReportInsert {
 const PUBLIC_COLUMNS = `id, number, tenant_slug, env, kind, description, status,
   reporter_user_id, reporter_name, reporter_email, reporter_role, page_url, app_version,
   user_agent, viewport, request_ids, recent_errors, attachment_name, attachment_mime,
-  attachment_size, admin_note, resolved_at, created_at, updated_at,
+  attachment_size, admin_note, tracker_ref, reporter_reply, resolved_at, created_at, updated_at,
   (attachment_path IS NOT NULL) AS has_attachment`;
 
 export interface ProblemReportRow {
@@ -57,10 +57,29 @@ export interface ProblemReportRow {
   attachment_mime: string | null;
   attachment_size: number | null;
   admin_note: string | null;
+  tracker_ref: string | null;
+  reporter_reply: string | null;
   resolved_at: string | null;
   created_at: string;
   updated_at: string;
   has_attachment: boolean;
+}
+
+/**
+ * What a reporter sees of their own report ("My reports"). No admin_note
+ * (internal) and no captured context: they wrote the description themselves.
+ */
+export interface MyProblemReportRow {
+  id: string;
+  number: string;
+  kind: ProblemReportKind;
+  description: string;
+  status: ProblemReportStatus;
+  tracker_ref: string | null;
+  reporter_reply: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export async function insertProblemReport(
@@ -118,25 +137,65 @@ export async function listProblemReports(tenantSlug: string, status: ProblemRepo
   return rows;
 }
 
+export interface ProblemReportPatch {
+  status?: ProblemReportStatus;
+  admin_note?: string | null;
+  tracker_ref?: string | null;
+  reporter_reply?: string | null;
+}
+
+/** The updated row plus the status it had before, so the caller can tell a real transition. */
 export async function updateProblemReport(
   tenantSlug: string,
   id: string,
-  patch: { status?: ProblemReportStatus; admin_note?: string | null }
-): Promise<ProblemReportRow | null> {
-  const { rows } = await getDb().query<ProblemReportRow>(
-    `UPDATE platform.problem_report
-        SET status      = COALESCE($3, status),
-            admin_note  = CASE WHEN $4 THEN $5 ELSE admin_note END,
-            resolved_at = CASE
-                            WHEN COALESCE($3, status) = 'resolved' THEN COALESCE(resolved_at, now())
-                            ELSE NULL
-                          END,
-            updated_at  = now()
+  patch: ProblemReportPatch
+): Promise<{ row: ProblemReportRow; previousStatus: ProblemReportStatus } | null> {
+  const { rows } = await getDb().query<ProblemReportRow & { previous_status: ProblemReportStatus }>(
+    `WITH prev AS (
+       SELECT status AS previous_status FROM platform.problem_report WHERE id = $1 AND tenant_slug = $2 FOR UPDATE
+     )
+     UPDATE platform.problem_report
+        SET status         = COALESCE($3, status),
+            admin_note     = CASE WHEN $4 THEN $5 ELSE admin_note END,
+            tracker_ref    = CASE WHEN $6 THEN $7 ELSE tracker_ref END,
+            reporter_reply = CASE WHEN $8 THEN $9 ELSE reporter_reply END,
+            resolved_at    = CASE
+                               WHEN COALESCE($3, status) = 'resolved' THEN COALESCE(resolved_at, now())
+                               ELSE NULL
+                             END,
+            updated_at     = now()
+       FROM prev
       WHERE id = $1 AND tenant_slug = $2
-      RETURNING ${PUBLIC_COLUMNS}`,
-    [id, tenantSlug, patch.status ?? null, patch.admin_note !== undefined, patch.admin_note ?? null]
+      RETURNING ${PUBLIC_COLUMNS}, prev.previous_status`,
+    [
+      id,
+      tenantSlug,
+      patch.status ?? null,
+      patch.admin_note !== undefined,
+      patch.admin_note ?? null,
+      patch.tracker_ref !== undefined,
+      patch.tracker_ref ?? null,
+      patch.reporter_reply !== undefined,
+      patch.reporter_reply ?? null,
+    ]
   );
-  return rows[0] ?? null;
+  const updated = rows[0];
+  if (!updated) return null;
+  const { previous_status: previousStatus, ...row } = updated;
+  return { row, previousStatus };
+}
+
+/** The signed-in user's own reports in this tenant, newest first. */
+export async function listMyProblemReports(tenantSlug: string, reporterUserId: string): Promise<MyProblemReportRow[]> {
+  const { rows } = await getDb().query<MyProblemReportRow>(
+    `SELECT id, number, kind, description, status, tracker_ref, reporter_reply, resolved_at, created_at, updated_at
+       FROM platform.problem_report
+      WHERE tenant_slug = $1 AND reporter_user_id = $2
+      ORDER BY created_at DESC
+      LIMIT 100`,
+    [tenantSlug, reporterUserId]
+  );
+  return rows;
 }
 
 export async function getProblemReportAttachmentPath(tenantSlug: string, id: string): Promise<string | null> {

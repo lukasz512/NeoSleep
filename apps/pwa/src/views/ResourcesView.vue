@@ -8,8 +8,6 @@
         :error="loadFailure"
         :refresh-label="t('app.errorState.refresh')"
         :loading="loading"
-        :secondary-label="t('user.resources.reportIncident')"
-        :secondary-href="incidentMailtoHref"
         @refresh="() => load(locale)"
       />
     </div>
@@ -205,12 +203,9 @@ import { usePageHeaderRow, usePageHeaderTeleport } from "../composables/usePageH
 import { useMediaQuery } from "@vueuse/core";
 import { getUserSettings, setUserSettings } from "../utils/user-settings";
 import { MOBILE_BREAKPOINT } from "../config/layout";
-import { useAuthStore } from "../stores/auth";
-import { SUPPORT_EMAIL } from "../config/support";
 
 const { t, locale } = useI18n();
 const { documents, videos, documentGroups, loading, loadError, loadFailure, load } = usePartnerResources();
-const authStore = useAuthStore();
 
 // Documents tab hidden per product decision — only Webinars (the renamed
 // Videos tab) is shown. Data is still fetched as before (usePartnerResources
@@ -344,18 +339,6 @@ onMounted(() => {
 });
 onUnmounted(() => {
   window.removeEventListener("scroll", handleWindowScroll);
-});
-
-/** Interim manual reporting — see config/support.ts. */
-const incidentMailtoHref = computed(() => {
-  const subject = "NeoSleep — device lab connection issue";
-  const body = [
-    `Reported by: ${authStore.user?.email ?? "unknown"}`,
-    `Time: ${new Date().toISOString()}`,
-    "",
-    "What were you trying to do when this happened?",
-  ].join("\n");
-  return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 });
 </script>
 

@@ -6,6 +6,7 @@
  */
 import { reactive } from "vue";
 import { getRecentErrors } from "@api";
+import { browserStorage, getPrefsIdentity, prefsKey, readPref, removePref, writePref } from "@prefs";
 import { apiFetch } from "./useApi";
 import type { ProblemKind } from "../types/issues";
 
@@ -78,6 +79,45 @@ async function submit(form: ReportProblemForm): Promise<ReportProblemResult> {
     // report would loop.
     return { ok: false, status: null };
   }
+}
+
+/**
+ * Trackable reports: a report that could not be sent (offline, server down) is kept on this
+ * device for the signed-in user and comes back the next time the dialog opens, so it never
+ * silently disappears. Text and kind only (never the file); dropped after a week or once sent.
+ */
+export interface ReportDraft {
+  kind: ProblemKind;
+  description: string;
+}
+
+const DRAFT_SLOT = "reportDraft";
+const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const KINDS: readonly ProblemKind[] = ["problem", "suggestion", "other"];
+
+function draftKey(): string | null {
+  const id = getPrefsIdentity();
+  return id ? prefsKey(id, DRAFT_SLOT) : null;
+}
+
+export function saveReportDraft(draft: ReportDraft): boolean {
+  const key = draftKey();
+  return key ? writePref(browserStorage(), key, { kind: draft.kind, description: draft.description }) : false;
+}
+
+export function readReportDraft(): ReportDraft | null {
+  const key = draftKey();
+  if (!key) return null;
+  const value = readPref(browserStorage(), key, Date.now(), DRAFT_MAX_AGE_MS);
+  if (!value || typeof value !== "object") return null;
+  const { kind, description } = value as Record<string, unknown>;
+  if (typeof description !== "string" || !description.trim()) return null;
+  return { kind: KINDS.includes(kind as ProblemKind) ? (kind as ProblemKind) : "problem", description };
+}
+
+export function clearReportDraft(): void {
+  const key = draftKey();
+  if (key) removePref(browserStorage(), key);
 }
 
 export function useReportProblem() {

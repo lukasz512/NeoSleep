@@ -66,6 +66,12 @@ const patientStudiesLink = (p: NotificationLinkParams): string | null => (p.pati
 const practitionerLink = (p: NotificationLinkParams): string | null => (p.practitionerId ? `/hcp/${p.practitionerId}` : null);
 /** NEO-197: the patient's OrthoApnea tab, where the placed order shows up. */
 const patientOrthoapneaLink = (p: NotificationLinkParams): string | null => (p.patientId ? `/patients/${p.patientId}?tab=orthoapnea` : null);
+/** Trackable reports: the reporter's own list, opened on the report. */
+const myReportsLink = (p: NotificationLinkParams): string =>
+  p.entityId ? `/my-reports?report=${encodeURIComponent(p.entityId)}` : "/my-reports";
+/** Trackable reports: the admin Issues view, opened on the report. */
+const issuesReportLink = (p: NotificationLinkParams): string =>
+  p.entityId ? `/issues?report=${encodeURIComponent(p.entityId)}` : "/issues";
 
 export const NOTIFICATION_TYPES = [
   "appointment_booked",
@@ -78,6 +84,10 @@ export const NOTIFICATION_TYPES = [
   "questionnaire_submitted",
   "practitioner_invite_accepted",
   "device_order_placed",
+  "problem_report_received",
+  "problem_report_new",
+  "problem_report_in_progress",
+  "problem_report_closed",
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -167,6 +177,42 @@ export const NOTIFICATION_CATALOG: Readonly<Record<NotificationType, Notificatio
     escalateAfterMin: null,
     link: patientOrthoapneaLink,
     entityType: "TreatmentPlan",
+  },
+  /** Trackable reports: the reporter's own receipt, so a report never vanishes without a trace. */
+  problem_report_received: {
+    category: "operational",
+    priority: "normal",
+    channels: ["in_app"],
+    escalateAfterMin: null,
+    link: myReportsLink,
+    entityType: "ProblemReport",
+  },
+  /** Trackable reports: the tenant's admins, who triage reports in the Issues view. */
+  problem_report_new: {
+    category: "operational",
+    priority: "normal",
+    channels: ["in_app", "push"],
+    escalateAfterMin: null,
+    link: issuesReportLink,
+    entityType: "ProblemReport",
+  },
+  /** Trackable reports D3: intermediate status changes reach the reporter in-app only. */
+  problem_report_in_progress: {
+    category: "operational",
+    priority: "normal",
+    channels: ["in_app"],
+    escalateAfterMin: null,
+    link: myReportsLink,
+    entityType: "ProblemReport",
+  },
+  /** Trackable reports D3: resolved or won't fix — in-app here, plus the email the route sends. */
+  problem_report_closed: {
+    category: "operational",
+    priority: "normal",
+    channels: ["in_app", "push"],
+    escalateAfterMin: null,
+    link: myReportsLink,
+    entityType: "ProblemReport",
   },
 };
 
