@@ -9,13 +9,12 @@
     <section v-if="tiles.length" class="patient-details__tiles" :aria-label="t('app.patients.detail.summaryLabel')" data-testid="summary-strip">
       <template v-for="tile in tiles" :key="tile.key">
         <component
-          :is="tile.to ? RouterLink : tile.tab ? 'button' : 'div'"
-          :to="tile.to"
-          :type="tile.tab ? 'button' : undefined"
+          :is="tile.tab || tile.open ? 'button' : 'div'"
+          :type="tile.tab || tile.open ? 'button' : undefined"
           class="patient-details__tile"
-          :class="{ 'patient-details__tile--link': tile.tab || tile.to }"
+          :class="{ 'patient-details__tile--link': tile.tab || tile.open }"
           :data-testid="`tile-${tile.key}`"
-          @click="tile.tab && emit('open-tab', tile.tab)"
+          @click="tile.tab ? emit('open-tab', tile.tab) : tile.open?.()"
         >
           <span class="patient-details__tile-key">{{ tile.label }}</span>
           <span class="patient-details__tile-value" :title="tile.value">{{ tile.value }}</span>
@@ -128,7 +127,7 @@
           >
             <dt>{{ formatDayLabel(a.start_at, a.timezone, intlLocale(locale)) }}</dt>
             <dd>
-              <RouterLink :to="calendarLink(a.id)" class="patient-details__link">{{ formatTimeRange(a.start_at, a.end_at, a.timezone, intlLocale(locale)) }}</RouterLink><template v-if="a.practitioner_name"> · {{ a.practitioner_name }}</template>
+              <button type="button" class="patient-details__link" data-testid="patient-appointment-open" @click="openAppointment(a.id)">{{ formatTimeRange(a.start_at, a.end_at, a.timezone, intlLocale(locale)) }}</button><template v-if="a.practitioner_name"> · {{ a.practitioner_name }}</template>
               <VChip v-if="a.status !== 'scheduled'" size="x-small" variant="tonal" class="ml-1">{{ t(`user.appointments.status.${a.status}`) }}</VChip>
             </dd>
           </div>
@@ -149,7 +148,7 @@
           >
             <dt>{{ formatDate(e.start_at) }}</dt>
             <dd>
-              {{ formatEventTime(e.start_at) }} · {{ e.title || t("user.planner.form.fieldTitle") }} · {{ t(e.type === "video" ? "user.planner.form.typeVideo" : "user.planner.form.typeF2f") }}
+              <button type="button" class="patient-details__link" data-testid="patient-event-open" @click="openEvent(e)">{{ formatEventTime(e.start_at) }}</button> · {{ e.title || t("user.planner.form.fieldTitle") }} · {{ t(e.type === "video" ? "user.planner.form.typeVideo" : "user.planner.form.typeF2f") }}
               <VChip v-if="e.status !== 'scheduled'" size="x-small" variant="tonal" class="ml-1">{{ t(`user.appointments.status.${e.status}`) }}</VChip>
             </dd>
           </div>
@@ -249,13 +248,31 @@
         </dl>
       </section>
     </div>
+
+    <!-- CORE-159: a visit opens here, on the card — act on it without leaving the patient. -->
+    <AppointmentDetailDialog
+      v-model="showAppointment"
+      :appointment="selectedAppointment"
+      @changed="onAppointmentChanged"
+      @reschedule="onReschedule"
+      @book-next="onBookNext"
+    />
+    <AppointmentDialog
+      v-model="showBooking"
+      :appointment="bookingAppointment"
+      :patient="bookingPatient"
+      :practitioner="bookingPractitioner"
+      :start-at="bookingStart"
+      @saved="onVisitSaved"
+    />
+    <EventForm v-model="showEventForm" :initial-data="eventFormInitial" @submit="onEventFormSubmit" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { reportCaught, reportFailedResponse } from "@api";
-import { computed, onMounted, ref, toRef, watch } from "vue";
-import { RouterLink, useRouter, type RouteLocationRaw } from "vue-router";
+import { computed, defineAsyncComponent, onMounted, ref, toRef, watch } from "vue";
+import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { VAutocomplete, VChip } from "vuetify/components";
 import { intlLocale } from "@i18n/language-options";
@@ -265,7 +282,11 @@ import AppConfirmDialog from "../AppConfirmDialog.vue";
 import AppIcon from "../AppIcon.vue";
 import PatientTmjCard from "./PatientTmjCard.vue";
 import { onPatientChecklistUpdated, type ChecklistCategory } from "../../composables/usePatientChecklist";
-import { onPatientChanged } from "../../composables/usePatientChanged";
+import { emitPatientChanged, onPatientChanged } from "../../composables/usePatientChanged";
+import { useEventSave } from "../../composables/useEventSave";
+import type { SubmitDone } from "../../composables/useEntitySubmit";
+import type { Appointment } from "../../composables/useAppointments";
+import type { EventFormInitialData, EventSubmitPayload } from "../EventForm.vue";
 import { useVisiblePolling } from "../../composables/useVisiblePolling";
 import { useAuthStore } from "../../stores/auth";
 import EntityLink from "../EntityLink.vue";
@@ -295,9 +316,13 @@ interface Tile {
   ahi?: number;
   /** Clicking the tile opens this tab. */
   tab?: string;
-  /** …or this route (the next visit, in the calendar). */
-  to?: RouteLocationRaw;
+  /** …or runs this (the next visit opens in its dialog, CORE-159). */
+  open?: () => void;
 }
+
+const EventForm = defineAsyncComponent(() => import("../EventForm.vue"));
+const AppointmentDialog = defineAsyncComponent(() => import("../AppointmentDialog.vue"));
+const AppointmentDetailDialog = defineAsyncComponent(() => import("../AppointmentDetailDialog.vue"));
 
 const props = defineProps<{
   patient: PatientDetailsTabPatient;
@@ -318,18 +343,10 @@ const canOpenHcp = computed(() => {
   const roles = router.resolve({ name: "hcp-detail", params: { id: "_" } }).meta.roles as string[] | undefined;
   return !roles || roles.includes(authStore.user?.role ?? "");
 });
-const calendarLink = (appointmentId: string): RouteLocationRaw => ({ name: "calendar", query: { appointment: appointmentId } });
 
 const summary = ref<PatientSummary | null>(null);
 
-interface PatientAppointment {
-  id: string;
-  status: string;
-  start_at: string;
-  end_at: string;
-  timezone: string;
-  practitioner_name?: string | null;
-}
+type PatientAppointment = Appointment;
 const appointmentItems = ref<PatientAppointment[]>([]);
 const eventItems = ref<PlannerEvent[]>([]);
 
@@ -496,6 +513,107 @@ function formatEventTime(iso: string): string {
   return new Date(iso).toLocaleTimeString(intlLocale(locale.value), { hour: "numeric", minute: "2-digit" });
 }
 
+/**
+ * The soonest upcoming scheduled visit, appointment or event (CORE-159). The
+ * summary's next appointment is only the fallback until the lists load.
+ */
+type NextVisit =
+  | { kind: "appointment"; id: string; start_at: string; appointment?: Appointment }
+  | { kind: "event"; id: string; start_at: string; event: PlannerEvent };
+const nextVisit = computed<NextVisit | null>(() => {
+  const now = Date.now();
+  const upcoming = (iso: string) => new Date(iso).getTime() >= now;
+  const candidates: NextVisit[] = [
+    ...appointments.value
+      .filter((a) => a.status === "scheduled" && upcoming(a.start_at))
+      .map((a) => ({ kind: "appointment" as const, id: a.id, start_at: a.start_at, appointment: a })),
+    ...events.value
+      .filter((e) => e.status === "scheduled" && upcoming(e.start_at))
+      .map((e) => ({ kind: "event" as const, id: e.id, start_at: e.start_at, event: e })),
+  ];
+  const fallback = summary.value?.next_appointment;
+  if (!appointmentItems.value.length && fallback) candidates.push({ kind: "appointment", id: fallback.id, start_at: fallback.start_at });
+  candidates.sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
+  return candidates[0] ?? null;
+});
+
+// ── visit dialogs (CORE-159): the same ones the calendar opens ──────────────
+
+const showAppointment = ref(false);
+const selectedAppointment = ref<Appointment | null>(null);
+const showBooking = ref(false);
+const bookingAppointment = ref<Appointment | null>(null);
+const bookingPatient = ref<{ id: string; name: string; practitioner_id?: string | null } | null>(null);
+const bookingPractitioner = ref<{ id: string; name: string } | null>(null);
+const bookingStart = ref<string | null>(null);
+const showEventForm = ref(false);
+const eventFormInitial = ref<EventFormInitialData | undefined>(undefined);
+
+/** From the list when it is there; otherwise (summary fallback) fetched by id. */
+async function openAppointment(id: string): Promise<void> {
+  let appointment = appointmentItems.value.find((a) => a.id === id) ?? null;
+  if (!appointment) {
+    try {
+      const res = await apiFetch(`/api/v1/appointments/${encodeURIComponent(id)}`, { handleErrors: false });
+      if (!res.ok) return;
+      appointment = (await res.json()) as Appointment;
+    } catch (err) {
+      reportCaught(err, { where: "PatientDetailsTab.openAppointment" });
+      return;
+    }
+  }
+  selectedAppointment.value = appointment;
+  showAppointment.value = true;
+}
+
+/** Tell the whole card (side panel too); this tab reloads through onPatientChanged. */
+function onVisitSaved(): void {
+  emitPatientChanged(props.patient.id, "visits");
+}
+function onAppointmentChanged(appointment: Appointment): void {
+  selectedAppointment.value = appointment;
+  onVisitSaved();
+}
+function onReschedule(appointment: Appointment): void {
+  showAppointment.value = false;
+  bookingAppointment.value = appointment;
+  bookingPatient.value = null;
+  bookingPractitioner.value = null;
+  bookingStart.value = null;
+  showBooking.value = true;
+}
+/** Same as the calendar: the next visit a week later, same patient and doctor. */
+function onBookNext(appointment: Appointment): void {
+  showAppointment.value = false;
+  bookingAppointment.value = null;
+  bookingPatient.value = { id: appointment.patient_id, name: appointment.patient_name ?? "", practitioner_id: appointment.practitioner_id };
+  bookingPractitioner.value = { id: appointment.practitioner_id, name: appointment.practitioner_name ?? "" };
+  bookingStart.value = new Date(new Date(appointment.start_at).getTime() + 7 * 86_400_000).toISOString();
+  showBooking.value = true;
+}
+
+function openEvent(e: PlannerEvent): void {
+  eventFormInitial.value = {
+    id: e.id,
+    title: e.title,
+    start_at: e.start_at,
+    end_at: e.end_at,
+    type: e.type,
+    status: e.status,
+    attendees: e.attendees,
+    location: e.location,
+    video_link: e.video_link,
+    notes: e.notes,
+    region: e.region,
+    patient_ids: e.patient_ids,
+  };
+  showEventForm.value = true;
+}
+const saveEvent = useEventSave("PatientDetailsTab.onEventFormSubmit");
+function onEventFormSubmit(payload: EventSubmitPayload, done: SubmitDone): Promise<void> {
+  return saveEvent(payload, done, onVisitSaved);
+}
+
 const numberFormat = computed(() => new Intl.NumberFormat(intlLocale(locale.value), { maximumFractionDigits: 1 }));
 const fmt = (n: number) => numberFormat.value.format(n);
 
@@ -566,20 +684,17 @@ const tiles = computed<Tile[]>(() => {
     }
   }
 
-  // The next scheduled visit from the full list knows its clinic's zone; the
-  // summary's bare instant is only the fallback until the list loads (CORE-133).
-  const now = Date.now();
-  const listed = appointments.value.find((a) => a.status === "scheduled" && new Date(a.start_at).getTime() >= now);
-  const visit = listed ?? summary.value?.next_appointment ?? null;
-  if (visit) {
-    const start = new Date(visit.start_at);
-    const timeZone = listed?.timezone;
+  const next = nextVisit.value;
+  if (next) {
+    const start = new Date(next.start_at);
+    // An appointment shows in its clinic's zone; the summary's bare instant and an event use the device's (CORE-133).
+    const timeZone = next.kind === "appointment" ? next.appointment?.timezone : undefined;
     out.push({
       key: "appointment",
       label: t("app.patients.detail.summary.nextAppointment"),
       value: start.toLocaleDateString(intlLocale(locale.value), { day: "numeric", month: "short", timeZone }),
       sub: start.toLocaleTimeString(intlLocale(locale.value), { hour: "2-digit", minute: "2-digit", timeZone }),
-      to: calendarLink(visit.id),
+      open: next.kind === "event" ? () => openEvent(next.event) : () => void openAppointment(next.id),
     });
   }
   return out;
@@ -770,5 +885,14 @@ const tiles = computed<Tile[]>(() => {
 .patient-details__link {
   color: rgb(var(--v-theme-primary));
   text-decoration: none;
+}
+
+/* A visit row opens its dialog (CORE-159): a button that reads like the links. */
+button.patient-details__link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
 }
 </style>

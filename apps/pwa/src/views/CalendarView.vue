@@ -175,9 +175,8 @@ import { useDisplay } from "vuetify";
 import { useRoute, useRouter } from "vue-router";
 import { intlLocale } from "@i18n/language-options";
 import { apiFetch } from "../composables/useApi";
-import { useNotifications } from "../composables/useNotifications";
 import { useAppointments, appointmentResponseState, type Appointment, type AppointmentResponseState } from "../composables/useAppointments";
-import { toEncounterBody, fromEncounter, type PlannerEvent } from "../utils/encounterMapping";
+import { fromEncounter, type PlannerEvent } from "../utils/encounterMapping";
 import { toZonedCalendarDateTime, deviceTimeZone, zonedInputToIso } from "../utils/appointmentTime";
 import {
   MINUTES_PER_DAY,
@@ -195,7 +194,7 @@ import {
   type CalendarMotion,
   type CalendarViewType,
 } from "../utils/calendarLayout";
-import { fieldErrorsFromResponse } from "../composables/useFormErrors";
+import { useEventSave } from "../composables/useEventSave";
 import { usePageHeaderTeleport } from "../composables/usePageHeader";
 import type { SubmitDone } from "../composables/useEntitySubmit";
 import type { EventFormInitialData, EventSubmitPayload } from "../components/EventForm.vue";
@@ -212,7 +211,6 @@ const AppointmentDetailDialog = defineAsyncComponent(() => import("../components
 
 const { t, locale } = useI18n();
 const { smAndUp } = useDisplay();
-const notifications = useNotifications();
 const { isDoctor } = useAppointments();
 
 const lang = computed(() => intlLocale(locale.value));
@@ -659,52 +657,9 @@ function openEncounter(encounter: PlannerEvent) {
   showEventForm.value = true;
 }
 
-async function rejectEventSave(res: Response, done: SubmitDone) {
-  const fieldErrors = await fieldErrorsFromResponse(res);
-  if (fieldErrors) {
-    done(false, fieldErrors);
-    return;
-  }
-  notifications.show(t("user.planner.form.errorSave"), "error", undefined, { icon: "nav-planner" });
-  done(false);
-}
-
-async function onEventFormSubmit(payload: EventSubmitPayload, done: SubmitDone) {
-  try {
-    if (payload.id) {
-      const res = await apiFetch(`/api/v1/encounter/${payload.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(toEncounterBody(payload)),
-        handleErrors: false,
-      });
-      if (res.ok) {
-        notifications.show(t("user.planner.form.editSuccess"), "success", undefined, { icon: "nav-planner" });
-        await fetchItems();
-        done(true);
-      } else {
-        await rejectEventSave(res, done);
-      }
-    } else {
-      const res = await apiFetch("/api/v1/encounter", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(toEncounterBody(payload)),
-        handleErrors: false,
-      });
-      if (res.ok) {
-        notifications.show(t("user.planner.form.success"), "success", undefined, { icon: "nav-planner" });
-        await fetchItems();
-        done(true);
-      } else {
-        await rejectEventSave(res, done);
-      }
-    }
-  } catch (err) {
-    reportCaught(err, { where: "CalendarView.onEventFormSubmit" });
-    notifications.show(t("user.planner.form.errorSave"), "error", undefined, { icon: "nav-planner" });
-    done(false);
-  }
+const saveEvent = useEventSave("CalendarView.onEventFormSubmit");
+function onEventFormSubmit(payload: EventSubmitPayload, done: SubmitDone) {
+  return saveEvent(payload, done, fetchItems);
 }
 
 // ── appointment dialogs (AppointmentDialog / AppointmentDetailDialog) ──────
