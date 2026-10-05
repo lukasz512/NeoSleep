@@ -123,7 +123,7 @@
             <AppIcon name="chevron-right" />
           </button>
         </div>
-        <button type="button" class="cal__add" data-testid="calendar-add" :aria-label="t('user.calendar.add')" :title="t('user.calendar.add')" @click="openAddChoice()">
+        <button type="button" class="cal__add" data-testid="calendar-add" :aria-label="t('user.calendar.add')" :title="t('user.calendar.add')" @click="openAdd()">
           <AppIcon name="plus" />
         </button>
         <VProgressLinear v-if="loading" indeterminate absolute location="bottom" height="2" color="primary" class="cal__progress" />
@@ -131,32 +131,6 @@
 
       <div v-if="narrow && sideOpen" class="cal__scrim" @click="sideOpen = false" />
     </div>
-
-    <!-- "+" offers Cita or Evento (CORE-117) — each opens its own existing dialog below. -->
-    <AppFormDialog
-      :model-value="showAddChoice"
-      :max-width="380"
-      :title="t('user.calendar.addChoice.title')"
-      @update:model-value="showAddChoice = $event"
-      @close="showAddChoice = false"
-    >
-      <VList class="view-calendar__choice-list">
-        <VListItem data-testid="calendar-add-appointment" @click="onChooseAppointment">
-          <template #prepend>
-            <AppIcon name="nav-appointments" class="view-calendar__choice-icon" />
-          </template>
-          <VListItemTitle>{{ t('user.calendar.addChoice.appointment') }}</VListItemTitle>
-          <VListItemSubtitle>{{ t('user.calendar.addChoice.appointmentHint') }}</VListItemSubtitle>
-        </VListItem>
-        <VListItem data-testid="calendar-add-event" @click="onChooseEvent">
-          <template #prepend>
-            <AppIcon name="nav-planner" class="view-calendar__choice-icon" />
-          </template>
-          <VListItemTitle>{{ t('user.calendar.addChoice.event') }}</VListItemTitle>
-          <VListItemSubtitle>{{ t('user.calendar.addChoice.eventHint') }}</VListItemSubtitle>
-        </VListItem>
-      </VList>
-    </AppFormDialog>
 
     <EventForm v-model="showEventForm" :initial-data="eventFormInitial" @submit="onEventFormSubmit" />
 
@@ -213,7 +187,6 @@ import type { SubmitDone } from "../composables/useEntitySubmit";
 import type { EventFormInitialData, EventSubmitPayload } from "../components/EventForm.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppErrorState from "../components/AppErrorState.vue";
-import AppFormDialog from "../components/AppFormDialog.vue";
 import CalendarTimeGrid from "../components/calendar/CalendarTimeGrid.vue";
 import CalendarMonthGrid from "../components/calendar/CalendarMonthGrid.vue";
 import CalendarMiniMonth from "../components/calendar/CalendarMiniMonth.vue";
@@ -587,7 +560,7 @@ function onKey(event: KeyboardEvent) {
   if (event.metaKey || event.ctrlKey || event.altKey) return;
   const target = event.target as HTMLElement | null;
   if (target?.closest("input, textarea, select, [contenteditable='true'], .v-overlay")) return;
-  if (showAddChoice.value || showEventForm.value || showBooking.value || showDetail.value) return;
+  if (showEventForm.value || showBooking.value || showDetail.value) return;
   const byKey: Record<string, () => void> = {
     ArrowLeft: () => step(-1),
     ArrowRight: () => step(1),
@@ -630,28 +603,16 @@ function onOpen(id: string) {
 function onSlot(dayKey: string, minutes: number) {
   // The clicked time is wall time: an event reads it in the device zone, a booking in the clinic's (CORE-120).
   const wall = `${dayKey}T${clockLabel(minutes)}`;
-  openAddChoice(zonedInputToIso(wall, deviceTimeZone()), wall);
+  openAdd(zonedInputToIso(wall, deviceTimeZone()), wall);
 }
 
-// ── "+" add choice ───────────────────────────────────────────────────────────
+// ── "+" add ──────────────────────────────────────────────────────────────────
 
-const showAddChoice = ref(false);
-const addPrefillStart = ref<string | null>(null);
-/** The clicked slot as wall time — a booking keeps it in the clinic's zone (CORE-120). */
-const addPrefillWall = ref<string | null>(null);
-
-function openAddChoice(prefillStartIso?: string, prefillWall?: string) {
-  addPrefillStart.value = prefillStartIso ?? null;
-  addPrefillWall.value = prefillWall ?? null;
-  showAddChoice.value = true;
-}
-
-function defaultStart(): string {
-  if (addPrefillStart.value) return addPrefillStart.value;
-  const d = new Date();
-  d.setMinutes(0, 0, 0);
-  d.setHours(d.getHours() + 1);
-  return d.toISOString();
+// "+" and an empty slot always book a Cita for now — doctors schedule their own patients.
+// The Cita/Evento choice (CORE-117) comes back when events are needed again.
+// prefillWall is the clicked slot as wall time — a booking keeps it in the clinic's zone (CORE-120).
+function openAdd(prefillStartIso?: string, prefillWall?: string) {
+  openBooking({ start: prefillStartIso, startLocal: prefillWall ?? null });
 }
 
 // ── encounter dialog (EventForm) ────────────────────────────────────────────
@@ -659,13 +620,6 @@ function defaultStart(): string {
 const showEventForm = ref(false);
 const eventFormInitial = ref<EventFormInitialData | undefined>(undefined);
 
-function onChooseEvent() {
-  showAddChoice.value = false;
-  const start = defaultStart();
-  const end = new Date(new Date(start).getTime() + 3_600_000).toISOString();
-  eventFormInitial.value = { start_at: start, end_at: end };
-  showEventForm.value = true;
-}
 
 function openEncounter(encounter: PlannerEvent) {
   eventFormInitial.value = {
@@ -751,11 +705,6 @@ function openBooking(opts: { start?: string | null; startLocal?: string | null; 
   bookingStart.value = opts.start ?? null;
   bookingStartLocal.value = opts.startLocal ?? null;
   showBooking.value = true;
-}
-
-function onChooseAppointment() {
-  showAddChoice.value = false;
-  openBooking({ start: addPrefillStart.value ?? undefined, startLocal: addPrefillWall.value });
 }
 
 function openDetail(appointment: Appointment) {
@@ -1294,17 +1243,6 @@ function onEntryClick(entry: CalendarEntry) {
 .cal__row-meta {
   font-size: 0.8125rem;
   color: var(--cal-muted);
-}
-
-/* "+" choice dialog */
-.view-calendar__choice-list {
-  padding-top: 0;
-  padding-bottom: 8px;
-}
-
-.view-calendar__choice-icon {
-  width: 22px;
-  height: 22px;
 }
 
 @keyframes cal-fade-in {

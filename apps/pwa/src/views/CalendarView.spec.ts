@@ -244,15 +244,17 @@ describe("CalendarView (CORE-117)", () => {
     }
   });
 
-  it("the \"+\" button offers a choice between Appointment and Event (CORE-117)", async () => {
+  // For now "+" always means a Cita — doctors book their own patients; the Evento choice (CORE-117) comes back later.
+  it("the \"+\" button opens the appointment booking straight away, no Cita/Evento choice", async () => {
     apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
     const wrapper = await mountView("manager");
 
     await wrapper.find('[data-testid="calendar-add"]').trigger("click");
     await flushPromises();
 
-    expect(document.body.querySelector('[data-testid="calendar-add-appointment"]')).not.toBeNull();
-    expect(document.body.querySelector('[data-testid="calendar-add-event"]')).not.toBeNull();
+    expect(document.body.querySelector('[data-testid="appointment-submit"]')).not.toBeNull();
+    expect(document.body.querySelector('[data-testid="calendar-add-appointment"]')).toBeNull();
+    expect(document.body.querySelector('[data-testid="calendar-add-event"]')).toBeNull();
   });
 
   // CORE-4: a notification about a visit opens that visit, not just the calendar.
