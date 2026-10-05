@@ -211,6 +211,21 @@ describe("document system (header, title, banner, sections, signatures, footer)"
     }
   });
 
+  it("Historia clínica v2: two pages (exam + consent on page 2), STOP-Bang as 8 lettered rows, the skull's joints driven by state", () => {
+    const html = renderDocumentHtml("historiaEndo", "mx", "<p>x</p>");
+    const page2 = html.indexOf('<div class="hc-p2">');
+    expect(page2).toBeGreaterThan(0);
+    expect(html.indexOf('data-field="q_has_anemia"')).toBeLessThan(page2); // history on page 1
+    expect(html.indexOf('<div class="doc-content">')).toBeGreaterThan(page2); // consent on page 2
+    for (const key of ["sb_snoring", "sb_tiredness", "sb_observed_apnea", "sb_pressure", "sb_bmi_over_35", "sb_age_over_50", "sb_neck_over_40", "sb_is_male"]) {
+      expect(html, key).toContain(`<span class="hc-tick" data-state-field="${key}">`);
+    }
+    expect(html).toContain('data-state-field="tmj_level_right"');
+    expect(html).toContain('data-state-field="tmj_level_left"');
+    expect(html).toContain('data-state-field="score_state"');
+    expect(html).toContain("Sí = 1 punto");
+  });
+
   it("footer escapes names typed into the app", () => {
     const html = renderDocumentFooterHtml("NSL-SB v1", "mx", { subject: '<img src=x onerror="alert(1)">', issuer: ["A & B <Clinic>"] });
     expect(html).not.toContain("<img");

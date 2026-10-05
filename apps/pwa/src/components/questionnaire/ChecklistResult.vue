@@ -29,22 +29,24 @@
     </div>
   </div>
 
-  <!-- Clinical questionnaire: counts + proportion + the positive answers. -->
+  <!-- Clinical questionnaire (Łukasz 2026-10-05, option A + B's meter): a summary with one meter segment per question, then every question as a row. -->
   <div v-else-if="record && record.kind !== 'stop_bang'" class="checklist-result">
-    <div class="checklist-result__row">
-      <span class="checklist-result__count checklist-result__count--yes">
-        <b>{{ yesNo.yes }}</b><span>{{ record.kind === "oral_exam" ? t("app.clinical.result.findings") : t("app.clinical.result.yes") }}</span>
+    <div class="checklist-result__summary">
+      <span class="checklist-result__total">{{ yesNo.yes }} / {{ yesNo.total }}</span>
+      <span class="checklist-result__muted">{{ isOralExam ? t("app.clinical.result.withFinding") : t("app.clinical.result.answeredYes") }}</span>
+      <span v-if="skeletalClass" class="checklist-result__value">{{ skeletalClass }}</span>
+      <span class="checklist-result__meter" role="img" :aria-label="t('app.clinical.result.meterAria', { yes: yesNo.yes, n: yesNo.total })">
+        <i v-for="row in answerRows" :key="row.key" :class="row.state" />
       </span>
-      <span class="checklist-result__count">
-        <b>{{ yesNo.no }}</b><span>{{ record.kind === "oral_exam" ? t("app.clinical.result.normal") : t("app.clinical.result.no") }}</span>
-      </span>
-      <span class="checklist-result__split" aria-hidden="true"><i :style="{ width: `${(yesNo.yes / Math.max(yesNo.total, 1)) * 100}%` }" /></span>
-      <span class="checklist-result__muted">{{ t("app.clinical.result.ofQuestions", { n: yesNo.total }) }}</span>
     </div>
-    <div v-if="positives.length || extras.length" class="checklist-result__chips">
-      <span v-for="label in positives" :key="label" class="checklist-result__chip checklist-result__chip--yes">{{ label }}</span>
-      <span v-for="label in extras" :key="label" class="checklist-result__chip">{{ label }}</span>
-    </div>
+    <ul class="checklist-result__list">
+      <li v-for="row in answerRows" :key="row.key" :data-question="row.key" :data-state="row.state" :class="`checklist-result__item--${row.state}`">
+        <span class="checklist-result__mark" aria-hidden="true">{{ MARK[row.state] }}</span>
+        <span class="checklist-result__label">{{ row.label }}</span>
+        <span class="checklist-result__state">{{ row.status }}</span>
+      </li>
+    </ul>
+    <p v-if="otherText" class="checklist-result__other">{{ otherText }}</p>
   </div>
 
   <!-- STOP-Bang: score, risk, one letter per question (filled = yes; dashed = not asked yet). -->
@@ -115,14 +117,31 @@ const yesNo = computed(() => {
   const yes = answers.filter((a) => a === true).length;
   return { yes, no: answers.filter((a) => a === false).length, total: questions.value.length };
 });
-const positives = computed(() => questions.value.filter((q) => record.value?.[q.key] === true).map((q) => t(q.labelKey)));
-const extras = computed(() => {
-  const r = record.value;
-  if (!r) return [];
-  if (r.kind === "oral_exam" && r.skeletal_class) return [`${t("app.clinical.skeletalClassLabel")} ${r.skeletal_class}`];
-  if (r.kind === "medical_history" && r.medical_history_other) return [t("app.clinical.result.other", { text: r.medical_history_other })];
-  return [];
-});
+const isOralExam = computed(() => record.value?.kind === "oral_exam");
+type AnswerState = "yes" | "no" | "todo";
+const MARK: Record<AnswerState, string> = { yes: "!", no: "✓", todo: "–" };
+/** Every question with its answer — an oral-exam "no" reads "Normal", a history "no" reads "No". */
+const answerRows = computed(() =>
+  questions.value.map((q) => {
+    const answer = record.value?.[q.key];
+    const state: AnswerState = answer === true ? "yes" : answer === false ? "no" : "todo";
+    const status =
+      state === "yes"
+        ? t("app.clinical.result.yes")
+        : state === "todo"
+          ? t("app.clinical.result.notAnswered")
+          : t(isOralExam.value ? "app.clinical.result.normal" : "app.clinical.result.no");
+    return { key: q.key, label: t(q.labelKey), state, status };
+  })
+);
+const skeletalClass = computed(() =>
+  isOralExam.value && record.value?.skeletal_class ? `${t("app.clinical.skeletalClassLabel")} ${record.value.skeletal_class}` : null
+);
+const otherText = computed(() =>
+  record.value?.kind === "medical_history" && record.value.medical_history_other
+    ? t("app.clinical.result.other", { text: record.value.medical_history_other })
+    : null
+);
 
 const tmjCounts = computed(() => tmjSideCounts(record.value ?? {}));
 const tmjRows = computed(() =>
@@ -263,7 +282,6 @@ const formatNumber = (value: number) => value.toLocaleString(intlLocale(locale.v
   font-size: 0.8125rem;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
-.checklist-result__count,
 .checklist-result__skull {
   width: 44px;
   flex: none;
@@ -274,31 +292,105 @@ const formatNumber = (value: number) => value.toLocaleString(intlLocale(locale.v
   gap: 4px;
   font-variant-numeric: tabular-nums;
 }
-.checklist-result__count b,
 .checklist-result__metric b {
   font-size: 1.125rem;
   font-weight: 700;
 }
-.checklist-result__count span,
 .checklist-result__metric span {
   font-size: 0.8125rem;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
-.checklist-result__count--yes b {
+.checklist-result__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+}
+.checklist-result__total {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
   color: rgb(var(--v-theme-warning));
 }
-.checklist-result__split {
-  flex: 1 1 120px;
-  max-width: 220px;
-  height: 8px;
+.checklist-result__value {
+  margin-left: auto;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 2px 12px;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: 999px;
-  overflow: hidden;
-  background: rgba(var(--v-theme-on-surface), 0.08);
 }
-.checklist-result__split i {
-  display: block;
-  height: 100%;
+.checklist-result__meter {
+  flex: 1 0 100%;
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+.checklist-result__meter i {
+  flex: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(var(--v-theme-on-surface), 0.12);
+}
+.checklist-result__meter i.yes {
   background: rgb(var(--v-theme-warning));
+}
+.checklist-result__meter i.todo {
+  background: none;
+  border: 1.5px dashed rgba(var(--v-theme-on-surface), 0.3);
+}
+.checklist-result__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  column-gap: 24px;
+}
+.checklist-result__list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  font-size: 0.875rem;
+}
+.checklist-result__mark {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 0.625rem;
+  font-weight: 700;
+  border: 1.5px solid rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.checklist-result__item--yes .checklist-result__mark {
+  border-color: rgb(var(--v-theme-warning));
+  background: rgb(var(--v-theme-warning));
+  color: rgb(var(--v-theme-on-warning));
+}
+.checklist-result__item--todo .checklist-result__mark {
+  border-style: dashed;
+}
+.checklist-result__label {
+  flex: 1;
+  min-width: 0;
+}
+.checklist-result__state {
+  font-size: 0.8125rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.checklist-result__item--yes .checklist-result__state {
+  color: rgb(var(--v-theme-warning));
+  font-weight: 600;
+}
+.checklist-result__other {
+  margin: 0;
+  font-size: 0.875rem;
 }
 .checklist-result__chips {
   display: flex;
