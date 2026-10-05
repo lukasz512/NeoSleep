@@ -1,15 +1,31 @@
 <template>
-  <!-- ATM evaluation (NEO-237): a mini skull lit per side, findings per side, the opening, the findings as chips. -->
+  <!-- ATM evaluation (NEO-237): a mini copy of the exam — skull, then every finding with its right / left mark, then the opening. -->
   <div v-if="record && record.kind === 'tmj_exam'" class="checklist-result checklist-result--tmj">
-    <div class="checklist-result__row">
+    <div class="tmj-result">
       <TmjSkull class="checklist-result__skull" :counts="tmjCounts" mini />
-      <span class="checklist-result__metric"><b>{{ t("app.clinical.tmj.counts", tmjCounts) }}</b></span>
-      <span v-if="record.max_opening_mm != null" class="checklist-result__metric">
-        <b>{{ t("app.clinical.tmj.mm", { mm: record.max_opening_mm }) }}</b><span>{{ t("app.clinical.tmj.maxOpening") }}</span>
-      </span>
-    </div>
-    <div v-if="tmjPositives.length" class="checklist-result__chips">
-      <span v-for="label in tmjPositives" :key="label" class="checklist-result__chip checklist-result__chip--yes">{{ label }}</span>
+      <table class="tmj-mini">
+        <thead>
+          <tr>
+            <th scope="col"><span class="visually-hidden">{{ t("app.clinical.kind.tmjExam") }}</span></th>
+            <th v-for="side in TMJ_SIDES" :key="side" scope="col" :class="{ 'tmj-mini__head--on': tmjCounts[side] > 0 }">
+              {{ t(`app.clinical.tmj.${side}`) }} <b>{{ tmjCounts[side] }}</b>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in tmjRows" :key="row.key" :class="{ 'tmj-mini__row--on': row.right || row.left }">
+            <th scope="row">{{ row.label }}</th>
+            <td v-for="side in TMJ_SIDES" :key="side" :data-finding="row.key" :data-side="side">
+              <span v-if="row[side]" class="tmj-mini__mark tmj-mini__mark--on" role="img" :aria-label="t('app.clinical.result.yes')">✓</span>
+              <span v-else class="tmj-mini__mark" role="img" :aria-label="t('app.clinical.result.no')">—</span>
+            </td>
+          </tr>
+          <tr v-if="record.max_opening_mm != null" class="tmj-mini__opening">
+            <th scope="row">{{ t("app.clinical.tmj.maxOpening") }}</th>
+            <td colspan="2"><b>{{ t("app.clinical.tmj.mm", { mm: record.max_opening_mm }) }}</b></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
@@ -128,10 +144,13 @@ const otherText = computed(() =>
 );
 
 const tmjCounts = computed(() => tmjSideCounts(record.value ?? {}));
-const tmjPositives = computed(() =>
-  TMJ_FINDINGS.flatMap((f) =>
-    TMJ_SIDES.filter((side) => record.value?.[`${f.key}_${side}`] === true).map((side) => `${t(f.labelKey)} (${t(`app.clinical.tmj.${side}Short`)})`)
-  )
+const tmjRows = computed(() =>
+  TMJ_FINDINGS.map((f) => ({
+    key: f.key,
+    label: t(f.labelKey),
+    right: record.value?.[`${f.key}_right`] === true,
+    left: record.value?.[`${f.key}_left`] === true,
+  }))
 );
 
 const STOP_BANG_LETTERS = ["S", "T", "O", "P", "B", "A", "N", "G"];
@@ -164,6 +183,100 @@ const formatNumber = (value: number) => value.toLocaleString(intlLocale(locale.v
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 14px;
+}
+.checklist-result--tmj {
+  container: tmj-result / inline-size;
+}
+.tmj-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.tmj-result .checklist-result__skull {
+  width: 56px;
+}
+/* The exam in miniature: findings down, right / left across, same order as the form. */
+.tmj-mini {
+  flex: 1 1 auto;
+  max-width: 480px;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+.tmj-mini th,
+.tmj-mini td {
+  padding: 4px 8px;
+  text-align: center;
+  font-weight: 400;
+}
+.tmj-mini th[scope="row"] {
+  text-align: left;
+  padding-left: 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+.tmj-mini thead th {
+  width: 88px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+.tmj-mini thead th:first-child {
+  width: auto;
+}
+.tmj-mini thead th b {
+  font-variant-numeric: tabular-nums;
+}
+.tmj-mini__head--on b {
+  color: rgb(var(--v-theme-warning));
+}
+.tmj-mini tbody tr + tr {
+  border-top: 1px solid rgba(var(--v-border-color), calc(var(--v-border-opacity) * 0.6));
+}
+.tmj-mini__row--on th[scope="row"] {
+  color: rgb(var(--v-theme-on-surface));
+  font-weight: 500;
+}
+.tmj-mini__mark {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 20px;
+  border-radius: 999px;
+  color: rgba(var(--v-theme-on-surface), 0.3);
+}
+.tmj-mini__mark--on {
+  width: 32px;
+  background: rgba(var(--v-theme-warning), 0.16);
+  color: rgb(var(--v-theme-warning));
+  font-weight: 700;
+}
+.tmj-mini__opening td {
+  font-variant-numeric: tabular-nums;
+}
+/* Phone: the skull goes above, so the finding labels keep the full width. */
+@container tmj-result (max-width: 420px) {
+  .tmj-result {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .tmj-result .checklist-result__skull {
+    align-self: center;
+  }
+  .tmj-mini thead th {
+    width: 64px;
+  }
+  .tmj-mini th,
+  .tmj-mini td {
+    padding: 4px;
+  }
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 .checklist-result__muted {
   font-size: 0.8125rem;

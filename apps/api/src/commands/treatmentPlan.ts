@@ -10,6 +10,7 @@ import {
   getPractitionerById,
   softDeleteTreatmentPlan,
   restoreTreatmentPlan,
+  setTreatmentPlanAdvanceLevel,
   type TreatmentPlan,
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
@@ -125,6 +126,38 @@ export async function UpdateTreatmentPlanCommand(
     entity_id: id,
     entity_before: { status: before.status },
     entity_after: { status: after.status },
+    request_id: ctx.requestId,
+  });
+
+  return after;
+}
+
+/** Highest mandibular advance level the doctor can record (one device per level, protocol slide 15). */
+export const MAX_ADVANCE_LEVEL = 10;
+
+/**
+ * Records the mandibular advance level the doctor authorized at a control visit
+ * (metadata.advance_level). null clears it. Only this key changes, so an order
+ * draft or anything else in metadata survives.
+ */
+export async function SetTreatmentAdvanceLevelCommand(
+  ctx: TenantContext,
+  id: string,
+  level: number | null
+): Promise<TreatmentPlan> {
+  if (level !== null && (!Number.isInteger(level) || level < 1 || level > MAX_ADVANCE_LEVEL)) {
+    throw new ValidationError(`advance_level must be a whole number from 1 to ${MAX_ADVANCE_LEVEL}`, "advance_level");
+  }
+  const before = await requireTreatmentPlanInScope(ctx, id);
+  const after = await setTreatmentPlanAdvanceLevel(ctx.client, id, level);
+
+  await insertAuditLog(ctx.client, {
+    user_id: ctx.user.id,
+    action: "update",
+    entity_type: "TreatmentPlan",
+    entity_id: id,
+    entity_before: { advance_level: before.metadata?.advance_level ?? null },
+    entity_after: { advance_level: level },
     request_id: ctx.requestId,
   });
 

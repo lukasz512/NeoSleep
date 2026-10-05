@@ -24,9 +24,30 @@ import { recordPreviewFromItem, rememberRecordPreview } from "./useRecordPreview
 type ListSnapshot = { key: string; items: Record<string, unknown>[]; total: number; mobileHasMore: boolean };
 const lastShown = new Map<string, ListSnapshot>();
 
-/** Test hook: forget every list's last page. */
+/** The queue chip each list showed last, in memory only (same lifetime as lastShown), so Back keeps it. */
+const lastQueue = new Map<string, string>();
+
+/** Test hook: forget every list's last page and queue chip. */
 export function clearListSnapshots(): void {
   lastShown.clear();
+  lastQueue.clear();
+}
+
+/**
+ * Queue chips over a list (the doctor's Estudios / Tratamientos): the API filters by `?queue=`
+ * and `endpoint` returns { [value]: count } under the same search. `values` are in display order;
+ * with no chip picked yet, the first one opens if it has rows, else the second, else the first non-empty.
+ */
+export interface EntityListQueues {
+  endpoint: string;
+  values: readonly string[];
+}
+
+export function defaultQueue(values: readonly string[], counts: Record<string, number>): string {
+  const has = (v: string | undefined) => !!v && (counts[v] ?? 0) > 0;
+  if (has(values[0])) return values[0]!;
+  if (has(values[1])) return values[1]!;
+  return values.find(has) ?? values[0] ?? "";
 }
 
 export interface EntityListOptions {
@@ -46,6 +67,7 @@ export interface EntityListOptions {
    * (`patient` — GDPR Art. 9 data, see PatientsView.vue).
    */
   cacheable?: boolean;
+  queues?: EntityListQueues;
 }
 
 function cacheableEntityFor(viewId: string, cacheable: boolean | undefined): CacheableEntity | null {
@@ -110,13 +132,42 @@ export function useEntityList(opts: EntityListOptions) {
   const loadingMore = ref(false);
   const mobilePage = ref(1);
 
+  /** Picked queue chip ("" until the first counts arrive) and the rows behind each chip. */
+  const queue = ref(opts.queues ? (lastQueue.get(opts.viewId) ?? "") : "");
+  const queueCounts = ref<Record<string, number> | null>(null);
+
   const hasActiveFiltersOrSearch = computed(
     () => searchQuery.value.trim() !== "" || activeFilterCount.value > 0,
   );
 
+  // With queue chips, an empty chip is not an empty list: only no rows under any chip is.
   const isTrulyEmpty = computed(
-    () => !loading.value && !loadError.value && total.value === 0 && !hasActiveFiltersOrSearch.value,
+    () =>
+      !loading.value && !loadError.value && total.value === 0 && !hasActiveFiltersOrSearch.value &&
+      (!opts.queues || Object.values(queueCounts.value ?? {}).every((n) => n === 0)),
   );
+
+  async function loadQueueCounts(): Promise<void> {
+    if (!opts.queues) return;
+    const params = new URLSearchParams();
+    if (searchQuery.value.trim()) params.set(opts.searchParamKey ?? "search", searchQuery.value.trim());
+    try {
+      const res = await apiFetch(`${opts.queues.endpoint}?${params.toString()}`, { errorMessageKey: opts.i18n.errorLoad });
+      if (!res.ok) return;
+      queueCounts.value = await readJson<Record<string, number>>(res, { path: opts.queues.endpoint });
+      if (!queue.value) queue.value = defaultQueue(opts.queues.values, queueCounts.value);
+    } catch (err) {
+      // The chips just go without numbers; the list itself still loads.
+      reportCaught(err, { where: `useEntityList.queues:${opts.viewId}` });
+    }
+  }
+
+  function setQueue(value: string) {
+    queue.value = value;
+    lastQueue.set(opts.viewId, value);
+    tableOptions.value.page = 1;
+    void loadData();
+  }
 
   const debouncedSearch = useDebounceFn(() => {
     tableOptions.value.page = 1;
@@ -223,6 +274,7 @@ export function useEntityList(opts: EntityListOptions) {
     params.set("sortOrder", sortOrder);
     if (searchQuery.value.trim())
       params.set(opts.searchParamKey ?? "search", searchQuery.value.trim());
+    if (queue.value) params.set("queue", queue.value);
     for (const key of opts.filterParamKeys ?? []) {
       const val = filterState.value[key];
       if (Array.isArray(val)) {
@@ -249,6 +301,9 @@ export function useEntityList(opts: EntityListOptions) {
     if (!quiet) loading.value = true;
     loadError.value = "";
     loadFailure.value = null;
+    // The first load waits for the counts, which pick the opening chip; later ones refresh them alongside.
+    if (opts.queues && !queue.value) await loadQueueCounts();
+    else void loadQueueCounts();
     const o = tableOptions.value;
     const isFreshLoad = o.page === 1;
     const params = buildParams(o.page);
@@ -392,5 +447,8 @@ export function useEntityList(opts: EntityListOptions) {
     onRowClick,
     loadData,
     loadMoreMobile,
+    queue,
+    queueCounts,
+    setQueue,
   };
 }

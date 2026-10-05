@@ -5,15 +5,48 @@ import en from "@i18n/en.json";
 import ChecklistResult from "./ChecklistResult.vue";
 import type { ChecklistHistoryEntry, ChecklistRecord } from "../../composables/usePatientChecklist";
 
-/** NEO-TBD (Łukasz 2026-10-05, option A + B's meter): every question is a row, a segment meter sums it up. */
+const i18nPlugin = () => createI18n({ legacy: false, locale: "en", messages: { en } });
+
+/** ATM result in the history: a mini copy of the exam, findings split into right / left columns. */
+const mountTmj = (record: Record<string, unknown>) =>
+  mount(ChecklistResult, {
+    // Test fixture: only the record fields the TMJ branch reads.
+    props: { entry: { record: { kind: "tmj_exam", ...record } } as unknown as ChecklistHistoryEntry },
+    global: { plugins: [i18nPlugin()] },
+  });
+
+const mark = (wrapper: ReturnType<typeof mountTmj>, finding: string, side: string) =>
+  wrapper.find(`td[data-finding='${finding}'][data-side='${side}'] .tmj-mini__mark`);
+
+describe("ChecklistResult — ATM exam", () => {
+  it("lists every finding once, with its right and left mark in their own columns", () => {
+    const wrapper = mountTmj({ pain_palpation_right: true, opening_deviation_left: true, opening_deviation_right: true });
+    expect(wrapper.findAll("tbody tr")).toHaveLength(5);
+    expect(mark(wrapper, "pain_palpation", "right").classes()).toContain("tmj-mini__mark--on");
+    expect(mark(wrapper, "pain_palpation", "left").classes()).not.toContain("tmj-mini__mark--on");
+    expect(mark(wrapper, "opening_deviation", "left").classes()).toContain("tmj-mini__mark--on");
+    expect(wrapper.findAll(".tmj-mini__row--on")).toHaveLength(2);
+  });
+
+  it("the column headers carry the count per side", () => {
+    const wrapper = mountTmj({ pain_palpation_right: true, joint_sounds_right: true, muscle_pain_left: true });
+    const heads = wrapper.findAll("thead th").map((th) => th.text());
+    expect(heads[1]).toBe("Right 2");
+    expect(heads[2]).toBe("Left 1");
+  });
+
+  it("shows the maximum opening as the last row, only when recorded", () => {
+    expect(mountTmj({ max_opening_mm: 42 }).find(".tmj-mini__opening").text()).toContain("42 mm");
+    expect(mountTmj({}).find(".tmj-mini__opening").exists()).toBe(false);
+  });
+});
+
+/** Łukasz 2026-10-05 (option A + B's meter): every question is a row, a segment meter sums it up. */
 const entry = (record: Partial<ChecklistRecord>): ChecklistHistoryEntry =>
-  ({ id: "e1", type: "record", created_at: "2026-10-05T10:00:00Z", source: "staff", by: null, record } as ChecklistHistoryEntry);
+  ({ id: "e1", type: "record", created_at: "2026-10-05T10:00:00Z", source: "staff", by: null, record }) as ChecklistHistoryEntry;
 
 const mountResult = (record: Partial<ChecklistRecord>) =>
-  mount(ChecklistResult, {
-    props: { entry: entry(record) },
-    global: { plugins: [createI18n({ legacy: false, locale: "en", messages: { en } })] },
-  });
+  mount(ChecklistResult, { props: { entry: entry(record) }, global: { plugins: [i18nPlugin()] } });
 
 const rows = (wrapper: ReturnType<typeof mountResult>) => wrapper.findAll("[data-question]");
 
