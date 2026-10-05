@@ -659,12 +659,12 @@ describe("AuthView — app version under the badge (NEO-12)", () => {
 
   it("shows version and build number with no suffix on prod", async () => {
     const { wrapper } = await mountAuthView(vi.fn(), "/login", { version: "1.0.0", build: 12, channel: "prod" });
-    expect(versionText(wrapper).text()).toBe("Version 1.0.0 (build 12)");
+    expect(versionText(wrapper).text()).toBe("Version 1.0.0.12");
   });
 
   it("marks dev deploys with a DEV suffix", async () => {
     const { wrapper } = await mountAuthView(vi.fn(), "/login", { version: "1.0.0", build: 3, channel: "dev" });
-    expect(versionText(wrapper).text()).toBe("Version 1.0.0 (build 3) · DEV");
+    expect(versionText(wrapper).text()).toBe("Version 1.0.0.3 · DEV");
   });
 
   it("shows a local build without a build number", async () => {

@@ -185,7 +185,7 @@ withDefaults(defineProps<{
   locale: string;
   /** False for Google-only accounts — they have no password to change. */
   canChangePassword: boolean;
-  /** "Version 1.0.0 (build 105)" — empty hides the line. */
+  /** "Version 1.1.0.105" — empty hides the line. */
   version: string;
   /** "DEV" / "LOCAL" on non-prod builds, null on prod. */
   channel: string | null;

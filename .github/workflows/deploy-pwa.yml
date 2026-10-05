@@ -49,6 +49,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history: the build number below counts commits since the
+          # last version bump in apps/pwa/package.json.
+          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -76,15 +80,14 @@ jobs:
             echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_DEV }}" >> $GITHUB_ENV
           fi
 
-      # Shown under the login badge as "Version <package.json version> (build N)".
-      # N = this workflow's run number minus BUILD_BASE, so numbering started at 1
-      # with NEO-12 (run 114 was the last deploy before it). Never lower
-      # BUILD_BASE — build numbers must only ever go up.
+      # Shown under the login badge as "Version <package.json version>.N" (CORE-154).
+      # N = commits since the commit that last changed the "version" line in
+      # apps/pwa/package.json, plus one. Bumping the version restarts N at 1;
+      # within a version N only goes up. Nothing to maintain by hand.
       - name: Set app build number and channel
-        env:
-          BUILD_BASE: 114
         run: |
-          echo "VITE_APP_BUILD=$(( ${{ github.run_number }} - BUILD_BASE ))" >> $GITHUB_ENV
+          VERSION_COMMIT=$(git log -1 --format=%H -G'"version"' -- apps/pwa/package.json)
+          echo "VITE_APP_BUILD=$(( $(git rev-list --count "${VERSION_COMMIT}..HEAD") + 1 ))" >> $GITHUB_ENV
           if [ "${{ github.ref }}" = "refs/heads/prod" ]; then
             echo "VITE_APP_CHANNEL=prod" >> $GITHUB_ENV
           else

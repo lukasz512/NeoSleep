@@ -24,8 +24,10 @@ describe("resolveAppVersion", () => {
     expect(resolveAppVersion({ VITE_APP_VERSION: "1.0.0", VITE_APP_CHANNEL: "staging" }).channel).toBe("local");
   });
 
-  it("starts numbering at 1.0.0 in apps/pwa/package.json", () => {
+  // CORE-154: package.json holds the 3-part version; CI appends the build as
+  // the 4th part ("1.1.0.N"), so the version itself must stay plain X.Y.Z.
+  it("keeps a plain X.Y.Z version in apps/pwa/package.json", () => {
     const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version?: string };
-    expect(pkg.version).toBe("1.0.0");
+    expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/);
   });
 });
