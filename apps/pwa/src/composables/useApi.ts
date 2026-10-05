@@ -17,7 +17,8 @@
  * endpoint it tries exactly one silent refresh (concurrent 401s share the same in-flight
  * refresh call via refreshPromise, so a burst of requests on boot never races two refresh
  * calls against the same rotating token — the second would look like token reuse and kill
- * the session). Only if that also fails does it clear both tokens and notify the auth store
+ * the session; across tabs the same is ensured by a Web Lock, see withRefreshLock()).
+ * Only if the server rejects the refresh does it clear both tokens and notify the auth store
  * so the router guard redirects to /login. Register the store-clear callback via
  * setAuthInterceptor() — called from stores/auth.ts after store creation.
  */
@@ -32,7 +33,9 @@ export type { ApiFetchOptions };
 export { extractErrorMessage };
 
 let accessToken: string | null = null;
-const refreshToken = useLocalStorage<string | null>(APP_STORAGE_KEYS.refreshToken, null);
+// flush "sync": refreshAccessToken() reads storage directly (other tabs write there), so
+// this tab's own writes must land in storage at once, not on the next tick.
+const refreshToken = useLocalStorage<string | null>(APP_STORAGE_KEYS.refreshToken, null, { flush: "sync" });
 
 export function getAuthToken(): string | null {
   return accessToken;
@@ -77,13 +80,38 @@ function isAuthPath(url: string): boolean {
 /** At most one refresh in flight at a time — see the module doc comment above for why a
  *  second concurrent call would be fatal (rotation makes it look like token reuse). Every
  *  caller that 401s while a refresh is already running just awaits the same promise. */
-let refreshPromise: Promise<boolean> | null = null;
+let refreshPromise: Promise<RefreshOutcome> | null = null;
 
-async function refreshAccessToken(): Promise<boolean> {
+/** "unreachable" = network error / timeout: the session may be fine, so nobody is signed out. */
+type RefreshOutcome = "refreshed" | "rejected" | "unreachable";
+
+const REFRESH_LOCK = "neo:auth-refresh";
+
+/** refreshPromise only dedupes within one tab, but every tab of this browser shares the
+ *  one stored refresh token. Two tabs refreshing at once sent the same token twice; the
+ *  server rotated it for the first and took the second for theft, killing the session
+ *  (seen on pwa-dev, 2026-10-05). So tabs take turns through a Web Lock, and each reads
+ *  the token from storage only once it holds the lock — by then it is the newest one. */
+async function withRefreshLock<T>(fn: () => Promise<T>): Promise<T> {
+  if (typeof navigator !== "undefined" && navigator.locks) {
+    return navigator.locks.request(REFRESH_LOCK, fn);
+  }
+  return fn();
+}
+
+function readStoredRefreshToken(): string | null {
+  try {
+    return localStorage.getItem(APP_STORAGE_KEYS.refreshToken);
+  } catch {
+    return refreshToken.value;
+  }
+}
+
+async function refreshAccessToken(): Promise<RefreshOutcome> {
   if (refreshPromise) return refreshPromise;
-  refreshPromise = (async () => {
-    const current = refreshToken.value;
-    if (!current) return false;
+  refreshPromise = withRefreshLock(async (): Promise<RefreshOutcome> => {
+    const current = readStoredRefreshToken();
+    if (!current) return "rejected";
     try {
       const res = await fetch(`${getApiUrl()}/api/v1/auth/refresh`, {
         method: "POST",
@@ -93,22 +121,23 @@ async function refreshAccessToken(): Promise<boolean> {
         // refresh would otherwise block every 401-retrying caller behind refreshPromise.
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
-      if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
         accessToken = null;
         refreshToken.value = null;
-        return false;
+        return "rejected";
       }
+      if (!res.ok) return "unreachable";
       const data = (await res.json()) as { token: string; refresh_token: string };
       accessToken = data.token;
       refreshToken.value = data.refresh_token;
-      return true;
+      return "refreshed";
     } catch (err) {
       // Network error / timeout, not an auth rejection — leave the refresh token alone so
       // the next request can simply try again rather than forcing a real re-login.
       reportCaught(err, { where: "useApi.refreshAccessToken", level: "warn" });
-      return false;
+      return "unreachable";
     }
-  })();
+  });
   try {
     return await refreshPromise;
   } finally {
@@ -163,11 +192,12 @@ async function fetchWithAuth(
     let res = await fetch(input, { ...init, headers: buildHeaders(), signal: timeoutController.signal });
 
     if (res.status === 401 && !isAuthPath(url)) {
-      const refreshed = await refreshAccessToken();
-      if (refreshed) {
+      const outcome = await refreshAccessToken();
+      if (outcome === "refreshed") {
         res = await fetch(input, { ...init, headers: buildHeaders(), signal: timeoutController.signal });
       }
-      if (res.status === 401) {
+      // A refresh that couldn't reach the API is not a sign-out: the request fails, the session stays.
+      if (res.status === 401 && outcome !== "unreachable") {
         clearAuthToken();
         refreshToken.value = null;
         _clearAuth?.();

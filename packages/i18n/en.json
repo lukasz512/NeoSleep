@@ -660,6 +660,7 @@
   "user.login.callback.loading": "Signing you in…",
   "user.login.callback.error": "Sign-in failed. Please try again.",
   "user.login.callback.backToLogin": "Back to sign in",
+  "user.login.sessionEnded": "Your session has ended. Please sign in again.",
   "user.login.google.or": "or",
   "user.login.google.signIn": "Sign in with Google",
   "user.login.google.error.noAccount": "This Google account doesn't have access. Ask your administrator for an invitation.",

@@ -217,10 +217,13 @@ authRouter.get(
 // A refresh token that's already revoked (either logged-out, or already
 // rotated away by an earlier /auth/refresh call) is treated as a theft
 // signal, not a routine error: every token for that user is revoked, forcing
-// a real re-login on every device. A legitimate client never presents an
-// already-rotated token — it always holds the newest one — so this only
-// fires when a token has been copied and two parties raced to use it.
+// a real re-login on every device. Exception: within ROTATION_RACE_GRACE_MS of
+// the rotation, a re-presented token is a race (two tabs of one browser, or a
+// phone that lost the response), so only that one request fails.
 // ---------------------------------------------------------------------------
+
+/** How long after a rotation a re-presented old token counts as a race, not theft. */
+const ROTATION_RACE_GRACE_MS = 60_000;
 
 authRouter.post("/auth/refresh", asyncHandler(async (req: Request, res: Response) => {
   const { refresh_token } = req.body as { refresh_token?: string };
@@ -244,6 +247,9 @@ authRouter.post("/auth/refresh", asyncHandler(async (req: Request, res: Response
       // a dead token, not a new signal, and must NOT cascade into revoking this
       // user's other, still-legitimate sessions.
       if (row.replaced_by_id) {
+        if (Date.now() - row.revoked_at.getTime() < ROTATION_RACE_GRACE_MS) {
+          return { status: 401, body: { error: "This session was refreshed elsewhere." } } as const;
+        }
         await revokeAllRememberMeTokensForUser(client, row.user_id);
         return { status: 401, body: { error: "This session is no longer valid. Please log in again." } } as const;
       }

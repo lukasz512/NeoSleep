@@ -3,6 +3,7 @@ import request from "supertest";
 import bcrypt from "bcrypt";
 import { app } from "./server.js";
 import { withTenant, insertStaffUser } from "./db.js";
+import { hashToken } from "./utils/hashToken.js";
 
 // Covers ADR-020's refresh-token rotation model: POST /auth/refresh, reuse/theft
 // detection, per-device logout, and password-change revoking every device. See
@@ -26,6 +27,13 @@ function testEmail(label: string): string {
 async function createLoginUser(email: string): Promise<void> {
   const hash = await bcrypt.hash(TEST_PASSWORD, 4);
   await withTenant(TENANT_SLUG, (client) => insertStaffUser(client, email, "QA", "Refresh", "rep", hash, false));
+}
+
+/** Moves a token's rotation past the race grace window, so replaying it counts as theft. */
+async function ageRotation(refreshToken: string): Promise<void> {
+  await withTenant(TENANT_SLUG, (client) =>
+    client.query(`UPDATE remember_me_tokens SET revoked_at = now() - interval '10 minutes' WHERE token_hash = $1`, [hashToken(refreshToken)]),
+  );
 }
 
 async function login(email: string, ip: string): Promise<{ token: string; refresh_token: string }> {
@@ -98,8 +106,9 @@ describe("POST /api/v1/auth/refresh", () => {
       .send({ refresh_token: original.refresh_token });
     expect(rotated.status).toBe(200);
     const newestRefreshToken = rotated.body.refresh_token as string;
+    await ageRotation(original.refresh_token);
 
-    // An attacker (or a client that lost a race) replays the now-rotated-away token.
+    // An attacker replays the now-rotated-away token, well after the rotation.
     const reuseRes = await request(app)
       .post("/api/v1/auth/refresh")
       .set("X-Forwarded-For", ip)
@@ -114,6 +123,34 @@ describe("POST /api/v1/auth/refresh", () => {
       .set("X-Forwarded-For", ip)
       .send({ refresh_token: newestRefreshToken });
     expect(legitimateButNowDeadRes.status).toBe(401);
+  });
+
+  // Two tabs of one browser (or a phone that lost the response) can present the
+  // just-rotated token a moment after the rotation. That is a race, not theft:
+  // only that request fails and the newest token keeps working.
+  it("a replay within the grace window 401s without revoking the newest token (race, not theft)", async () => {
+    const email = testEmail("reuse-race");
+    await createLoginUser(email);
+    const ip = freshIp();
+    const original = await login(email, ip);
+
+    const rotated = await request(app)
+      .post("/api/v1/auth/refresh")
+      .set("X-Forwarded-For", ip)
+      .send({ refresh_token: original.refresh_token });
+    expect(rotated.status).toBe(200);
+
+    const raceRes = await request(app)
+      .post("/api/v1/auth/refresh")
+      .set("X-Forwarded-For", ip)
+      .send({ refresh_token: original.refresh_token });
+    expect(raceRes.status).toBe(401);
+
+    const newestRes = await request(app)
+      .post("/api/v1/auth/refresh")
+      .set("X-Forwarded-For", ip)
+      .send({ refresh_token: rotated.body.refresh_token });
+    expect(newestRes.status).toBe(200);
   });
 
   // Regression test for a real bug caught during implementation: a plain logout
