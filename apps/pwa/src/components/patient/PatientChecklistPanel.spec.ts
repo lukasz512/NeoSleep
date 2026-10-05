@@ -224,9 +224,9 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
     expect(wrapper.find("[data-section='medicalHistory']").classes()).toContain("studies__hc-tab--done");
     const history = await openTab(wrapper, "medicalHistory");
     expect(history.text()).toContain("Filled in by the patient");
-    // Result: yes/no counts + the positive answers as chips.
-    expect(history.find(".checklist-result__count--yes").text()).toBe("1Yes");
-    expect(history.findAll(".checklist-result__chip--yes").map((c) => c.text())).toEqual(["Diabetes"]);
+    // Result: the yes count over all questions + every question as a row, the positive one marked.
+    expect(history.find(".checklist-result__total").text()).toBe("1 / 14");
+    expect(history.findAll("[data-state='yes']").map((r) => r.find(".checklist-result__label").text())).toEqual(["Diabetes"]);
     expect(button(history, "Fill in")).toBeUndefined();
     expect(history.find('[aria-label="More actions for Medical history"]').exists()).toBe(true);
 
