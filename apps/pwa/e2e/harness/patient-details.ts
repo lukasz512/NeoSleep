@@ -54,6 +54,7 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   if (url.includes("/summary")) return json(SUMMARY);
   if (url.includes("/care-team")) return json(CARE_TEAM);
+  if (url.endsWith("/version")) return json({ version: "v1" });
   // NEO-237's ATM card: unstubbed, its 401 signs the harness user out and the care team loses its actions.
   if (url.includes("/clinical-records")) return json({ records: [] });
   if (url.includes("/api/v1/practitioner")) return json({ items: [{ id: "h-4", name: "Dr. Pablo Ortiz" }] });
@@ -66,7 +67,7 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
 const Stub = { render: () => null };
 const router = createRouter({
   history: createMemoryHistory(),
-  routes: [{ path: "/", component: Stub }, { path: "/hcp/:id", name: "hcp-detail", component: Stub }],
+  routes: [{ path: "/", component: Stub }, { path: "/hcp/:id", name: "hcp-detail", component: Stub }, { path: "/calendar", name: "calendar", component: Stub }],
 });
 
 const TABS = [
