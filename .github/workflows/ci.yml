@@ -34,6 +34,9 @@ jobs:
     # (e.g. renovate/*); a skipped job counts as passed for required checks.
     if: github.event_name != 'pull_request' || !(startsWith(github.head_ref, 'worktree-') || startsWith(github.head_ref, 'worker/') || startsWith(github.head_ref, 'claude/'))
     runs-on: ubuntu-latest
+    # CORE-151: a hung e2e used to hold the job (and the session waiting on it) for up
+    # to an hour; the default limit is 6 h. A full 3-engine run takes ~20-30 min.
+    timeout-minutes: 45
 
     services:
       postgres:
@@ -178,6 +181,7 @@ jobs:
           EOF
 
       - name: Test — pwa e2e (blocking)
+        timeout-minutes: 25
         run: |
           echo "e2e browsers: $E2E_BROWSERS"
           pnpm --filter @neo/pwa test:e2e $(for b in $E2E_BROWSERS; do printf -- '--project=%s ' "$b"; done)
