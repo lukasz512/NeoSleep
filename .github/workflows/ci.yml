@@ -31,8 +31,9 @@ concurrency:
 jobs:
   test:
     # JOB_IF (CORE-98): pull_request runs only for heads the push trigger doesn't cover
-    # (e.g. renovate/*); a skipped job counts as passed for required checks.
-    if: github.event_name != 'pull_request' || !(startsWith(github.head_ref, 'worktree-') || startsWith(github.head_ref, 'worker/') || startsWith(github.head_ref, 'claude/'))
+    # (e.g. renovate/*); a skipped job counts as passed for required checks. Head dev =
+    # the dev→prod promote PR: the dev push run already tests that same commit.
+    if: github.event_name != 'pull_request' || !(startsWith(github.head_ref, 'worktree-') || startsWith(github.head_ref, 'worker/') || startsWith(github.head_ref, 'claude/') || github.head_ref == 'dev')
     runs-on: ubuntu-latest
 
     services:
@@ -190,7 +191,7 @@ jobs:
   # every PR/push so a broken Dockerfile fails here, not during a deploy. Build only,
   # nothing is pushed.
   api-image:
-    if: github.event_name != 'pull_request' || !(startsWith(github.head_ref, 'worktree-') || startsWith(github.head_ref, 'worker/') || startsWith(github.head_ref, 'claude/'))
+    if: github.event_name != 'pull_request' || !(startsWith(github.head_ref, 'worktree-') || startsWith(github.head_ref, 'worker/') || startsWith(github.head_ref, 'claude/') || github.head_ref == 'dev')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -213,7 +214,7 @@ jobs:
   # Claude Code tooling (hooks, ship-artifact, worktree cleanup) has its own self-tests.
   # They need only git, jq, bash and Node, no install and no database (CORE-23).
   tooling:
-    if: github.event_name != 'pull_request' || !(startsWith(github.head_ref, 'worktree-') || startsWith(github.head_ref, 'worker/') || startsWith(github.head_ref, 'claude/'))
+    if: github.event_name != 'pull_request' || !(startsWith(github.head_ref, 'worktree-') || startsWith(github.head_ref, 'worker/') || startsWith(github.head_ref, 'claude/') || github.head_ref == 'dev')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
