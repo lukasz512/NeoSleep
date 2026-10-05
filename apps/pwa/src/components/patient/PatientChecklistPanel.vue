@@ -210,6 +210,7 @@
     <template v-else-if="checklist">
       <header class="studies__header">
         <AppSegmentProgress
+          v-if="items.length > 1"
           class="studies__progress"
           :segments="checklistSegments(items)"
           :label="t('app.clinical.progress', summary)"
@@ -454,8 +455,8 @@ const isAdmin = computed(() => authStore.user?.role === "admin");
 
 const checklistApi = usePatientChecklist(() => props.patientId);
 const checklist = computed(() => checklistApi.checklist.value);
-const waitingCount = computed(() => checklist.value?.items.filter((i) => i.status === "pending_patient").length ?? 0);
 const items = computed(() => (checklist.value?.items ?? []).filter((item) => !props.category || item.category === props.category));
+const waitingCount = computed(() => items.value.filter((i) => i.status === "pending_patient").length);
 const summary = computed(() => ({ done: items.value.filter((i) => i.status === "done").length, total: items.value.length }));
 /** The patient QR and email only carry documents (consent, questionnaires) — never shown on Estudios. */
 const showsPatientActions = computed(() => props.category !== "study");

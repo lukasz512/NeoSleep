@@ -213,7 +213,8 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
     (checklistBody.other_uploads as unknown[]).push({ id: "up-9", type: "upload", created_at: "2026-09-22T10:00:00Z", source: "staff", by: null, title: "CBCT", file_attachment_id: "up-9" });
     const wrapper = await mountPanel({ category: "study" });
     expect(rows(wrapper).map((r) => r.find(".studies__item-title").text())).toEqual(["Polysomnography", "CBCT"]);
-    expect(wrapper.text()).toContain("0 of 1 done");
+    // A single study gets no progress bar — it appears once there's a second one.
+    expect(wrapper.find(".studies__progress").exists()).toBe(false);
     expect(wrapper.find(".studies__qr").exists()).toBe(false);
     expect(wrapper.find(".studies__add").exists()).toBe(true);
   });

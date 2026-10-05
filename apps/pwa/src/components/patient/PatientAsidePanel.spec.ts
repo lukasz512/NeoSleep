@@ -156,4 +156,21 @@ describe("PatientAsidePanel (NEO-153, NEO-203)", () => {
     expect(wrapper.findAll(".patient-aside__note")).toHaveLength(1);
     expect(wrapper.find(".patient-aside__note-body").text()).toBe("Latest note");
   });
+
+  it("counts documents only — the single study gets no bar of its own", async () => {
+    const wrapper = await mountPanel();
+    const bars = wrapper.findAll(".patient-aside__docs .app-segment-progress");
+    expect(bars).toHaveLength(1);
+    expect(bars[0].attributes("data-category")).toBe("document");
+    expect(bars[0].text()).toContain("Documents: 1 of 2 done");
+    expect(bars[0].findAll("[data-testid='app-segment-progress-segment']")).toHaveLength(2);
+  });
+
+  it("gives studies their own bar once there is more than one", async () => {
+    checklistItems.push(item("homeSleepTest", "results", "missing", false));
+    const wrapper = await mountPanel();
+    const study = wrapper.find(".patient-aside__docs .app-segment-progress[data-category='study']");
+    expect(study.exists()).toBe(true);
+    expect(study.text()).toContain("Studies: 1 of 2 done");
+  });
 });
