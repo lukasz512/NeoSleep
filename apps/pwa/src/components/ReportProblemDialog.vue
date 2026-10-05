@@ -82,7 +82,6 @@ import AppIcon from "./AppIcon.vue";
 import ChoiceChipsField from "./ChoiceChipsField.vue";
 import { useReportProblem } from "../composables/useReportProblem";
 import { useNotifications } from "../composables/useNotifications";
-import { useAuthStore } from "../stores/auth";
 import type { ProblemKind } from "../types/issues";
 
 /**
@@ -96,7 +95,6 @@ const FILE_MAX_BYTES = FILE_MAX_MB * 1024 * 1024;
 
 const { t } = useI18n();
 const { state, close, submit } = useReportProblem();
-const authStore = useAuthStore();
 const appVersion = useAppVersionParts();
 const notifications = useNotifications();
 
@@ -109,8 +107,8 @@ const submitError = ref("");
 const attempted = ref(false);
 const sending = ref(false);
 
-const isDoctor = computed(() => authStore.user?.role === "doctor");
-const title = computed(() => t(isDoctor.value ? "report.title.feedback" : "report.title.default"));
+// One name for every role (decision form core-141-decisions, D3): the kind chips say whether it's a problem.
+const title = computed(() => t("report.title.feedback"));
 const kindItems = computed(() =>
   (["problem", "suggestion", "other"] as const).map((value) => ({ value, title: t(`report.kind.${value}`) })),
 );

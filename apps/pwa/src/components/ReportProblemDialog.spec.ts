@@ -84,8 +84,8 @@ describe("ReportProblemDialog", () => {
     expect(notify).not.toHaveBeenCalled();
   });
 
-  it("is called Feedback for a doctor", async () => {
-    await open("doctor");
+  it("is called Feedback for every role (D3)", async () => {
+    await open("rep");
     expect(byTestId("app-dialog-header-title")?.textContent).toBe("Feedback");
   });
 });

@@ -116,7 +116,7 @@
       @click="$emit('report-problem'); $emit('close')"
     >
       <AppIcon name="feedback" class="user-menu__action-icon" />
-      {{ t(role === 'doctor' ? 'report.menu.feedback' : 'report.menu.default') }}
+      {{ t('report.menu.feedback') }}
     </button>
 
     <div v-if="accountActions" class="user-menu__actions" :class="{ 'user-menu__actions--single': !canChangePassword }" data-motion="row">

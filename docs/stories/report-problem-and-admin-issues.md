@@ -9,7 +9,7 @@ Production errors are already captured in `platform.diagnostics` (API 5xx via
 there is no view, every occurrence is a new row and API rows carry no tenant or user.
 
 ## User stories
-- As a **doctor**, I tap "Feedback" in my user menu, pick Problem / Suggestion / Other,
+- As a **doctor** (and every other role, D3 round 2), I tap "Feedback" in my user menu, pick Problem / Suggestion / Other,
   describe it, optionally attach a photo or file, and get a reference number back.
 - As **any signed-in user** (rep, manager, admin), the same form is "Report a problem";
   every error screen offers "Report" with the failing request already attached (D2).
@@ -28,9 +28,14 @@ there is no view, every occurrence is a new row and API rows carry no tenant or 
 | D4 Who sees | tenant admin: own tenant's reports; errors: platform admins only |
 | D5 Attachment | optional photo/file from the gallery |
 
+Round 2 (form core-141-decisions, 2026-10-05): D1 prod before the demo (Łukasz merges +
+promotes); D3 one name for every role: "Feedback" / „Uwagi” / „Comentarios”.
+D2 traffic capture scope: events **plus request bodies with masking** (not built yet).
+
 Follow-up (separate, after the demo): automatic capture of all traffic for analysis
-(events only — screen, action, timing, status, request_id; no form or request bodies,
-pseudonymised user, 30-day retention, platform-admin only).
+(events — screen, action, timing, status, request_id — plus request bodies with sensitive
+fields masked, per D2; pseudonymised user, 30-day retention, platform-admin only; a test must
+prove the masking on stored bodies; needs a Legal check: patient data in logs → DPA).
 
 ## Defaults (decided without asking — tests prove them)
 - Description required, 10–5000 chars; max 5 reports per user per hour.
