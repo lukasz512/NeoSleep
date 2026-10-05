@@ -53,8 +53,8 @@ function pointsAt(spec, target) {
   return last === basename(target) || last === name || (name === "index" && spec.endsWith(basename(dirname(target))));
 }
 
-export function relatedSpecs(changed, { root = ROOT } = {}) {
-  const ui = changed.filter((f) => UI.test(f));
+export function relatedSpecs(changed, { root = ROOT, seeds = UI } = {}) {
+  const ui = changed.filter((f) => seeds.test(f));
   if (!ui.length) return [];
   const specs = readdirSync(join(root, E2E))
     .filter((f) => f.endsWith(".spec.ts"))
