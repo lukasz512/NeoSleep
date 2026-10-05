@@ -4,10 +4,11 @@
  * helps us reproduce: the page path (no query string or fragment), app version, viewport and the
  * last errors of this session (already scrubbed by reportCaught). No form or request bodies.
  */
-import { reactive } from "vue";
+import { reactive, ref } from "vue";
 import { getRecentErrors } from "@api";
 import { browserStorage, getPrefsIdentity, prefsKey, readPref, removePref, writePref } from "@prefs";
 import { apiFetch } from "./useApi";
+import { fetchMyReports } from "./useIssues";
 import type { ProblemKind } from "../types/issues";
 
 export interface ReportProblemPrefill {
@@ -29,6 +30,21 @@ export type ReportProblemResult = { ok: true; number: number } | { ok: false; st
 export const MAX_REQUEST_IDS = 20;
 
 const state = reactive<{ open: boolean; prefill: ReportProblemPrefill }>({ open: false, prefill: {} });
+
+/**
+ * Whether the signed-in user has sent at least one report — "My reports" in the account menu
+ * shows only then (CORE-158). Unknown or a failed check counts as "no".
+ */
+const hasReports = ref(false);
+
+export async function loadHasReports(): Promise<void> {
+  try {
+    hasReports.value = (await fetchMyReports()).length > 0;
+  } catch {
+    // benign: already reported by useIssues; the row simply stays hidden.
+    hasReports.value = false;
+  }
+}
 
 export function openReportProblem(prefill: ReportProblemPrefill = {}): void {
   state.prefill = { ...prefill };
@@ -73,6 +89,7 @@ async function submit(form: ReportProblemForm): Promise<ReportProblemResult> {
     });
     if (!res.ok) return { ok: false, status: res.status };
     const body = (await res.json()) as { number: number };
+    hasReports.value = true;
     return { ok: true, number: body.number };
   } catch {
     // benign: offline or timeout — the dialog shows a retry message; reporting a failed
@@ -121,5 +138,5 @@ export function clearReportDraft(): void {
 }
 
 export function useReportProblem() {
-  return { state, open: openReportProblem, close: closeReportProblem, submit };
+  return { state, hasReports, open: openReportProblem, close: closeReportProblem, submit };
 }
