@@ -16,7 +16,7 @@
 
 name: Deploy NeoSleepCare App
 
-# Deploys only when something this app is built from changed (CORE-PENDING):
+# Deploys only when something this app is built from changed (CORE-144):
 # its own code, the shared packages it imports, or the root build files. A
 # change elsewhere (API, docs, the other app) no longer rebuilds and re-uploads
 # it. Run it by hand (workflow_dispatch) to redeploy without a change.
