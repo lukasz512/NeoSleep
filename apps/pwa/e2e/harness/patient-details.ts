@@ -67,7 +67,7 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
 const Stub = { render: () => null };
 const router = createRouter({
   history: createMemoryHistory(),
-  routes: [{ path: "/", component: Stub }, { path: "/hcp/:id", name: "hcp-detail", component: Stub }, { path: "/calendar", name: "calendar", component: Stub }],
+  routes: [{ path: "/", component: Stub }, { path: "/hcp/:id", name: "hcp-detail", component: Stub, meta: { roles: ["rep", "kam", "msl", "manager", "admin"] } }, { path: "/calendar", name: "calendar", component: Stub }],
 });
 
 const TABS = [
