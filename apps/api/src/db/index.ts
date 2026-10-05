@@ -32,3 +32,5 @@ export * from "./partnerSyncRun.js";
 export * from "./territory.js";
 export * from "./patientScope.js";
 export * from "./careTeam.js";
+export * from "./platformAdmin.js";
+export * from "./problemReport.js";

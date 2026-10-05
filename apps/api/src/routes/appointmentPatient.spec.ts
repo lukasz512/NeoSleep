@@ -103,6 +103,9 @@ describe("appointment emails to the patient (CORE-25)", () => {
       expect(sends.rows).toEqual([{ kind: "appointment", appointment_id: res.body.id }]);
       const audit = await client.query(`SELECT legal_basis FROM audit_log WHERE entity_id = $1 AND action = 'notify'`, [res.body.id]);
       expect(audit.rows).toEqual([{ legal_basis: "contract" }]);
+      // Written after the commit, still tied to the booking request (audit ref 27de033d had none).
+      const traced = await client.query(`SELECT request_id FROM audit_log WHERE entity_id = $1 AND action = 'notify'`, [res.body.id]);
+      expect(traced.rows[0]?.request_id).toBe(res.headers["x-request-id"]);
     });
   });
 

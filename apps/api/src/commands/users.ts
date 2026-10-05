@@ -107,7 +107,7 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,
     action: "create",
-    entity_type: "Person",
+    entity_type: "User",
     entity_id: user.id,
     entity_after: { id: user.id, email, name: user.name, role, territory_id: user.scope_territory_id },
     request_id: ctx.requestId,
@@ -155,7 +155,7 @@ export async function UpdateUserCommand(
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,
     action: "update",
-    entity_type: "Person",
+    entity_type: "User",
     entity_id: id,
     entity_after: { status: before.status, region: before.region, role: before.role, territory_id: before.scope_territory_id },
     request_id: ctx.requestId,
@@ -197,7 +197,7 @@ export async function ResetUserPasswordCommand(
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,
     action: "reset_password",
-    entity_type: "Person",
+    entity_type: "User",
     entity_id: id,
     request_id: ctx.requestId,
   });
@@ -219,7 +219,7 @@ export async function DeleteUserCommand(ctx: TenantContext, id: string): Promise
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,
     action: "delete",
-    entity_type: "Person",
+    entity_type: "User",
     entity_id: id,
     request_id: ctx.requestId,
   });

@@ -1,10 +1,28 @@
 import type { Request, Response, NextFunction } from "express";
 import type { RequestWithId } from "./requestId.js";
 import { AppError, EmailInUseError, PartnerOrderAlreadySubmittedError, ValidationError } from "../errors.js";
-import { insertDiagnostic } from "../db.js";
+import { insertDiagnostic, tenantSlugFromHost, type DiagnosticInsert } from "../db.js";
+import { notifyNewErrorKind } from "../services/issueNotifications.js";
 
 function isDiagnosticsEnabled(): boolean {
   return process.env.ENABLE_DIAGNOSTICS_DB === "1" || process.env.NODE_ENV === "production";
+}
+
+/** Records an API error with tenant and user, and emails the platform inbox when it is a new kind on prod. */
+function recordApiError(req: Request, requestId: string | undefined, row: Pick<DiagnosticInsert, "message" | "stack" | "metadata">): void {
+  const entry: DiagnosticInsert = {
+    level: "error",
+    message: row.message,
+    stack: row.stack ?? null,
+    source: "api",
+    tenant_slug: tenantSlugFromHost(req.hostname),
+    user_id: req.user?.sub ?? null,
+    request_id: requestId ?? null,
+    metadata: row.metadata ?? null,
+  };
+  insertDiagnostic(entry)
+    .then((result) => notifyNewErrorKind(entry, result))
+    .catch((e) => console.error("insertDiagnostic failed:", e));
 }
 
 export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction): void {
@@ -14,14 +32,11 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     console.error(`[${requestId}] ${err.code}: ${err.message}`, err.cause ?? "");
 
     if (isDiagnosticsEnabled() && err.statusCode >= 500) {
-      insertDiagnostic({
-        level: "error",
+      recordApiError(req, requestId, {
         message: err.message,
         stack: err.stack ?? null,
-        source: "api",
-        request_id: requestId ?? null,
-        metadata: { code: err.code, cause: String(err.cause ?? "") },
-      }).catch((e) => console.error("insertDiagnostic failed:", e));
+        metadata: { code: err.code, cause: String(err.cause ?? ""), path: req.path },
+      });
     }
 
     if (!res.headersSent) {
@@ -40,13 +55,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
   console.error(`[${requestId}] Unhandled error:`, message, stack ?? "");
 
   if (isDiagnosticsEnabled()) {
-    insertDiagnostic({
-      level: "error",
-      message: `Unhandled: ${message}`,
-      stack: stack ?? null,
-      source: "api",
-      request_id: requestId ?? null,
-    }).catch((e) => console.error("insertDiagnostic failed:", e));
+    recordApiError(req, requestId, { message: `Unhandled: ${message}`, stack: stack ?? null, metadata: { path: req.path } });
   }
 
   if (!res.headersSent) res.status(500).json({ error: "Internal server error" });

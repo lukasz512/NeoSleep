@@ -5,6 +5,8 @@ import {
   type GetTreatmentPlansFilters,
   type TreatmentPlan,
 } from "../db.js";
+import { getTreatmentPlanQueueCounts, type TreatmentPlanListItem } from "../db/treatmentPlan.js";
+import type { TreatmentQueue } from "../db/clinicalQueues.js";
 import { NotFoundError } from "../errors.js";
 import { getViewer, patientListScope, requirePatientInScope } from "./entityAccess.js";
 
@@ -25,7 +27,7 @@ export async function requireTreatmentPlanInScope(ctx: TenantContext, id: string
 
 export type TreatmentPlanDto = TreatmentPlan;
 
-function toDto(t: TreatmentPlan): TreatmentPlanDto {
+function toDto<T extends TreatmentPlan>(t: T): T {
   return t;
 }
 
@@ -34,6 +36,7 @@ export interface GetTreatmentPlanListInput {
   type?: string;
   status?: string;
   search?: string;
+  queue?: TreatmentQueue;
   page?: number;
   limit?: number;
   sortBy?: string;
@@ -41,7 +44,7 @@ export interface GetTreatmentPlanListInput {
 }
 
 export interface GetTreatmentPlanListResult {
-  items: TreatmentPlanDto[];
+  items: TreatmentPlanListItem[];
   total: number;
 }
 
@@ -54,6 +57,7 @@ export async function GetTreatmentPlanListQuery(
     type: input.type,
     status: input.status,
     search: input.search,
+    queue: input.queue,
     // CORE-104: only plans of patients the viewer may see (a doctor: their own).
     patientScope: patientListScope(await getViewer(ctx)),
   };
@@ -65,6 +69,18 @@ export async function GetTreatmentPlanListQuery(
 
   const { rows, total } = await getTreatmentPlansPaginated(ctx.client, filters, page, limit, sortBy, sortOrder);
   return { items: rows.map(toDto), total };
+}
+
+/** Counts for the list's queue chips, same scope and search as the list. */
+export async function GetTreatmentPlanQueueCountsQuery(
+  ctx: TenantContext,
+  input: { search?: string; type?: string }
+): Promise<Record<TreatmentQueue, number>> {
+  return getTreatmentPlanQueueCounts(ctx.client, {
+    search: input.search,
+    type: input.type,
+    patientScope: patientListScope(await getViewer(ctx)),
+  });
 }
 
 export async function GetTreatmentPlanByIdQuery(ctx: TenantContext, id: string): Promise<TreatmentPlanDto | null> {

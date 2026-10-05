@@ -5,6 +5,7 @@ import { requireRole } from "../middleware/requireRole.js";
 import { requireStudyRole } from "../middleware/requireClinicalRole.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { buildContext } from "../context/TenantContext.js";
+import { requestContextMiddleware } from "../context/requestContext.js";
 import { CreatePatientCommand, UpdatePatientCommand, DeletePatientCommand } from "../commands/patient.js";
 import { GetPatientListQuery, GetPatientByIdQuery } from "../queries/patient.js";
 import { ListCareTeamQuery, AddCareTeamMemberCommand, RemoveCareTeamMemberCommand } from "../commands/careTeam.js";
@@ -370,6 +371,7 @@ patientRouter.post(
   "/patient/:id/studies/uploads",
   requireStudyRole,
   studyUpload.single("file"),
+  requestContextMiddleware,
   asyncHandler(async (req: Request, res: Response) => {
     const id = uuidParam(req, "id");
     if (!req.file) throw new ValidationError("A file is required");
