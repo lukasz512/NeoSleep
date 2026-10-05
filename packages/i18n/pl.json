@@ -660,6 +660,7 @@
   "user.login.callback.loading": "Logowanie…",
   "user.login.callback.error": "Logowanie nie powiodło się. Spróbuj ponownie.",
   "user.login.callback.backToLogin": "Wróć do logowania",
+  "user.login.sessionEnded": "Sesja wygasła. Zaloguj się ponownie.",
   "user.login.google.or": "lub",
   "user.login.google.signIn": "Zaloguj się przez Google",
   "user.login.google.error.noAccount": "To konto Google nie ma dostępu. Poproś administratora o zaproszenie.",

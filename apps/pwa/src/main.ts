@@ -17,7 +17,9 @@ import { configureErrorReporting, installGlobalErrorHandlers } from "@api";
 import { setupOfflineCacheSession } from "./composables/useOfflineCacheSession";
 import { setupPrefsSession } from "./composables/usePrefsSession";
 import { apiFetch } from "./composables/useApi";
-import { authTokenStorage } from "./stores/auth";
+import { authTokenStorage, useAuthStore } from "./stores/auth";
+import { installSessionLossRedirect, installCrossTabSessionSync } from "./router/sessionLossRedirect";
+import { APP_STORAGE_KEYS } from "./config/storageKeys";
 import { useConfigStore } from "./stores/config";
 import { USER_ROLE_BADGE_OVERRIDES } from "./utils/userRoleBadge";
 import { useNotifications } from "./composables/useNotifications";
@@ -85,6 +87,23 @@ useMotionPreferenceStore().startListening();
 installGlobalErrorHandlers(app);
 setupOfflineCacheSession();
 setupPrefsSession();
+
+// A session that ends mid-use (refresh rejected, signed out in another tab) goes
+// straight to /login instead of leaving the screen up with no user.
+const authStore = useAuthStore();
+const sessionUserId = () => authStore.user?.id ?? null;
+installSessionLossRedirect(router, {
+  userId: sessionUserId,
+  notify: useNotifications().show,
+  message: () => i18n.global.t("user.login.sessionEnded"),
+});
+installCrossTabSessionSync(APP_STORAGE_KEYS.sessionUser, {
+  userId: sessionUserId,
+  storage: typeof localStorage === "undefined" ? null : localStorage,
+  onStorage: (listener) => window.addEventListener("storage", listener),
+  signOut: () => authStore.clearAuth(),
+  reload: () => window.location.reload(),
+});
 
 app.provide("neo:apiFetch", apiFetch);
 app.provide("neo:authTokenStorage", authTokenStorage);
