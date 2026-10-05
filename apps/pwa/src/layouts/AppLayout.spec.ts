@@ -130,7 +130,7 @@ describe("AppLayout", () => {
     it("admin always sees every nav item, including leads, documents, and territories (isRoleAllowed bypasses role restrictions for admin)", () => {
       const expectedPaths = [
         "/dashboard", "/leads", "/hcp", "/hco", "/patients", "/calendar", "/sleep-studies",
-        "/treatment-plans", "/resources", "/users", "/documents", "/territories",
+        "/treatment-plans", "/resources", "/users", "/documents", "/territories", "/issues",
       ];
       expect(navRoutesForRole("admin").map((r) => r.path)).toEqual(expectedPaths);
     });

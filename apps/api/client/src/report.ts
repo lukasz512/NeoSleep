@@ -60,6 +60,33 @@ const DIAGNOSTICS_PATH = "/api/v1/diagnostics";
 let config: ErrorReportingConfig | null = null;
 const recent = new Map<string, number>();
 
+/** One recent error of this session, attached to a user's problem report (never sent on its own). */
+export interface RecentError {
+  /** ISO timestamp. */
+  at: string;
+  where: string;
+  /** The already scrubbed message, capped at 300 chars. */
+  message: string;
+  request_id: string | null;
+  status?: number;
+  path?: string;
+}
+
+const RECENT_ERRORS_MAX = 10;
+const recentErrors: RecentError[] = [];
+
+function recordRecentError(entry: RecentError): void {
+  const last = recentErrors[recentErrors.length - 1];
+  if (last && last.where === entry.where && last.message === entry.message && last.request_id === entry.request_id) return;
+  recentErrors.push(entry);
+  if (recentErrors.length > RECENT_ERRORS_MAX) recentErrors.splice(0, recentErrors.length - RECENT_ERRORS_MAX);
+}
+
+/** The last (up to 10) errors reported in this session, oldest first. A copy — safe to mutate. */
+export function getRecentErrors(): RecentError[] {
+  return recentErrors.map((e) => ({ ...e }));
+}
+
 export function configureErrorReporting(next: ErrorReportingConfig): void {
   config = next;
 }
@@ -68,6 +95,7 @@ export function configureErrorReporting(next: ErrorReportingConfig): void {
 export function resetErrorReportingForTests(): void {
   config = null;
   recent.clear();
+  recentErrors.length = 0;
 }
 
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
@@ -193,9 +221,24 @@ export function reportCaught(err: unknown, ctx: ReportContext): void {
   } catch {
     // benign: a console that throws (exotic embedded webviews) must never break the caller.
   }
+  let payload: DiagnosticPayload | null = null;
+  try {
+    payload = buildDiagnosticPayload(err, ctx);
+    const entry: RecentError = {
+      at: new Date().toISOString(),
+      where: ctx.where,
+      message: payload.message.slice(0, 300),
+      request_id: payload.request_id,
+    };
+    if (api?.status != null) entry.status = api.status;
+    if (api?.path) entry.path = stripQuery(api.path);
+    recordRecentError(entry);
+  } catch {
+    // benign: the in-session buffer is best effort and must never throw into a catch block.
+  }
   if (!shouldSend(`${ctx.where}|${message}`)) return;
   try {
-    sendDiagnosticPayload(buildDiagnosticPayload(err, ctx));
+    if (payload) sendDiagnosticPayload(payload);
   } catch {
     // benign: building/sending the report is best effort and must never throw into a catch block.
   }

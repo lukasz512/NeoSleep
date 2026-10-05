@@ -69,6 +69,16 @@ The lab's status is reported as `labStatus` and is never a mismatch.
 - `POST /api/v1/device-orders/jobs/reconcile` (machine-to-machine, `Authorization: Bearer <RECONCILIATION_JOB_SECRET>`, its own secret, Łukasz D2 — the shared job secret is refused): the daily job (`.github/workflows/device-order-reconciliation.yml`, 07:00 Mexico City). Runs for the default tenant and every tenant with a device-order link → `{ tenants: { <slug>: { status, runId } | { error } }, tenantsFailed }`. A scheduled run with `mismatch` or `failed` emails the active admins counts and lab order numbers only, with no patient data (Łukasz Q1).
 - Environment tag: the last line of every new order's notes is `[NeoSleep DEV|PROD|LOCAL · ref <first 8 hex of the plan id>] — referencia interna NeoSleep, no requiere acción` (`DEPLOY_ENV`; wording approved by Łukasz 2026-10-03, D1).
 
+## Problem reports + production errors (CORE-141)
+Story: `docs/stories/report-problem-and-admin-issues.md`. Both tables live in the `platform` schema (`problem_report`, `diagnostics`), scoped by `tenant_slug`. A platform admin is an active `platform.users` row with role `owner`/`admin` whose email matches the signed-in user.
+- `POST /api/v1/problem-reports` (any signed-in user, 5 per hour → `429`): multipart (optional `file` ≤ 5 MB, `image/*` or PDF) or JSON. Fields `kind` (`problem`|`suggestion`|`other`), `description` (10–5000), `page_url` (query and fragment stripped), `app_version`, `viewport`, `request_ids` (≤ 20), `recent_errors` (≤ 10 flat objects, ≤ 20 KB). The reporter comes from the token → `201 { id, number }`. It emails `RESEND_NOTIFY_TO` the number, kind, tenant, reporter and page, never the description.
+- `GET /api/v1/admin/issues/access` (**admin**) → `{ platformAdmin }`.
+- `GET /api/v1/admin/problem-reports?status=new|in_progress|resolved|dismissed|all` (**admin**, own tenant, newest 200) → `{ items }`, with no storage path and with `has_attachment`.
+- `PATCH /api/v1/admin/problem-reports/:id` (**admin**, own tenant) `{ status?, admin_note? }` → row. `resolved_at` is set on `resolved` and cleared otherwise.
+- `GET /api/v1/admin/problem-reports/:id/attachment` (**admin**, own tenant) → `{ url }`, signed for 300 s.
+- `GET /api/v1/admin/diagnostics?status=open|resolved|dismissed|all&env=&level=` (**admin + platform admin**) → `{ items }`. These are errors grouped by (env, source, normalised message hash), with `count`, `first_seen`, `last_seen` and `linked_reports [{ id, number }]` matched by `request_id`.
+- `PATCH /api/v1/admin/diagnostics/:id` (**admin + platform admin**) `{ status }` → `{ id, status }`. A resolved error that recurs reopens; a dismissed one keeps counting but stays dismissed. The first occurrence of an `error`/`fatal` kind in `production` emails `RESEND_NOTIFY_TO`, at most 20 such emails per hour per process.
+
 ## Planner events (calendar)
 - `GET /api/events?start=&end=&region=` – list events (filtered by rep/region)
 - `GET /api/events/:id` – event detail with attendees

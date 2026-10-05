@@ -144,3 +144,16 @@ export const apiLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many requests, please try again later" },
 });
+
+/**
+ * Applied to POST /problem-reports — signed-in users only, so it is keyed by user
+ * (not IP): 5 reports per hour each. Mount it after requireAuth.
+ */
+export const problemReportLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  keyGenerator: (req) => `problem-report:${req.user?.sub ?? "anonymous"}`,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many reports, please try again later" },
+});
