@@ -1,30 +1,32 @@
 <template>
   <!-- ATM evaluation (NEO-237): a mini copy of the exam — skull, then every finding with its right / left mark, then the opening. -->
   <div v-if="record && record.kind === 'tmj_exam'" class="checklist-result checklist-result--tmj">
-    <TmjSkull class="checklist-result__skull" :counts="tmjCounts" mini />
-    <table class="tmj-mini">
-      <thead>
-        <tr>
-          <th scope="col"><span class="visually-hidden">{{ t("app.clinical.kind.tmjExam") }}</span></th>
-          <th v-for="side in TMJ_SIDES" :key="side" scope="col" :class="{ 'tmj-mini__head--on': tmjCounts[side] > 0 }">
-            {{ t(`app.clinical.tmj.${side}`) }} <b>{{ tmjCounts[side] }}</b>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="row in tmjRows" :key="row.key" :class="{ 'tmj-mini__row--on': row.right || row.left }">
-          <th scope="row">{{ row.label }}</th>
-          <td v-for="side in TMJ_SIDES" :key="side" :data-finding="row.key" :data-side="side">
-            <span v-if="row[side]" class="tmj-mini__mark tmj-mini__mark--on" role="img" :aria-label="t('app.clinical.result.yes')">✓</span>
-            <span v-else class="tmj-mini__mark" role="img" :aria-label="t('app.clinical.result.no')">—</span>
-          </td>
-        </tr>
-        <tr v-if="record.max_opening_mm != null" class="tmj-mini__opening">
-          <th scope="row">{{ t("app.clinical.tmj.maxOpening") }}</th>
-          <td colspan="2"><b>{{ t("app.clinical.tmj.mm", { mm: record.max_opening_mm }) }}</b></td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="tmj-result">
+      <TmjSkull class="checklist-result__skull" :counts="tmjCounts" mini />
+      <table class="tmj-mini">
+        <thead>
+          <tr>
+            <th scope="col"><span class="visually-hidden">{{ t("app.clinical.kind.tmjExam") }}</span></th>
+            <th v-for="side in TMJ_SIDES" :key="side" scope="col" :class="{ 'tmj-mini__head--on': tmjCounts[side] > 0 }">
+              {{ t(`app.clinical.tmj.${side}`) }} <b>{{ tmjCounts[side] }}</b>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in tmjRows" :key="row.key" :class="{ 'tmj-mini__row--on': row.right || row.left }">
+            <th scope="row">{{ row.label }}</th>
+            <td v-for="side in TMJ_SIDES" :key="side" :data-finding="row.key" :data-side="side">
+              <span v-if="row[side]" class="tmj-mini__mark tmj-mini__mark--on" role="img" :aria-label="t('app.clinical.result.yes')">✓</span>
+              <span v-else class="tmj-mini__mark" role="img" :aria-label="t('app.clinical.result.no')">—</span>
+            </td>
+          </tr>
+          <tr v-if="record.max_opening_mm != null" class="tmj-mini__opening">
+            <th scope="row">{{ t("app.clinical.tmj.maxOpening") }}</th>
+            <td colspan="2"><b>{{ t("app.clinical.tmj.mm", { mm: record.max_opening_mm }) }}</b></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
   <!-- Clinical questionnaire: counts + proportion + the positive answers. -->
@@ -164,11 +166,14 @@ const formatNumber = (value: number) => value.toLocaleString(intlLocale(locale.v
   gap: 6px 14px;
 }
 .checklist-result--tmj {
-  flex-direction: row;
+  container: tmj-result / inline-size;
+}
+.tmj-result {
+  display: flex;
   align-items: flex-start;
   gap: 12px;
 }
-.checklist-result--tmj .checklist-result__skull {
+.tmj-result .checklist-result__skull {
   width: 56px;
 }
 /* The exam in miniature: findings down, right / left across, same order as the form. */
@@ -228,6 +233,23 @@ const formatNumber = (value: number) => value.toLocaleString(intlLocale(locale.v
 }
 .tmj-mini__opening td {
   font-variant-numeric: tabular-nums;
+}
+/* Phone: the skull goes above, so the finding labels keep the full width. */
+@container tmj-result (max-width: 420px) {
+  .tmj-result {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .tmj-result .checklist-result__skull {
+    align-self: center;
+  }
+  .tmj-mini thead th {
+    width: 64px;
+  }
+  .tmj-mini th,
+  .tmj-mini td {
+    padding: 4px;
+  }
 }
 .visually-hidden {
   position: absolute;
