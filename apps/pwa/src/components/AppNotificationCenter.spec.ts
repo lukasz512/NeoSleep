@@ -113,10 +113,19 @@ describe("AppNotificationCenter — glass card (CORE-4)", () => {
   });
 
   it("pins events with quick actions under Needs action, the rest under Today", async () => {
-    const wrapper = await mountBell();
-    await openBell(wrapper);
-    const headings = [...card().querySelectorAll(".notif-center__group-title")].map((h) => h.textContent?.trim());
-    expect(headings).toEqual(["Needs action", "Today"]);
+    // At midday, so the rows (12 and 30 min old) are Today even when the suite runs just after midnight.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2032, 0, 15, 12, 0));
+    try {
+      const rows = [{ ...ROWS[0]!, created_at: minutesAgo(12) }, { ...ROWS[1]!, created_at: minutesAgo(30) }];
+      apiFetch.mockImplementation((url: string) => (url.startsWith("/api/v1/notification?") ? respond({ items: rows, total: 2 }) : respond({})));
+      const wrapper = await mountBell();
+      await openBell(wrapper);
+      const headings = [...card().querySelectorAll(".notif-center__group-title")].map((h) => h.textContent?.trim());
+      expect(headings).toEqual(["Needs action", "Today"]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("names the patient and uses the short in-app title instead of the push copy", async () => {
