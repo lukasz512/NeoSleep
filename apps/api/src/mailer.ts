@@ -335,6 +335,18 @@ export async function sendDemoBookingConfirmationEmail(to: string, meeting: Demo
   });
 }
 
+/**
+ * Partner emails (invite, signed documents) open with a formal address line ("Dr First Last,"),
+ * never the casual "Hi …," greeting and never the bare email address. Every partner is a doctor,
+ * so a missing salutation on the record falls back to the locale's "Dr" rather than dropping it.
+ */
+function formatPartnerAddress(recipient: EmailRecipient, to: string): string {
+  const locale = recipient.language;
+  const hasName = !!(recipient.firstName?.trim() || recipient.lastName?.trim());
+  const title = recipient.title?.trim() || (hasName ? emailT(locale, "email.partner.defaultTitle") : null);
+  return emailT(locale, "email.partner.address", { name: formatGreetingName({ ...recipient, title }, to) });
+}
+
 export async function sendPartnerInviteEmail(
   to: string,
   registerLink: string,
@@ -342,11 +354,10 @@ export async function sendPartnerInviteEmail(
   sender: EmailSender
 ): Promise<void> {
   const locale = recipient.language;
-  const greetingName = formatGreetingName(recipient, to);
 
   const bodyHtml = `
     <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.partnerInvite.title"))}</h1>
-    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: greetingName }))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(formatPartnerAddress(recipient, to))}</p>
     <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.partnerInvite.body"))}</p>
     <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.partnerInvite.deviceNote"))}</p>
     <p style="margin:0 0 16px;font-size:13px;color:#7a827e;">${escapeHtml(emailT(locale, "email.partnerInvite.expiry"))}</p>`;
@@ -714,16 +725,10 @@ export async function sendSignedDocumentsEmail(
   ccEmail?: string | null
 ): Promise<string | null> {
   const locale = recipient.language;
-  // These are the signed legal documents, so the address line is formal ("Dr First Last,"), never
-  // the casual "Hi …," greeting and never the bare email address. Every partner is a doctor, so a
-  // missing salutation on the record falls back to the locale's "Dr" rather than dropping the title.
-  const hasName = !!(recipient.firstName?.trim() || recipient.lastName?.trim());
-  const title = recipient.title?.trim() || (hasName ? emailT(locale, "email.signedDocuments.defaultTitle") : null);
-  const addressName = formatGreetingName({ ...recipient, title }, to);
 
   const bodyHtml = `
     <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.signedDocuments.title"))}</h1>
-    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.signedDocuments.address", { name: addressName }))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(formatPartnerAddress(recipient, to))}</p>
     <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.signedDocuments.body"))}</p>`;
 
   const socials = getSocialsForRegion(recipient.region);
