@@ -230,6 +230,13 @@ describe("CalendarView (CORE-117)", () => {
     expect(Math.round((nextStart.getTime() - firstStart.getTime()) / 86_400_000)).toBe(7);
   });
 
+  it("hides the sidebar (mini month + calendars) and its toggle on tablet and desktop", async () => {
+    apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
+    const wrapper = await mountView("manager");
+    expect(wrapper.find('[data-testid="calendar-sidebar"]').isVisible()).toBe(false);
+    expect(wrapper.find('[data-testid="calendar-sidebar-toggle"]').exists()).toBe(false);
+  });
+
   it("CORE-122: unticking a calendar hides its entries", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2032, 0, 1, 9, 0));
