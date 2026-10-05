@@ -124,7 +124,9 @@ describe("PatientAsidePanel (NEO-153, NEO-203)", () => {
     const facts = wrapper.find(".patient-aside__facts");
     expect(facts.element.previousElementSibling?.classList.contains("patient-aside__next")).toBe(true);
     expect(facts.find(".patient-aside__diagnosis").text()).toBe("G47.33 · OSA");
-    expect(facts.text()).toContain("AHI 32");
+    // NEO-247: status and IAH live on Details only.
+    expect(facts.text()).not.toContain("AHI");
+    expect(facts.find(".v-chip").exists()).toBe(false);
     expect(facts.find("a").text()).toBe("Dr Marta Nowak");
 
     const empty = await mountPanel({ patient: { id: "p-1", diagnosis_code: null } });

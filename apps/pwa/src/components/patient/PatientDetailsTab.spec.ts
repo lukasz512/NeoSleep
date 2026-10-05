@@ -99,8 +99,23 @@ describe("PatientDetailsTab (NEO-206)", () => {
   });
 
   it("hides empty tiles; no strip at all when nothing is known", async () => {
-    const w = await mountTab(EMPTY, { patient: { diagnosis_code: null } });
+    const w = await mountTab(EMPTY, { patient: { diagnosis_code: null, ahi_baseline: null } });
     expect(w.find('[data-testid="summary-strip"]').exists()).toBe(false);
+  });
+
+  it("no scored study: the IAH tile shows the baseline, with the severity scale (NEO-247)", async () => {
+    const w = await mountTab(EMPTY);
+    expect(tileKeys(w)).toEqual(["tile-diagnosis", "tile-ahiBaseline"]);
+    const tile = w.find('[data-testid="tile-ahiBaseline"]');
+    expect(tile.text()).toContain("AHI baseline");
+    expect(tile.text()).toContain("18 /h");
+    expect(tile.find(".patient-details__tile-scale").exists()).toBe(true);
+  });
+
+  it("a scored study wins over the baseline: one IAH tile, never two", async () => {
+    const w = await mountTab(FULL);
+    expect(tileKeys(w)).toContain("tile-psg");
+    expect(tileKeys(w)).not.toContain("tile-ahiBaseline");
   });
 
   it("falls back to the study's diagnosis when the patient has none", async () => {

@@ -542,6 +542,14 @@ const tiles = computed<Tile[]>(() => {
       sub: sub || undefined,
       tab: "studies",
     });
+  } else if (props.canSeeStudies && props.patient.ahi_baseline != null) {
+    // No scored study yet: the baseline IAH is the only number there is (NEO-247); health data, so gated like diagnosis.
+    out.push({
+      key: "ahiBaseline",
+      label: t("app.patients.detail.ahiBaseline"),
+      value: t("app.patients.detail.summary.perHour", { n: fmt(props.patient.ahi_baseline) }),
+      ahi: props.patient.ahi_baseline,
+    });
   }
 
   const order = summary.value?.device_order ?? null;
