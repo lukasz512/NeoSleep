@@ -21,10 +21,6 @@
     </section>
 
     <p class="patient-aside__facts" :aria-label="t('app.patients.detail.aside.keyFacts')">
-      <VChip v-if="patient.status" :color="patientStatusColor(patient.status)" size="small" variant="tonal">
-        {{ patientStatusLabel(t, patient.status) }}
-      </VChip>
-      <span v-if="patient.ahi_baseline != null">{{ t("app.patients.detail.aside.ahi", { n: patient.ahi_baseline }) }}</span>
       <!-- A doctor's patient is their own: no need to read their own name here. -->
       <template v-if="isDoctor" />
       <RouterLink
@@ -107,7 +103,6 @@
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { VChip } from "vuetify/components";
 import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import AppSegmentProgress from "../AppSegmentProgress.vue";
@@ -120,7 +115,6 @@ import { HC_PRINTABLE_KEY, splitHistoriaClinica } from "../../config/historiaCli
 import { formatDiagnosis } from "../../utils/diagnosis";
 import { useNotes } from "../../composables/useNotes";
 import { useAsyncAction } from "../../composables/useAsyncAction";
-import { patientStatusColor, patientStatusLabel } from "../../utils/patientStatus";
 import { usePermissions } from "../../composables/usePermissions";
 
 const RECENT_NOTES = 1;
@@ -130,8 +124,6 @@ const DOC_ROWS = 6;
 const props = defineProps<{
   patient: {
     id: string;
-    status?: string;
-    ahi_baseline?: number | null;
     practitioner_id?: string | null;
     practitioner_name?: string | null;
     diagnosis_code?: Record<string, unknown> | null;

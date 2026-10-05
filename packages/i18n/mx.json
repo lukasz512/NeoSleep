@@ -1296,7 +1296,6 @@
   "app.patients.detail.aside.waitingOnPatient": "Pendientes del paciente: {n}",
   "app.patients.detail.aside.nothingForPatient": "Nada pendiente del paciente",
   "app.patients.detail.aside.allDone": "Todo completado",
-  "app.patients.detail.aside.ahi": "IAH {n}",
   "app.patients.detail.aside.allDocuments": "Ver los {n} →",
   "app.patients.detail.tabs.details": "Detalles",
   "app.patients.detail.tabs.nextStep": "Siguiente paso",

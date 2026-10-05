@@ -1378,7 +1378,6 @@
   "app.patients.detail.aside.waitingOnPatient": "Waiting on the patient: {n}",
   "app.patients.detail.aside.nothingForPatient": "Nothing left for the patient",
   "app.patients.detail.aside.allDone": "All done",
-  "app.patients.detail.aside.ahi": "AHI {n}",
   "app.patients.detail.aside.allDocuments": "See all {n} →",
   "app.patients.detail.tabs.details": "Details",
   "app.patients.detail.tabs.nextStep": "Next step",
