@@ -8,6 +8,7 @@ import { RecordClinicalQuestionnaireCommand } from "./clinicalRecords.js";
 import { PrintChecklistItemCommand, UploadPatientStudyCommand, DeletePatientStudyUploadCommand } from "./patientChecklist.js";
 import { GetPatientChecklistQuery } from "../queries/patientChecklist.js";
 import { GetCurrentDocumentContentQuery } from "../queries/documentContent.js";
+import { insertConsent } from "../db/consent.js";
 
 /**
  * Patient Estudios checklist (ADR-024) — real Postgres, real PDF rendering;
@@ -209,6 +210,14 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
       expect(options.dataFields.telefono).toBe("+52 55 1234 5678");
       expect(options.dataFields.email).toMatch(/^ana-.*@example\.mx$/);
       expect(html.slice(html.indexOf('<div class="hc-p3">'))).toContain(consent);
+      expect(options.dataFields.consent_stamp).toBe(""); // not signed yet → the empty line to sign on paper
+
+      // NEO-249 D2: signed electronically → a dated stamp instead of the line.
+      await insertConsent(client, { entity_type: "patient", entity_id: patient.id, legal_basis: "consent", jurisdiction: "MX", purpose: "informedConsent" });
+      renderSpy.mockClear();
+      await PrintChecklistItemCommand(ctx, patient.id, "historiaEndo");
+      const [, signed] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string> }];
+      expect(signed.dataFields.consent_stamp).toMatch(/^Firmado electrónicamente por el paciente · \d{2}\/\d{2}\/\d{4}$/);
     });
   }, 60000);
 

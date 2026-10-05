@@ -175,6 +175,11 @@ export async function PrintChecklistItemCommand(
       tmj: latest<TmjExamRecord>("tmjExam"),
       screening,
     });
+    // NEO-249 D2: a consent already signed electronically prints as a dated stamp, not an empty line.
+    const signedConsent = checklist.items.find((i) => i.key === INFORMED_CONSENT_KEY)?.history.find((h) => h.type === "consent");
+    fields.consent_stamp = signedConsent
+      ? documentT(locale, "documents.historiaEndo.consentSignedStamp", { date: formatFormDate(signedConsent.created_at, locale) })
+      : "";
     Object.assign(fields, print.fields);
     Object.assign(choices, print.choices);
     Object.assign(states, print.states);

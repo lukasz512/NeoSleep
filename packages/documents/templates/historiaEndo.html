@@ -14,16 +14,20 @@
   gauge, ATM skull, airway + mouth), then what the patient reports. Page 2
   is the exam and the signature: ATM skull + findings next to the STOP-Bang
   table drawn like Dra. Lorena's paper form, the oral exam, then the
-  consent and both signatures. Page 3 is the full Consentimiento informado
-  (the informedConsent document), printed for every patient.
+  doctor's signature. Page 3 on is the one consent the patient signs
+  (NEO-249 D1): the full Consentimiento informado (the informedConsent
+  document), then the clinical-record consent, printed for every patient.
+  When the patient already signed the consent electronically, a stamp with
+  the date replaces the empty signing line (D2).
 
   Two substitution passes fill it, in order — same split as informedConsent.html:
 
   1. @neo/documents' renderDocumentHtml(templateName, locale, contentHtml) —
      brand tokens, documents.historiaEndo.* labels (packages/i18n) and the
-     content slot (.doc-content div): the consent text, admin-editable in the
-     Documents editor (platform.document_content_version). The informedConsent
-     slot on page 3 is that document's own current body (same source).
+     content slot (.doc-content div): the clinical-record consent text,
+     admin-editable in the Documents editor (platform.document_content_version),
+     printed after the informedConsent slot: that document's own current body
+     (same source).
 
   2. apps/api's renderHtmlToPdf (commands/patientChecklist.ts builds them):
        data-field        — text values (patient, clinic, date, measures)
@@ -236,7 +240,8 @@
   .hc-p3 .doc-fields { margin-bottom: 3mm; }
   .hc-p3 .doc-content { font-size: 9pt; line-height: 1.42; color: var(--text); }
   .hc-p3 .doc-content p { margin: 0 0 6px; }
-  .hc-p3 .doc-content > p:first-child { font-style: italic; }
+  .hc-p3 .hc-ci-body > p:first-child { font-style: italic; }
+  .hc-p3 .doc-manufacturers { margin: 0 0 6px; }
   .sig-panels { margin-top: 4mm; }
 </style>
 </head>
@@ -426,11 +431,7 @@
     </div>
 
 
-    <h3 class="doc-sec">{{documents.historiaEndo.sectionConsent}}</h3>
-    <div class="doc-content">{{content}}</div>
-
     <div class="sig-panels">
-      <div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.historiaEndo.signatureLabelPatient}}</div><div class="sig-area" data-field="firma_paciente"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_paciente"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div>
       <div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.historiaEndo.signatureLabelDoctor}}</div><div class="sig-area" data-field="firma_doctor"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_medico"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div>
     </div>
   </div>
@@ -452,9 +453,10 @@
       <div class="doc-field"><dt>{{documents.informedConsent.fieldPlace}}</dt><dd data-field="lugar"></dd></div>
       <div class="doc-field doc-field--short"><dt>{{documents.informedConsent.fieldDate}}</dt><dd data-field="fecha"></dd></div>
     </dl>
-    <div class="doc-content">{{slot:informedConsent}}</div>
+    <div class="doc-content hc-ci-body">{{slot:informedConsent}}</div>
     <p class="doc-manufacturers">{{documents.informedConsent.manufacturers}}</p>
-    <div class="sig-panels"><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.informedConsent.signatureLabel}}</div><div class="sig-area" data-field="firma_paciente"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_paciente"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div></div>
+    <div class="doc-content">{{content}}</div>
+    <div class="sig-panels"><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.informedConsent.signatureLabel}}</div><div class="sig-stamp" data-field="consent_stamp"></div><div class="sig-area" data-field="firma_paciente"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_paciente"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div></div>
   </div>
 
   <!-- One skull drawing, used twice: left half drawn, right half mirrored; joints read data-state (0–5 findings). -->
