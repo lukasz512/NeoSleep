@@ -4,9 +4,17 @@ import { requireAuth } from "../../middleware/requireAuth.js";
 import { requireRole } from "../../middleware/requireRole.js";
 import { requireStudyRole, STUDY_ROLES } from "../../middleware/requireClinicalRole.js";
 import { requireInternalJobSecret } from "../../middleware/requireInternalJobSecret.js";
-import { withTenant, tenantSlugFromHost, insertAuditLog, getPartnerTransactionHistory } from "../../db.js";
+import {
+  withTenant,
+  tenantSlugFromHost,
+  insertAuditLog,
+  getPartnerTransactionHistory,
+  listPartnerSyncRuns,
+  getPartnerOpenOrders,
+} from "../../db.js";
 import { buildContext } from "../../context/TenantContext.js";
 import {
+  ORTHOAPNEA_TERMINAL_STATUSES,
   ensureOrthoApneaPatient,
   addOrthoApneaComment,
   fetchOrthoApneaProducts,
@@ -14,6 +22,7 @@ import {
   fetchCountries,
 } from "../../services/partners/orthoapnea.js";
 import {
+  SyncOrthoApneaTreatmentStatusesCommand,
   SyncOrthoApneaTreatmentStatusesAllTenantsCommand,
   SyncOrthoApneaStatusesForOpenAppCommand,
 } from "../../commands/orthoapneaSync.js";
@@ -219,6 +228,55 @@ orthoapneaTreatmentsRouter.post(
     const slug = tenantSlugFromHost(req.hostname);
     const requestId = (req.headers["x-request-id"] as string | undefined) ?? crypto.randomUUID();
     res.json(await SyncOrthoApneaStatusesForOpenAppCommand(slug, requestId));
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/partners/orthoapnea/sync-status
+// Admin Dashboard card: the last 10 sync runs (any trigger), the orders the
+// sync still watches, and how many orders were ever sent from the app
+// (totalLinks) so "0 open" can be told apart from "nothing sent yet".
+// ---------------------------------------------------------------------------
+orthoapneaTreatmentsRouter.get(
+  "/partners/orthoapnea/sync-status",
+  requireRole("admin"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const slug = tenantSlugFromHost(req.hostname);
+    const { runs, open } = await withTenant(slug, async (client) => ({
+      runs: await listPartnerSyncRuns(client, "orthoapnea", 10),
+      open: await getPartnerOpenOrders(client, "orthoapnea", ORTHOAPNEA_TERMINAL_STATUSES),
+    }));
+    res.json({
+      runs: runs.map((r) => ({
+        id: r.id,
+        trigger: r.trigger,
+        startedAt: r.started_at,
+        finishedAt: r.finished_at,
+        checked: r.checked,
+        changed: r.changed,
+        failed: r.failed,
+        error: r.error,
+        triggeredBy: r.triggered_by,
+      })),
+      openOrders: open.openOrders,
+      totalLinks: open.totalLinks,
+    });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// POST /api/v1/partners/orthoapnea/sync-statuses/now
+// Admin "Check now": runs the sync immediately, bypassing the 15-minute
+// in-app throttle, and records a 'manual' run for the signed-in admin.
+// ---------------------------------------------------------------------------
+orthoapneaTreatmentsRouter.post(
+  "/partners/orthoapnea/sync-statuses/now",
+  requireRole("admin"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const slug = tenantSlugFromHost(req.hostname);
+    // Short transaction only to resolve the live user (token_version check); the lab calls run outside it (ADR-017).
+    const ctx = await withTenant(slug, (client) => buildContext(req, client, slug));
+    res.json(await SyncOrthoApneaTreatmentStatusesCommand(slug, ctx.requestId, "manual", ctx.user.id));
   })
 );
 
