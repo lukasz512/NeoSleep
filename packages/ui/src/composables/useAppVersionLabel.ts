@@ -3,7 +3,7 @@ import { useI18n } from "vue-i18n";
 import { APP_VERSION_KEY } from "@stores";
 
 export interface AppVersionParts {
-  /** "Version 1.0.0 (build 12)" — empty when the app provides no APP_VERSION_KEY. */
+  /** "Version 1.1.0.12" — empty when the app provides no APP_VERSION_KEY. */
   version: string;
   /** "DEV" / "LOCAL" on non-prod builds, null on prod. */
   channel: string | null;
@@ -29,7 +29,7 @@ export function useAppVersionParts(): ComputedRef<AppVersionParts> {
   });
 }
 
-/** "Version 1.0.0 (build 12) · DEV" — prod shows no channel suffix. Used by
+/** "Version 1.1.0.12 · DEV" — prod shows no channel suffix. Used by
  *  the login badge (AuthView). Empty string when the app provides no
  *  APP_VERSION_KEY, so callers can just v-if on it. */
 export function useAppVersionLabel(): ComputedRef<string> {

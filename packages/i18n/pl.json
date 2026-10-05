@@ -657,7 +657,7 @@
   "user.login.logoAlt": "Logo firmy",
   "user.login.pwaBadge": "Progresywna aplikacja webowa",
   "user.login.appVersion": "Wersja {version}",
-  "user.login.appVersionBuild": "Wersja {version} (build {build})",
+  "user.login.appVersionBuild": "Wersja {version}.{build}",
   "user.login.appVersionWithChannel": "{version} · {channel}",
   "user.login.appChannelDev": "DEV",
   "user.login.appChannelLocal": "LOKALNIE",

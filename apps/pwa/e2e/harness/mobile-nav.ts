@@ -115,7 +115,7 @@ const Harness = defineComponent({
                       themePreference: "system",
                       locale: "en",
                       canChangePassword: true,
-                      version: "Version 2.14.0 (build 412)",
+                      version: "Version 2.14.0.412",
                       channel: "DEV",
                       avatarSize: MENU_AVATAR_SIZE,
                     }),

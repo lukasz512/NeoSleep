@@ -30,12 +30,12 @@ describe("useAppVersionLabel", () => {
   });
 
   it("shows version and build without a suffix on prod", () => {
-    expect(labelFor({ version: "1.0.0", build: 12, channel: "prod" })).toBe("Version 1.0.0 (build 12)");
+    expect(labelFor({ version: "1.1.0", build: 12, channel: "prod" })).toBe("Version 1.1.0.12");
   });
 
   it("appends the channel on dev and local", () => {
-    expect(labelFor({ version: "1.0.0", build: 3, channel: "dev" })).toBe("Version 1.0.0 (build 3) · DEV");
-    expect(labelFor({ version: "1.0.0", build: null, channel: "local" })).toBe("Version 1.0.0 · LOCAL");
+    expect(labelFor({ version: "1.1.0", build: 3, channel: "dev" })).toBe("Version 1.1.0.3 · DEV");
+    expect(labelFor({ version: "1.1.0", build: null, channel: "local" })).toBe("Version 1.1.0 · LOCAL");
   });
 });
 
@@ -56,8 +56,8 @@ describe("useAppVersionParts", () => {
   }
 
   it("splits version and channel, with no channel on prod", () => {
-    expect(partsFor({ version: "1.0.0", build: 105, channel: "dev" })).toBe("Version 1.0.0 (build 105)|DEV");
-    expect(partsFor({ version: "1.0.0", build: 105, channel: "prod" })).toBe("Version 1.0.0 (build 105)|-");
+    expect(partsFor({ version: "1.1.0", build: 105, channel: "dev" })).toBe("Version 1.1.0.105|DEV");
+    expect(partsFor({ version: "1.1.0", build: 105, channel: "prod" })).toBe("Version 1.1.0.105|-");
     expect(partsFor()).toBe("|-");
   });
 });

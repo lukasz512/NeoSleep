@@ -37,7 +37,7 @@ function mountPanel(overrides: Partial<{
       themePreference: "system",
       locale: "en",
       canChangePassword: true,
-      version: "Version 1.0.0 (build 105)",
+      version: "Version 1.1.0.105",
       channel: "DEV",
       ...overrides,
     },
@@ -111,7 +111,7 @@ describe("AppUserMenuPanel — NEO-102 account menu (icon rows + action pair)", 
 
   it("ends with the app version, plus the channel tag on non-prod builds only", () => {
     const dev = mountPanel().get('[data-testid="user-menu-version"]');
-    expect(dev.text()).toContain("Version 1.0.0 (build 105)");
+    expect(dev.text()).toContain("Version 1.1.0.105");
     expect(dev.text()).toContain("DEV");
 
     const prod = mountPanel({ channel: null }).get('[data-testid="user-menu-version"]');
