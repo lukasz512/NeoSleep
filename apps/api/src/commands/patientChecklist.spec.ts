@@ -7,6 +7,8 @@ import { ValidationError } from "../errors.js";
 import { RecordClinicalQuestionnaireCommand } from "./clinicalRecords.js";
 import { PrintChecklistItemCommand, UploadPatientStudyCommand, DeletePatientStudyUploadCommand } from "./patientChecklist.js";
 import { GetPatientChecklistQuery } from "../queries/patientChecklist.js";
+import { GetCurrentDocumentContentQuery } from "../queries/documentContent.js";
+import { insertConsent } from "../db/consent.js";
 
 /**
  * Patient Estudios checklist (ADR-024) — real Postgres, real PDF rendering;
@@ -195,6 +197,29 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
       await expect(PrintChecklistItemCommand(ctx, patient.id, "polysomnography")).rejects.toThrow(ValidationError);
     });
   }, 90000);
+
+  it("the Historia clínica prints the patient's phone + email and the current informed consent as its last page, for any patient (NEO-249)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await insertPatient(client, { first_name: "Ana", last_name: `Contact-${uniqueSuffix()}`, phone: "+52 55 1234 5678", email: `ana-${uniqueSuffix()}@example.mx` });
+      const consent = (await GetCurrentDocumentContentQuery("informedConsent", "mx")).content_html;
+
+      renderSpy.mockClear();
+      await PrintChecklistItemCommand(ctx, patient.id, "historiaEndo");
+      const [html, options] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string> }];
+      expect(options.dataFields.telefono).toBe("+52 55 1234 5678");
+      expect(options.dataFields.email).toMatch(/^ana-.*@example\.mx$/);
+      expect(html.slice(html.indexOf('<div class="hc-p3">'))).toContain(consent);
+      expect(options.dataFields.consent_stamp).toBe(""); // not signed yet → the empty line to sign on paper
+
+      // NEO-249 D2: signed electronically → a dated stamp instead of the line.
+      await insertConsent(client, { entity_type: "patient", entity_id: patient.id, legal_basis: "consent", jurisdiction: "MX", purpose: "informedConsent" });
+      renderSpy.mockClear();
+      await PrintChecklistItemCommand(ctx, patient.id, "historiaEndo");
+      const [, signed] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string> }];
+      expect(signed.dataFields.consent_stamp).toMatch(/^Firmado electrónicamente por el paciente · \d{2}\/\d{2}\/\d{4}$/);
+    });
+  }, 60000);
 
   const PATIENT_FORMS = ["medicalHistory", "oralExam", "tmjExam", "historiaEndo", "informedConsent", "stopBang"];
 

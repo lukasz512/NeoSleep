@@ -8,20 +8,27 @@
   and a token mention that only exists here for documentation would get
   replaced exactly like a real one.
 
-  Layout (Łukasz, 2026-10-05): two A4 pages, the clinic's own letterhead
-  (monogram, name, date + record number box) on both. Page 1 is the patient
-  and the summary: banner, a strip of three numbers-only tiles (STOP-Bang,
-  ATM, airway + mouth), then what the patient reports. Page 2 is the exam and
-  the signature: ATM skull + findings next to the STOP-Bang table drawn like
-  Dra. Lorena's paper form, its gauge in the Total row, then the consent and
-  both signatures. Skull and gauge are drawn once each (NEO-251).
+  Layout (Łukasz, 2026-10-05, NEO-249 2026-10-06): the same header as the
+  Consentimiento informado (logo + category, title with the clinic under it).
+  Page 1 is the patient and the summary: banner, a strip of three
+  numbers-only tiles (STOP-Bang, ATM, airway + mouth), then what the patient
+  reports. Page 2 is the exam and the doctor's signature: ATM skull +
+  findings next to the STOP-Bang table drawn like Dra. Lorena's paper form,
+  its gauge in the Total row, then the oral exam. Skull and gauge are drawn
+  once each (NEO-251). Page 3 on is the one consent the patient signs
+  (NEO-249 D1): the full Consentimiento informado (the informedConsent
+  document), then the clinical-record consent, printed for every patient.
+  When the patient already signed the consent electronically, a stamp with
+  the date replaces the empty signing line (D2).
 
   Two substitution passes fill it, in order — same split as informedConsent.html:
 
   1. @neo/documents' renderDocumentHtml(templateName, locale, contentHtml) —
      brand tokens, documents.historiaEndo.* labels (packages/i18n) and the
-     content slot (.doc-content div): the consent text, admin-editable in the
-     Documents editor (platform.document_content_version).
+     content slot (.doc-content div): the clinical-record consent text,
+     admin-editable in the Documents editor (platform.document_content_version),
+     printed after the informedConsent slot: that document's own current body
+     (same source).
 
   2. apps/api's renderHtmlToPdf (commands/patientChecklist.ts builds them):
        data-field        — text values (patient, clinic, date, measures)
@@ -83,22 +90,11 @@
   {{style:docTheme}}
 
   /* ---- Historia clínica v2 (after the shared theme: this document's own letterhead + visuals) ---- */
-  header.doc-header { display: grid; grid-template-columns: auto 1fr auto; gap: 4mm; align-items: center; padding-bottom: 2.5mm; margin-bottom: 3mm; }
-  .hc-mono { width: 11mm; height: 11mm; display: grid; place-items: center; border: 1px solid var(--primary); border-radius: 50%; color: var(--primary); font-size: 13pt; font-weight: 300; letter-spacing: -0.04em; }
-  .hc-mono:empty { border-style: dashed; }
-  .hc-clinic { min-width: 0; }
-  .hc-clinic-name { display: block; font-size: 10pt; font-weight: 400; letter-spacing: 0.18em; text-transform: uppercase; color: var(--secondary); }
-  .hc-clinic-name:empty { min-height: 1.4em; border-bottom: 1px solid #b9c6c3; }
-  header.doc-header .doc-cat { display: block; text-align: left; font-size: 6.5pt; letter-spacing: 0.16em; color: var(--muted); margin-top: 1px; }
-  .hc-box { margin: 0; padding: 2mm 3mm; background: var(--soft); border-radius: 1.6mm; display: grid; gap: 1mm; font-size: 7pt; }
-  .hc-box > div { display: grid; grid-template-columns: auto 26mm; gap: 3mm; align-items: end; }
-  .hc-box dt { letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-  .hc-box dd { margin: 0; font-weight: 500; font-variant-numeric: tabular-nums; min-height: 1.3em; }
-  .hc-box dd:empty { border-bottom: 1px solid #b9c6c3; }
-  .doc-title { border-left: 0; padding-left: 0; margin-bottom: 2mm; }
-  .doc-title h1 { font-size: 15pt; font-weight: 300; letter-spacing: 0.16em; text-transform: uppercase; color: var(--primary); }
+  .doc-title h2:empty { display: none; }
   .hc-cont { font-size: 7pt; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0 0 2mm; }
-  .doc-fields { grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.3fr) minmax(0, 0.7fr) minmax(0, 1.6fr); margin-bottom: 3mm; }
+  body > .doc-fields { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1.25fr) minmax(0, 0.6fr) minmax(0, 1.65fr) minmax(0, 0.9fr); margin-bottom: 3mm; }
+  body > .doc-fields .hc-span2 { grid-column: span 2; }
+  body > .doc-fields dt, body > .doc-fields dd { white-space: nowrap; }
   .doc-field--patient { grid-column: auto; padding-bottom: 0; border-bottom: 0; }
   .doc-field--patient dd { font-size: 11pt; }
   .hc-sex .choice { width: auto !important; margin-right: 6px; }
@@ -107,8 +103,7 @@
   .doc-sec, h3.doc-sec { margin: 1.8mm 0 1.1mm; }
   /* Two pages by design: the renderer's extra air for multi-page documents would push page 1 onto a third. */
   .doc-roomy header.doc-header { padding-bottom: 2.5mm; margin-bottom: 3mm; }
-  .doc-roomy .doc-title { margin: 0 0 2mm; padding-block: 0; }
-  .doc-roomy .doc-title h1 { font-size: 15pt; }
+  .doc-roomy .doc-title { margin: 0 0 2mm; }
   .doc-roomy .doc-fields { margin-bottom: 2.5mm; }
   .hc-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 7mm; }
   .hc-cols > div { min-width: 0; }
@@ -235,30 +230,39 @@
   .hc-sb-note { margin: 1.2mm 0 0; font-size: 6.5pt; color: var(--muted); }
 
   .doc-content { font-size: 7.8pt; line-height: 1.42; color: var(--secondary); }
+
+  /* Page 3: the Consentimiento informado, read like its own document (informedConsent.html). */
+  .hc-p3 { break-before: page; }
+  .hc-p3 .doc-fields { margin-bottom: 3mm; }
+  .hc-p3 .doc-content { font-size: 9pt; line-height: 1.42; color: var(--text); }
+  .hc-p3 .doc-content p { margin: 0 0 6px; }
+  .hc-p3 .hc-ci-body > p:first-child { font-style: italic; }
+  .hc-p3 .doc-manufacturers { margin: 0 0 6px; }
   .sig-panels { margin-top: 4mm; }
 </style>
 </head>
 <body>
 
   <header class="doc-header">
-    <span class="hc-mono" data-field="clinic_initials"></span>
-    <div class="hc-clinic"><span class="hc-clinic-name" data-field="nombre_clinica"></span><span class="doc-cat">{{documents.common.category.clinicalRecord}}</span></div>
-    <dl class="hc-box"><div><dt>{{documents.historiaEndo.fieldDate}}</dt><dd data-field="fecha"></dd></div><div><dt>{{documents.historiaEndo.fieldRecordNo}}</dt><dd data-field="expediente"></dd></div></dl>
+    <span class="logo">{{brand:logo}}</span>
+    <span class="doc-cat">{{documents.common.category.clinicalRecord}}</span>
   </header>
 
   <div class="doc-title">
     <h1>{{documents.historiaEndo.title}}</h1>
+    <h2 data-field="nombre_clinica"></h2>
   </div>
 
   <dl class="doc-fields">
     <div class="doc-field doc-field--patient"><dt>{{documents.historiaEndo.fieldPatientName}}</dt><dd data-field="nombre_paciente"></dd></div>
     <div class="doc-field"><dt>{{documents.fieldBirthDate}}</dt><dd data-field="fecha_nacimiento"></dd></div>
     <div class="doc-field"><dt>{{documents.historiaEndo.fieldAge}}</dt><dd data-field="edad"></dd></div>
-    <div class="doc-field"><dt>{{documents.historiaEndo.fieldPractitioner}}</dt><dd data-field="nombre_medico"></dd></div>
     <div class="doc-field"><dt>{{documents.historiaEndo.fieldSex}}</dt><dd class="hc-sex" data-field="sexo"></dd></div>
-    <div class="doc-field"><dt>{{documents.historiaEndo.fieldPhone}}</dt><dd></dd></div>
-    <div class="doc-field"><dt>{{documents.historiaEndo.fieldOccupation}}</dt><dd></dd></div>
-    <div class="doc-field"><dt>{{documents.historiaEndo.fieldMaritalStatus}}</dt><dd></dd></div>
+    <div class="doc-field"><dt>{{documents.historiaEndo.fieldDate}}</dt><dd data-field="fecha"></dd></div>
+    <div class="doc-field"><dt>{{documents.historiaEndo.fieldPractitioner}}</dt><dd data-field="nombre_medico"></dd></div>
+    <div class="doc-field"><dt>{{documents.historiaEndo.fieldPhone}}</dt><dd data-field="telefono"></dd></div>
+    <div class="doc-field hc-span2"><dt>{{documents.historiaEndo.fieldEmail}}</dt><dd data-field="email"></dd></div>
+    <div class="doc-field"><dt>{{documents.historiaEndo.fieldRecordNo}}</dt><dd data-field="expediente"></dd></div>
   </dl>
 
   <!-- Summary strip (NEO-251): numbers only; the gauge and the skull are drawn once, on page 2, next to their tables. -->
@@ -341,18 +345,6 @@
     </div>
   </div>
 
-  <h3 class="doc-sec">{{documents.historiaEndo.sectionOralExam}}</h3>
-  <div class="hc-qs">
-    <div class="hc-q"><span>{{documents.historiaEndo.q.bruxism}}</span><span class="q-answer" data-field="q_has_bruxism"></span></div>
-    <div class="hc-q"><span>{{documents.historiaEndo.q.narrowPalate}}</span><span class="q-answer" data-field="q_has_narrow_palate"></span></div>
-    <div class="hc-q"><span>{{documents.historiaEndo.q.geographicTongue}}</span><span class="q-answer" data-field="q_has_geographic_tongue"></span></div>
-    <div class="hc-q"><span>{{documents.historiaEndo.q.xerostomia}}</span><span class="q-answer" data-field="q_has_xerostomia"></span></div>
-    <div class="hc-q"><span>{{documents.historiaEndo.q.mouthBreather}}</span><span class="q-answer" data-field="q_is_mouth_breather"></span></div>
-    <div class="hc-q"><span>{{documents.historiaEndo.q.missingTeeth}}</span><span class="q-answer" data-field="q_has_missing_teeth"></span></div>
-    <div class="hc-q"><span>{{documents.historiaEndo.q.periodontalDisease}}</span><span class="q-answer" data-field="q_has_periodontal_disease"></span></div>
-    <div class="hc-q hc-q--class"><span>{{documents.historiaEndo.skeletalClassShort}}</span><span class="q-answer" data-field="q_skeletal_class"></span></div>
-  </div>
-
   <h3 class="doc-sec">{{documents.historiaEndo.sectionStudies}}</h3>
   <div class="hc-ticks hc-ticks--4">
     <div><span class="hc-tick"></span>{{documents.historiaEndo.study.odontogram}}</div>
@@ -419,13 +411,45 @@
       </div>
     </div>
 
-    <h3 class="doc-sec">{{documents.historiaEndo.sectionConsent}}</h3>
-    <div class="doc-content">{{content}}</div>
+    <h3 class="doc-sec">{{documents.historiaEndo.sectionOralExam}}</h3>
+    <div class="hc-qs">
+      <div class="hc-q"><span>{{documents.historiaEndo.q.bruxism}}</span><span class="q-answer" data-field="q_has_bruxism"></span></div>
+      <div class="hc-q"><span>{{documents.historiaEndo.q.narrowPalate}}</span><span class="q-answer" data-field="q_has_narrow_palate"></span></div>
+      <div class="hc-q"><span>{{documents.historiaEndo.q.geographicTongue}}</span><span class="q-answer" data-field="q_has_geographic_tongue"></span></div>
+      <div class="hc-q"><span>{{documents.historiaEndo.q.xerostomia}}</span><span class="q-answer" data-field="q_has_xerostomia"></span></div>
+      <div class="hc-q"><span>{{documents.historiaEndo.q.mouthBreather}}</span><span class="q-answer" data-field="q_is_mouth_breather"></span></div>
+      <div class="hc-q"><span>{{documents.historiaEndo.q.missingTeeth}}</span><span class="q-answer" data-field="q_has_missing_teeth"></span></div>
+      <div class="hc-q"><span>{{documents.historiaEndo.q.periodontalDisease}}</span><span class="q-answer" data-field="q_has_periodontal_disease"></span></div>
+      <div class="hc-q hc-q--class"><span>{{documents.historiaEndo.skeletalClassShort}}</span><span class="q-answer" data-field="q_skeletal_class"></span></div>
+    </div>
+
 
     <div class="sig-panels">
-      <div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.historiaEndo.signatureLabelPatient}}</div><div class="sig-area" data-field="firma_paciente"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_paciente"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div>
       <div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.historiaEndo.signatureLabelDoctor}}</div><div class="sig-area" data-field="firma_doctor"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_medico"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div>
     </div>
+  </div>
+
+  <!-- Page 3: the Consentimiento informado for every patient (NEO-249) — same blocks as informedConsent.html. -->
+  <div class="hc-p3">
+    <header class="doc-header">
+      <span class="logo">{{brand:logo}}</span>
+      <span class="doc-cat">{{documents.common.category.consent}}</span>
+    </header>
+    <div class="doc-title">
+      <h1>{{documents.informedConsent.title}}</h1>
+      <h2>{{documents.informedConsent.subtitle}}</h2>
+    </div>
+    <dl class="doc-fields">
+      <div class="doc-field doc-field--patient"><dt>{{documents.informedConsent.fieldPatientName}}</dt><dd data-field="nombre_paciente"></dd></div>
+      <div class="doc-field doc-field--short"><dt>{{documents.fieldBirthDate}}</dt><dd data-field="fecha_nacimiento"></dd></div>
+      <div class="doc-field"><dt>{{documents.informedConsent.fieldPractitioner}}</dt><dd data-field="nombre_medico"></dd></div>
+      <div class="doc-field"><dt>{{documents.informedConsent.fieldPlace}}</dt><dd data-field="lugar"></dd></div>
+      <div class="doc-field doc-field--short"><dt>{{documents.informedConsent.fieldDate}}</dt><dd data-field="fecha"></dd></div>
+    </dl>
+    <div class="doc-content hc-ci-body">{{slot:informedConsent}}</div>
+    <p class="doc-manufacturers">{{documents.informedConsent.manufacturers}}</p>
+    <div class="doc-content">{{content}}</div>
+    <div class="sig-panels"><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.informedConsent.signatureLabel}}</div><div class="sig-stamp" data-field="consent_stamp"></div><div class="sig-area" data-field="firma_paciente"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_paciente"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div></div>
   </div>
 
   <!-- The skull drawing: left half drawn, right half mirrored; joints read data-state (0–5 findings). -->
