@@ -7,6 +7,7 @@ import {
   resolveBrowserLaunch,
   applyDataFields,
   applyChoiceFields,
+  applyStateFields,
   applyDataImages,
   applyVariant,
   lockDownPage,
@@ -268,6 +269,17 @@ describe.skipIf(!launch)("renderHtmlToPdf (real Chromium)", () => {
       const pdf = await fitPageLayout(page, () => page.pdf({ format: "A4", margin }), margin);
       expect(countPdfPages(pdf)).toBe(1);
     });
+  });
+
+  it("state fields set data-state on every matching element (drives CSS-only visuals), ignoring unsafe values", { timeout: 60_000 }, async () => {
+    browser ??= await puppeteer.launch({ ...launch!, headless: true });
+    const page = await browser.newPage();
+    await page.setContent(`<i data-state-field="tmj_level_right"></i><i data-state-field="tmj_level_right"></i><i data-state-field="score_state"></i><i data-state-field="untouched"></i>`);
+
+    await applyStateFields(page, { tmj_level_right: "2", score_state: "x\" onload=\"alert(1)" });
+
+    const states = await page.$$eval("[data-state-field]", (els) => els.map((el) => el.getAttribute("data-state")));
+    expect(states).toEqual(["2", "2", null, null]);
   });
 
   it("a recorded answer still prints every option, only the selected one marked", { timeout: 60_000 }, async () => {

@@ -17,6 +17,7 @@ import { formatFormDate, formatFormDateTime } from "../utils/formDate.js";
 import { uploadPartnerDocument, deletePartnerDocument, getPartnerDocumentSignedUrl } from "../services/partnerDocuments.js";
 import { NotFoundError, ValidationError } from "../errors.js";
 import { MEDICAL_HISTORY_QUESTIONS, ORAL_EXAM_QUESTIONS, STOP_QUESTIONS, BANG_QUESTIONS, TMJ_FINDINGS } from "./clinicalRecordFields.js";
+import { historiaClinicaPrintFields, formatMeasure } from "./historiaClinicaPrint.js";
 
 /**
  * COMMANDS — the patient Estudios checklist (NEO-36 part 2, ADR-024):
@@ -50,12 +51,6 @@ function stopBangZones(locale: string, score: number | null): ChoiceField {
 function patientStamp(locale: string, source: string | undefined, answeredAt: Date | undefined): string {
   if (source !== "patient" || !answeredAt) return "";
   return documentT(locale, "documents.common.patientStamp", { date: formatFormDateTime(answeredAt, locale) });
-}
-
-/** A measurement as printed on the form: one decimal, dropped when whole, decimal comma except for English. */
-function formatMeasure(value: number, locale: string): string {
-  const text = Number.isInteger(value) ? String(value) : value.toFixed(1);
-  return locale === "en" ? text : text.replace(".", ",");
 }
 
 /** What the specialist measured for B and N, printed under those two questions (migration 034). Empty when answered as a plain yes/no. */
@@ -130,6 +125,7 @@ export async function PrintChecklistItemCommand(
   let date = new Date();
   const fields: Record<string, string> = {};
   const choices: Record<string, ChoiceField> = {};
+  const states: Record<string, string> = {};
 
   if (key === "medicalHistory" || key === "historiaEndo") {
     const history =
@@ -159,10 +155,27 @@ export async function PrintChecklistItemCommand(
     if (key === "tmjExam" && exam) date = exam.created_at;
   }
   if (key === "historiaEndo") {
-    // The Historia clínica carries the latest STOP-Bang result next to the other sections (NEO-231 D2).
-    const screening = recordOf<StopBangRecord>(checklist.items.find((i) => i.key === "stopBang") ?? item, undefined);
+    // The Historia clínica carries the latest STOP-Bang result next to the other sections (NEO-231 D2),
+    // drawn as its summary tiles, skull and STOP-Bang table (v2, 2026-10-05).
+    const latest = <T>(itemKey: string): T | null => {
+      const source = checklist.items.find((i) => i.key === itemKey);
+      return source ? recordOf<T>(source, undefined) : null;
+    };
+    const screening = latest<StopBangRecord>("stopBang");
     fields.score = screening?.score == null ? "" : String(screening.score);
-    choices.score_zone = stopBangZones(locale, screening?.score ?? null);
+    Object.assign(fields, measurementDetails(locale, screening));
+    const print = historiaClinicaPrintFields(locale, {
+      organizationName: pdfContext.organization_name,
+      birthDate: pdfContext.patient_birth_date,
+      today: date,
+      history: latest<MedicalHistoryRecord>("medicalHistory"),
+      oral: latest<OralExamRecord>("oralExam"),
+      tmj: latest<TmjExamRecord>("tmjExam"),
+      screening,
+    });
+    Object.assign(fields, print.fields);
+    Object.assign(choices, print.choices);
+    Object.assign(states, print.states);
   }
   if (key === "stopBang") {
     const screening = recordOf<StopBangRecord>(item, recordId);
@@ -204,6 +217,7 @@ export async function PrintChecklistItemCommand(
       ...fields,
     },
     choiceFields: choices,
+    stateFields: states,
   });
 
   await insertAuditLog(ctx.client, {

@@ -184,6 +184,14 @@ export interface RenderHtmlToPdfOptions {
    */
   choiceFields?: Record<string, ChoiceField>;
   /**
+   * Visual states keyed by `data-state-field="key"`: each matching element
+   * gets `data-state="<value>"`, which the template's CSS turns into a
+   * drawing (the Historia clínica's ATM skull glow per side, the STOP-Bang
+   * gauge needle). Page scripts are disabled (lockDownPage), so this is how
+   * a template shows a computed level. Values are short tokens only.
+   */
+  stateFields?: Record<string, string>;
+  /**
    * Images placed into `[data-field="key"]` elements — a drawn signature
    * (data:image/png;base64 only: the page lockdown allows data: URLs and
    * nothing else, and callers validate the format first). The element's
@@ -324,6 +332,18 @@ export async function applyChoiceFields(page: Page, fields: Record<string, Choic
   }, normalized);
 }
 
+const STATE_VALUE_RE = /^[a-z0-9_-]{1,32}$/;
+
+/** Sets `data-state` on `[data-state-field="key"]` elements — see RenderHtmlToPdfOptions.stateFields. Exported for the spec. */
+export async function applyStateFields(page: Page, fields: Record<string, string>): Promise<void> {
+  const safe = Object.fromEntries(Object.entries(fields).filter(([, value]) => STATE_VALUE_RE.test(value)));
+  await page.evaluate((values) => {
+    for (const [key, value] of Object.entries(values)) {
+      document.querySelectorAll(`[data-state-field="${CSS.escape(key)}"]`).forEach((el) => el.setAttribute("data-state", value));
+    }
+  }, safe);
+}
+
 const RENDER_READY_TIMEOUT_MS = 10_000;
 
 /**
@@ -461,6 +481,7 @@ export async function renderHtmlToPdf(html: string, options: RenderHtmlToPdfOpti
       await page.setContent(html, { waitUntil: "load" });
       if (options.dataFields) await applyDataFields(page, options.dataFields);
       if (options.choiceFields) await applyChoiceFields(page, options.choiceFields);
+      if (options.stateFields) await applyStateFields(page, options.stateFields);
       if (options.variant) await applyVariant(page, options.variant);
       if (options.dataImages) await applyDataImages(page, options.dataImages);
       if (options.imageFields) await applyDataImages(page, options.imageFields, "data-image");
