@@ -226,11 +226,9 @@ describe("PatientQuestionnaireView (public QR self-fill)", () => {
     expect(alerts(wrapper)).toEqual(["Tick the box above to confirm you have read the document."]);
     expect(apiFetch).toHaveBeenCalledTimes(1);
 
-    // The accept box lists the documents it accepts, bold and unquoted (CORE-156); the privacy box above names its own.
+    // The accept box lists the documents it accepts as plain text, unquoted and not bold, like the privacy box above (CORE-156).
     expect(wrapper.find("[data-testid='consent-accept']").text()).toBe("I have read Informed consent and accept its content.");
-    expect(wrapper.findAll("[data-testid='consent-accept'] strong").map((s) => s.text())).toEqual(["Informed consent"]);
-    // One inline span: Vuetify's label is a flex row, so loose text nodes would split into columns.
-    expect(wrapper.find("[data-testid='consent-accept'] label > span").text()).toBe("I have read Informed consent and accept its content.");
+    expect(wrapper.find("[data-testid='consent-accept'] label strong").exists()).toBe(false);
     await wrapper.find("[data-testid='consent-accept'] input").setValue(true);
     apiFetch.mockResolvedValueOnce(jsonResponse(true, 201, { step: "informedConsent", completed: false }));
     await wrapper.find("form").trigger("submit");
