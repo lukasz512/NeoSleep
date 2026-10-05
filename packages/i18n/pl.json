@@ -456,6 +456,8 @@
   "user.resources.title": "Materiały",
   "user.resources.featured.protocol.title": "Protocolo de atención",
   "user.resources.featured.protocol.subtitle": "Protokół opieki NeoSleep · 24 slajdy · PDF",
+  "user.resources.featured.guide.title": "Instrukcja obsługi",
+  "user.resources.featured.guide.subtitle": "Dla lekarzy · 25 slajdów · PDF (po hiszpańsku)",
   "user.resources.tabs.documents": "Dokumenty",
   "user.resources.tabs.videos": "Webinary",
   "user.resources.emptyDocuments": "Brak dostępnych dokumentów",

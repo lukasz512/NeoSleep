@@ -1,6 +1,7 @@
 /**
- * Seeds the demo doctor + "Tester Patient N" records the doctor user guide's
- * screenshots are taken from (docs/user-guide/, run by `pnpm guide:build`).
+ * Seeds the demo doctor + "Tester Patient-N" records the doctor user guide's
+ * screenshots are taken from (docs/user-guide/, `pnpm guide:shots`). The
+ * hyphen matters: lists show only the first word of each name.
  *
  *   pnpm --filter @neo/api seed:guide
  *
@@ -52,12 +53,24 @@ async function seed(): Promise<void> {
     const hash = await bcrypt.hash(GUIDE_DOCTOR_PASSWORD, 4);
     const user = await insertStaffUser(client, GUIDE_DOCTOR_EMAIL, "Lorena", "Demo", "doctor", hash, false, "Dra.", null, null, null, "MX");
     if (!user) throw new Error("doctor user was not created");
+    // insertPractitioner made the shared identity first, so the user upsert left its country empty;
+    // MX gives the doctor +52 phone prefixes like a real Mexican account.
+    await client.query(`UPDATE identities SET country_code = 'MX' WHERE email = $1`, [GUIDE_DOCTOR_EMAIL]);
+    // A primary clinic in Mexico: booking forms show times in the clinic's zone (CORE-120).
+    const clinic = await client.query<{ id: string }>(
+      `INSERT INTO organization (name, type, address_line1, city, state, postal_code, country_code, region, phone, email)
+       VALUES ('Clínica Demo', 'clinic', 'Av. Reforma 123', 'Ciudad de México', 'CDMX', '06600', 'MX', 'MX', '+52 55 1234 5600', 'clinica.demo@example.com') RETURNING id`,
+    );
+    await client.query(
+      `INSERT INTO practitioner_organization (practitioner_id, organization_id, is_primary) VALUES ($1, $2, true)`,
+      [practitioner.id, clinic.rows[0]!.id],
+    );
 
     const patient = (n: number, gender: "female" | "male", dob: string) =>
       insertPatient(client, {
-        first_name: "Tester", last_name: `Patient ${n}`, gender, date_of_birth: dob,
+        first_name: "Tester", last_name: `Patient-${n}`, gender, date_of_birth: dob,
         email: `tester.patient${n}@example.com`, phone: `55 1234 56${String(n).padStart(2, "0")}`,
-        country_code: "MX", practitioner_id: practitioner.id,
+        country_code: "MX", region: "MX", practitioner_id: practitioner.id,
       });
     const visit = (patientId: string, start: Date, minutes = 60, notes: string | null = null) =>
       insertAppointment(client, {

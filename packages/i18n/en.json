@@ -453,6 +453,8 @@
   "user.resources.title": "Resources",
   "user.resources.featured.protocol.title": "Protocolo de atención",
   "user.resources.featured.protocol.subtitle": "NeoSleep care protocol · 24 slides · PDF",
+  "user.resources.featured.guide.title": "User guide",
+  "user.resources.featured.guide.subtitle": "For doctors · 25 slides · PDF (Spanish)",
   "user.resources.tabs.documents": "Documents",
   "user.resources.tabs.videos": "Webinars",
   "user.resources.emptyDocuments": "No documents available yet",

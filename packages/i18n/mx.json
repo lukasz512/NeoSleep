@@ -456,6 +456,8 @@
   "user.resources.title": "Recursos",
   "user.resources.featured.protocol.title": "Protocolo de atención",
   "user.resources.featured.protocol.subtitle": "Protocolo clínico NeoSleep · 24 diapositivas · PDF",
+  "user.resources.featured.guide.title": "Guía de uso",
+  "user.resources.featured.guide.subtitle": "Para médicos · 25 diapositivas · PDF",
   "user.resources.tabs.documents": "Documentos",
   "user.resources.tabs.videos": "Webinars",
   "user.resources.emptyDocuments": "Aún no hay documentos disponibles",

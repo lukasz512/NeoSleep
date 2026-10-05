@@ -58,6 +58,14 @@ describe("Featured resources (NEO-242)", () => {
     expect(css).toMatch(/@media \(min-width: 600px\)\s*{\s*\.resource-featured\s*{\s*max-width: \d+px;/);
   });
 
+  it("lists the doctors' user guide right after the protocol, in the reader's language", () => {
+    expect(FEATURED_RESOURCES[1]?.id).toBe("guia-uso");
+    const link = mountList("mx").find('[data-testid="resources-featured-guia-uso"]');
+    expect(link.text()).toContain("Guía de uso");
+    expect(link.attributes("href")).toMatch(/files\/guia-uso-neosleep\.pdf$/);
+    expect(mountList("en").find('[data-testid="resources-featured-guia-uso"]').text()).toContain("User guide");
+  });
+
   it("joins the base URL with exactly one slash", () => {
     const item = FEATURED_RESOURCES[0]!;
     expect(featuredResourceHref(item, "/")).toBe("/files/protocolo-atencion-neosleep.pdf");

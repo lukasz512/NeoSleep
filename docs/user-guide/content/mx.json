@@ -8,7 +8,8 @@
     "toc": "Contenido",
     "chapterLabel": "Capítulo {n}",
     "upcoming": "próximamente",
-    "footer": "NeoSleep · Guía de uso"
+    "footer": "NeoSleep · Guía de uso",
+    "quoteLabel": "Del protocolo de atención"
   },
   "chapters": {
     "access": {
@@ -66,6 +67,178 @@
         "Guárdala. A partir de ahora inicia sesión con la nueva contraseña."
       ],
       "tip": "¿El enlace caducó? Solicita uno nuevo desde «¿Olvidaste tu contraseña?»."
+    },
+    "patients": {
+      "title": "Tus pacientes",
+      "lead": "«Pacientes» en el menú lista los pacientes asignados a ti. Cada fila muestra sus documentos, estudios y el siguiente paso.",
+      "steps": [
+        "Busca por nombre.",
+        "Agrega un paciente nuevo.",
+        "Abre el expediente tocando el nombre.",
+        "El botón de «Siguiente paso» te lleva directo a lo que falta: el QR del paciente o el seguimiento del dispositivo."
+      ]
+    },
+    "patientAdd": {
+      "title": "Agregar un paciente",
+      "lead": "Toca + en la lista de pacientes. El panel de la izquierda se llena mientras escribes.",
+      "steps": [
+        "Nombre y apellido.",
+        "Sexo.",
+        "Fecha de nacimiento.",
+        "Correo y teléfono: ahí el paciente recibe sus formularios y los recordatorios de cita.",
+        "Toca «Añadir paciente»."
+      ],
+      "tip": "Para guardar solo necesitas el nombre. Completa lo demás después con el lápiz del expediente."
+    },
+    "patientDetail": {
+      "title": "El expediente del paciente",
+      "lead": "Todo sobre un paciente en una sola pantalla.",
+      "steps": [
+        "Pestañas: Detalles, Notas, Documentos, Estudios, Dispositivo e Historial.",
+        "«Siguiente paso» te dice qué está pendiente y te ofrece la acción para resolverlo.",
+        "«Documentos y estudios» muestra qué tan completo está el expediente.",
+        "Agenda una cita (ícono de calendario). El lápiz de al lado edita los datos del paciente."
+      ]
+    },
+    "psgFill": {
+      "title": "Polisomnografía: registra los resultados",
+      "lead": "Imprescindible: sin polisomnografía no hay diagnóstico ni plan de tratamiento. En el expediente abre «Estudios» y toca «Llenar» en Polisomnografía.",
+      "steps": [
+        "Fecha del estudio (no puede ser futura).",
+        "Estado: de «Solicitado» a «Resultados recibidos» e «Interpretado».",
+        "Puntuación IAH, SpO2 mínima (%) e IDO del reporte.",
+        "Tu interpretación.",
+        "Toca «Guardar»."
+      ],
+      "quote": "Polisomnografía: confirma el diagnóstico y su severidad.",
+      "quoteSource": "Protocolo de atención, diapositiva 9 (AADSM Standards 2022)"
+    },
+    "psgResult": {
+      "title": "Polisomnografía: el resultado",
+      "lead": "Al guardar, el estudio aparece en «Estudios» con sus valores y la severidad en la escala IAH.",
+      "steps": [
+        "Adjunta el reporte del laboratorio (PDF, JPG o PNG) con +. Adjuntado al estudio, el archivo lo completa.",
+        "La tarjeta del estudio: fecha, IAH, SpO2 mínima e IDO.",
+        "La severidad: <5 normal, 5–15 leve, 15–30 moderado, >30 severo."
+      ],
+      "tip": "Los criterios clínicos están en el Protocolo de atención, en Recursos."
+    },
+    "visit": {
+      "title": "Agendar una cita",
+      "lead": "En el expediente toca el ícono de calendario («Agendar cita»). El paciente y tú como médico ya están puestos.",
+      "steps": [
+        "Fecha.",
+        "Hora, en la zona horaria de tu clínica.",
+        "Duración.",
+        "Notas para la cita (opcional).",
+        "Toca «Agendar»."
+      ],
+      "tip": "Si el paciente tiene correo, recibe una confirmación y un recordatorio, y puede confirmar o avisar que no podrá asistir. Su respuesta la ves en el Panel."
+    },
+    "qr": {
+      "title": "QR para el paciente",
+      "lead": "El paciente llena sus propios formularios en su teléfono: consentimiento, antecedentes médicos y el cuestionario STOP-Bang. Toca «QR para el paciente» en el expediente.",
+      "steps": [
+        "Los formularios que incluye el QR: solo los que siguen pendientes.",
+        "El paciente escanea el código con la cámara de su teléfono.",
+        "«Copiar enlace» para enviarlo por mensaje."
+      ],
+      "tip": "El enlace funciona una sola vez y vence en 24 horas. Si venció, genera un QR nuevo."
+    },
+    "documents": {
+      "title": "Documentos: dónde llenar cada cosa",
+      "lead": "La pestaña «Documentos» reúne el consentimiento y la historia clínica. Lo completado lleva una palomita verde.",
+      "steps": [
+        "El avance: cuántos documentos están completos.",
+        "Consentimiento informado: por QR, impreso o subiendo el escaneo firmado.",
+        "Historia clínica en 4 secciones: Antecedentes, STOP-BANG, Exploración y ATM.",
+        "«Llenar» para completar tú una sección durante la cita.",
+        "Envía al paciente todo lo pendiente por correo (el enlace funciona 7 días)."
+      ],
+      "tip": "Completo = todo marcado en «Documentos y estudios»."
+    },
+    "order": {
+      "title": "Solicitar el dispositivo (DAM)",
+      "lead": "En el expediente abre «Dispositivo» y toca +. La solicitud tiene 3 pasos.",
+      "steps": [
+        "Los pasos: configuración del tratamiento, registro dental (escaneos) y resumen.",
+        "Máxima retrusión (MR), en mm.",
+        "Máxima protrusión (MP), en mm.",
+        "El rango de avance mandibular se calcula solo.",
+        "Avanza con la flecha. En el resumen revisa todo y envía."
+      ],
+      "tip": "Si la dirección de tu clínica está incompleta, la solicitud lo indica arriba: contacta a NeoSleep para corregirla antes de pedir."
+    },
+    "tracking": {
+      "title": "Seguimiento del pedido",
+      "lead": "En «Dispositivo» cada pedido muestra su número y dónde está. La lista de pacientes muestra lo mismo en «Siguiente paso».",
+      "steps": [
+        "El número del pedido.",
+        "«Pedido»: el laboratorio está fabricando el dispositivo.",
+        "«Recibido»: el dispositivo llegó y puedes agendar la cita de entrega."
+      ],
+      "tip": "El laboratorio da la fecha de entrega, normalmente unos 15 días después del registro dental (Protocolo de atención)."
+    },
+    "calendar": {
+      "title": "Calendario",
+      "lead": "Todas tus citas, con el paciente y la hora.",
+      "steps": [
+        "Calendario del mes: toca un día para ir a él.",
+        "Cambia entre día, semana y mes.",
+        "«Hoy» te regresa al día actual.",
+        "Toca una cita para verla, moverla o cancelarla.",
+        "+ agenda una cita nueva."
+      ]
+    },
+    "panel": {
+      "title": "Panel",
+      "lead": "Tu pantalla de inicio: lo que te espera hoy.",
+      "steps": [
+        "Busca a cualquiera de tus pacientes.",
+        "Citas de hoy, estudios por interpretar, expedientes por completar y pacientes en tratamiento.",
+        "Tus pacientes por etapa, de nuevos a en tratamiento.",
+        "Próximas citas.",
+        "«Requiere tu acción»: resultados por interpretar, consentimientos sin firmar, pacientes que no podrán asistir."
+      ],
+      "tip": "El Panel se está activando cuenta por cuenta. Si aún no lo ves, la aplicación abre en «Pacientes»."
     }
+  },
+  "faq": {
+    "faq1": [
+      {
+        "q": "No me llega el correo para restablecer la contraseña.",
+        "a": "Revisa spam. El enlace funciona 1 hora; pide uno nuevo desde «¿Olvidaste tu contraseña?». Si aun así no llega, contacta a NeoSleep."
+      },
+      {
+        "q": "No encuentro a un paciente.",
+        "a": "Solo ves los pacientes asignados a ti. Busca por nombre o apellido y revisa que no haya un filtro activo."
+      },
+      {
+        "q": "El paciente dice que el QR no funciona.",
+        "a": "El QR funciona una sola vez y durante 24 horas. Genera uno nuevo con «QR para el paciente» o usa «Copiar enlace» y envíalo por mensaje."
+      },
+      {
+        "q": "¿Puedo usar la aplicación en mi teléfono?",
+        "a": "Sí, en el navegador. Agrégala a la pantalla de inicio para abrirla como una app."
+      }
+    ],
+    "faq2": [
+      {
+        "q": "¿Dónde registro la polisomnografía?",
+        "a": "En el expediente, pestaña «Estudios» → «Llenar» en Polisomnografía. Adjunta el reporte del laboratorio con «Subir archivo»."
+      },
+      {
+        "q": "¿Dónde veo cómo va el pedido del dispositivo?",
+        "a": "En el expediente, pestaña «Dispositivo», o en «Siguiente paso» en la lista de pacientes."
+      },
+      {
+        "q": "La solicitud dice que la dirección de mi clínica está incompleta.",
+        "a": "Contacta a NeoSleep: para entregar el dispositivo se necesitan la dirección, el código postal, el teléfono y el correo de la clínica."
+      },
+      {
+        "q": "¿El paciente se entera de la cita?",
+        "a": "Sí, si tiene correo: recibe una confirmación y un recordatorio, y su respuesta aparece en el Panel."
+      }
+    ]
   }
 }

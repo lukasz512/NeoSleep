@@ -41,6 +41,19 @@ async function settle(page) {
   await page.waitForTimeout(200);
 }
 
+/** The element's box plus a margin (room for the markers), kept inside the viewport. */
+async function clipAround(locator, pad = 28) {
+  const box = await locator.boundingBox();
+  if (!box) throw new Error("clipTo element not visible");
+  const x = Math.max(0, Math.floor(box.x - pad));
+  const y = Math.max(0, Math.floor(box.y - pad));
+  return {
+    x, y,
+    width: Math.min(VIEWPORT.width - x, Math.ceil(box.width + pad * 2)),
+    height: Math.min(VIEWPORT.height - y, Math.ceil(box.height + pad * 2)),
+  };
+}
+
 async function signIn(page) {
   await page.goto(`${BASE}/login`);
   await page.locator('input[type="email"]').first().fill(DOCTOR.email);
@@ -83,12 +96,13 @@ for (const shot of Object.values(SHOTS)) {
   const page = await pageFor(shot.auth);
   await shot.run(page, { base: BASE });
   await settle(page);
-  const clip = shot.clip ?? { x: 0, y: 0, ...VIEWPORT };
+  const clip = shot.clip ?? (shot.clipTo ? await clipAround(shot.clipTo(page)) : { x: 0, y: 0, ...VIEWPORT });
   const markers = [];
-  for (const loc of shot.markers(page)) {
-    const box = await loc.boundingBox();
+  for (const marker of shot.markers(page)) {
+    const { loc, side = "left" } = "loc" in marker ? marker : { loc: marker };
+    const box = await loc.boundingBox({ timeout: 8000 }).catch(() => null);
     if (!box) throw new Error(`${shot.name}: marker ${markers.length + 1} not visible`);
-    markers.push({ x: Math.round(box.x - clip.x), y: Math.round(box.y - clip.y), w: Math.round(box.width), h: Math.round(box.height) });
+    markers.push({ x: Math.round(box.x - clip.x), y: Math.round(box.y - clip.y), w: Math.round(box.width), h: Math.round(box.height), side });
   }
   await page.screenshot({ path: path.join(out, `${shot.name}.png`), clip });
   fs.writeFileSync(path.join(out, `${shot.name}.json`), JSON.stringify({ size: { width: clip.width, height: clip.height }, markers }, null, 2) + "\n");

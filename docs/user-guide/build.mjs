@@ -95,7 +95,8 @@ function task(slide, page, total, chapterId) {
     throw new Error(`${slide.id}: ${t.steps.length} steps but ${s.markers.length} markers on the shot`);
   }
   const markers = s.markers.map((m, i) => {
-    const left = Math.max(18, m.x - 22) / s.size.width * 100;
+    const cx = m.side === "right" ? m.x + m.w + 24 : m.x - 22;
+    const left = Math.min(s.size.width - 18, Math.max(18, cx)) / s.size.width * 100;
     const top = (m.y + m.h / 2) / s.size.height * 100;
     return `<span class="mk" style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%">${i + 1}</span>`;
   }).join("");
@@ -108,8 +109,20 @@ function task(slide, page, total, chapterId) {
       <p class="lead">${esc(t.lead)}</p>
       <ol class="steps">${steps}</ol>
       ${t.tip ? `<p class="tip">${esc(t.tip)}</p>` : ""}
+      ${t.quote ? `<blockquote class="quote"><small>${esc(meta.quoteLabel)}</small><p>${esc(t.quote)}</p><cite>${esc(t.quoteSource ?? "")}</cite></blockquote>` : ""}
     </div>
-    <div class="task-shot"><figure style="aspect-ratio:${ratio.toFixed(4)}"><img src="${s.src}" alt="">${markers}</figure></div>
+    <div class="task-shot"><figure style="aspect-ratio:${ratio.toFixed(4)};width:min(100%, ${Math.round(584 * ratio)}px)"><img src="${s.src}" alt="">${markers}</figure></div>
+    ${footer(page, total, chapterId)}
+  </section>`;
+}
+
+function faq(slide, page, total, chapterId) {
+  const items = content.faq?.[slide.id];
+  if (!items) throw new Error(`content/${LOCALE}.json has no faq.${slide.id}`);
+  const rows = items.map((it) => `<div class="faq-item"><h3>${esc(it.q)}</h3><p>${esc(it.a)}</p></div>`).join("");
+  return `<section class="slide faq">
+    <p class="eyebrow">${esc(content.chapters[chapterId].title)}</p>
+    <div class="faq-grid">${rows}</div>
     ${footer(page, total, chapterId)}
   </section>`;
 }
@@ -122,6 +135,7 @@ function render() {
     if (slide.kind === "cover") return cover();
     if (slide.kind === "toc") return toc(page, total);
     if (slide.kind === "chapter") { chapterId = slide.id; return chapter(slide, page, total); }
+    if (slide.kind === "faq") return faq(slide, page, total, chapterId);
     return task(slide, page, total, chapterId);
   }).join("\n");
   return `<!doctype html><html lang="${INTL}"><head><meta charset="utf-8"><title>${esc(meta.title)}</title>

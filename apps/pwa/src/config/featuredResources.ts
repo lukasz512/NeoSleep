@@ -25,6 +25,14 @@ export const FEATURED_RESOURCES: readonly FeaturedResource[] = [
     icon: "file-pdf",
     file: "files/protocolo-atencion-neosleep.pdf",
   },
+  {
+    // Built from docs/user-guide/ (pnpm guide:build); Spanish (MX) only for now.
+    id: "guia-uso",
+    titleKey: "user.resources.featured.guide.title",
+    subtitleKey: "user.resources.featured.guide.subtitle",
+    icon: "file-pdf",
+    file: "files/guia-uso-neosleep.pdf",
+  },
 ];
 
 export function featuredResourceHref(resource: FeaturedResource, base: string = import.meta.env.BASE_URL): string {
