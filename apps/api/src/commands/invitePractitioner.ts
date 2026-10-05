@@ -210,7 +210,7 @@ export async function InvitePractitionerCommand(
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,
     action: "invite",
-    entity_type: "Person",
+    entity_type: "User",
     entity_id: user.id,
     entity_after: { lead_id: leadId, email, role: "doctor" },
     request_id: ctx.requestId,
@@ -719,7 +719,7 @@ export async function AcceptPractitionerInviteCommand(
   await insertAuditLog(client, {
     user_id: user.id,
     action: "accept_invite",
-    entity_type: "Person",
+    entity_type: "User",
     entity_id: user.id,
     user_ip: meta.ip,
     user_agent: meta.userAgent,
