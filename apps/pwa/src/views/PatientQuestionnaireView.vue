@@ -148,7 +148,7 @@
                 <VCheckbox v-model="accepted" hide-details class="patient-questionnaire__consent" data-testid="consent-accept">
                   <template #label>
                     <!-- CORE-156: names every document this signature covers, bold and unquoted, joined the locale's way ("A y B"). -->
-                    <Translation keypath="app.questionnaire.consentStep.accept" :plural="signedDocuments.length" scope="global">
+                    <Translation keypath="app.questionnaire.consentStep.accept" :plural="signedDocuments.length" scope="global" tag="span">
                       <template #documents>
                         <template v-for="(part, i) in signedDocumentParts" :key="i"><strong v-if="part.type === 'element'">{{ part.value }}</strong><template v-else>{{ part.value }}</template></template>
                       </template>
