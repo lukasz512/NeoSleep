@@ -10,6 +10,10 @@ export const APPOINTMENT_TYPES = ["visit"] as const;
 export const APPOINTMENT_LOCATION_TYPES = ["clinic", "online"] as const;
 export const APPOINTMENT_PATIENT_RESPONSES = ["confirmed", "cannot_attend"] as const;
 export type AppointmentPatientResponse = (typeof APPOINTMENT_PATIENT_RESPONSES)[number];
+// migrations/055_appointment_cannot_attend_followup.sql
+export type AppointmentCancelReason = "patient_cannot_attend";
+/** The longest day/time suggestion a patient may leave with "I can't come" (NEO-254). */
+export const PATIENT_RESPONSE_NOTE_MAX = 200;
 
 /** A range query never returns more than this — an agenda shows a day or a week. */
 export const APPOINTMENT_LIST_MAX = 500;
@@ -20,6 +24,8 @@ export interface Appointment {
   patient_name: string | null;
   patient_first_name: string | null;
   patient_last_name: string | null;
+  /** NEO-254: so staff can call or WhatsApp a patient who can't come. */
+  patient_phone: string | null;
   practitioner_id: string;
   practitioner_name: string | null;
   practitioner_first_name: string | null;
@@ -41,6 +47,10 @@ export interface Appointment {
   /** The patient's answer from the email link (CORE-25); cleared on reschedule. */
   patient_response: AppointmentPatientResponse | null;
   patient_responded_at: string | null;
+  /** NEO-254: the day/time the patient suggests with "I can't come"; cleared with the answer. */
+  patient_response_note: string | null;
+  /** NEO-254: 'patient_cannot_attend' when cancelled after the patient declined, else null. */
+  cancel_reason: AppointmentCancelReason | null;
   /** CORE-116: when the "please confirm" email went out (booking email or the 2-day ask). */
   confirm_request_sent_at: string | null;
   /** CORE-116: when the day-before email (reminder or second ask) went out. */
@@ -74,6 +84,9 @@ export interface AppointmentUpdate {
   notes?: string | null;
   sleep_study_id?: string | null;
   treatment_plan_id?: string | null;
+  cancel_reason?: AppointmentCancelReason | null;
+  /** Staff recording the patient's answer ("Sí vendrá", NEO-254): stamps the time and drops the suggestion. */
+  patient_response?: AppointmentPatientResponse;
 }
 
 export interface AppointmentFilters {
@@ -102,8 +115,8 @@ type AppointmentRow = Omit<Appointment, "patient_name" | "practitioner_name" | "
 const SELECT_COLS = `
   a.id, a.patient_id, a.practitioner_id, a.organization_id, a.territory_id, a.sleep_study_id,
   a.treatment_plan_id, a.created_by_user_id, a.type, a.status, a.start_at, a.end_at, a.timezone,
-  a.location_type, a.online_url, a.notes, a.patient_response, a.patient_responded_at, a.confirm_request_sent_at, a.day_before_sent_at, a.today_reminder_sent_at, a.created_at, a.updated_at,
-  pi.title AS patient_salutation, pi.first_name AS patient_first_name, pi.last_name AS patient_last_name,
+  a.location_type, a.online_url, a.notes, a.patient_response, a.patient_responded_at, a.patient_response_note, a.cancel_reason, a.confirm_request_sent_at, a.day_before_sent_at, a.today_reminder_sent_at, a.created_at, a.updated_at,
+  pi.title AS patient_salutation, pi.first_name AS patient_first_name, pi.last_name AS patient_last_name, pi.phone AS patient_phone,
   di.title AS practitioner_salutation, di.first_name AS practitioner_first_name, di.last_name AS practitioner_last_name,
   o.name AS organization_name`.trim();
 
@@ -123,6 +136,7 @@ function serialize(row: AppointmentRow): Appointment {
     patient_name: formatOptionalDisplayName({ salutation: row.patient_salutation, first_name: row.patient_first_name, last_name: row.patient_last_name }),
     patient_first_name: row.patient_first_name,
     patient_last_name: row.patient_last_name,
+    patient_phone: row.patient_phone,
     practitioner_id: row.practitioner_id,
     practitioner_name: formatOptionalDisplayName({ salutation: row.practitioner_salutation, first_name: row.practitioner_first_name, last_name: row.practitioner_last_name }),
     practitioner_first_name: row.practitioner_first_name,
@@ -143,6 +157,8 @@ function serialize(row: AppointmentRow): Appointment {
     notes: row.notes,
     patient_response: row.patient_response,
     patient_responded_at: row.patient_responded_at ? isoDate(row.patient_responded_at) : null,
+    patient_response_note: row.patient_response_note,
+    cancel_reason: row.cancel_reason,
     confirm_request_sent_at: row.confirm_request_sent_at ? isoDate(row.confirm_request_sent_at) : null,
     day_before_sent_at: row.day_before_sent_at ? isoDate(row.day_before_sent_at) : null,
     today_reminder_sent_at: row.today_reminder_sent_at ? isoDate(row.today_reminder_sent_at) : null,
@@ -242,11 +258,15 @@ export async function insertAppointment(client: PoolClient, data: AppointmentIns
 export async function updateAppointment(client: PoolClient, id: string, data: AppointmentUpdate): Promise<Appointment | null> {
   const sets: string[] = [];
   const params: unknown[] = [];
-  for (const key of ["start_at", "end_at", "status", "notes", "sleep_study_id", "treatment_plan_id"] as const) {
+  for (const key of ["start_at", "end_at", "status", "notes", "sleep_study_id", "treatment_plan_id", "cancel_reason"] as const) {
     if (data[key] !== undefined) {
       params.push(data[key]);
       sets.push(`${key} = $${params.length}`);
     }
+  }
+  if (data.patient_response !== undefined) {
+    params.push(data.patient_response);
+    sets.push(`patient_response = $${params.length}`, "patient_responded_at = now()", "patient_response_note = NULL");
   }
   if (sets.length === 0) return getAppointmentById(client, id);
   params.push(id);
