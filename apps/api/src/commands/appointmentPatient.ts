@@ -12,6 +12,7 @@ import {
   setAppointmentPatientToken,
   upsertNotificationPreference,
   APPOINTMENT_PATIENT_RESPONSES,
+  PATIENT_RESPONSE_NOTE_MAX,
   type Appointment,
   type AppointmentEmailContext,
   type AppointmentPatientResponse,
@@ -356,6 +357,8 @@ export interface PublicAppointment {
   contact_phone: string | null;
   contact_email: string | null;
   patient_response: AppointmentPatientResponse | null;
+  /** NEO-254: the day/time the patient suggested with "I can't come" — their own words, shown back. */
+  patient_response_note: string | null;
   opted_out: boolean;
   /** The patient's language, so the page speaks it. */
   locale: string;
@@ -398,6 +401,7 @@ async function toPublic(client: PoolClient, appointment: Appointment, context: A
     contact_phone: contact.phone,
     contact_email: contact.email,
     patient_response: appointment.patient_response,
+    patient_response_note: appointment.patient_response_note,
     opted_out: await isAppointmentEmailOptedOut(client, context.patient_identity_id),
     locale,
     calendar: isOpen(appointment) ? appointmentCalendar(appointment, context, locale, context.patient_email, "REQUEST") : null,
@@ -409,16 +413,24 @@ export async function GetPublicAppointmentQuery(client: PoolClient, token: strin
   return toPublic(client, appointment, context);
 }
 
-export async function RespondPublicAppointmentCommand(client: PoolClient, token: string, response: string, meta: PublicAppointmentMeta): Promise<PublicAppointment> {
+/** `note`: the day/time the patient suggests with "I can't come" (NEO-254); ignored for any other answer. */
+export async function RespondPublicAppointmentCommand(client: PoolClient, token: string, response: string, meta: PublicAppointmentMeta, note?: string): Promise<PublicAppointment> {
   if (!APPOINTMENT_PATIENT_RESPONSES.includes(response as AppointmentPatientResponse)) {
     throw new ValidationError(`response must be one of ${APPOINTMENT_PATIENT_RESPONSES.join(", ")}`, "response");
   }
   const answer = response as AppointmentPatientResponse;
+  const suggestion = answer === "cannot_attend" ? note?.trim() || null : null;
+  if (suggestion && suggestion.length > PATIENT_RESPONSE_NOTE_MAX) {
+    throw new ValidationError(`note must be at most ${PATIENT_RESPONSE_NOTE_MAX} characters`, "note");
+  }
   const { appointment, context } = await appointmentForToken(client, token, true);
   if (!isOpen(appointment)) throw new AppointmentNotOpenError();
 
+  if (appointment.patient_response === answer && suggestion && suggestion !== appointment.patient_response_note) {
+    await setAppointmentPatientResponse(client, appointment.id, answer, suggestion);
+  }
   if (appointment.patient_response !== answer) {
-    await setAppointmentPatientResponse(client, appointment.id, answer);
+    await setAppointmentPatientResponse(client, appointment.id, answer, suggestion);
     await insertAuditLog(client, {
       user_id: null,
       action: "update",

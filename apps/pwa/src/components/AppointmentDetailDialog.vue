@@ -16,9 +16,9 @@
             {{ t(`user.appointments.status.${appointment.status}`) }}
           </VChip>
         </div>
-        <!-- The patient's answer from the appointment email (CORE-25). -->
+        <!-- The patient's answer from the appointment email (CORE-25); "can't come" gets the follow-up panel instead. -->
         <VChip
-          v-if="responseState"
+          v-if="responseState && !declined"
           :color="responseState === 'confirmed' ? 'success' : responseState === 'awaiting' ? 'info' : 'warning'"
           size="small"
           variant="tonal"
@@ -47,6 +47,39 @@
           </template>
         </dl>
 
+        <!-- NEO-254 (decision form D1, 2026-10-06): a guided follow-up — contact the patient, then record what you agreed (actions below). -->
+        <section v-if="declined" class="appointment-detail__followup" data-testid="appointment-followup">
+          <div class="appointment-detail__followup-head">
+            <AppIcon name="alert-triangle" class="appointment-detail__followup-icon" />
+            <div>
+              <strong>{{ t('user.appointments.followup.title') }}</strong>
+              <small v-if="answeredAgo">{{ t('user.appointments.followup.answered', { when: answeredAgo }) }}</small>
+            </div>
+          </div>
+          <p v-if="appointment.patient_response_note" class="appointment-detail__suggestion" data-testid="appointment-patient-suggestion">
+            {{ t('user.appointments.followup.suggestion', { note: appointment.patient_response_note }) }}
+          </p>
+          <template v-if="patientPhone">
+            <span class="appointment-detail__step">{{ t('user.appointments.followup.stepContact') }}</span>
+            <div class="appointment-detail__pills">
+              <a :href="`tel:${patientPhone.replace(/[^0-9+]/g, '')}`" class="appointment-detail__pill" data-testid="appointment-call">
+                <AppIcon name="phone" class="appointment-detail__pill-icon" />
+                {{ patientPhone }}
+              </a>
+              <a
+                :href="`https://wa.me/${patientPhone.replace(/\D/g, '')}`"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="appointment-detail__pill appointment-detail__pill--whatsapp"
+                data-testid="appointment-whatsapp"
+              >
+                <AppIcon name="lead-source-whatsapp" class="appointment-detail__pill-icon" />
+                {{ t('user.appointments.followup.whatsapp') }}
+              </a>
+            </div>
+          </template>
+        </section>
+
         <AppInlineAlert v-if="appointment.status === 'completed' && canBookNext" type="info" class="mt-4">
           <div class="appointment-detail__next">
             <span>{{ t('user.appointments.detail.bookNextPrompt') }}</span>
@@ -60,7 +93,40 @@
 
     <!-- One layout for phone and desktop: the main outcome as a full-width button, the other three as
          equal icon tiles under it (Łukasz, 2026-09-26: the text-only row was unreadable). -->
-    <template v-if="appointment?.status === 'scheduled'" #actions>
+    <!-- NEO-254: after "I can't come", three equal outcomes; complete and no-show are hidden (the patient warned in advance). -->
+    <template v-if="declined && changeable" #actions>
+      <div class="appointment-detail__actions">
+        <span v-if="patientPhone" class="appointment-detail__step">{{ t('user.appointments.followup.stepAgree') }}</span>
+        <div class="appointment-detail__tiles">
+          <AppButton variant="tonal" class="appointment-detail__tile" data-testid="appointment-reschedule" @click="emit('reschedule', appointment!)">
+            <span class="appointment-detail__tile-inner">
+              <AppIcon name="calendar-clock" class="appointment-detail__tile-icon" />
+              {{ t('user.appointments.followup.newDate') }}
+            </span>
+          </AppButton>
+          <AppButton variant="tonal" color="success" class="appointment-detail__tile" :loading="busy === 'keep'" data-testid="appointment-keep" @click="keep">
+            <span class="appointment-detail__tile-inner">
+              <AppIcon name="check-circle" class="appointment-detail__tile-icon" />
+              {{ t('user.appointments.followup.keep') }}
+            </span>
+          </AppButton>
+          <AppButton
+            variant="tonal"
+            color="error"
+            class="appointment-detail__tile"
+            :loading="busy === 'cancelled'"
+            data-testid="appointment-cancel"
+            @click="confirmCancel = true"
+          >
+            <span class="appointment-detail__tile-inner">
+              <AppIcon name="x-circle" class="appointment-detail__tile-icon" />
+              {{ t('user.appointments.followup.cancel') }}
+            </span>
+          </AppButton>
+        </div>
+      </div>
+    </template>
+    <template v-else-if="appointment?.status === 'scheduled' && !declined" #actions>
       <div class="appointment-detail__actions">
         <AppButton
           v-if="canClose"
@@ -144,6 +210,7 @@ import { intlLocale } from "@i18n/language-options";
 import { useNotifications } from "../composables/useNotifications";
 import { useAppointments, APPOINTMENT_STATUS_COLOR, appointmentResponseState, type Appointment, type AppointmentStatus } from "../composables/useAppointments";
 import { formatTimeRange, formatDayLabel, timeZoneLabel } from "../utils/appointmentTime";
+import { formatRelativeTime } from "../utils/relativeTime";
 import AppButton from "./AppButton.vue";
 import AppIcon from "./AppIcon.vue";
 import AppFormDialog from "./AppFormDialog.vue";
@@ -162,7 +229,7 @@ const { t, locale } = useI18n();
 const notifications = useNotifications();
 const { canClose, canChange, isFieldForce, update } = useAppointments();
 
-const busy = ref<AppointmentStatus | null>(null);
+const busy = ref<AppointmentStatus | "keep" | null>(null);
 const confirmCancel = ref(false);
 const error = ref<string | null>(null);
 
@@ -172,6 +239,10 @@ const dayLabel = computed(() => (props.appointment ? formatDayLabel(props.appoin
 const zoneLabel = computed(() => (props.appointment ? timeZoneLabel(props.appointment.start_at, props.appointment.timezone, lang.value) : ""));
 const changeable = computed(() => !!props.appointment && canChange(props.appointment));
 const responseState = computed(() => (props.appointment ? appointmentResponseState(props.appointment) : null));
+/** NEO-254: the patient said "I can't come" — the dialog becomes a guided follow-up. */
+const declined = computed(() => responseState.value === "cannot_attend");
+const patientPhone = computed(() => props.appointment?.patient_phone?.trim() || null);
+const answeredAgo = computed(() => (props.appointment?.patient_responded_at ? formatRelativeTime(props.appointment.patient_responded_at, locale.value) : ""));
 /** "Book the next visit" after a completed one (Łukasz, 2026-09-26) — offered to whoever can book for this patient. */
 const canBookNext = computed(() => !isFieldForce.value || changeable.value);
 
@@ -180,27 +251,36 @@ function close() {
   emit("update:modelValue", false);
 }
 
-async function setStatus(status: AppointmentStatus) {
+async function save(key: AppointmentStatus | "keep", body: Record<string, unknown>, savedMessage: string) {
   if (!props.appointment) return;
-  busy.value = status;
+  busy.value = key;
   error.value = null;
   try {
-    const result = await update(props.appointment.id, { status });
+    const result = await update(props.appointment.id, body);
     if (!result.ok || !result.appointment) {
       error.value = t("user.appointments.form.errorSave");
       return;
     }
-    notifications.show(t(`user.appointments.detail.saved.${status}`), "success", undefined, {
+    notifications.show(savedMessage, "success", undefined, {
       icon: "nav-appointments",
       context: result.appointment.patient_name ?? undefined,
     });
     emit("changed", result.appointment);
   } catch (err) {
-    reportCaught(err, { where: "AppointmentDetailDialog.setStatus" });
+    reportCaught(err, { where: "AppointmentDetailDialog.save" });
     error.value = t("user.appointments.form.errorSave");
   } finally {
     busy.value = null;
   }
+}
+
+function setStatus(status: AppointmentStatus) {
+  return save(status, { status }, t(`user.appointments.detail.saved.${status}`));
+}
+
+/** "Sí vendrá": the doctor reached the patient and they will come after all (NEO-254). */
+function keep() {
+  return save("keep", { patient_response: "confirmed" }, t("user.appointments.followup.kept"));
 }
 
 async function onConfirmCancel() {
@@ -266,6 +346,82 @@ async function onConfirmCancel() {
 
 .appointment-detail__notes {
   white-space: pre-wrap;
+}
+
+.appointment-detail__followup {
+  display: grid;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  background: rgba(var(--v-theme-warning), 0.12);
+}
+
+.appointment-detail__followup-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: rgb(var(--v-theme-warning));
+}
+
+.appointment-detail__followup-head strong {
+  font-weight: 600;
+}
+
+.appointment-detail__followup-head small {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.appointment-detail__followup-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+}
+
+.appointment-detail__suggestion {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.appointment-detail__step {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.appointment-detail__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.appointment-detail__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: rgba(var(--v-theme-warning), 0.16);
+  color: rgb(var(--v-theme-on-surface));
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.appointment-detail__pill--whatsapp {
+  background: rgba(var(--v-theme-success), 0.16);
+}
+
+.appointment-detail__pill-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .appointment-detail__next {

@@ -36,6 +36,7 @@ const appointment = (over: Record<string, unknown> = {}) => ({
   contact_phone: "+52 55 1234 5678",
   contact_email: "hola@sonrisa.mx",
   patient_response: null,
+  patient_response_note: null,
   opted_out: false,
   locale: "mx",
   calendar: { ics: "BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n", google: "https://calendar.google.com/x", outlook: "https://outlook.live.com/x" },
@@ -121,6 +122,19 @@ describe("PatientAppointmentView (CORE-25)", () => {
     expect(answer.text()).toContain(en["publicAppointment.cannotTitle"]);
     expect(answer.find("a[href='tel:+525512345678']").exists()).toBe(true);
     expect(wrapper.find("[data-testid='appointment-calendar']").exists()).toBe(false);
+  });
+
+  it("after 'No' the patient may suggest a day; it is sent with the answer and shown back (NEO-254)", async () => {
+    apiFetch.mockResolvedValueOnce(json(200, appointment({ patient_response: "cannot_attend" })));
+    const wrapper = await mountView();
+    expect(wrapper.find("[data-testid='appointment-suggest-send']").attributes("disabled")).toBeDefined();
+    await wrapper.find("[data-testid='appointment-suggest'] textarea").setValue("Jueves por la tarde");
+    apiFetch.mockResolvedValueOnce(json(200, appointment({ patient_response: "cannot_attend", patient_response_note: "Jueves por la tarde" })));
+    await wrapper.find("[data-testid='appointment-suggest-send']").trigger("click");
+    await flushPromises();
+    expect(lastBody()).toEqual({ token: TOKEN, response: "cannot_attend", note: "Jueves por la tarde" });
+    expect(wrapper.find("[data-testid='appointment-suggest']").exists()).toBe(false);
+    expect(wrapper.find("[data-testid='appointment-suggest-done']").text()).toContain("Jueves por la tarde");
   });
 
   it("a cancelled appointment shows no buttons", async () => {
