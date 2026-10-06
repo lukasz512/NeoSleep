@@ -65,8 +65,16 @@
           <p class="partner-doc-dialog__intent">
             {{ t('user.partnerRegistration.dialog.intent', { version: preview?.versionLabel ?? '' }) }}
           </p>
+          <!-- Computers: sign on the phone through a QR instead of with the mouse (CORE-166). -->
+          <PartnerPhoneSignPanel
+            v-if="phoneMode"
+            :token="token"
+            class="partner-doc-dialog__phone"
+            @signed="onPhoneSigned"
+            @cancel="phoneMode = false"
+          />
           <!-- As wide as a signature line in the document, not the whole dialog. -->
-          <div class="partner-doc-dialog__pad">
+          <div v-else class="partner-doc-dialog__pad">
             <SignaturePad
               ref="padRef"
               :clear-label="t('user.partnerRegistration.form.signatureClear')"
@@ -74,6 +82,16 @@
               clear-placement="overlay"
               @change="padEmpty = $event"
             />
+            <AppButton
+              v-if="!xs"
+              variant="text"
+              color="primary"
+              class="partner-doc-dialog__phone-toggle"
+              @click="phoneMode = true"
+            >
+              <template #prepend><AppIcon name="qr-code" /></template>
+              {{ t('user.partnerRegistration.dialog.phoneButton') }}
+            </AppButton>
           </div>
         </section>
       </VCardText>
@@ -88,7 +106,7 @@
             {{ t('user.partnerRegistration.dialog.keepSignature') }}
           </AppButton>
           <AppButton v-else variant="text" @click="close">{{ t('user.partnerRegistration.dialog.close') }}</AppButton>
-          <AppButton color="primary" variant="flat" :disabled="state !== 'ready' || padEmpty" @click="onSign">
+          <AppButton v-if="!phoneMode" color="primary" variant="flat" :disabled="state !== 'ready' || padEmpty" @click="onSign">
             {{ t('user.partnerRegistration.dialog.sign') }}
           </AppButton>
         </template>
@@ -118,6 +136,7 @@ import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import AppLoadingState from "../AppLoadingState.vue";
 import SignaturePad from "../SignaturePad.vue";
+import PartnerPhoneSignPanel from "./PartnerPhoneSignPanel.vue";
 import { apiFetch } from "../../composables/useApi";
 
 /**
@@ -174,12 +193,14 @@ const frameKey = ref(0);
 // "Change signature" swaps the signed preview back to the pad; the current
 // signature only goes away if the doctor actually signs again.
 const resigning = ref(false);
+const phoneMode = ref(false);
 const shownSignature = computed(() => (props.kind === "agreement" && !resigning.value ? props.signature ?? null : null));
 
 async function load(): Promise<void> {
   state.value = "loading";
   padEmpty.value = true;
   resigning.value = false;
+  phoneMode.value = false;
   frameKey.value += 1;
   try {
     const res = await apiFetch(
@@ -344,6 +365,15 @@ function onSign(): void {
   resigning.value = false;
 }
 
+/** The phone's signature counts exactly like one drawn here; it just has no pad to fly from. */
+function onPhoneSigned(signatureDataUrl: string): void {
+  if (!preview.value) return;
+  pendingFlight = null;
+  phoneMode.value = false;
+  emit("signed", { signatureDataUrl, versionIds: preview.value.versionIds });
+  resigning.value = false;
+}
+
 function onAcknowledge(): void {
   if (!preview.value) return;
   emit("acknowledged", { versionIds: preview.value.versionIds });
@@ -415,6 +445,17 @@ function onAcknowledge(): void {
   width: 100%;
   max-width: 360px;
   margin: 4px auto 0;
+}
+
+.partner-doc-dialog__phone-toggle {
+  display: flex;
+  margin: 8px auto 0;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.partner-doc-dialog__phone {
+  margin-top: 4px;
 }
 
 .partner-doc-dialog__signature--signed .partner-doc-dialog__pad {
