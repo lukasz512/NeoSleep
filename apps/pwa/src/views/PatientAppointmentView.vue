@@ -81,14 +81,23 @@
               <h2>{{ t("publicAppointment.cannotTitle") }}</h2>
               <p>{{ t("publicAppointment.cannotBody") }}</p>
             </div>
+            <div class="patient-appointment__contact-big">
+              <a v-if="appointment.contact_phone" :href="`tel:${telHref(appointment.contact_phone)}`" class="patient-appointment__contact-btn">
+                <AppIcon name="phone" /> {{ appointment.contact_phone }}
+              </a>
+              <a v-if="appointment.contact_email" :href="`mailto:${appointment.contact_email}`" class="patient-appointment__contact-btn patient-appointment__contact-btn--quiet">
+                <AppIcon name="mail" /> {{ appointment.contact_email }}
+              </a>
+            </div>
             <!-- NEO-254: an optional day/time the patient prefers; the doctor sees it in the appointment dialog. -->
             <p v-if="appointment.patient_response_note" class="patient-appointment__suggest-done" data-testid="appointment-suggest-done">
               {{ t("publicAppointment.suggestDone", { note: appointment.patient_response_note }) }}
             </p>
             <div v-else class="patient-appointment__suggest" data-testid="appointment-suggest">
+              <label for="patient-appointment-suggest" class="patient-appointment__suggest-label">{{ t("publicAppointment.suggestLabel") }}</label>
               <VTextarea
+                id="patient-appointment-suggest"
                 v-model="suggestion"
-                :label="t('publicAppointment.suggestLabel')"
                 :placeholder="t('publicAppointment.suggestPlaceholder')"
                 :maxlength="SUGGESTION_MAX"
                 rows="2"
@@ -99,14 +108,6 @@
               <AppButton variant="tonal" color="primary" block data-testid="appointment-suggest-send" :disabled="busy || !suggestion.trim()" @click="sendSuggestion">
                 {{ t("publicAppointment.suggestSend") }}
               </AppButton>
-            </div>
-            <div class="patient-appointment__contact-big">
-              <a v-if="appointment.contact_phone" :href="`tel:${telHref(appointment.contact_phone)}`" class="patient-appointment__contact-btn">
-                <AppIcon name="phone" /> {{ appointment.contact_phone }}
-              </a>
-              <a v-if="appointment.contact_email" :href="`mailto:${appointment.contact_email}`" class="patient-appointment__contact-btn patient-appointment__contact-btn--quiet">
-                <AppIcon name="mail" /> {{ appointment.contact_email }}
-              </a>
             </div>
             <button type="button" class="patient-appointment__link" @click="changing = true">{{ t("publicAppointment.changeAnswer") }}</button>
           </section>
@@ -715,6 +716,11 @@ onMounted(load);
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.patient-appointment__suggest-label {
+  font-weight: 600;
+  text-align: center;
 }
 
 .patient-appointment__suggest-done {
