@@ -7,7 +7,8 @@
  * Whether all of that fits one window is layout that only a real browser
  * computes. The API is answered in the page (window.fetch stub).
  * `?theme=dark`, `?lang=pl|mx|en`, `?done=1` (nothing left for the patient),
- * `?tab=documents`.
+ * `?tab=documents`. NEO-258: `?stage=doctor` (patient done, exploration open),
+ * `?stage=historia` (every section done), `?role=doctor`, `?email=0` (no email on file).
  */
 import { createApp, defineComponent, h } from "vue";
 import { createPinia } from "pinia";
@@ -17,6 +18,7 @@ import { i18n, loadLocale } from "../../src/plugins/i18n";
 import "../../src/styles/theme.scss";
 import "../../src/styles/app-responsive.scss";
 import PatientAsidePanel from "../../src/components/patient/PatientAsidePanel.vue";
+import { useAuthStore } from "../../src/stores/auth";
 
 const params = new URLSearchParams(location.search);
 vuetify.theme.change(params.get("theme") === "dark" ? darkTheme : lightTheme);
@@ -25,7 +27,8 @@ if (lang === "pl" || lang === "mx") {
   await loadLocale(lang);
   i18n.global.locale.value = lang;
 }
-const done = params.get("done") === "1";
+const stage = params.get("stage");
+const done = params.get("done") === "1" || stage === "doctor" || stage === "historia";
 
 function item(key: string, group: string, status: string, qr = true, label = key) {
   return {
@@ -39,7 +42,7 @@ const ITEMS = [
   item("medicalHistory", "patient", "done"),
   item("stopBang", "patient", done ? "done" : "missing"),
   item("oralExam", "doctor", "done", false),
-  item("tmjExam", "doctor", "missing", false),
+  item("tmjExam", "doctor", stage === "historia" ? "done" : "missing", false),
   item("historiaEndo", "doctor", "done", false),
   item("polysomnography", "results", "done", false),
   // Tenant-defined extras (no i18n key): the admin manifest label is shown.
@@ -82,6 +85,7 @@ const Harness = defineComponent({
             patient: {
               id: "p-1", status: "active", ahi_baseline: 22, cpap_device: null, practitioner_id: "h-1", practitioner_name: "Dra. Laura Cuicas",
               diagnosis_code: { code: "G47.33", label: "Apnea obstructiva del sueño del adulto, moderada" },
+              email: params.get("email") === "0" ? null : "lucia.paciente@example.mx",
             },
             canSeeStudies: true,
             activeTab: params.get("tab") ?? "details",
@@ -102,6 +106,9 @@ style.textContent = `
 `;
 document.head.append(style);
 
-createApp(Harness).use(createPinia()).use(router).use(vuetify).use(i18n).mount("#app");
+const pinia = createPinia();
+const app = createApp(Harness).use(pinia).use(router).use(vuetify).use(i18n);
+if (params.get("role") === "doctor") useAuthStore(pinia).user = { id: "u-1", email: "doc@example.mx", role: "doctor" };
+app.mount("#app");
 // Same as dialog-header.ts: the boot splash vite.config.ts injects isn't dismissed here.
 document.getElementById("boot-splash")?.remove();

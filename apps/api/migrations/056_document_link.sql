@@ -1,58 +1,59 @@
 -- =============================================================================
--- Migration 056: "sign on your phone" for every signature pad (CORE-172)
+-- Migration 056: emailed document link — the signed Historia clínica (NEO-258)
 --
--- Łukasz, 2026-10-06: every signature drawn on a computer gets a QR next to
--- the pad, so it can be drawn with a finger on a phone instead. CORE-166 did
--- this for the partner agreement only, on invite_tokens.metadata; this table
--- is the one shared mechanism for all of them:
---   purpose    partner_agreement | patient_consent | doctor_print
---   owner_ref  what started it (invite_tokens.id, questionnaire_request.id, users.id)
---   label      what the phone shows above the pad (signer name, version)
---   sign_token_hash    the QR's token: it can only read the label and sign once
---   pickup_token_hash  held by the computer that showed the QR: it gets the
---                      signature back exactly once
---   signature  the drawn PNG, cleared at pickup; the rest stays as evidence
--- A row lives 15 minutes (expires_at); a new QR replaces the starter's earlier one.
+-- docs/stories/hc-next-step-print-email.md, decision form neo258-r1:
+--   D1 the patient gets a link valid for 7 days, never the PDF as an attachment;
+--   D3 only a Historia clínica the doctor signed is sent.
+--
+--   document_link        one row per emailed link. The signed PDF is stored
+--                        once (file_attachment, private bucket); the token is
+--                        the only credential, hashed at rest like
+--                        questionnaire_request's. opened_at / open_count say
+--                        whether the patient used it; every download is also
+--                        an audit_log row (entity_type 'DocumentLink').
+--   patient_email_send   kind 'document_link' for the email that carries it,
+--                        so Resend's delivery status follows it (NEO-190).
 --
 -- Tenant-table change → create_tenant_schema() regenerated at the bottom.
 --
--- ROLLBACK (manual, per tenant): DROP TABLE signature_handoff;
---   re-run 055's create_tenant_schema() body.
+-- ROLLBACK (manual, per tenant): DROP TABLE document_link; restore
+--   patient_email_send_kind_check without 'document_link'; re-run 055's
+--   create_tenant_schema() body.
 -- =============================================================================
 
 DO $$
 DECLARE r RECORD;
 BEGIN
   FOR r IN SELECT db_schema FROM platform.tenants LOOP
-    IF to_regclass(format('%I.audit_log', r.db_schema)) IS NULL THEN
+    IF to_regclass(format('%I.patient', r.db_schema)) IS NULL THEN
       CONTINUE;
     END IF;
-    EXECUTE format($t$
-      CREATE TABLE IF NOT EXISTS %I.signature_handoff (
-        id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-        purpose           TEXT        NOT NULL CHECK (purpose IN ('partner_agreement', 'patient_consent', 'doctor_print')),
-        owner_ref         TEXT        NOT NULL,
-        label             JSONB       NOT NULL DEFAULT '{}'::jsonb,
-        sign_token_hash   TEXT        NOT NULL UNIQUE,
-        pickup_token_hash TEXT        NOT NULL UNIQUE,
-        expires_at        TIMESTAMPTZ NOT NULL,
-        signature         TEXT,
-        signed_at         TIMESTAMPTZ,
-        signed_ip         TEXT,
-        signed_user_agent TEXT,
-        picked_up_at      TIMESTAMPTZ,
-        replaced_at       TIMESTAMPTZ,
-        created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
-      )$t$, r.db_schema);
-    EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.signature_handoff (purpose, owner_ref)',
-      'signature_handoff_owner_idx', r.db_schema);
+
+    EXECUTE format('
+      CREATE TABLE IF NOT EXISTS %I.document_link (
+        id                 UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        patient_id         UUID        NOT NULL REFERENCES %I.patient(id) ON DELETE CASCADE,
+        file_attachment_id UUID        NOT NULL REFERENCES %I.file_attachment(id) ON DELETE CASCADE,
+        document_key       TEXT        NOT NULL,
+        token_hash         TEXT        NOT NULL UNIQUE,
+        expires_at         TIMESTAMPTZ NOT NULL,
+        created_by         UUID        REFERENCES %I.users(id) ON DELETE SET NULL,
+        opened_at          TIMESTAMPTZ,
+        open_count         INT         NOT NULL DEFAULT 0,
+        created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+      )', r.db_schema, r.db_schema, r.db_schema, r.db_schema);
+
+    EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON %I.document_link (patient_id)', 'document_link_patient_idx', r.db_schema);
+
+    EXECUTE format('ALTER TABLE %I.patient_email_send DROP CONSTRAINT IF EXISTS patient_email_send_kind_check', r.db_schema);
+    EXECUTE format($c$ALTER TABLE %I.patient_email_send ADD CONSTRAINT patient_email_send_kind_check CHECK (kind IN ('questionnaire_link', 'signed_copy', 'appointment', 'document_link'))$c$, r.db_schema);
   END LOOP;
 END $$;
 
 -- -----------------------------------------------------------------------------
 -- create_tenant_schema() for tenants provisioned from now on — generated by
 -- scripts/generate-create-tenant-schema.ts against a from-scratch postgres:15
--- with migrations up to 055 + 056 (part above) applied. Do not hand-edit; regenerate.
+-- with migrations 000-040 + 042-055 + 056 (part above) applied. Do not hand-edit; regenerate.
 -- -----------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION create_tenant_schema(slug TEXT)
 RETURNS void
@@ -250,6 +251,19 @@ BEGIN
     finished_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT device_order_reconciliation_run_status_check CHECK ((status = ANY (ARRAY['ok'::text, 'mismatch'::text, 'failed'::text]))),
     CONSTRAINT device_order_reconciliation_run_trigger_check CHECK ((trigger = ANY (ARRAY['manual'::text, 'scheduled'::text])))
+);$tenant_ddl$;
+
+  EXECUTE $tenant_ddl$CREATE TABLE IF NOT EXISTS document_link (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    patient_id uuid NOT NULL,
+    file_attachment_id uuid NOT NULL,
+    document_key text NOT NULL,
+    token_hash text NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    created_by uuid,
+    opened_at timestamp with time zone,
+    open_count integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
 );$tenant_ddl$;
 
   EXECUTE $tenant_ddl$CREATE TABLE IF NOT EXISTS efpia_disclosure (
@@ -791,7 +805,7 @@ BEGIN
     status_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     appointment_id uuid,
-    CONSTRAINT patient_email_send_kind_check CHECK ((kind = ANY (ARRAY['questionnaire_link'::text, 'signed_copy'::text, 'appointment'::text]))),
+    CONSTRAINT patient_email_send_kind_check CHECK ((kind = ANY (ARRAY['questionnaire_link'::text, 'signed_copy'::text, 'appointment'::text, 'document_link'::text]))),
     CONSTRAINT patient_email_send_status_check CHECK ((status = ANY (ARRAY['sent'::text, 'delayed'::text, 'delivered'::text, 'bounced'::text, 'failed'::text, 'suppressed'::text, 'complained'::text])))
 );$tenant_ddl$;
 
@@ -1084,24 +1098,6 @@ BEGIN
     added_at timestamp with time zone DEFAULT now() NOT NULL,
     metadata jsonb,
     CONSTRAINT segment_member_entity_type_check CHECK ((entity_type = ANY (ARRAY['practitioner'::text, 'patient'::text, 'lead'::text])))
-);$tenant_ddl$;
-
-  EXECUTE $tenant_ddl$CREATE TABLE IF NOT EXISTS signature_handoff (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    purpose text NOT NULL,
-    owner_ref text NOT NULL,
-    label jsonb DEFAULT '{}'::jsonb NOT NULL,
-    sign_token_hash text NOT NULL,
-    pickup_token_hash text NOT NULL,
-    expires_at timestamp with time zone NOT NULL,
-    signature text,
-    signed_at timestamp with time zone,
-    signed_ip text,
-    signed_user_agent text,
-    picked_up_at timestamp with time zone,
-    replaced_at timestamp with time zone,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT signature_handoff_purpose_check CHECK ((purpose = ANY (ARRAY['partner_agreement'::text, 'patient_consent'::text, 'doctor_print'::text])))
 );$tenant_ddl$;
 
   EXECUTE $tenant_ddl$CREATE TABLE IF NOT EXISTS sleep_study (
@@ -1469,6 +1465,8 @@ END) STORED,
 
   EXECUTE $tenant_ddl$CREATE INDEX IF NOT EXISTS device_order_reconciliation_run_started_idx ON device_order_reconciliation_run USING btree (started_at DESC);$tenant_ddl$;
 
+  EXECUTE $tenant_ddl$CREATE INDEX IF NOT EXISTS document_link_patient_idx ON document_link USING btree (patient_id);$tenant_ddl$;
+
   EXECUTE $tenant_ddl$CREATE INDEX IF NOT EXISTS encounter_patient_patient_idx ON encounter_patient USING btree (patient_id);$tenant_ddl$;
 
   EXECUTE $tenant_ddl$CREATE UNIQUE INDEX IF NOT EXISTS identities_email_unique_not_shared ON identities USING btree (email) WHERE (NOT email_shared);$tenant_ddl$;
@@ -1769,8 +1767,6 @@ END) STORED,
 
   EXECUTE $tenant_ddl$CREATE INDEX IF NOT EXISTS questionnaire_request_patient_idx ON questionnaire_request USING btree (patient_id);$tenant_ddl$;
 
-  EXECUTE $tenant_ddl$CREATE INDEX IF NOT EXISTS signature_handoff_owner_idx ON signature_handoff USING btree (purpose, owner_ref);$tenant_ddl$;
-
   EXECUTE $tenant_ddl$CREATE INDEX IF NOT EXISTS tmj_exam_patient_idx ON tmj_exam USING btree (patient_id);$tenant_ddl$;
 
   EXECUTE $tenant_ddl$CREATE INDEX IF NOT EXISTS tmj_exam_recorder_idx ON tmj_exam USING btree (recorded_by);$tenant_ddl$;
@@ -1799,6 +1795,12 @@ END) STORED,
   EXECUTE $tenant_ddl$ALTER TABLE conversation DROP CONSTRAINT IF EXISTS conversation_user_id_fkey;$tenant_ddl$;
 
   EXECUTE $tenant_ddl$ALTER TABLE device_order_reconciliation_run DROP CONSTRAINT IF EXISTS device_order_reconciliation_run_triggered_by_fkey;$tenant_ddl$;
+
+  EXECUTE $tenant_ddl$ALTER TABLE document_link DROP CONSTRAINT IF EXISTS document_link_created_by_fkey;$tenant_ddl$;
+
+  EXECUTE $tenant_ddl$ALTER TABLE document_link DROP CONSTRAINT IF EXISTS document_link_file_attachment_id_fkey;$tenant_ddl$;
+
+  EXECUTE $tenant_ddl$ALTER TABLE document_link DROP CONSTRAINT IF EXISTS document_link_patient_id_fkey;$tenant_ddl$;
 
   EXECUTE $tenant_ddl$ALTER TABLE efpia_disclosure DROP CONSTRAINT IF EXISTS efpia_disclosure_approved_by_fkey;$tenant_ddl$;
 
@@ -2078,6 +2080,10 @@ END) STORED,
 
   EXECUTE $tenant_ddl$ALTER TABLE device_order_reconciliation_run DROP CONSTRAINT IF EXISTS device_order_reconciliation_run_pkey;$tenant_ddl$;
 
+  EXECUTE $tenant_ddl$ALTER TABLE document_link DROP CONSTRAINT IF EXISTS document_link_pkey;$tenant_ddl$;
+
+  EXECUTE $tenant_ddl$ALTER TABLE document_link DROP CONSTRAINT IF EXISTS document_link_token_hash_key;$tenant_ddl$;
+
   EXECUTE $tenant_ddl$ALTER TABLE efpia_disclosure DROP CONSTRAINT IF EXISTS efpia_disclosure_pkey;$tenant_ddl$;
 
   EXECUTE $tenant_ddl$ALTER TABLE efpia_disclosure DROP CONSTRAINT IF EXISTS efpia_disclosure_practitioner_id_year_key;$tenant_ddl$;
@@ -2230,12 +2236,6 @@ END) STORED,
 
   EXECUTE $tenant_ddl$ALTER TABLE segment DROP CONSTRAINT IF EXISTS segment_pkey;$tenant_ddl$;
 
-  EXECUTE $tenant_ddl$ALTER TABLE signature_handoff DROP CONSTRAINT IF EXISTS signature_handoff_pickup_token_hash_key;$tenant_ddl$;
-
-  EXECUTE $tenant_ddl$ALTER TABLE signature_handoff DROP CONSTRAINT IF EXISTS signature_handoff_pkey;$tenant_ddl$;
-
-  EXECUTE $tenant_ddl$ALTER TABLE signature_handoff DROP CONSTRAINT IF EXISTS signature_handoff_sign_token_hash_key;$tenant_ddl$;
-
   EXECUTE $tenant_ddl$ALTER TABLE sleep_study DROP CONSTRAINT IF EXISTS sleep_study_pkey;$tenant_ddl$;
 
   EXECUTE $tenant_ddl$ALTER TABLE stop_bang_screening DROP CONSTRAINT IF EXISTS stop_bang_screening_pkey;$tenant_ddl$;
@@ -2324,6 +2324,12 @@ END) STORED,
 
   EXECUTE $tenant_ddl$ALTER TABLE device_order_reconciliation_run
     ADD CONSTRAINT device_order_reconciliation_run_pkey PRIMARY KEY (id);$tenant_ddl$;
+
+  EXECUTE $tenant_ddl$ALTER TABLE document_link
+    ADD CONSTRAINT document_link_pkey PRIMARY KEY (id);$tenant_ddl$;
+
+  EXECUTE $tenant_ddl$ALTER TABLE document_link
+    ADD CONSTRAINT document_link_token_hash_key UNIQUE (token_hash);$tenant_ddl$;
 
   EXECUTE $tenant_ddl$ALTER TABLE efpia_disclosure
     ADD CONSTRAINT efpia_disclosure_pkey PRIMARY KEY (id);$tenant_ddl$;
@@ -2553,15 +2559,6 @@ END) STORED,
   EXECUTE $tenant_ddl$ALTER TABLE segment
     ADD CONSTRAINT segment_pkey PRIMARY KEY (id);$tenant_ddl$;
 
-  EXECUTE $tenant_ddl$ALTER TABLE signature_handoff
-    ADD CONSTRAINT signature_handoff_pickup_token_hash_key UNIQUE (pickup_token_hash);$tenant_ddl$;
-
-  EXECUTE $tenant_ddl$ALTER TABLE signature_handoff
-    ADD CONSTRAINT signature_handoff_pkey PRIMARY KEY (id);$tenant_ddl$;
-
-  EXECUTE $tenant_ddl$ALTER TABLE signature_handoff
-    ADD CONSTRAINT signature_handoff_sign_token_hash_key UNIQUE (sign_token_hash);$tenant_ddl$;
-
   EXECUTE $tenant_ddl$ALTER TABLE sleep_study
     ADD CONSTRAINT sleep_study_pkey PRIMARY KEY (id);$tenant_ddl$;
 
@@ -2675,6 +2672,15 @@ END) STORED,
 
   EXECUTE $tenant_ddl$ALTER TABLE device_order_reconciliation_run
     ADD CONSTRAINT device_order_reconciliation_run_triggered_by_fkey FOREIGN KEY (triggered_by) REFERENCES users(id) ON DELETE SET NULL;$tenant_ddl$;
+
+  EXECUTE $tenant_ddl$ALTER TABLE document_link
+    ADD CONSTRAINT document_link_created_by_fkey FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;$tenant_ddl$;
+
+  EXECUTE $tenant_ddl$ALTER TABLE document_link
+    ADD CONSTRAINT document_link_file_attachment_id_fkey FOREIGN KEY (file_attachment_id) REFERENCES file_attachment(id) ON DELETE CASCADE;$tenant_ddl$;
+
+  EXECUTE $tenant_ddl$ALTER TABLE document_link
+    ADD CONSTRAINT document_link_patient_id_fkey FOREIGN KEY (patient_id) REFERENCES patient(id) ON DELETE CASCADE;$tenant_ddl$;
 
   EXECUTE $tenant_ddl$ALTER TABLE efpia_disclosure
     ADD CONSTRAINT efpia_disclosure_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL;$tenant_ddl$;

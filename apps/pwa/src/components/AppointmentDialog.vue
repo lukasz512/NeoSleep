@@ -150,7 +150,14 @@ import {
   type Appointment,
   type AppointmentWriteResult,
 } from "../composables/useAppointments";
-import { deviceTimeZone, toZonedInputValue, zonedInputToIso, timeZoneLabel, takenIntervalsOnDay } from "../utils/appointmentTime";
+import {
+  deviceTimeZone,
+  toZonedInputValue,
+  zonedInputToIso,
+  timeZoneLabel,
+  takenIntervalsOnDay,
+  defaultBookingWall,
+} from "../utils/appointmentTime";
 import { addDaysIso } from "../utils/dateField";
 import { intlLocale } from "@i18n/language-options";
 import AppButton from "./AppButton.vue";
@@ -346,19 +353,13 @@ function showServerErrors(fieldErrors: FieldErrors): boolean {
   return true;
 }
 
-/** Next full hour, as an instant. */
-function nextFullHour(): string {
-  const d = new Date();
-  d.setMinutes(0, 0, 0);
-  d.setHours(d.getHours() + 1);
-  return d.toISOString();
-}
-
 /**
- * The instant the form opened on (slot click, "book next", next full hour) —
- * re-read as wall time when the clinic zone arrives, until the user edits it.
+ * The instant the form opened on (slot click, "book next") — re-read as wall
+ * time when the clinic zone arrives, until the user edits it.
  */
 let initialStart: string | null = null;
+/** Set when the form opened on the default (tomorrow, CORE-167) — re-derived per zone the same way. */
+let openedAt: Date | null = null;
 
 function reset() {
   problem.value = null;
@@ -368,12 +369,15 @@ function reset() {
   const a = props.appointment;
   patientId.value = a?.patient_id ?? fixedPatient.value?.id ?? null;
   practitionerId.value = a?.practitioner_id ?? fixedPractitioner.value?.id ?? fixedPatient.value?.practitioner_id ?? null;
+  initialStart = a?.start_at ?? (props.startLocal ? null : props.startAt) ?? null;
+  openedAt = null;
   if (!a && props.startLocal) {
-    initialStart = null;
     startWall.value = props.startLocal;
-  } else {
-    initialStart = a?.start_at ?? props.startAt ?? nextFullHour();
+  } else if (initialStart) {
     startWall.value = toZonedInputValue(initialStart, zone.value);
+  } else {
+    openedAt = new Date();
+    startWall.value = defaultBookingWall(openedAt, zone.value, deviceTimeZone());
   }
   duration.value = a ? Math.round((new Date(a.end_at).getTime() - new Date(a.start_at).getTime()) / 60_000) : DEFAULT_APPOINTMENT_DURATION;
   notes.value = a?.notes ?? "";
@@ -458,6 +462,8 @@ watch(
 watch(zone, (now, before) => {
   if (initialStart && startWall.value === toZonedInputValue(initialStart, before)) {
     startWall.value = toZonedInputValue(initialStart, now);
+  } else if (openedAt && startWall.value === defaultBookingWall(openedAt, before, deviceTimeZone())) {
+    startWall.value = defaultBookingWall(openedAt, now, deviceTimeZone());
   }
 });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toZonedCalendarDateTime, toZonedInputValue, zonedInputToIso, zonedDateKey, takenIntervalsOnDay } from "./appointmentTime";
+import { toZonedCalendarDateTime, toZonedInputValue, zonedInputToIso, zonedDateKey, takenIntervalsOnDay, defaultBookingWall } from "./appointmentTime";
 
 describe("appointmentTime (clinic-zone times, NEO-34)", () => {
   it("shows a UTC instant as the clinic's wall-clock time", () => {
@@ -37,5 +37,14 @@ describe("appointmentTime (clinic-zone times, NEO-34)", () => {
       { start: "10:00", end: "11:00" },
       { start: "23:30", end: "23:59" },
     ]);
+  });
+
+  it("defaults a new booking to tomorrow as the viewer sees it, at the clinic's next full hour (CORE-167)", () => {
+    // 00:30Z on 6 Oct = 02:30 on the 6th in Warsaw, still 18:30 on the 5th in Mexico City.
+    const now = new Date("2026-10-06T00:30:00.000Z");
+    expect(defaultBookingWall(now, "America/Mexico_City", "Europe/Warsaw")).toBe("2026-10-07T19:00");
+    // Viewer in the clinic's zone: tomorrow, next full hour.
+    const local = new Date("2026-10-06T16:10:00.000Z");
+    expect(defaultBookingWall(local, "America/Mexico_City", "America/Mexico_City")).toBe("2026-10-07T11:00");
   });
 });

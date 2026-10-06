@@ -2,22 +2,63 @@
   <div class="patient-aside" :class="{ 'patient-aside--inline': inline }">
     <section v-if="canSeeStudies && checklist" class="patient-aside__next" :aria-label="t('app.patients.detail.aside.nextStep')">
       <h2 class="patient-aside__heading">{{ t("app.patients.detail.aside.nextStep") }}</h2>
-      <p class="patient-aside__next-title">
-        {{ patientItems.length ? t("app.patients.detail.aside.waitingOnPatient", { n: patientItems.length }) : t("app.patients.detail.aside.nothingForPatient") }}
-      </p>
-      <p v-if="patientItems.length" class="patient-aside__next-items">{{ patientItems.map((item) => checklistItemTitle(t, item.key, item.label)).join(" · ") }}</p>
-      <!-- On every tab: while this panel shows, the Documentos tab drops its own QR button (NEO-203) — never two on screen. -->
-      <AppButton
-        color="primary"
-        variant="flat"
-        size="large"
-        class="patient-aside__qr text-none"
-        :disabled="!patientItems.length"
-        @click="$emit('qr')"
-      >
-        <template #prepend><AppIcon name="qr-code" /></template>
-        {{ patientItems.length ? t("app.patients.detail.aside.qr") : t("app.patients.detail.aside.allDone") }}
-      </AppButton>
+      <!-- NEO-258 D2: the patient's part → the doctor's exploration → the finished Historia clínica, to print or email. -->
+      <template v-if="nextStage === 'doctor'">
+        <p class="patient-aside__next-title" data-testid="next-step-title">{{ t("app.patients.detail.aside.waitingOnDoctor", { n: doctorSections.length }) }}</p>
+        <p class="patient-aside__next-items">{{ doctorSections.map((item) => checklistItemTitle(t, item.key, item.label)).join(" · ") }}</p>
+        <AppButton color="primary" variant="flat" size="large" class="patient-aside__qr text-none" data-testid="next-step-complete" @click="openFirstDoctorSection">
+          <template #prepend><AppIcon name="form-screening" /></template>
+          {{ t("app.patients.detail.aside.completeExam") }}
+        </AppButton>
+      </template>
+      <template v-else-if="nextStage === 'historia'">
+        <p class="patient-aside__next-title" data-testid="next-step-title">{{ t("app.patients.detail.aside.hcReady") }}</p>
+        <!-- No email on file: the reason takes the hint's line, so the panel never grows (NEO-203: one window). -->
+        <p v-if="isDoctor && !patient.email" class="patient-aside__next-items" data-testid="next-step-no-email">{{ t("app.patients.detail.aside.hcNoEmail") }}</p>
+        <p v-else class="patient-aside__next-items">{{ t("app.patients.detail.aside.hcReadyHint") }}</p>
+        <!-- One row, the same height as the QR button: print fills it, email is a square icon (as everywhere, NEO-127). -->
+        <div class="patient-aside__hc-actions">
+          <AppButton color="primary" variant="flat" size="large" class="patient-aside__qr patient-aside__hc-print text-none" :loading="printing" data-testid="next-step-print" @click="onPrint">
+            <template #prepend><AppIcon name="printer" /></template>
+            {{ t("app.patients.detail.aside.hcPrint") }}
+          </AppButton>
+          <!-- D3: only signed by the doctor, so only a doctor sends it — to the patient's own email on file. -->
+          <AppButton
+            v-if="isDoctor"
+            color="primary"
+            variant="tonal"
+            size="large"
+            class="patient-aside__hc-email"
+            :disabled="!patient.email"
+            :loading="emailing"
+            :aria-label="t('app.patients.detail.aside.hcEmail')"
+            :title="patient.email ? t('app.patients.detail.aside.hcEmail') : t('app.patients.detail.aside.hcNoEmail')"
+            data-testid="next-step-email"
+            @click="signFor = 'email'"
+          >
+            <AppIcon name="mail" />
+          </AppButton>
+        </div>
+      </template>
+      <template v-else>
+        <p class="patient-aside__next-title">
+          {{ patientItems.length ? t("app.patients.detail.aside.waitingOnPatient", { n: patientItems.length }) : t("app.patients.detail.aside.nothingForPatient") }}
+        </p>
+        <p v-if="patientItems.length" class="patient-aside__next-items">{{ patientItems.map((item) => checklistItemTitle(t, item.key, item.label)).join(" · ") }}</p>
+        <!-- On every tab: while this panel shows, the Documentos tab drops its own QR button (NEO-203) — never two on screen. -->
+        <AppButton
+          color="primary"
+          variant="flat"
+          size="large"
+          class="patient-aside__qr text-none"
+          :disabled="!patientItems.length"
+          @click="$emit('qr')"
+        >
+          <template #prepend><AppIcon name="qr-code" /></template>
+          {{ patientItems.length ? t("app.patients.detail.aside.qr") : t("app.patients.detail.aside.allDone") }}
+        </AppButton>
+      </template>
+      <DoctorSignatureDialog :model-value="signFor !== null" :purpose="signFor ?? 'print'" @update:model-value="signFor = null" @print="onSigned" />
     </section>
 
     <p class="patient-aside__facts" :aria-label="t('app.patients.detail.aside.keyFacts')">
@@ -107,6 +148,7 @@ import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import AppSegmentProgress from "../AppSegmentProgress.vue";
 import NoteComposer from "../NoteComposer.vue";
+import DoctorSignatureDialog from "./DoctorSignatureDialog.vue";
 import ChecklistStatusIcon from "../questionnaire/ChecklistStatusIcon.vue";
 import { CHECKLIST_TAB, checklistSegments, usePatientChecklist, type ChecklistCategory, type ChecklistItem } from "../../composables/usePatientChecklist";
 import { useVisiblePolling } from "../../composables/useVisiblePolling";
@@ -127,6 +169,8 @@ const props = defineProps<{
     practitioner_id?: string | null;
     practitioner_name?: string | null;
     diagnosis_code?: Record<string, unknown> | null;
+    /** NEO-258: the Historia clínica is emailed only to the patient's own address on file. */
+    email?: string | null;
   };
   /** Documentos and Estudios hold health data — admin, doctor and manager only (NEO-83), same rule as the tabs. */
   canSeeStudies: boolean;
@@ -138,7 +182,7 @@ const props = defineProps<{
 
 const { isDoctor } = usePermissions();
 
-defineEmits<{
+const emit = defineEmits<{
   "open-notes": [];
   "open-study": [itemKey: string, category: ChecklistCategory];
   "open-tab": [tab: string];
@@ -156,6 +200,60 @@ const checklist = computed(() => checklistApi.checklist.value);
 const patientItems = computed(
   () => checklist.value?.items.filter((item) => item.actions.qr && (item.status === "missing" || item.status === "pending_patient")) ?? [],
 );
+/**
+ * NEO-258 D2: what "Siguiente paso" offers. The patient's part first (QR); then the
+ * Historia clínica sections still open — the doctor's exploration, or a STOP-Bang
+ * waiting for B-A-N-G; once they are all done, the Historia clínica itself.
+ * No Historia clínica configured → the old end state ("Todo completado").
+ */
+const hcSplit = computed(() => splitHistoriaClinica(checklist.value?.items ?? []));
+const doctorSections = computed(() => hcSplit.value.sections.filter((s) => s.status !== "done"));
+const nextStage = computed<"patient" | "doctor" | "historia" | "none">(() => {
+  if (patientItems.value.length) return "patient";
+  if (!hcSplit.value.sections.length || !hcSplit.value.printable) return "none";
+  return doctorSections.value.length ? "doctor" : "historia";
+});
+
+function openFirstDoctorSection(): void {
+  const first = doctorSections.value[0];
+  if (first) emit("open-study", first.key, first.category);
+}
+
+const printing = ref(false);
+const emailing = ref(false);
+/** Which action the signature pad is open for (a doctor signs before printing or emailing, NEO-255/258). */
+const signFor = ref<"print" | "email" | null>(null);
+
+async function printHistoria(signature?: string): Promise<void> {
+  printing.value = true;
+  try {
+    await checklistApi.print(HC_PRINTABLE_KEY, undefined, signature);
+  } finally {
+    printing.value = false;
+  }
+}
+
+function onPrint(): void {
+  if (isDoctor.value) signFor.value = "print";
+  else void printHistoria();
+}
+
+async function onSigned(signature: string | null): Promise<void> {
+  const purpose = signFor.value;
+  signFor.value = null;
+  if (purpose === "print") {
+    await printHistoria(signature ?? undefined);
+    return;
+  }
+  if (purpose !== "email" || !signature) return;
+  emailing.value = true;
+  try {
+    await checklistApi.sendHistoriaByEmail(signature);
+  } finally {
+    emailing.value = false;
+  }
+}
+
 /** Unfinished first (stable within each half), cut to DOC_ROWS. */
 const shownDocs = computed(() => {
   const all = checklist.value?.items ?? [];
@@ -268,6 +366,28 @@ watch(() => props.activeTab, loadStudies);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.patient-aside__hc-actions {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-2, 8px);
+}
+
+.patient-aside__hc-print {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Square, as tall as the print button next to it. */
+.patient-aside__hc-email {
+  flex: none;
+  align-self: stretch;
+  margin-top: var(--space-1, 4px);
+  width: var(--pwa-btn-min-height, 44px);
+  height: auto !important;
+  min-width: 0 !important;
+  padding-inline: 0 !important;
 }
 
 .patient-aside__qr {
