@@ -28,8 +28,9 @@ import ConsentSignatureField from "../questionnaire/ConsentSignatureField.vue";
 
 /**
  * NEO-255 D1: before a doctor prints a patient's Historia clínica, they sign
- * it here. The drawn signature goes with that one print (both "Firma del
- * doctor" panels, with a dated stamp) and is never stored; "Print unsigned"
+ * it here. The drawn signature goes with that one print (the "Firma del
+ * doctor" panel on page 2, with a dated stamp; the consent page stays the
+ * patient's) and is never stored; "Print unsigned"
  * keeps the blank line to sign on paper. `print` fires inside the click, so
  * the caller can still open the PDF tab without a popup blocker.
  */

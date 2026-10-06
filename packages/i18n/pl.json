@@ -1458,7 +1458,7 @@
   "app.clinical.generatePdfError": "Nie udało się wygenerować PDF",
   "app.clinical.doctorSignature.signAndPrint": "Podpisz i drukuj",
   "app.clinical.doctorSignature.printUnsigned": "Drukuj bez podpisu",
-  "app.clinical.doctorSignature.hint": "Twój podpis trafi na pola lekarza w tym wydruku. Nie jest zapisywany.",
+  "app.clinical.doctorSignature.hint": "Twój podpis trafi na pole lekarza w tym wydruku. Nie jest zapisywany.",
   "app.clinical.doctorSignature.title": "Podpisz historię kliniczną",
   "app.clinical.errorLoad": "Nie udało się wczytać kwestionariuszy",
   "app.clinical.pending.title": "Czeka na pacjenta",

@@ -262,19 +262,19 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
     });
   }, 60000);
 
-  it("the Historia clínica's consent page has the patient's and the doctor's signature panels; a doctor's drawn signature signs both doctor panels (NEO-255)", async () => {
+  it("the patient signs the consent page, the doctor the Historia's page 2; a doctor's drawn signature signs that panel (NEO-255)", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const { ctx, patientId } = await doctorWithPatient(client);
       const signature = `data:image/png;base64,${ONE_PIXEL_PNG}`;
 
-      // Unsigned: both doctor panels keep the patient's doctor and the blank line to sign on paper.
+      // Unsigned: the doctor panel keeps the patient's doctor and the blank line to sign on paper.
       renderSpy.mockClear();
       await PrintChecklistItemCommand(ctx, patientId, "historiaEndo");
       const [html, unsigned] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string>; dataImages: Record<string, string> }];
       const consentPage = html.slice(html.indexOf('<div class="hc-p3">'));
       expect(consentPage).toContain('data-field="firma_paciente"');
-      expect(consentPage).toContain('data-field="firma_doctor"');
-      expect(html.match(/data-field="firma_doctor"/g)).toHaveLength(2); // page 2 + the consent page
+      expect(consentPage).not.toContain('data-field="firma_doctor"'); // the consent is the patient's alone
+      expect(html.match(/data-field="firma_doctor"/g)).toHaveLength(1); // page 2
       expect(unsigned.dataFields.doctor_stamp).toBe("");
       expect(unsigned.dataFields.nombre_medico_firma).toMatch(/Lorena Firma-/);
       expect(unsigned.dataImages.firma_doctor).toBeUndefined();

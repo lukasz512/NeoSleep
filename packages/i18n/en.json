@@ -1540,7 +1540,7 @@
   "app.clinical.generatePdfError": "Could not generate the PDF",
   "app.clinical.doctorSignature.signAndPrint": "Sign and print",
   "app.clinical.doctorSignature.printUnsigned": "Print unsigned",
-  "app.clinical.doctorSignature.hint": "Your signature goes on the doctor panels of this print. It is not saved.",
+  "app.clinical.doctorSignature.hint": "Your signature goes on the doctor panel of this print. It is not saved.",
   "app.clinical.doctorSignature.title": "Sign the clinical record",
   "app.clinical.errorLoad": "Could not load the questionnaires",
   "app.clinical.pending.title": "Waiting for the patient",

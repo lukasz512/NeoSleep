@@ -1458,7 +1458,7 @@
   "app.clinical.generatePdfError": "No se pudo generar el PDF",
   "app.clinical.doctorSignature.signAndPrint": "Firmar e imprimir",
   "app.clinical.doctorSignature.printUnsigned": "Imprimir sin firma",
-  "app.clinical.doctorSignature.hint": "Su firma aparecerá en los recuadros del doctor de esta impresión. No se guarda.",
+  "app.clinical.doctorSignature.hint": "Su firma aparecerá en el recuadro del doctor de esta impresión. No se guarda.",
   "app.clinical.doctorSignature.title": "Firmar la historia clínica",
   "app.clinical.errorLoad": "No se pudieron cargar los cuestionarios",
   "app.clinical.pending.title": "Esperando al paciente",
