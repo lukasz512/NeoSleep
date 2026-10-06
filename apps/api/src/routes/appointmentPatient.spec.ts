@@ -272,3 +272,89 @@ describe("the patient's appointment page /a (CORE-25)", () => {
     expect(audit.rowCount).toBe(1);
   });
 });
+
+describe("doctor follow-up after 'I can't come' (NEO-254)", () => {
+  beforeEach(() => sendMock.mockClear());
+
+  // A fresh client address per call: the public write limiter allows 10 per IP and the file shares one.
+  let ipCounter = 0;
+  function respond(body: Record<string, unknown>): request.Test {
+    ipCounter += 1;
+    return request(app).post("/api/v1/public/appointment/respond").set("X-Forwarded-For", `198.51.100.${ipCounter}`).send(body);
+  }
+
+  async function declined(note?: string): Promise<{ a: { id: string; auth: string }; s: Awaited<ReturnType<typeof setup>>; id: string }> {
+    const a = await admin();
+    const s = await setup();
+    const created = await book(a.auth, { patient_id: s.patientId, start_at: futureSlot() });
+    const token = tokenFrom(lastEmail().appointment.links.cannotAttend);
+    const res = await respond({ token, response: "cannot_attend", ...(note === undefined ? {} : { note }) });
+    expect(res.status).toBe(200);
+    // The patient's page shows their own suggestion back.
+    expect(res.body.patient_response_note).toBe(note?.trim() || null);
+    return { a, s, id: created.body.id };
+  }
+
+  it("the patient may suggest another day with 'I can't come'; staff see it, a reschedule clears it", async () => {
+    const { a, id } = await declined("  Jueves por la tarde  ");
+    const staff = await request(app).get(`/api/v1/appointments/${id}`).set("Authorization", a.auth);
+    expect(staff.body.patient_response).toBe("cannot_attend");
+    expect(staff.body.patient_response_note).toBe("Jueves por la tarde");
+
+    const moved = await request(app).patch(`/api/v1/appointments/${id}`).set("Authorization", a.auth).send({ start_at: futureSlot() });
+    expect(moved.body.patient_response).toBeNull();
+    expect(moved.body.patient_response_note).toBeNull();
+    expect(lastEmail().appointment.kind).toBe("rescheduled");
+  });
+
+  it("a suggestion over 200 characters is a 400; 'Confirm' never stores one", async () => {
+    const a = await admin();
+    const s = await setup();
+    const created = await book(a.auth, { patient_id: s.patientId, start_at: futureSlot() });
+    const token = tokenFrom(lastEmail().appointment.links.confirm);
+    expect((await respond({ token, response: "cannot_attend", note: "x".repeat(201) })).status).toBe(400);
+    await respond({ token, response: "confirmed", note: "ignored" });
+    const staff = await request(app).get(`/api/v1/appointments/${created.body.id}`).set("Authorization", a.auth);
+    expect(staff.body.patient_response_note).toBeNull();
+  });
+
+  it("staff see the patient's phone so they can call or WhatsApp them", async () => {
+    const { a, s, id } = await declined();
+    await withTenant(TENANT_SLUG, (client) => client.query(`UPDATE identities SET phone = '+52 55 1234 5678' WHERE id = $1`, [s.patientIdentityId]));
+    const staff = await request(app).get(`/api/v1/appointments/${id}`).set("Authorization", a.auth);
+    expect(staff.body.patient_phone).toBe("+52 55 1234 5678");
+  });
+
+  it("cancel after 'I can't come' records the reason, apart from no-shows; a plain cancel has none", async () => {
+    const { a, id } = await declined();
+    const cancelled = await request(app).patch(`/api/v1/appointments/${id}`).set("Authorization", a.auth).send({ status: "cancelled" });
+    expect(cancelled.status).toBe(200);
+    expect(cancelled.body.cancel_reason).toBe("patient_cannot_attend");
+
+    const s2 = await setup();
+    const other = await book(a.auth, { patient_id: s2.patientId, start_at: futureSlot() });
+    const plain = await request(app).patch(`/api/v1/appointments/${other.body.id}`).set("Authorization", a.auth).send({ status: "cancelled" });
+    expect(plain.body.cancel_reason).toBeNull();
+  });
+
+  it("'Sí vendrá' (keep) marks the visit confirmed by staff and drops the suggestion; no email goes out", async () => {
+    const { a, id } = await declined("Lunes");
+    sendMock.mockClear();
+    const kept = await request(app).patch(`/api/v1/appointments/${id}`).set("Authorization", a.auth).send({ patient_response: "confirmed" });
+    expect(kept.status).toBe(200);
+    expect(kept.body.patient_response).toBe("confirmed");
+    expect(kept.body.patient_response_note).toBeNull();
+    expect(kept.body.status).toBe("scheduled");
+    expect(sendMock).not.toHaveBeenCalled();
+    const audit = await withTenant(TENANT_SLUG, (client) =>
+      client.query(`SELECT 1 FROM audit_log WHERE entity_type = 'Appointment' AND entity_id = $1 AND entity_after->>'patient_response' = 'confirmed' AND user_id = $2`, [id, a.id])
+    );
+    expect(audit.rowCount).toBe(1);
+  });
+
+  it("staff can only set the answer to 'confirmed'", async () => {
+    const { a, id } = await declined();
+    const res = await request(app).patch(`/api/v1/appointments/${id}`).set("Authorization", a.auth).send({ patient_response: "cannot_attend" });
+    expect(res.status).toBe(400);
+  });
+});

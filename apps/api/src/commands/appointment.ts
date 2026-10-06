@@ -42,6 +42,9 @@ import { addCareTeamMember, releaseCareTeamAfterVisit } from "./careTeam.js";
  *   - reschedule / cancel: those three plus whoever booked it
  *   - the patient is emailed on book / reschedule / cancel (CORE-25): pass
  *     `effects` and the route sends what it collects after the commit
+ *   - after "I can't come" (NEO-254): whoever may reschedule may record that the
+ *     patient will come after all (patient_response "confirmed", no email), and
+ *     a cancel stores cancel_reason 'patient_cannot_attend'
  */
 
 export const DEFAULT_DURATION_MINUTES = 60;
@@ -241,6 +244,8 @@ export interface UpdateAppointmentInput {
   notes?: string | null;
   sleep_study_id?: string | null;
   treatment_plan_id?: string | null;
+  /** Only "confirmed": staff record the patient will come after all (NEO-254). */
+  patient_response?: string;
 }
 
 export async function UpdateAppointmentCommand(ctx: TenantContext, id: string, input: UpdateAppointmentInput, effects?: AppointmentEffects): Promise<AppointmentView> {
@@ -262,8 +267,20 @@ export async function UpdateAppointmentCommand(ctx: TenantContext, id: string, i
   const touchesClinical = input.notes !== undefined || input.sleep_study_id !== undefined || input.treatment_plan_id !== undefined;
   if (viewer.kind === "field" && touchesClinical) throw new ForbiddenError("Notes and clinical links are for clinical staff only");
   await assertClinicalLinks(ctx, before.patient_id, input.sleep_study_id, input.treatment_plan_id);
+  if (input.patient_response !== undefined && input.patient_response !== "confirmed") {
+    throw new ValidationError("patient_response can only be set to 'confirmed'", "patient_response");
+  }
+  if (input.patient_response !== undefined && before.status !== "scheduled") {
+    throw new ValidationError("Only a scheduled appointment can be confirmed", "patient_response");
+  }
 
   const update: AppointmentUpdate = { status, notes: input.notes, sleep_study_id: input.sleep_study_id, treatment_plan_id: input.treatment_plan_id };
+  if (input.patient_response === "confirmed" && before.patient_response !== "confirmed") update.patient_response = "confirmed";
+  if (status === "cancelled" && before.status !== "cancelled") {
+    update.cancel_reason = before.patient_response === "cannot_attend" ? "patient_cannot_attend" : null;
+  } else if (status !== undefined && status !== "cancelled" && before.status === "cancelled") {
+    update.cancel_reason = null;
+  }
   if (input.start_at !== undefined || input.start_local !== undefined || input.end_at !== undefined || input.duration_minutes !== undefined) {
     const start = resolveStart(input, before.timezone) ?? new Date(before.start_at);
     const keepLength = input.end_at === undefined && input.duration_minutes === undefined;
@@ -281,8 +298,8 @@ export async function UpdateAppointmentCommand(ctx: TenantContext, id: string, i
     action: "update",
     entity_type: "Appointment",
     entity_id: id,
-    entity_before: { start_at: before.start_at, end_at: before.end_at, status: before.status },
-    entity_after: { start_at: after.start_at, end_at: after.end_at, status: after.status, timezone: after.timezone },
+    entity_before: { start_at: before.start_at, end_at: before.end_at, status: before.status, patient_response: before.patient_response },
+    entity_after: { start_at: after.start_at, end_at: after.end_at, status: after.status, timezone: after.timezone, patient_response: after.patient_response, cancel_reason: after.cancel_reason },
     request_id: ctx.requestId,
   });
 

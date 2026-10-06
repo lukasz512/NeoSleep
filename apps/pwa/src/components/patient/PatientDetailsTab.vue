@@ -8,8 +8,21 @@
     <!-- A: what you read in five seconds. Each tile shows only when it has something to say. -->
     <section v-if="tiles.length" class="patient-details__tiles" :aria-label="t('app.patients.detail.summaryLabel')" data-testid="summary-strip">
       <template v-for="tile in tiles" :key="tile.key">
+        <!-- CORE-162: the next visit is a wider tile with its own actions. -->
+        <NextVisitTile
+          v-if="tile.key === 'appointment' && nextVisitView"
+          v-bind="nextVisitView"
+          :label="tile.label"
+          :busy="completing"
+          @open="tile.open?.()"
+          @reschedule="rescheduleNextVisit"
+          @complete="confirmComplete = true"
+        />
+        <!-- Nothing booked: the same slot, empty, offers to book (CORE-162). -->
+        <NextVisitEmptyTile v-else-if="tile.key === 'appointment'" :label="tile.label" @book="emit('book')" />
         <component
           :is="tile.tab || tile.open ? 'button' : 'div'"
+          v-else
           :type="tile.tab || tile.open ? 'button' : undefined"
           class="patient-details__tile"
           :class="{ 'patient-details__tile--link': tile.tab || tile.open }"
@@ -266,6 +279,15 @@
       @saved="onVisitSaved"
     />
     <EventForm v-model="showEventForm" :initial-data="eventFormInitial" @submit="onEventFormSubmit" />
+    <AppConfirmDialog
+      v-model="confirmComplete"
+      :text="t('app.patients.detail.nextVisit.completeConfirm')"
+      :secondary-label="t('app.common.no')"
+      :secondary-color="null"
+      :primary-label="t('app.patients.detail.nextVisit.done')"
+      @secondary="confirmComplete = false"
+      @primary="completeNextVisit"
+    />
   </div>
 </template>
 
@@ -285,7 +307,10 @@ import { onPatientChecklistUpdated, type ChecklistCategory } from "../../composa
 import { emitPatientChanged, onPatientChanged } from "../../composables/usePatientChanged";
 import { useEventSave } from "../../composables/useEventSave";
 import type { SubmitDone } from "../../composables/useEntitySubmit";
-import type { Appointment } from "../../composables/useAppointments";
+import { useAppointments, appointmentResponseState, type Appointment } from "../../composables/useAppointments";
+import { useNotifications } from "../../composables/useNotifications";
+import NextVisitTile from "./NextVisitTile.vue";
+import NextVisitEmptyTile from "./NextVisitEmptyTile.vue";
 import type { EventFormInitialData, EventSubmitPayload } from "../EventForm.vue";
 import { useVisiblePolling } from "../../composables/useVisiblePolling";
 import { useAuthStore } from "../../stores/auth";
@@ -331,7 +356,7 @@ const props = defineProps<{
   /** Details is the open tab — tabs stay mounted (NEO-153), so coming back to it reloads. */
   active?: boolean;
 }>();
-const emit = defineEmits<{ "open-tab": [tab: string]; "open-study": [itemKey: string, category: ChecklistCategory] }>();
+const emit = defineEmits<{ "open-tab": [tab: string]; "open-study": [itemKey: string, category: ChecklistCategory]; book: [] }>();
 
 const { t, locale } = useI18n();
 const { specialtySet } = useIdentity();
@@ -442,8 +467,15 @@ async function onRemove(): Promise<void> {
  * Reloads what Details shows while keeping it on screen: every loader only
  * replaces its data on success, so a failed refresh leaves the old values.
  */
+/** Both visit lists answered once: only then can "nothing booked" be told apart from "still loading". */
+const visitsLoaded = ref(false);
+async function loadVisits(): Promise<void> {
+  await Promise.all([loadAppointments(), loadEvents()]);
+  visitsLoaded.value = true;
+}
+
 async function refresh(): Promise<void> {
-  await Promise.all([load(), loadAppointments(), loadEvents(), careTeam.load()]);
+  await Promise.all([load(), loadVisits(), careTeam.load()]);
 }
 
 /** Fingerprint of the card (GET /patient/:id/version) — compared to know when someone else changed it. */
@@ -485,9 +517,9 @@ watch(
     careTeam.members.value = [];
     adding.value = false;
     version = null;
+    visitsLoaded.value = false;
     void load();
-    void loadAppointments();
-    void loadEvents();
+    void loadVisits();
     void careTeam.load();
   },
 );
@@ -614,6 +646,78 @@ function onEventFormSubmit(payload: EventSubmitPayload, done: SubmitDone): Promi
   return saveEvent(payload, done, onVisitSaved);
 }
 
+// ── the next-visit tile (CORE-162): what it shows and its two quick actions ──
+
+const appointmentRights = useAppointments();
+const notifications = useNotifications();
+const RESPONSE_COLOR = { confirmed: "success", awaiting: "warning", cannot_attend: "error" } as const;
+
+const nextVisitView = computed(() => {
+  const next = nextVisit.value;
+  if (!next) return null;
+  if (next.kind === "event") {
+    const type = t(next.event.type === "video" ? "user.planner.form.typeVideo" : "user.planner.form.typeF2f");
+    return {
+      startAt: next.start_at,
+      timeZone: undefined,
+      title: next.event.title || t("user.calendar.kind.encounter"),
+      // The title already says what it is; the chip only says how (space: two tiles wide).
+      chip: { text: type },
+      canReschedule: true,
+      canComplete: true,
+    };
+  }
+  const a = next.appointment;
+  const state = a ? appointmentResponseState(a) : null;
+  return {
+    startAt: next.start_at,
+    timeZone: a?.timezone,
+    title: a?.practitioner_name ? t("app.patients.detail.nextVisit.withDoctor", { name: a.practitioner_name }) : t("user.calendar.kind.appointment"),
+    chip: state ? { text: t(`user.appointments.patientResponse.${state}`), color: RESPONSE_COLOR[state] } : null,
+    // Until the list loads only the summary's id is known: open works, the actions wait for the full record.
+    canReschedule: !!a && appointmentRights.canChange(a),
+    canComplete: !!a && appointmentRights.canClose.value,
+  };
+});
+
+function rescheduleNextVisit(): void {
+  const next = nextVisit.value;
+  if (next?.kind === "event") openEvent(next.event);
+  else if (next?.appointment) onReschedule(next.appointment);
+}
+
+const confirmComplete = ref(false);
+const completing = ref(false);
+/** "Done" on the tile: the same status change as the visit dialog, without opening it. */
+async function completeNextVisit(): Promise<void> {
+  confirmComplete.value = false;
+  const next = nextVisit.value;
+  if (!next) return;
+  completing.value = true;
+  try {
+    if (next.kind === "appointment") {
+      const result = await appointmentRights.update(next.id, { status: "completed" });
+      if (!result.ok) throw new Error("appointment update failed");
+      notifications.show(t("user.appointments.detail.saved.completed"), "success", undefined, { icon: "nav-appointments" });
+    } else {
+      const res = await apiFetch(`/api/v1/encounter/${encodeURIComponent(next.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "completed" }),
+        handleErrors: false,
+      });
+      if (!res.ok) throw new Error(`encounter update ${res.status}`);
+      notifications.show(t("app.patients.detail.nextVisit.eventCompleted"), "success", undefined, { icon: "nav-planner" });
+    }
+    onVisitSaved();
+  } catch (err) {
+    reportCaught(err, { where: "PatientDetailsTab.completeNextVisit" });
+    notifications.show(t("user.appointments.form.errorSave"), "error");
+  } finally {
+    completing.value = false;
+  }
+}
+
 const numberFormat = computed(() => new Intl.NumberFormat(intlLocale(locale.value), { maximumFractionDigits: 1 }));
 const fmt = (n: number) => numberFormat.value.format(n);
 
@@ -684,18 +788,19 @@ const tiles = computed<Tile[]>(() => {
     }
   }
 
+  // CORE-162: the next visit comes first, half the strip; with nothing booked its slot offers to book.
   const next = nextVisit.value;
   if (next) {
     const start = new Date(next.start_at);
-    // An appointment shows in its clinic's zone; the summary's bare instant and an event use the device's (CORE-133).
     const timeZone = next.kind === "appointment" ? next.appointment?.timezone : undefined;
-    out.push({
+    out.unshift({
       key: "appointment",
       label: t("app.patients.detail.summary.nextAppointment"),
       value: start.toLocaleDateString(intlLocale(locale.value), { day: "numeric", month: "short", timeZone }),
-      sub: start.toLocaleTimeString(intlLocale(locale.value), { hour: "2-digit", minute: "2-digit", timeZone }),
       open: next.kind === "event" ? () => openEvent(next.event) : () => void openAppointment(next.id),
     });
+  } else if (visitsLoaded.value) {
+    out.unshift({ key: "appointment", label: t("app.patients.detail.summary.nextAppointment"), value: "" });
   }
   return out;
 });
@@ -732,6 +837,7 @@ const tiles = computed<Tile[]>(() => {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2, 8px);
 }
+/* Four columns that wrap: the next visit first at half the width, the rest after it (CORE-162). */
 @container (min-width: 560px) {
   .patient-details__tiles {
     grid-template-columns: repeat(4, minmax(0, 1fr));

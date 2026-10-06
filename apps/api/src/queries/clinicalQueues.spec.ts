@@ -159,19 +159,26 @@ describe("SetTreatmentAdvanceLevelCommand", () => {
       const id = await plan(p, { status: "completed", metadata: { orthoapneaDraft: false, note: "keep" } });
       const { rows: [before] } = await client.query<{ updated_at: Date }>(`SELECT updated_at FROM treatment_plan WHERE id = $1`, [id]);
 
+      // Both commands run in this one transaction, so their audit rows share created_at
+      // (now() is fixed per transaction) and no ORDER BY tells them apart (CORE-164).
+      // Read the audit after each command instead.
+      const audits = async () =>
+        (await client.query<{ id: string; entity_after: unknown }>(
+          `SELECT id, entity_after FROM audit_log WHERE entity_type = 'TreatmentPlan' AND entity_id = $1`,
+          [id],
+        )).rows;
+
       const set = await SetTreatmentAdvanceLevelCommand(ctx, id, 3);
       expect(set.metadata).toEqual({ orthoapneaDraft: false, note: "keep", advance_level: 3 });
       // updated_at stands in for the delivery of a completed plan — a level change must not move it.
       expect(set.updated_at).toBe(before!.updated_at.toISOString());
+      const afterSet = await audits();
+      expect(afterSet.map((a) => a.entity_after)).toEqual([{ advance_level: 3 }]);
 
       const cleared = await SetTreatmentAdvanceLevelCommand(ctx, id, null);
       expect(cleared.metadata).toEqual({ orthoapneaDraft: false, note: "keep" });
-
-      const { rows: audits } = await client.query(
-        `SELECT entity_after FROM audit_log WHERE entity_type = 'TreatmentPlan' AND entity_id = $1 ORDER BY created_at`,
-        [id],
-      );
-      expect(audits.map((a) => a.entity_after)).toEqual([{ advance_level: 3 }, { advance_level: null }]);
+      const added = (await audits()).filter((a) => a.id !== afterSet[0]!.id);
+      expect(added.map((a) => a.entity_after)).toEqual([{ advance_level: null }]);
 
       await expect(SetTreatmentAdvanceLevelCommand(ctx, id, 0)).rejects.toThrow(/advance_level/);
       await expect(SetTreatmentAdvanceLevelCommand(ctx, id, 2.5)).rejects.toThrow(/advance_level/);
