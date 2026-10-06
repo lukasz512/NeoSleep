@@ -43,6 +43,7 @@ import { sendPartnerJoinThankYouEmail } from "../mailer.js";
 import { uploadPartnerDocument } from "../services/partnerDocuments.js";
 import { renderHtmlToPdf } from "../services/documentRenderer.js";
 import type { PartnerJurisdiction } from "../db/partnerSignatories.js";
+import { isSignatureDataUrl } from "../utils/signatureDataUrl.js";
 import {
   buildAgreementDocument,
   buildNoticeDocument,
@@ -425,8 +426,6 @@ export interface AcceptInviteResult {
   documents: SignedDocumentResult[];
 }
 
-const SIGNATURE_DATA_URL_RE = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
-
 function sha256Hex(bytes: Uint8Array): string {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
@@ -451,7 +450,7 @@ export async function AcceptPractitionerInviteCommand(
   }
   const practiceRole: PracticeRole = input.practiceRole;
   if (practiceRole === "owner" && !input.taxId?.trim()) throw new ValidationError("Tax ID is required", "taxId");
-  if (!input.agreementSignatureDataUrl || !SIGNATURE_DATA_URL_RE.test(input.agreementSignatureDataUrl)) {
+  if (!isSignatureDataUrl(input.agreementSignatureDataUrl)) {
     throw new ValidationError("A handwritten signature on the partner agreement is required");
   }
   if (!input.noticeAcknowledged) throw new ValidationError("Please confirm you have read the privacy notice");

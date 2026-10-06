@@ -3,7 +3,7 @@ import bcrypt from "bcrypt";
 import { withTenant, insertStaffUser, insertPatient, insertPractitioner, insertSleepStudy, getGlobalTerritoryId } from "../db.js";
 import { ensureDocumentContent } from "../testing/documentContentFixture.js";
 import type { TenantContext } from "../context/TenantContext.js";
-import { ValidationError } from "../errors.js";
+import { ForbiddenError, ValidationError } from "../errors.js";
 import { RecordClinicalQuestionnaireCommand } from "./clinicalRecords.js";
 import { PrintChecklistItemCommand, UploadPatientStudyCommand, DeletePatientStudyUploadCommand } from "./patientChecklist.js";
 import { GetPatientChecklistQuery } from "../queries/patientChecklist.js";
@@ -57,6 +57,23 @@ async function buildContext(client: Client): Promise<TenantContext> {
   const territory = await getGlobalTerritoryId(client);
   const user = await insertStaffUser(client, email, "QA", "Doctor", "admin", hash, false, null, null, territory);
   return { slug: TENANT_SLUG, client, user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", territory_id: territory }] }, requestId: `test-${uniqueSuffix()}` };
+}
+
+/** A doctor login sharing its identity with a practitioner (ADR-014), plus one patient of theirs (CORE-104). */
+async function doctorWithPatient(client: Client): Promise<{ ctx: TenantContext; patientId: string }> {
+  const email = `qa-checklist-doc-${uniqueSuffix()}@neosleepcare.com`;
+  const practitioner = await insertPractitioner(client, { first_name: "Lorena", last_name: `Firma-${uniqueSuffix()}`, email });
+  const hash = await bcrypt.hash("irrelevant-not-logged-in-with", 4);
+  const territory = await getGlobalTerritoryId(client);
+  const user = await insertStaffUser(client, email, "Lorena", "Firma", "doctor", hash, false, null, null, territory);
+  const patient = await insertPatient(client, { first_name: "Ana", last_name: `Signed-${uniqueSuffix()}`, practitioner_id: practitioner.id });
+  const ctx: TenantContext = {
+    slug: TENANT_SLUG,
+    client,
+    user: { id: user!.id, email, name: "Dra. Lorena Firma", role: "doctor", roles: [{ role: "doctor", territory_id: territory }] },
+    requestId: `test-${uniqueSuffix()}`,
+  };
+  return { ctx, patientId: patient.id };
 }
 
 const newPatient = (client: Client) => insertPatient(client, { first_name: "Ana", last_name: `Checklist-${uniqueSuffix()}` });
@@ -242,6 +259,51 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
       renderSpy.mockClear();
       await PrintChecklistItemCommand(ctx, patient.id, "historiaEndo"); // download rejects (the default mock)
       expect((renderSpy.mock.calls[0] as [string, { dataImages: Record<string, string> }])[1].dataImages).toEqual({});
+    });
+  }, 60000);
+
+  it("the Historia clínica's consent page has the patient's and the doctor's signature panels; a doctor's drawn signature signs both doctor panels (NEO-255)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const { ctx, patientId } = await doctorWithPatient(client);
+      const signature = `data:image/png;base64,${ONE_PIXEL_PNG}`;
+
+      // Unsigned: both doctor panels keep the patient's doctor and the blank line to sign on paper.
+      renderSpy.mockClear();
+      await PrintChecklistItemCommand(ctx, patientId, "historiaEndo");
+      const [html, unsigned] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string>; dataImages: Record<string, string> }];
+      const consentPage = html.slice(html.indexOf('<div class="hc-p3">'));
+      expect(consentPage).toContain('data-field="firma_paciente"');
+      expect(consentPage).toContain('data-field="firma_doctor"');
+      expect(html.match(/data-field="firma_doctor"/g)).toHaveLength(2); // page 2 + the consent page
+      expect(unsigned.dataFields.doctor_stamp).toBe("");
+      expect(unsigned.dataFields.nombre_medico_firma).toMatch(/Lorena Firma-/);
+      expect(unsigned.dataImages.firma_doctor).toBeUndefined();
+
+      // Signed in the print dialog: the image, the signer's name and a dated stamp; the signing is audit-logged.
+      renderSpy.mockClear();
+      await PrintChecklistItemCommand(ctx, patientId, "historiaEndo", { doctorSignature: signature });
+      const [, signed] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string>; dataImages: Record<string, string> }];
+      expect(signed.dataImages.firma_doctor).toBe(signature);
+      expect(signed.dataFields.nombre_medico_firma).toBe("Dra. Lorena Firma");
+      expect(signed.dataFields.doctor_stamp).toMatch(/^Firmado electrónicamente por Dra\. Lorena Firma · \d{2}\/\d{2}\/\d{4}$/);
+      const { rows } = await client.query<{ entity_after: Record<string, unknown> }>(
+        `SELECT entity_after FROM audit_log WHERE entity_type = 'ChecklistItemPrint' AND entity_id = $1 AND user_id = $2`,
+        [patientId, ctx.user.id]
+      );
+      expect(rows.map((r) => r.entity_after.doctor_signed ?? false).sort()).toEqual([false, true]); // the unsigned print, then the signed one
+    });
+  }, 60000);
+
+  it("only a doctor signs, only the Historia clínica, only with a drawn PNG (NEO-255)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const signature = `data:image/png;base64,${ONE_PIXEL_PNG}`;
+      const admin = await buildContext(client);
+      const patient = await newPatient(client);
+      await expect(PrintChecklistItemCommand(admin, patient.id, "historiaEndo", { doctorSignature: signature })).rejects.toThrow(ForbiddenError);
+
+      const { ctx, patientId } = await doctorWithPatient(client);
+      await expect(PrintChecklistItemCommand(ctx, patientId, "medicalHistory", { doctorSignature: signature })).rejects.toThrow(ValidationError);
+      await expect(PrintChecklistItemCommand(ctx, patientId, "historiaEndo", { doctorSignature: "data:image/svg+xml;base64,PHN2Zz4=" })).rejects.toThrow(ValidationError);
     });
   }, 60000);
 

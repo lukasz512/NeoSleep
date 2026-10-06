@@ -352,10 +352,11 @@ patientRouter.post(
     const id = uuidParam(req, "id");
     const key = routeParam(req, "key")?.trim() ?? "";
     const recordId = typeof req.body?.recordId === "string" && UUID_RE.test(req.body.recordId) ? req.body.recordId : undefined;
+    const doctorSignature: unknown = req.body?.doctorSignature;
     const slug = tenantSlugFromHost(req.hostname);
     const result = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return PrintChecklistItemCommand(ctx, id, key, recordId);
+      return PrintChecklistItemCommand(ctx, id, key, { recordId, doctorSignature });
     });
     if (result.kind === "stored") {
       res.json({ url: result.url });

@@ -19,7 +19,9 @@
   (NEO-249 D1): the full Consentimiento informado (the informedConsent
   document), then the clinical-record consent, printed for every patient.
   When the patient already signed the consent electronically, a stamp with
-  the date replaces the empty signing line (D2).
+  the date replaces the empty signing line (D2). The consent page carries two
+  signatures, the patient's and the doctor's (NEO-255); a doctor who draws a
+  signature in the print dialog signs both doctor panels, with a dated stamp.
 
   Two substitution passes fill it, in order — same split as informedConsent.html:
 
@@ -426,7 +428,7 @@
 
 
     <div class="sig-panels">
-      <div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.historiaEndo.signatureLabelDoctor}}</div><div class="sig-area" data-field="firma_doctor"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_medico"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div>
+      <div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.historiaEndo.signatureLabelDoctor}}</div><div class="sig-stamp" data-field="doctor_stamp"></div><div class="sig-area" data-field="firma_doctor"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_medico_firma"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div>
     </div>
   </div>
 
@@ -450,7 +452,7 @@
     <div class="doc-content hc-ci-body">{{slot:informedConsent}}</div>
     <p class="doc-manufacturers">{{documents.informedConsent.manufacturers}}</p>
     <div class="doc-content">{{content}}</div>
-    <div class="sig-panels"><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.informedConsent.signatureLabel}}</div><div class="sig-stamp" data-field="consent_stamp"></div><div class="sig-area" data-field="firma_paciente"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_paciente"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div></div>
+    <div class="sig-panels"><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.informedConsent.signatureLabel}}</div><div class="sig-stamp" data-field="consent_stamp"></div><div class="sig-area" data-field="firma_paciente"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_paciente"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.historiaEndo.signatureLabelDoctor}}</div><div class="sig-stamp" data-field="doctor_stamp"></div><div class="sig-area" data-field="firma_doctor"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_medico_firma"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div></div>
   </div>
 
   <!-- The skull drawing: left half drawn, right half mirrored; joints read data-state (0–5 findings). -->

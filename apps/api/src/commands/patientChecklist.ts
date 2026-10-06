@@ -17,7 +17,8 @@ import { renderHtmlToPdf, type ChoiceField } from "../services/documentRenderer.
 import { formatFormDate, formatFormDateTime } from "../utils/formDate.js";
 import { uploadPartnerDocument, deletePartnerDocument, downloadPartnerDocument, getPartnerDocumentSignedUrl } from "../services/partnerDocuments.js";
 import { listConsentsForEntity } from "../db/consent.js";
-import { NotFoundError, ValidationError } from "../errors.js";
+import { ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
+import { isSignatureDataUrl } from "../utils/signatureDataUrl.js";
 import { MEDICAL_HISTORY_QUESTIONS, ORAL_EXAM_QUESTIONS, STOP_QUESTIONS, BANG_QUESTIONS, TMJ_FINDINGS } from "./clinicalRecordFields.js";
 import { historiaClinicaPrintFields, formatMeasure } from "./historiaClinicaPrint.js";
 
@@ -119,12 +120,26 @@ function recordOf<T>(item: ChecklistItem, recordId: string | undefined): T | nul
   return (entry?.record as T | undefined) ?? null;
 }
 
+export interface PrintOptions {
+  recordId?: string;
+  /**
+   * NEO-255 D1: the doctor's signature, drawn in the print dialog (a PNG data URL), for the
+   * Historia clínica only. Used for this one PDF, never stored; the signing is audit-logged.
+   */
+  doctorSignature?: unknown;
+}
+
 export async function PrintChecklistItemCommand(
   ctx: TenantContext,
   patientId: string,
   key: string,
-  recordId?: string
+  { recordId, doctorSignature }: PrintOptions = {}
 ): Promise<PrintResult> {
+  if (doctorSignature != null) {
+    if (key !== "historiaEndo") throw new ValidationError(`"${key}" has no doctor signature`);
+    if (ctx.user.role !== "doctor") throw new ForbiddenError("Only a doctor can sign the Historia clínica");
+    if (!isSignatureDataUrl(doctorSignature)) throw new ValidationError("A drawn signature (PNG) is required");
+  }
   const checklist = await GetPatientChecklistQuery(ctx, patientId); // territory-checked
   const item = checklist.items.find((i) => i.key === key);
   if (!item) throw new NotFoundError("Checklist item", key);
@@ -204,6 +219,15 @@ export async function PrintChecklistItemCommand(
       const signature = await consentSignatureDataUrl(ctx, patientId, signedConsent.id);
       if (signature) images.firma_paciente = signature;
     }
+    // NEO-255 D1: the doctor's panels carry who signed; without a drawn signature they keep the patient's doctor and a blank line.
+    fields.nombre_medico_firma = pdfContext.practitioner_name ?? "";
+    fields.doctor_stamp = "";
+    if (isSignatureDataUrl(doctorSignature)) {
+      const signer = ctx.user.name?.trim() || ctx.user.email;
+      images.firma_doctor = doctorSignature;
+      fields.nombre_medico_firma = signer;
+      fields.doctor_stamp = documentT(locale, "documents.historiaEndo.doctorSignedStamp", { name: signer, date: formatFormDate(new Date(), locale) });
+    }
     Object.assign(fields, print.fields);
     Object.assign(choices, print.choices);
     Object.assign(states, print.states);
@@ -259,7 +283,7 @@ export async function PrintChecklistItemCommand(
     action: "read",
     entity_type: "ChecklistItemPrint",
     entity_id: patientId,
-    entity_after: { item: key, record_id: recordId ?? null },
+    entity_after: { item: key, record_id: recordId ?? null, ...(images.firma_doctor ? { doctor_signed: true } : {}) },
     request_id: ctx.requestId,
   });
 

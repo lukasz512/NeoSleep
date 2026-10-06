@@ -134,6 +134,8 @@ app.use(
 // validated in commands/questionnaireRequest.ts) — its own larger parser,
 // mounted first; body-parser then skips the already-parsed body below.
 app.use("/api/v1/public/questionnaire/submit", express.json({ limit: "600kb" }));
+// Printing the Historia clínica can carry the doctor's drawn signature too (NEO-255).
+app.use("/api/v1/patient/:id/checklist/:key/print", express.json({ limit: "600kb" }));
 // The early "opened" ping sends its token as text/plain (no CORS preflight, NEO-123).
 app.use("/api/v1/public/questionnaire/opened", express.text({ type: "text/plain", limit: "1kb" }));
 // Resend signs the exact bytes it sends — keep the raw body for that one path (NEO-190).
