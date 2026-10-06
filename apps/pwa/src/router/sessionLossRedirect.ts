@@ -59,7 +59,9 @@ export function installSessionLossRedirect(router: Router, deps: SessionLossDeps
     if (!previous || current) return;
     const route = router.currentRoute.value;
     if (!route.meta.requiresAuth) return;
-    deps.notify(deps.message(), "warning", "session-ended");
+    // No toast key: AppNotifications renders t(key) when one is set, which would
+    // replace the already-translated message with the raw key (CORE-171).
+    deps.notify(deps.message(), "warning");
     void router.replace({ path: "/login", query: { redirect: route.fullPath } });
   });
 }
