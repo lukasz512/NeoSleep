@@ -163,9 +163,11 @@ publicRouter.post(
   "/public/appointment/respond",
   publicAppointmentWriteLimiter,
   asyncHandler(async (req: Request, res: Response) => {
-    const response = (req.body as { response?: unknown } | undefined)?.response;
+    const body = req.body as { response?: unknown; note?: unknown } | undefined;
+    const response = typeof body?.response === "string" ? body.response : "";
+    const note = typeof body?.note === "string" ? body.note : undefined;
     const slug = tenantSlugFromHost(req.hostname);
-    res.json(await withTenant(slug, (client) => RespondPublicAppointmentCommand(client, bodyToken(req), typeof response === "string" ? response : "", publicAppointmentMeta(req))));
+    res.json(await withTenant(slug, (client) => RespondPublicAppointmentCommand(client, bodyToken(req), response, publicAppointmentMeta(req), note)));
   })
 );
 

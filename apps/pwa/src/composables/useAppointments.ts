@@ -28,6 +28,13 @@ export interface Appointment {
   notes: string | null;
   /** The patient's answer from the appointment email (CORE-25); cleared when the appointment moves. */
   patient_response?: AppointmentPatientResponse | null;
+  patient_responded_at?: string | null;
+  /** NEO-254: the day/time the patient suggested with "I can't come". */
+  patient_response_note?: string | null;
+  /** NEO-254: for the call / WhatsApp buttons when the patient can't come. */
+  patient_phone?: string | null;
+  /** NEO-254: 'patient_cannot_attend' when cancelled after the patient declined. */
+  cancel_reason?: "patient_cannot_attend" | null;
   /** CORE-116: when the patient was asked to confirm — set + no answer = "waiting for the patient". */
   confirm_request_sent_at?: string | null;
 }
