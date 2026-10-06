@@ -16,29 +16,36 @@
     </button>
     <!-- Two tiles wide at most, one tile tall (Łukasz, 2026-10-06): the actions are icons beside the text. -->
     <div v-if="canReschedule || canComplete" class="next-visit__actions">
-      <button
-        v-if="canReschedule"
-        type="button"
-        class="next-visit__action"
-        :aria-label="t('user.appointments.detail.reschedule')"
-        :title="t('user.appointments.detail.reschedule')"
-        data-testid="next-visit-reschedule"
-        @click="emit('reschedule')"
-      >
-        <AppIcon name="calendar-clock" class="next-visit__action-icon" />
-      </button>
-      <button
-        v-if="canComplete"
-        type="button"
-        class="next-visit__action next-visit__action--primary"
-        :aria-label="t('app.patients.detail.nextVisit.done')"
-        :title="t('app.patients.detail.nextVisit.done')"
-        :disabled="busy"
-        data-testid="next-visit-complete"
-        @click="emit('complete')"
-      >
-        <AppIcon name="check-circle" class="next-visit__action-icon" />
-      </button>
+      <!-- Icon-only, so each names itself on hover/focus (CORE-168); to the left, the buttons are stacked. -->
+      <VTooltip v-if="canReschedule" :text="t('user.appointments.detail.reschedule')" location="start">
+        <template #activator="{ props: tip }">
+          <button
+            v-bind="tip"
+            type="button"
+            class="next-visit__action"
+            :aria-label="t('user.appointments.detail.reschedule')"
+            data-testid="next-visit-reschedule"
+            @click="emit('reschedule')"
+          >
+            <AppIcon name="calendar-clock" class="next-visit__action-icon" />
+          </button>
+        </template>
+      </VTooltip>
+      <VTooltip v-if="canComplete" :text="t('app.patients.detail.nextVisit.done')" location="start">
+        <template #activator="{ props: tip }">
+          <button
+            v-bind="tip"
+            type="button"
+            class="next-visit__action next-visit__action--primary"
+            :aria-label="t('app.patients.detail.nextVisit.done')"
+            :disabled="busy"
+            data-testid="next-visit-complete"
+            @click="emit('complete')"
+          >
+            <AppIcon name="check-circle" class="next-visit__action-icon" />
+          </button>
+        </template>
+      </VTooltip>
     </div>
     <AppIcon v-else name="chevron-right" class="next-visit__chevron" />
   </div>
@@ -47,7 +54,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import { VChip } from "vuetify/components";
+import { VChip, VTooltip } from "vuetify/components";
 import { intlLocale } from "@i18n/language-options";
 import AppIcon from "../AppIcon.vue";
 
