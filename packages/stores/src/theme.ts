@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, nextTick } from "vue";
 
 export type ThemeMode = "light" | "dark";
 export type ThemePreference = ThemeMode | "system";
@@ -71,7 +71,8 @@ export const useThemeStore = defineStore("theme", () => {
 
   const preference = computed<ThemePreference>(() => explicitPreference.value ?? "system");
 
-  const mode = computed<ThemeMode>(() => {
+  /** What preference + OS + tenant default resolve to, right now. */
+  const resolvedMode = computed<ThemeMode>(() => {
     if (explicitPreference.value === "light" || explicitPreference.value === "dark") {
       return explicitPreference.value;
     }
@@ -79,6 +80,16 @@ export const useThemeStore = defineStore("theme", () => {
     if (tenantDefault.value) return tenantDefault.value;
     return "light";
   });
+
+  /**
+   * The mode actually painted. It trails resolvedMode only while a theme view
+   * transition starts: it flips inside the transition's update callback, so
+   * every consumer (data-theme, Vuetify, components) changes between the
+   * "old" and the "new" snapshot — never before the old one is taken. That
+   * half-switched old frame was the jump (CORE-163).
+   */
+  const appliedMode = ref<ThemeMode>(resolvedMode.value);
+  const mode = computed<ThemeMode>(() => appliedMode.value);
 
   /** Sets an explicit preference. Pass "system" to follow the OS reactively. */
   function setPreference(pref: ThemePreference): void {
@@ -95,7 +106,7 @@ export const useThemeStore = defineStore("theme", () => {
 
   /** 2-way toggle for UIs that only expose light/dark. */
   function toggleMode(): void {
-    setPreference(mode.value === "dark" ? "light" : "dark");
+    setPreference(resolvedMode.value === "dark" ? "light" : "dark");
   }
 
   /** Feeds the tenant's app_config.color_scheme in once it has loaded. */
@@ -114,32 +125,53 @@ export const useThemeStore = defineStore("theme", () => {
   }
 
   // Universal DOM side effect — every consumer gets this for free, no per-app
-  // wiring required. App-specific side effects (favicon, Vuetify) stay local.
-  if (typeof document !== "undefined") {
-    const applyMode = (m: ThemeMode) => document.documentElement.setAttribute("data-theme", m);
-    let isFirstApply = true;
+  // wiring required. App-specific side effects (favicon, Vuetify) watch
+  // `mode`, which flips inside the same transition callback.
+  const hasDocument = typeof document !== "undefined";
+  let isFirstApply = true;
+  let transitionToken = 0;
 
-    watch(mode, (m) => {
-      // Skip the crossfade for the initial pre-mount application (nothing to
-      // fade from yet) and when the browser lacks View Transitions support —
-      // packages/brand/transitions.css covers that case with a plain CSS
-      // transition instead. Also respect prefers-reduced-motion.
-      const reducedMotion =
-        typeof window !== "undefined" &&
-        typeof window.matchMedia === "function" &&
-        window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-      if (isFirstApply || reducedMotion || typeof document.startViewTransition !== "function") {
-        isFirstApply = false;
-        applyMode(m);
-        return;
-      }
-      document.startViewTransition(() => applyMode(m));
-    }, {
-      immediate: true,
-      flush: "sync", // apply immediately — no flash, no waiting on the next tick
-    });
+  function apply(m: ThemeMode): void {
+    appliedMode.value = m;
+    if (hasDocument) document.documentElement.setAttribute("data-theme", m);
   }
+
+  watch(resolvedMode, (m) => {
+    // Plain switch for the initial pre-mount application (nothing to fade
+    // from yet), without View Transitions support (packages/brand/
+    // transitions.css covers that with a CSS color transition) and under
+    // prefers-reduced-motion.
+    const reducedMotion =
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (isFirstApply || !hasDocument || reducedMotion || typeof document.startViewTransition !== "function") {
+      isFirstApply = false;
+      apply(m);
+      return;
+    }
+    // data-theme-transition switches off every named view-transition group
+    // (page sheet, calendar, …) for this one transition, so the whole screen
+    // — the open account menu on top included — crossfades as one picture
+    // instead of named layers being lifted above the menu (CORE-163).
+    const root = document.documentElement;
+    const token = ++transitionToken;
+    root.setAttribute("data-theme-transition", "");
+    const transition = document.startViewTransition(async () => {
+      apply(m);
+      await nextTick(); // let Vue re-render before the "new" snapshot
+    });
+    void transition.finished.finally(() => {
+      if (token === transitionToken) root.removeAttribute("data-theme-transition");
+    });
+  }, {
+    immediate: true,
+    flush: "sync", // start at once — no flash, no waiting on the next tick
+  });
+
+  // Auto follows the OS live: when the device goes dark, so does the app.
+  startSystemListener();
 
   return {
     mode, preference,
