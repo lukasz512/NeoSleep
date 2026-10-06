@@ -20,6 +20,21 @@ vi.mock("../../composables/useApi", async (importOriginal) => ({
   apiFetch: (...args: unknown[]) => apiFetch(...args),
 }));
 
+// CORE-159: the visit dialogs are async and heavy — stand-ins that keep their name and props.
+/* eslint-disable vue/one-component-per-file, vue/require-default-prop -- test stand-ins */
+vi.mock("../AppointmentDetailDialog.vue", async () => {
+  const { defineComponent, h } = await import("vue");
+  return { __esModule: true, default: defineComponent({ name: "AppointmentDetailDialog", props: { modelValue: Boolean, appointment: Object }, render: () => h("div") }) };
+});
+vi.mock("../AppointmentDialog.vue", async () => {
+  const { defineComponent, h } = await import("vue");
+  return { __esModule: true, default: defineComponent({ name: "AppointmentDialog", props: { modelValue: Boolean, appointment: Object, patient: Object, practitioner: Object, startAt: String }, render: () => h("div") }) };
+});
+vi.mock("../EventForm.vue", async () => {
+  const { defineComponent, h } = await import("vue");
+  return { __esModule: true, default: defineComponent({ name: "EventForm", props: { modelValue: Boolean, initialData: Object }, emits: ["submit", "update:modelValue"], render: () => h("div") }) };
+});
+
 const PATIENT: PatientDetailsTabPatient = {
   id: "p-1",
   email: "mafer@correo.mx",
@@ -133,13 +148,13 @@ describe("PatientDetailsTab (NEO-206)", () => {
     expect(tileKeys(w)).toEqual(["tile-treatment", "tile-appointment"]);
   });
 
-  it("PSG and treatment tiles open their tabs; diagnosis is not a button; the next visit is a calendar link", async () => {
+  it("PSG and treatment tiles open their tabs; diagnosis is not a button; the next visit is a button (CORE-159)", async () => {
     const w = await mountTab(FULL);
     await w.find('[data-testid="tile-psg"]').trigger("click");
     await w.find('[data-testid="tile-treatment"]').trigger("click");
     expect(w.emitted("open-tab")).toEqual([["studies"], ["orthoapnea"]]);
     expect(w.find('[data-testid="tile-diagnosis"]').element.tagName).toBe("DIV");
-    expect(w.find('[data-testid="tile-appointment"]').attributes("href")).toBe("/calendar?appointment=a-1");
+    expect(w.find('[data-testid="tile-appointment"]').element.tagName).toBe("BUTTON");
   });
 
   it("groups the rows; keeps IAH basal and CPAP; extra rows only when set", async () => {
@@ -311,17 +326,21 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
     source: "appointment", appointment_id: "a-1", added_by_name: null, added_at: null,
   }];
 
-  interface Server { appointments: unknown[]; summary: PatientSummary; version: string; fail: boolean }
+  interface Server { appointments: unknown[]; events: unknown[]; summary: PatientSummary; version: string; fail: boolean; patched: { path: string; body: unknown }[] }
   let server: Server;
 
   async function mountLive(opts: { role?: string; active?: boolean } = {}) {
-    server = { appointments: [SOON], summary: EMPTY, version: "v1", fail: false };
+    server = { appointments: [SOON], events: [], summary: EMPTY, version: "v1", fail: false, patched: [] };
     setActivePinia(createPinia());
     if (opts.role) useAuthStore().user = { id: "u-1", role: opts.role } as NonNullable<ReturnType<typeof useAuthStore>["user"]>;
-    apiFetch.mockImplementation(async (path: string) => {
+    apiFetch.mockImplementation(async (path: string, init?: { method?: string; body?: string }) => {
       if (server.fail) return { ok: false, status: 503, json: async () => ({}) };
+      if (init?.method === "PATCH") {
+        server.patched.push({ path, body: JSON.parse(init.body ?? "{}") });
+        return { ok: true, status: 200, json: async () => ({}) };
+      }
       if (path.startsWith("/api/v1/appointments?")) return { ok: true, status: 200, json: async () => ({ items: server.appointments }) };
-      if (path.startsWith("/api/v1/encounter?")) return { ok: true, status: 200, json: async () => ({ items: [], total: 0 }) };
+      if (path.startsWith("/api/v1/encounter?")) return { ok: true, status: 200, json: async () => ({ items: server.events, total: server.events.length }) };
       if (path.endsWith("/care-team")) return { ok: true, status: 200, json: async () => TEAM };
       if (path.endsWith("/version")) return { ok: true, status: 200, json: async () => ({ version: server.version }) };
       return { ok: true, status: 200, json: async () => server.summary };
@@ -395,10 +414,65 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
     expect(rowIds(w)).toEqual(["a-new", "a-soon"]);
   });
 
-  it("the next-appointment tile and every visit row open that visit in the calendar", async () => {
+  // CORE-159: the visit opens on the card, in the same dialogs the calendar uses.
+  const EVENT_SOONER = { id: "e-sooner", type: "visit", status: "scheduled", start_at: "2031-03-01T18:00:00.000Z", end_at: "2031-03-01T19:00:00.000Z", metadata: { title: "Home visit" } };
+
+  it("the next-appointment tile opens that visit's detail dialog on the card", async () => {
     const w = await mountLive();
-    expect(w.find('[data-testid="tile-appointment"]').attributes("href")).toBe("/calendar?appointment=a-soon");
-    expect(w.find('[data-testid="patient-appointment"] a').attributes("href")).toBe("/calendar?appointment=a-soon");
+    await w.find('[data-testid="tile-appointment"]').trigger("click");
+    await flushPromises();
+    const dialog = w.findComponent({ name: "AppointmentDetailDialog" });
+    expect(dialog.props("modelValue")).toBe(true);
+    expect(dialog.props("appointment")).toMatchObject({ id: "a-soon" });
+  });
+
+  it("every visit row opens the same detail dialog", async () => {
+    const w = await mountLive();
+    await w.find('[data-testid="patient-appointment-open"]').trigger("click");
+    await flushPromises();
+    expect(w.findComponent({ name: "AppointmentDetailDialog" }).props("appointment")).toMatchObject({ id: "a-soon" });
+  });
+
+  it("an event sooner than the next appointment is the next visit, and the tile opens it in the event form", async () => {
+    const w = await mountLive();
+    server.events = [EVENT_SOONER];
+    emitPatientChanged("p-1", "visits");
+    await flushPromises();
+    expect(w.find('[data-testid="tile-appointment"]').text()).toContain("Mar 1");
+    await w.find('[data-testid="tile-appointment"]').trigger("click");
+    await flushPromises();
+    const form = w.findComponent({ name: "EventForm" });
+    expect(form.props("modelValue")).toBe(true);
+    expect(form.props("initialData")).toMatchObject({ id: "e-sooner", title: "Home visit" });
+  });
+
+  it("a cancelled event is never the next visit", async () => {
+    const w = await mountLive();
+    server.events = [{ ...EVENT_SOONER, status: "cancelled" }];
+    emitPatientChanged("p-1", "visits");
+    await flushPromises();
+    expect(w.find('[data-testid="tile-appointment"]').text()).toContain("Mar 4");
+  });
+
+  it("an event edited from the card is saved and the tile follows without F5", async () => {
+    const w = await mountLive();
+    server.events = [EVENT_SOONER];
+    emitPatientChanged("p-1", "visits");
+    await flushPromises();
+    await w.find('[data-testid="patient-event-open"]').trigger("click");
+    await flushPromises();
+    const moved = { ...EVENT_SOONER, start_at: "2031-03-03T18:00:00.000Z", end_at: "2031-03-03T19:00:00.000Z" };
+    server.events = [moved];
+    const done = vi.fn();
+    w.findComponent({ name: "EventForm" }).vm.$emit(
+      "submit",
+      { id: "e-sooner", title: "Home visit", start_at: "2031-03-03T18:00:00.000Z", end_at: "2031-03-03T19:00:00.000Z", type: "f2f", status: "scheduled", region: "mx", patient_ids: ["p-1"], attendees: [] },
+      done,
+    );
+    await flushPromises();
+    expect(server.patched.map((p) => p.path)).toEqual(["/api/v1/encounter/e-sooner"]);
+    expect(done).toHaveBeenCalledWith(true);
+    expect(w.find('[data-testid="tile-appointment"]').text()).toContain("Mar 3");
   });
 
   it("a doctor sees HCP names as plain text (doctors have no HCP detail); other roles get links", async () => {
