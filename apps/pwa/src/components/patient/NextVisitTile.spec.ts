@@ -56,6 +56,14 @@ describe("NextVisitTile (CORE-162)", () => {
     expect(w.emitted("open")).toHaveLength(1);
   });
 
+  it("each icon action has a tooltip with its name, and no native title beside it (CORE-168)", () => {
+    const w = mountTile("2031-03-06T22:00:00.000Z");
+    const tips = w.findAllComponents(vuetifyComponents.VTooltip);
+    expect(tips.map((tip) => tip.props("text"))).toEqual(["Reschedule", "Done"]);
+    expect(w.find('[data-testid="next-visit-reschedule"]').attributes("title")).toBeUndefined();
+    expect(w.find('[data-testid="next-visit-complete"]').attributes("title")).toBeUndefined();
+  });
+
   it("no action strip when neither action is allowed", () => {
     const w = mountTile("2031-03-06T22:00:00.000Z", { canReschedule: false, canComplete: false });
     expect(w.find(".next-visit__actions").exists()).toBe(false);
