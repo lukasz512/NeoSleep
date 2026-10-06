@@ -18,6 +18,8 @@
           @reschedule="rescheduleNextVisit"
           @complete="confirmComplete = true"
         />
+        <!-- Nothing booked: the same slot, empty, offers to book (CORE-162). -->
+        <NextVisitEmptyTile v-else-if="tile.key === 'appointment'" :label="tile.label" @book="emit('book')" />
         <component
           :is="tile.tab || tile.open ? 'button' : 'div'"
           v-else
@@ -308,6 +310,7 @@ import type { SubmitDone } from "../../composables/useEntitySubmit";
 import { useAppointments, appointmentResponseState, type Appointment } from "../../composables/useAppointments";
 import { useNotifications } from "../../composables/useNotifications";
 import NextVisitTile from "./NextVisitTile.vue";
+import NextVisitEmptyTile from "./NextVisitEmptyTile.vue";
 import type { EventFormInitialData, EventSubmitPayload } from "../EventForm.vue";
 import { useVisiblePolling } from "../../composables/useVisiblePolling";
 import { useAuthStore } from "../../stores/auth";
@@ -353,7 +356,7 @@ const props = defineProps<{
   /** Details is the open tab — tabs stay mounted (NEO-153), so coming back to it reloads. */
   active?: boolean;
 }>();
-const emit = defineEmits<{ "open-tab": [tab: string]; "open-study": [itemKey: string, category: ChecklistCategory] }>();
+const emit = defineEmits<{ "open-tab": [tab: string]; "open-study": [itemKey: string, category: ChecklistCategory]; book: [] }>();
 
 const { t, locale } = useI18n();
 const { specialtySet } = useIdentity();
@@ -464,8 +467,15 @@ async function onRemove(): Promise<void> {
  * Reloads what Details shows while keeping it on screen: every loader only
  * replaces its data on success, so a failed refresh leaves the old values.
  */
+/** Both visit lists answered once: only then can "nothing booked" be told apart from "still loading". */
+const visitsLoaded = ref(false);
+async function loadVisits(): Promise<void> {
+  await Promise.all([loadAppointments(), loadEvents()]);
+  visitsLoaded.value = true;
+}
+
 async function refresh(): Promise<void> {
-  await Promise.all([load(), loadAppointments(), loadEvents(), careTeam.load()]);
+  await Promise.all([load(), loadVisits(), careTeam.load()]);
 }
 
 /** Fingerprint of the card (GET /patient/:id/version) — compared to know when someone else changed it. */
@@ -507,9 +517,9 @@ watch(
     careTeam.members.value = [];
     adding.value = false;
     version = null;
+    visitsLoaded.value = false;
     void load();
-    void loadAppointments();
-    void loadEvents();
+    void loadVisits();
     void careTeam.load();
   },
 );
@@ -778,18 +788,19 @@ const tiles = computed<Tile[]>(() => {
     }
   }
 
+  // CORE-162: the next visit comes first, half the strip; with nothing booked its slot offers to book.
   const next = nextVisit.value;
   if (next) {
     const start = new Date(next.start_at);
-    // An appointment shows in its clinic's zone; the summary's bare instant and an event use the device's (CORE-133).
     const timeZone = next.kind === "appointment" ? next.appointment?.timezone : undefined;
-    out.push({
+    out.unshift({
       key: "appointment",
       label: t("app.patients.detail.summary.nextAppointment"),
       value: start.toLocaleDateString(intlLocale(locale.value), { day: "numeric", month: "short", timeZone }),
-      sub: start.toLocaleTimeString(intlLocale(locale.value), { hour: "2-digit", minute: "2-digit", timeZone }),
       open: next.kind === "event" ? () => openEvent(next.event) : () => void openAppointment(next.id),
     });
+  } else if (visitsLoaded.value) {
+    out.unshift({ key: "appointment", label: t("app.patients.detail.summary.nextAppointment"), value: "" });
   }
   return out;
 });
@@ -826,10 +837,10 @@ const tiles = computed<Tile[]>(() => {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2, 8px);
 }
-/* Five columns: three small tiles + the next visit, which spans two (CORE-162). */
+/* Four columns that wrap: the next visit first at half the width, the rest after it (CORE-162). */
 @container (min-width: 560px) {
   .patient-details__tiles {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 

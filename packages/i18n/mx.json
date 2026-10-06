@@ -1324,6 +1324,8 @@
   "app.patients.detail.summary.nextAppointment": "Próxima cita",
   "app.patients.detail.nextVisit.withDoctor": "Cita con {name}",
   "app.patients.detail.nextVisit.done": "Realizada",
+  "app.patients.detail.nextVisit.none": "Nada agendado",
+  "app.patients.detail.nextVisit.book": "Agendar",
   "app.patients.detail.nextVisit.completeConfirm": "¿Marcar esta visita como realizada?",
   "app.patients.detail.nextVisit.eventCompleted": "Evento marcado como realizado",
   "app.patients.detail.preferredName": "Nombre preferido",

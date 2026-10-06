@@ -91,7 +91,7 @@
         <DetailViewTabs v-model="activeTab" :tabs="patientTabs">
           <template #details>
             <!-- NEO-206: summary strip + grouped rows; the documents checklist lives in the side panel and on Documentos. -->
-            <PatientDetailsTab :patient="patient" :can-see-studies="canSeeStudies" :active="activeTab === 'details'" @open-tab="(tab: string) => (activeTab = tab)" @open-study="openStudy" />
+            <PatientDetailsTab :patient="patient" :can-see-studies="canSeeStudies" :active="activeTab === 'details'" @open-tab="(tab: string) => (activeTab = tab)" @open-study="openStudy" @book="onBookAppointment" />
           </template>
           <template #nextStep>
             <!-- NEO-235: below 1280px the side panel is tab 2 ("Siguiente paso", NEO-205 D1). -->

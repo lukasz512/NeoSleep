@@ -1324,6 +1324,8 @@
   "app.patients.detail.summary.nextAppointment": "Następna wizyta",
   "app.patients.detail.nextVisit.withDoctor": "Wizyta u {name}",
   "app.patients.detail.nextVisit.done": "Odbyta",
+  "app.patients.detail.nextVisit.none": "Nic nie umówiono",
+  "app.patients.detail.nextVisit.book": "Umów",
   "app.patients.detail.nextVisit.completeConfirm": "Oznaczyć tę wizytę jako odbytą?",
   "app.patients.detail.nextVisit.eventCompleted": "Wydarzenie oznaczone jako odbyte",
   "app.patients.detail.preferredName": "Preferowane imię",

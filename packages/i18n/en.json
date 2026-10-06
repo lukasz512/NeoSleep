@@ -1406,6 +1406,8 @@
   "app.patients.detail.summary.nextAppointment": "Next appointment",
   "app.patients.detail.nextVisit.withDoctor": "Appointment with {name}",
   "app.patients.detail.nextVisit.done": "Done",
+  "app.patients.detail.nextVisit.none": "Nothing booked",
+  "app.patients.detail.nextVisit.book": "Book",
   "app.patients.detail.nextVisit.completeConfirm": "Mark this visit as completed?",
   "app.patients.detail.nextVisit.eventCompleted": "Event marked completed",
   "app.patients.detail.preferredName": "Preferred name",

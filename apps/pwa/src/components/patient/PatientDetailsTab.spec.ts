@@ -105,9 +105,9 @@ describe("PatientDetailsTab (NEO-206)", () => {
     expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/p-1/summary", { handleErrors: false });
   });
 
-  it("shows the four tiles in order: diagnosis, PSG, treatment, next appointment", async () => {
+  it("shows the four tiles in order: next appointment first (CORE-162), then diagnosis, PSG, treatment", async () => {
     const w = await mountTab(FULL);
-    expect(tileKeys(w)).toEqual(["tile-diagnosis", "tile-psg", "tile-treatment", "tile-appointment"]);
+    expect(tileKeys(w)).toEqual(["tile-appointment", "tile-diagnosis", "tile-psg", "tile-treatment"]);
     expect(w.find('[data-testid="tile-diagnosis"]').text()).toContain("G47.33 · OSA");
     const psg = w.find('[data-testid="tile-psg"]').text();
     expect(psg).toContain("22.4 /h");
@@ -115,14 +115,36 @@ describe("PatientDetailsTab (NEO-206)", () => {
     expect(w.find('[data-testid="tile-treatment"]').text()).toContain("Ordered");
   });
 
-  it("hides empty tiles; no strip at all when nothing is known", async () => {
+  it("hides empty tiles; with nothing known only the empty next-visit slot is left (CORE-162)", async () => {
     const w = await mountTab(EMPTY, { patient: { diagnosis_code: null, ahi_baseline: null } });
-    expect(w.find('[data-testid="summary-strip"]').exists()).toBe(false);
+    expect(tileKeys(w)).toEqual(["tile-appointment-empty"]);
+  });
+
+  it("nothing booked: the empty slot says so and asks the card to book (CORE-162)", async () => {
+    const w = await mountTab(EMPTY);
+    const empty = w.find('[data-testid="tile-appointment-empty"]');
+    expect(empty.text()).toContain("Nothing booked");
+    expect(empty.text()).toContain("Book");
+    await empty.trigger("click");
+    expect(w.emitted("book")).toHaveLength(1);
+  });
+
+  it("the empty slot waits for the visit lists: it never flashes before they answer", async () => {
+    setActivePinia(createPinia());
+    apiFetch.mockImplementation(() => new Promise(() => {}));
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { template: "<div />" } }, { path: "/hcp/:id", name: "hcp-detail", component: { template: "<div />" } }] });
+    const w = mount(PatientDetailsTab, {
+      props: { patient: PATIENT, canSeeStudies: true },
+      global: { plugins: [createI18n({ legacy: false, locale: "en", messages: { en } }), createVuetify({ components: vuetifyComponents }), router] },
+    });
+    wrappers.push(w);
+    await flushPromises();
+    expect(w.find('[data-testid="tile-appointment-empty"]').exists()).toBe(false);
   });
 
   it("no scored study: the IAH tile shows the baseline, with the severity scale (NEO-247)", async () => {
     const w = await mountTab(EMPTY);
-    expect(tileKeys(w)).toEqual(["tile-diagnosis", "tile-ahiBaseline"]);
+    expect(tileKeys(w)).toEqual(["tile-appointment-empty", "tile-diagnosis", "tile-ahiBaseline"]);
     const tile = w.find('[data-testid="tile-ahiBaseline"]');
     expect(tile.text()).toContain("AHI baseline");
     expect(tile.text()).toContain("18 /h");
@@ -147,7 +169,7 @@ describe("PatientDetailsTab (NEO-206)", () => {
 
   it("commercial field force: no diagnosis tile even when the record has one", async () => {
     const w = await mountTab({ ...FULL, latest_study: null }, { canSeeStudies: false });
-    expect(tileKeys(w)).toEqual(["tile-treatment", "tile-appointment"]);
+    expect(tileKeys(w)).toEqual(["tile-appointment", "tile-treatment"]);
   });
 
   it("PSG and treatment tiles open their tabs; diagnosis is not a button; the next visit is a button (CORE-159)", async () => {

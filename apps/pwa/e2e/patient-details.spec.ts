@@ -16,28 +16,32 @@ async function tilesPerRow(page: Page): Promise<number> {
   return tops.filter((top) => top === tops[0]).length;
 }
 
-test("desktop column: four tiles in one row, groups in two columns", async ({ page }) => {
+test("desktop column: 4 columns that wrap, next visit first at half width, groups in two columns", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await open(page, "?lang=mx");
-  // Three small tiles + the next visit, which spans two columns (CORE-162).
+  // CORE-162: the next visit + three small tiles = 5 columns' worth on a 4-column grid, so the last one wraps.
   await expect(page.locator(".patient-details__tiles > *")).toHaveCount(4);
-  expect(await tilesPerRow(page)).toBe(4);
-  // CORE-162: the next visit is two tiles wide at most and as tall as a plain tile row.
-  const small = await page.locator(".patient-details__tile").first().boundingBox();
-  const next = await page.getByTestId("tile-appointment").boundingBox();
-  expect(next!.width).toBeLessThanOrEqual(small!.width * 2 + 12);
+  const strip = (await page.getByTestId("summary-strip").boundingBox())!;
+  const next = (await page.locator(".patient-details__tiles > *").first().boundingBox())!;
+  const small = (await page.locator(".patient-details__tile").first().boundingBox())!;
+  expect(await page.locator(".patient-details__tiles > *").first().getAttribute("data-testid")).toBe("tile-appointment");
+  expect(Math.round(next.x)).toBe(Math.round(strip.x));
+  expect(Math.abs(next.width - (strip.width - 8) / 2)).toBeLessThanOrEqual(1);
+  expect(Math.abs(small.width - (strip.width - 24) / 4)).toBeLessThanOrEqual(1);
+  expect(await tilesPerRow(page)).toBe(3);
   // The row stretches to its tallest tile; the next visit's own content must not be what makes it taller.
-  const content = await page.locator(".next-visit__text").boundingBox();
-  expect(content!.height + 24).toBeLessThanOrEqual(small!.height);
-  expect(next!.height).toBe(small!.height);
+  const content = (await page.locator(".next-visit__text").boundingBox())!;
+  expect(content.height + 24).toBeLessThanOrEqual(small.height);
   const lefts = await page.locator(".patient-details__group").evaluateAll((els) => new Set(els.map((el) => Math.round(el.getBoundingClientRect().left))).size);
   expect(lefts).toBe(2);
 });
 
-test("phone 360px: two tiles per row, one column, no sideways scroll", async ({ page }) => {
+test("phone 360px: next visit a full row, then two tiles per row, one column, no sideways scroll", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 780 });
   await open(page, "?lang=mx");
-  expect(await tilesPerRow(page)).toBe(2);
+  expect(await tilesPerRow(page)).toBe(1);
+  const tops = await page.locator(".patient-details__tiles > *").evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)));
+  expect(tops.filter((top) => top === tops[1]).length).toBe(2);
   const lefts = await page.locator(".patient-details__group").evaluateAll((els) => new Set(els.map((el) => Math.round(el.getBoundingClientRect().left))).size);
   expect(lefts).toBe(1);
   const { scrollWidth, clientWidth } = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }));
