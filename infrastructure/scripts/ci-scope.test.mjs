@@ -45,7 +45,8 @@ test("D3: a component change runs its related specs + auth, not the whole suite"
 
 test("D3: a .ts change in the app (store/composable) also seeds related specs", () => {
   const r = work(["apps/pwa/src/utils/calendarLayout.ts"]);
-  assert.deepEqual(r.specs, ["apps/pwa/e2e/auth.spec.ts", "apps/pwa/e2e/calendar.spec.ts"]);
+  // NEO-256: the patient card's Citas uses calendarLayout too, so its spec is related.
+  assert.deepEqual(r.specs, ["apps/pwa/e2e/auth.spec.ts", "apps/pwa/e2e/calendar.spec.ts", "apps/pwa/e2e/patient-details.spec.ts"]);
 });
 
 test("an API change adds the API-backed specs; an edited spec always runs", () => {
