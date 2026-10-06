@@ -14,14 +14,19 @@ import { insertConsent } from "../db/consent.js";
  * Patient Estudios checklist (ADR-024) — real Postgres, real PDF rendering;
  * only the Supabase Storage boundary is mocked.
  */
-const { uploadMock, deleteMock } = vi.hoisted(() => ({
+const ONE_PIXEL_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+const { uploadMock, deleteMock, downloadMock } = vi.hoisted(() => ({
   uploadMock: vi.fn(async (path: string) => ({ path, bucket: "partner-documents" })),
   deleteMock: vi.fn(async (_path: string) => undefined),
+  downloadMock: vi.fn(async (_path: string): Promise<Uint8Array> => {
+    throw new Error("not stored");
+  }),
 }));
 vi.mock("../services/partnerDocuments.js", async (importActual) => ({
   ...(await importActual<typeof import("../services/partnerDocuments.js")>()),
   uploadPartnerDocument: uploadMock,
   deletePartnerDocument: deleteMock,
+  downloadPartnerDocument: downloadMock,
 }));
 
 // Still the real renderer — only wrapped, to read back which fields each print sent.
@@ -216,8 +221,27 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
       await insertConsent(client, { entity_type: "patient", entity_id: patient.id, legal_basis: "consent", jurisdiction: "MX", purpose: "informedConsent" });
       renderSpy.mockClear();
       await PrintChecklistItemCommand(ctx, patient.id, "historiaEndo");
-      const [, signed] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string> }];
+      const [, signed] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string>; dataImages: Record<string, string> }];
       expect(signed.dataFields.consent_stamp).toMatch(/^Firmado electrónicamente por el paciente · \d{2}\/\d{2}\/\d{4}$/);
+      expect(signed.dataImages).toEqual({}); // signed before NEO-252: no stored signature, the stamp alone
+
+      // NEO-252: the drawn signature stored with the consent prints above the stamp; storage failing never fails the print.
+      await client.query(`UPDATE consent SET withdrawn_at = now() WHERE entity_id = $1`, [patient.id]);
+      await insertConsent(client, {
+        entity_type: "patient", entity_id: patient.id, legal_basis: "consent", jurisdiction: "MX", purpose: "informedConsent",
+        metadata: { signature_path: `patient/${patient.id}/consent-informedConsent-1-signature.png` },
+      });
+      downloadMock.mockResolvedValueOnce(new Uint8Array(Buffer.from(ONE_PIXEL_PNG, "base64")));
+      renderSpy.mockClear();
+      await PrintChecklistItemCommand(ctx, patient.id, "historiaEndo");
+      const [, drawn] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string>; dataImages: Record<string, string> }];
+      expect(downloadMock).toHaveBeenLastCalledWith(`patient/${patient.id}/consent-informedConsent-1-signature.png`);
+      expect(drawn.dataImages).toEqual({ firma_paciente: `data:image/png;base64,${ONE_PIXEL_PNG}` });
+      expect(drawn.dataFields.consent_stamp).not.toBe("");
+
+      renderSpy.mockClear();
+      await PrintChecklistItemCommand(ctx, patient.id, "historiaEndo"); // download rejects (the default mock)
+      expect((renderSpy.mock.calls[0] as [string, { dataImages: Record<string, string> }])[1].dataImages).toEqual({});
     });
   }, 60000);
 

@@ -136,6 +136,11 @@ describe("patient QR link — one link for everything the patient has to do", ()
       const [path, bytes] = uploadMock.mock.calls[before] as unknown as [string, Uint8Array];
       expect(path).toMatch(new RegExp(`^patient/${patient.id}/consent-informedConsent-`));
       expect(Buffer.from(bytes.subarray(0, 5)).toString("latin1")).toBe("%PDF-"); // real render, signature embedded
+      // NEO-252: the drawn signature is stored on its own too, for later prints (the Historia clínica).
+      const [pngPath, pngBytes, pngType] = uploadMock.mock.calls[before + 1] as unknown as [string, Uint8Array, string];
+      expect(pngPath).toMatch(new RegExp(`^patient/${patient.id}/consent-informedConsent-\\d+-signature\\.png$`));
+      expect(pngType).toBe("image/png");
+      expect(`data:image/png;base64,${Buffer.from(pngBytes).toString("base64")}`).toBe(SIGNATURE);
 
       await expect(GetPublicQuestionnaireQuery(client, tokenOf(url))).rejects.toThrow(QuestionnaireLinkInvalidError);
 
@@ -146,7 +151,7 @@ describe("patient QR link — one link for everything the patient has to do", ()
       const { rows } = await client.query(`SELECT purpose, legal_basis, metadata FROM consent WHERE entity_type = 'patient' AND entity_id = $1`, [patient.id]);
       expect(rows).toHaveLength(1);
       expect(rows[0]).toMatchObject({ purpose: "informedConsent", legal_basis: "consent" });
-      expect(rows[0].metadata).toMatchObject({ signature_method: "drawn", template_key: "informedConsent", read_to_end: true });
+      expect(rows[0].metadata).toMatchObject({ signature_method: "drawn", template_key: "informedConsent", read_to_end: true, signature_path: pngPath });
 
       const history = checklist.items.find((i) => i.key === "medicalHistory")!.history[0]!;
       const { rows: mh } = await client.query(`SELECT consent_version FROM medical_history_questionnaire WHERE id = $1`, [history.id]);
@@ -179,7 +184,7 @@ describe("patient QR link — one link for everything the patient has to do", ()
     });
   }, 60000);
 
-  it("a consent signed concurrently (after this submit rendered) is undone — the orphaned upload is deleted", async () => {
+  it("a consent signed concurrently (after this submit rendered) is undone — the orphaned uploads (PDF + signature) are deleted", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildContext(client);
       const patient = await insertPatient(client, { first_name: "Ana", last_name: `Race-${uniqueSuffix()}` });
@@ -196,7 +201,10 @@ describe("patient QR link — one link for everything the patient has to do", ()
       await expect(
         SubmitPublicQuestionnaireCommand(racingRunner, tokenOf(url), { step: "informedConsent", signatureDataUrl: SIGNATURE, privacyNoticeAccepted: true }, META)
       ).rejects.toThrow(QuestionnaireLinkInvalidError);
-      expect(deleteMock.mock.calls.length).toBe(deletesBefore + 1);
+      expect(deleteMock.mock.calls.slice(deletesBefore).map(([path]) => path)).toEqual([
+        expect.stringMatching(/\.pdf$/),
+        expect.stringMatching(/-signature\.png$/),
+      ]);
     });
   }, 60000);
 
