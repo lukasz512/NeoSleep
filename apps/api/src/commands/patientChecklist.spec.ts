@@ -262,7 +262,7 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
     });
   }, 60000);
 
-  it("page 2 carries the patient's and the doctor's signature, the consent page the patient's alone; a doctor's drawn signature signs the doctor panel (NEO-255)", async () => {
+  it("the patient signs the consent page, the doctor the Historia's page 2; a doctor's drawn signature signs that panel (NEO-255)", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const { ctx, patientId } = await doctorWithPatient(client);
       const signature = `data:image/png;base64,${ONE_PIXEL_PNG}`;
@@ -275,9 +275,6 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
       expect(consentPage).toContain('data-field="firma_paciente"');
       expect(consentPage).not.toContain('data-field="firma_doctor"'); // the consent is the patient's alone
       expect(html.match(/data-field="firma_doctor"/g)).toHaveLength(1); // page 2
-      const examPage = html.slice(0, html.indexOf('<div class="hc-p3">'));
-      expect(examPage).toContain('data-field="firma_paciente"'); // the consent's signature, repeated next to the doctor's
-      expect(examPage).toContain('data-field="consent_stamp"');
       expect(unsigned.dataFields.doctor_stamp).toBe("");
       expect(unsigned.dataFields.nombre_medico_firma).toMatch(/Lorena Firma-/);
       expect(unsigned.dataImages.firma_doctor).toBeUndefined();
