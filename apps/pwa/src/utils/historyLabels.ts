@@ -44,6 +44,8 @@ export function historyActionIcon(action: string): AppIconName {
     case "restore": return "refresh";
     case "read":    return "eye";
     case "notify":  return "mail";
+    case "comment": return "message";
+    case "status_change": return "pencil";
     default:        return "info-circle";
   }
 }
@@ -83,7 +85,17 @@ export function historyEntityTypeLabel(t: Translate, entityType: string): string
  * record — everything else (status, territory, profile edits) is administrative.
  * The timeline emphasizes clinical entries so they aren't lost among edits.
  */
-const CLINICAL_ENTITY_TYPES: ReadonlySet<string> = new Set(["SleepStudy", "TreatmentPlan"]);
+const CLINICAL_ENTITY_TYPES: ReadonlySet<string> = new Set([
+  "SleepStudy",
+  "TreatmentPlan",
+  // CORE-160: signed consent, clinical forms and uploaded study documents.
+  "Consent",
+  "MedicalHistoryQuestionnaire",
+  "StopBangScreening",
+  "OralExam",
+  "TmjExam",
+  "FileAttachment",
+]);
 
 export function isClinicalHistoryEntry(entry: Pick<HistoryEntryLike, "entity_type">): boolean {
   return CLINICAL_ENTITY_TYPES.has(entry.entity_type);
@@ -132,6 +144,10 @@ export function historyValueLabel(
 
   if (DATE_TIME_FIELDS.has(field) && lookups.dateTime && !Number.isNaN(Date.parse(value))) return lookups.dateTime(value, zone);
   if (field === "kind" && entityType === "Appointment") return translateOr(t, `app.history.emailKind.${value}`, value);
+  if (field === "patient_response") return translateOr(t, `app.history.patientResponseValue.${camelKey(value)}`, value);
+  if (field === "source" && entityType === "PatientCareTeam") return translateOr(t, `app.history.careTeamSource.${camelKey(value)}`, value);
+  if (field === "purpose" && entityType === "Consent") return translateOr(t, `app.history.consentPurpose.${value}`, value);
+  if (field === "document_type") return translateOr(t, `app.history.documentType.${camelKey(value)}`, value);
 
   if (field === "status") {
     switch (entityType) {
@@ -165,8 +181,30 @@ export function historyValueLabel(
  * language gets grammatical sentences (Polish noun cases, Spanish word order)
  * instead of a word-glued "Updated SleepStudy".
  */
+/**
+ * CORE-160: a change of one of these fields is the whole story of the entry,
+ * so it reads as its own sentence ("Patient confirmed the appointment").
+ * Keyed `<entity_type>.<field>` → i18n key prefix; the value picks the
+ * sentence, or fills {value} when the prefix is the whole key.
+ */
+const SINGLE_FIELD_HEADLINES: Record<string, { key: string; byValue: boolean }> = {
+  "Appointment.patient_response": { key: "app.history.patientResponse", byValue: true },
+  "Patient.appointment_emails": { key: "app.history.appointmentEmails", byValue: true },
+  "Patient.practitioner": { key: "app.history.primaryDoctorChanged", byValue: false },
+};
+
+function singleFieldHeadline(t: Translate, entry: HistoryEntryLike, changes: HistoryFieldChange[]): string {
+  if (entry.action !== "update" || changes.length !== 1) return "";
+  const rule = SINGLE_FIELD_HEADLINES[`${entry.entity_type}.${changes[0].field}`];
+  const value = changes[0].after;
+  if (!rule || typeof value !== "string" || value === "") return "";
+  return rule.byValue ? translateOr(t, `${rule.key}.${camelKey(value)}`, "") : translateOr(t, rule.key, "", { value });
+}
+
 export function historyHeadline(t: Translate, entry: HistoryEntryLike, lookups: HistoryValueLookups = {}): string {
   const changes = historyFieldChanges(entry);
+  const single = singleFieldHeadline(t, entry, changes);
+  if (single) return single;
   if (entry.action === "update" && changes.length === 1 && changes[0].field === "status") {
     const status = historyValueLabel(t, entry.entity_type, "status", changes[0].after, lookups);
     const key = `app.history.statusChanged.${entry.entity_type}`;
@@ -183,7 +221,14 @@ export function historyHeadline(t: Translate, entry: HistoryEntryLike, lookups: 
 /** Whether the headline already states the entry's only change (no need to repeat it inline). */
 export function historyHeadlineCoversChanges(entry: HistoryEntryLike): boolean {
   const changes = historyFieldChanges(entry);
-  return entry.action === "update" && changes.length === 1 && changes[0].field === "status";
+  if (entry.action !== "update" || changes.length !== 1) return false;
+  return changes[0].field === "status" || `${entry.entity_type}.${changes[0].field}` in SINGLE_FIELD_HEADLINES;
+}
+
+/** Who did it: the staff member, the patient (from an email / QR link, CORE-160), else the system. */
+export function historyActorLabel(t: Translate, entry: { user_name: string | null; actor?: string | null }): string {
+  if (entry.user_name) return entry.user_name;
+  return entry.actor === "patient" ? t("app.history.actor.patient") : t("app.history.actor.system");
 }
 
 export interface HistoryDayGroup<T> {

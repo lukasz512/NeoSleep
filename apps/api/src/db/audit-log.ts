@@ -155,6 +155,8 @@ export interface AuditLogEntry {
   outcome: string;
   entity_before: Record<string, unknown> | null;
   entity_after: Record<string, unknown> | null;
+  /** "patient" when the patient did it themselves from a link (metadata.actor) — no user_id then. */
+  actor: string | null;
 }
 
 type AuditLogRow = {
@@ -170,7 +172,28 @@ type AuditLogRow = {
   outcome: string;
   entity_before: Record<string, unknown> | null;
   entity_after: Record<string, unknown> | null;
+  actor: string | null;
+  before_doctor_salutation: string | null;
+  before_doctor_first_name: string | null;
+  before_doctor_last_name: string | null;
+  after_doctor_salutation: string | null;
+  after_doctor_first_name: string | null;
+  after_doctor_last_name: string | null;
 };
+
+/**
+ * CORE-160: a row that names a doctor by id (primary doctor change, care
+ * team) reads as the doctor's name, never a raw UUID. The CASE guard keeps a
+ * malformed id in old JSON from failing the cast and the whole timeline
+ * (Postgres doesn't promise to short-circuit a plain AND).
+ */
+const DOCTOR_NAME_COLUMNS = `bi.title AS before_doctor_salutation, bi.first_name AS before_doctor_first_name, bi.last_name AS before_doctor_last_name,
+            ai.title AS after_doctor_salutation, ai.first_name AS after_doctor_first_name, ai.last_name AS after_doctor_last_name`;
+const UUID_PATTERN = "'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'";
+const DOCTOR_NAME_JOINS = `LEFT JOIN practitioner bp ON bp.id = CASE WHEN a.entity_before->>'practitioner_id' ~ ${UUID_PATTERN} THEN (a.entity_before->>'practitioner_id')::uuid END
+     LEFT JOIN identities bi ON bp.identity_id = bi.id
+     LEFT JOIN practitioner ap ON ap.id = CASE WHEN a.entity_after->>'practitioner_id' ~ ${UUID_PATTERN} THEN (a.entity_after->>'practitioner_id')::uuid END
+     LEFT JOIN identities ai ON ap.identity_id = ai.id`;
 
 /**
  * Reads audit_log rows for a set of (entity_type, entity_id) pairs — used by
@@ -188,11 +211,13 @@ export async function getAuditLogForEntities(
 
   const result = await client.query<AuditLogRow>(
     `SELECT a.id, a.created_at, a.user_id, a.action, a.entity_type, a.entity_id, a.outcome,
-            a.entity_before, a.entity_after,
-            ui.title AS user_salutation, ui.first_name AS user_first_name, ui.last_name AS user_last_name
+            a.entity_before, a.entity_after, a.metadata->>'actor' AS actor,
+            ui.title AS user_salutation, ui.first_name AS user_first_name, ui.last_name AS user_last_name,
+            ${DOCTOR_NAME_COLUMNS}
      FROM audit_log a
      LEFT JOIN users u ON a.user_id = u.id
      LEFT JOIN identities ui ON u.identity_id = ui.id
+     ${DOCTOR_NAME_JOINS}
      WHERE a.entity_type = ANY($1) AND a.entity_id = ANY($2)
        AND a.action <> 'read' -- access trail (NEO-83), not a change: kept out of History timelines
      ORDER BY a.created_at DESC`,
@@ -203,11 +228,13 @@ export async function getAuditLogForEntities(
 }
 
 const TIMELINE_SELECT = `SELECT a.id, a.created_at, a.user_id, a.action, a.entity_type, a.entity_id, a.outcome,
-            a.entity_before, a.entity_after,
-            ui.title AS user_salutation, ui.first_name AS user_first_name, ui.last_name AS user_last_name
+            a.entity_before, a.entity_after, a.metadata->>'actor' AS actor,
+            ui.title AS user_salutation, ui.first_name AS user_first_name, ui.last_name AS user_last_name,
+            ${DOCTOR_NAME_COLUMNS}
      FROM audit_log a
      LEFT JOIN users u ON a.user_id = u.id
-     LEFT JOIN identities ui ON u.identity_id = ui.id`;
+     LEFT JOIN identities ui ON u.identity_id = ui.id
+     ${DOCTOR_NAME_JOINS}`;
 
 /**
  * CORE-133: everything that happened to a patient — their own record plus
@@ -286,7 +313,19 @@ function toAuditLogEntry(row: AuditLogRow): AuditLogEntry {
     entity_type: LEGACY_ENTITY_TYPES[row.entity_type] ?? row.entity_type,
     entity_id: row.entity_id,
     outcome: row.outcome,
-    entity_before: row.entity_before,
-    entity_after: row.entity_after,
+    entity_before: withDoctorName(row.entity_before, row.before_doctor_salutation, row.before_doctor_first_name, row.before_doctor_last_name),
+    entity_after: withDoctorName(row.entity_after, row.after_doctor_salutation, row.after_doctor_first_name, row.after_doctor_last_name),
+    actor: row.actor === "patient" ? "patient" : null,
   };
+}
+
+function withDoctorName(
+  fields: Record<string, unknown> | null,
+  salutation: string | null,
+  first_name: string | null,
+  last_name: string | null
+): Record<string, unknown> | null {
+  if (!fields || typeof fields.practitioner_id !== "string") return fields;
+  const name = formatOptionalDisplayName({ salutation, first_name, last_name });
+  return name ? { ...fields, practitioner: name } : fields;
 }
