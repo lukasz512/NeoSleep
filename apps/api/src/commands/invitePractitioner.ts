@@ -47,6 +47,7 @@ import { sendPartnerJoinThankYouEmail } from "../mailer.js";
 import { uploadPartnerDocument } from "../services/partnerDocuments.js";
 import { renderHtmlToPdf } from "../services/documentRenderer.js";
 import type { PartnerJurisdiction } from "../db/partnerSignatories.js";
+import { isSignatureDataUrl } from "../utils/signatureDataUrl.js";
 import {
   buildAgreementDocument,
   buildNoticeDocument,
@@ -429,8 +430,6 @@ export interface AcceptInviteResult {
   documents: SignedDocumentResult[];
 }
 
-const SIGNATURE_DATA_URL_RE = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
-
 function sha256Hex(bytes: Uint8Array): string {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
@@ -455,7 +454,7 @@ export async function AcceptPractitionerInviteCommand(
   }
   const practiceRole: PracticeRole = input.practiceRole;
   if (practiceRole === "owner" && !input.taxId?.trim()) throw new ValidationError("Tax ID is required", "taxId");
-  if (!input.agreementSignatureDataUrl || !SIGNATURE_DATA_URL_RE.test(input.agreementSignatureDataUrl)) {
+  if (!isSignatureDataUrl(input.agreementSignatureDataUrl)) {
     throw new ValidationError("A handwritten signature on the partner agreement is required");
   }
   if (!input.noticeAcknowledged) throw new ValidationError("Please confirm you have read the privacy notice");
@@ -781,8 +780,6 @@ export async function AcceptPractitionerInviteCommand(
 // ---------------------------------------------------------------------------
 
 const SIGN_HANDOFF_TTL_MS = 15 * 60 * 1000;
-/** Same cap as the patient QR consent signature (commands/questionnaireRequest.ts). */
-const MAX_SIGNATURE_DATA_URL_LENGTH = 400_000;
 
 export interface PartnerSignHandoffPhoneView {
   status: "pending" | "signed";
@@ -869,7 +866,7 @@ export async function SignPartnerSignHandoffCommand(
   now: Date = new Date(),
 ): Promise<boolean> {
   const signature = input.signatureDataUrl;
-  if (typeof signature !== "string" || signature.length > MAX_SIGNATURE_DATA_URL_LENGTH || !SIGNATURE_DATA_URL_RE.test(signature)) {
+  if (!isSignatureDataUrl(signature)) {
     throw new ValidationError("A handwritten signature is required", "signatureDataUrl");
   }
   const live = await liveHandoffInvite(client, input.handoffToken, now);

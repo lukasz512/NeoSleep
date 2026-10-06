@@ -23,6 +23,7 @@ import "../FormRenderer.vue";
 import { useAuthStore } from "../../stores/auth";
 import PatientChecklistPanel from "./PatientChecklistPanel.vue";
 import QuestionnaireQrDialog from "../questionnaire/QuestionnaireQrDialog.vue";
+import DoctorSignatureDialog from "./DoctorSignatureDialog.vue";
 
 function jsonResponse(ok: boolean, status: number, body: unknown, contentType = "application/json") {
   return {
@@ -125,9 +126,9 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-async function mountPanel(extraProps: Record<string, unknown> = {}): Promise<VueWrapper> {
+async function mountPanel(extraProps: Record<string, unknown> = {}, role = "doctor"): Promise<VueWrapper> {
   setActivePinia(createPinia());
-  useAuthStore().user = { id: "u-1", email: "doc@clinic.test", name: "Dra. Test", role: "doctor" } as ReturnType<typeof useAuthStore>["user"];
+  useAuthStore().user = { id: "u-1", email: "doc@clinic.test", name: "Dra. Test", role } as ReturnType<typeof useAuthStore>["user"];
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
   const wrapper = mount(PatientChecklistPanel, { props: { patientId: "patient-1", ...extraProps }, attachTo: document.body, global: { plugins: [i18n, vuetify] } });
@@ -343,14 +344,42 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
     const tab = { location: { href: "" }, close: vi.fn(), opener: {} };
     const open = vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
     const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:pdf-1");
-    const wrapper = await mountPanel();
+    const wrapper = await mountPanel({}, "admin");
 
     await button(hcTile(wrapper), "Print clinical history")!.trigger("click");
     await flushPromises();
 
-    expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/checklist/historiaEndo/print", expect.objectContaining({ method: "POST" }));
+    expect(wrapper.findComponent(DoctorSignatureDialog).props("modelValue")).toBe(false); // only a doctor signs
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/checklist/historiaEndo/print", expect.objectContaining({ method: "POST", body: "{}" }));
     expect(tab.location.href).toBe("blob:pdf-1");
     expect(tab.opener).toBeNull();
+    open.mockRestore();
+    createObjectURL.mockRestore();
+  });
+
+  // NEO-255 D1: a doctor signs the Historia clínica before it prints, or prints it unsigned.
+  it("a doctor signs the Historia clínica in a dialog first; the signature goes with that print", async () => {
+    const tab = { location: { href: "" }, close: vi.fn(), opener: {} };
+    const open = vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
+    const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:pdf-1");
+    const printCalls = () => apiFetch.mock.calls.filter(([path]) => String(path).endsWith("/historiaEndo/print"));
+    const wrapper = await mountPanel();
+    const dialog = wrapper.findComponent(DoctorSignatureDialog);
+
+    await button(hcTile(wrapper), "Print clinical history")!.trigger("click");
+    await flushPromises();
+    expect(dialog.props("modelValue")).toBe(true);
+    expect(printCalls()).toHaveLength(0);
+
+    dialog.vm.$emit("print", "data:image/png;base64,AAAA");
+    await flushPromises();
+    expect(dialog.props("modelValue")).toBe(false);
+    expect(JSON.parse(String(printCalls()[0][1].body))).toEqual({ doctorSignature: "data:image/png;base64,AAAA" });
+
+    await button(hcTile(wrapper), "Print clinical history")!.trigger("click");
+    dialog.vm.$emit("print", null); // "Print unsigned"
+    await flushPromises();
+    expect(JSON.parse(String(printCalls()[1][1].body))).toEqual({});
     open.mockRestore();
     createObjectURL.mockRestore();
   });

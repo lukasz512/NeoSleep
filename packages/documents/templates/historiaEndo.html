@@ -19,7 +19,9 @@
   (NEO-249 D1): the full Consentimiento informado (the informedConsent
   document), then the clinical-record consent, printed for every patient.
   When the patient already signed the consent electronically, a stamp with
-  the date replaces the empty signing line (D2).
+  the date replaces the empty signing line (D2). The patient signs the consent,
+  the doctor signs the Historia (page 2, NEO-255): a doctor who draws a
+  signature in the print dialog signs that panel, with a dated stamp.
 
   Two substitution passes fill it, in order — same split as informedConsent.html:
 
@@ -426,7 +428,7 @@
 
 
     <div class="sig-panels">
-      <div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.historiaEndo.signatureLabelDoctor}}</div><div class="sig-area" data-field="firma_doctor"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_medico"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div>
+      <div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.historiaEndo.signatureLabelDoctor}}</div><div class="sig-stamp" data-field="doctor_stamp"></div><div class="sig-area" data-field="firma_doctor"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_medico_firma"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div>
     </div>
   </div>
 

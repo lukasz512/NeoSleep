@@ -36,6 +36,7 @@ import { maskEmail } from "../utils/maskEmail.js";
 import { patientEmailLocale } from "../utils/patientEmailLocale.js";
 import { PRIVACY_NOTICE_URL } from "../env.js";
 import { validateMedicalHistory, validateStop } from "./clinicalRecordFields.js";
+import { isSignatureDataUrl } from "../utils/signatureDataUrl.js";
 
 /**
  * COMMANDS — patient QR link (migrations 030 + 031, ADR-023/024).
@@ -61,10 +62,6 @@ export const QUESTIONNAIRE_LINK_RETENTION_DAYS = 30;
  * app.questionnaire.consent) — stored on every patient-submitted record.
  */
 export const PATIENT_CONSENT_VERSION = "patient-self-fill-2026-09-26";
-
-/** Largest accepted drawn signature (a PNG data URL) — a finger signature on a phone is ~10-60 KB. */
-const MAX_SIGNATURE_DATA_URL_LENGTH = 400_000;
-const SIGNATURE_DATA_URL_RE = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
 
 /** Unknown, used, cancelled and expired links all look identical from outside — no signal about which tokens ever existed. */
 export class QuestionnaireLinkInvalidError extends AppError {
@@ -562,7 +559,7 @@ export async function SubmitPublicQuestionnaireCommand(
   if (type !== "consent") throw new QuestionnaireLinkInvalidError();
 
   const signature = body.signatureDataUrl;
-  if (typeof signature !== "string" || signature.length > MAX_SIGNATURE_DATA_URL_LENGTH || !SIGNATURE_DATA_URL_RE.test(signature)) {
+  if (!isSignatureDataUrl(signature)) {
     throw new ValidationError("A drawn signature (PNG) is required");
   }
   const locale = documentLocale(step, body.locale);

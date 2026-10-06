@@ -305,14 +305,16 @@ export function usePatientChecklist(patientId: () => string) {
    * Opens the print PDF in a new tab: a freshly rendered one (streamed as a
    * blob) or, for a signed consent, the stored document. The tab is opened
    * synchronously inside the click so popup blockers (Safari) allow it.
+   * `doctorSignature`: the doctor's drawn signature for the Historia clínica (NEO-255).
    */
-  async function print(key: string, recordId?: string): Promise<void> {
+  async function print(key: string, recordId?: string, doctorSignature?: string): Promise<void> {
     const tab = window.open("", "_blank");
     if (tab) tab.opener = null; // what "noopener" would do — passing it would make window.open return null
-    const res = await apiFetch(`/api/v1/patient/${patientId()}/checklist/${key}/print`, { ...json(recordId ? { recordId } : {}), handleErrors: false });
+    const body = { ...(recordId ? { recordId } : {}), ...(doctorSignature ? { doctorSignature } : {}) };
+    const res = await apiFetch(`/api/v1/patient/${patientId()}/checklist/${key}/print`, { ...json(body), handleErrors: false });
     if (!res.ok) {
       tab?.close();
-      await failWith(res, "app.clinical.generatePdfError", "printer", () => print(key, recordId));
+      await failWith(res, "app.clinical.generatePdfError", "printer", () => print(key, recordId, doctorSignature));
       return;
     }
     const target = res.headers.get("Content-Type")?.includes("application/pdf")
