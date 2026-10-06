@@ -243,17 +243,18 @@ describe("document system (header, title, banner, sections, signatures, footer)"
     expect(body.slice(page3)).toContain('data-field="firma_paciente"');
   });
 
-  it("Historia clínica (NEO-249 D1/D2): one consent — the record consent follows the informed consent on page 3, page 2 keeps only the doctor's signature; a stamp can replace the patient's line", () => {
+  it("Historia clínica (NEO-249 D1/D2): one consent — the record consent follows the informed consent on page 3, page 2 carries the patient's and the doctor's signature (NEO-255); a stamp can replace the patient's line", () => {
     const html = renderDocumentHtml("historiaEndo", "mx", "<p>RECORD-CONSENT</p>", { informedConsent: "<p>CONSENT-DAM-BODY</p>" });
     const body = html.slice(html.indexOf("<body>"));
     const page2 = body.slice(body.indexOf('<div class="hc-p2">'), body.indexOf('<div class="hc-p3">'));
     const page3 = body.slice(body.indexOf('<div class="hc-p3">'));
     expect(page2).not.toContain("RECORD-CONSENT");
-    expect(page2).not.toContain('data-field="firma_paciente"');
-    expect(page2).toContain('data-field="firma_doctor"');
+    // NEO-255 (Łukasz, 2026-10-06): the patient's consent signature is repeated on page 2 next to the doctor's.
+    expect(page2.indexOf('data-field="firma_paciente"')).toBeGreaterThan(-1);
+    expect(page2.indexOf('data-field="firma_doctor"')).toBeGreaterThan(page2.indexOf('data-field="firma_paciente"'));
     expect(page3.indexOf("RECORD-CONSENT")).toBeGreaterThan(page3.indexOf("CONSENT-DAM-BODY"));
     expect(page3.indexOf('data-field="consent_stamp"')).toBeGreaterThan(page3.indexOf("RECORD-CONSENT"));
-    expect(body.match(/data-field="firma_paciente"/g)).toHaveLength(1);
+    expect(body.match(/data-field="firma_paciente"/g)).toHaveLength(2); // page 2 + the consent page
   });
 
   it("Historia clínica draws the ATM skull and the STOP-Bang gauge once each, both on page 2 next to their tables (NEO-251)", () => {
