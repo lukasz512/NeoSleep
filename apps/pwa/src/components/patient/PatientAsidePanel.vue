@@ -13,9 +13,12 @@
       </template>
       <template v-else-if="nextStage === 'historia'">
         <p class="patient-aside__next-title" data-testid="next-step-title">{{ t("app.patients.detail.aside.hcReady") }}</p>
-        <p class="patient-aside__next-items">{{ t("app.patients.detail.aside.hcReadyHint") }}</p>
+        <!-- No email on file: the reason takes the hint's line, so the panel never grows (NEO-203: one window). -->
+        <p v-if="isDoctor && !patient.email" class="patient-aside__next-items" data-testid="next-step-no-email">{{ t("app.patients.detail.aside.hcNoEmail") }}</p>
+        <p v-else class="patient-aside__next-items">{{ t("app.patients.detail.aside.hcReadyHint") }}</p>
+        <!-- One row, the same height as the QR button: print fills it, email is a square icon (as everywhere, NEO-127). -->
         <div class="patient-aside__hc-actions">
-          <AppButton color="primary" variant="flat" size="large" class="patient-aside__qr text-none" :loading="printing" data-testid="next-step-print" @click="onPrint">
+          <AppButton color="primary" variant="flat" size="large" class="patient-aside__qr patient-aside__hc-print text-none" :loading="printing" data-testid="next-step-print" @click="onPrint">
             <template #prepend><AppIcon name="printer" /></template>
             {{ t("app.patients.detail.aside.hcPrint") }}
           </AppButton>
@@ -25,18 +28,17 @@
             color="primary"
             variant="tonal"
             size="large"
-            class="patient-aside__qr text-none"
+            class="patient-aside__hc-email"
             :disabled="!patient.email"
             :loading="emailing"
-            :title="patient.email ? undefined : t('app.patients.detail.aside.hcNoEmail')"
+            :aria-label="t('app.patients.detail.aside.hcEmail')"
+            :title="patient.email ? t('app.patients.detail.aside.hcEmail') : t('app.patients.detail.aside.hcNoEmail')"
             data-testid="next-step-email"
             @click="signFor = 'email'"
           >
-            <template #prepend><AppIcon name="mail" /></template>
-            {{ t("app.patients.detail.aside.hcEmail") }}
+            <AppIcon name="mail" />
           </AppButton>
         </div>
-        <p v-if="isDoctor && !patient.email" class="patient-aside__next-items" data-testid="next-step-no-email">{{ t("app.patients.detail.aside.hcNoEmail") }}</p>
       </template>
       <template v-else>
         <p class="patient-aside__next-title">
@@ -368,8 +370,24 @@ watch(() => props.activeTab, loadStudies);
 
 .patient-aside__hc-actions {
   display: flex;
-  flex-direction: column;
+  align-items: stretch;
   gap: var(--space-2, 8px);
+}
+
+.patient-aside__hc-print {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Square, as tall as the print button next to it. */
+.patient-aside__hc-email {
+  flex: none;
+  align-self: stretch;
+  margin-top: var(--space-1, 4px);
+  width: var(--pwa-btn-min-height, 44px);
+  height: auto !important;
+  min-width: 0 !important;
+  padding-inline: 0 !important;
 }
 
 .patient-aside__qr {

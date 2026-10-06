@@ -48,7 +48,11 @@ test("the QR button is the panel's first action, full width", async ({ page }) =
 // NEO-258: the finished Historia clínica brings two buttons (print + email) — the panel still fits one window.
 test("the Historia clínica stage (print + email) still fits 1280x720 without scrolling", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
+  // Font-independent: the card is no taller than the QR stage's, which the tests above already fit.
+  await open(page, "?lang=mx&role=doctor");
+  const qrStage = (await page.locator(".patient-aside__next").boundingBox())!.height;
   await open(page, "?lang=mx&stage=historia&role=doctor");
+  expect((await page.locator(".patient-aside__next").boundingBox())!.height).toBeLessThanOrEqual(qrStage + 1);
   await expect(page.getByTestId("next-step-print")).toBeVisible();
   await expect(page.getByTestId("next-step-email")).toBeEnabled();
   const aside = page.getByTestId("aside");
