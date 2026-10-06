@@ -16,6 +16,7 @@ vi.mock("../../composables/useApi", async (importOriginal) => ({
 vi.mock("../../composables/useNotifications", () => ({ useNotifications: () => ({ show: vi.fn() }) }));
 
 import PatientAsidePanel from "./PatientAsidePanel.vue";
+import DoctorSignatureDialog from "./DoctorSignatureDialog.vue";
 import { useAuthStore } from "../../stores/auth";
 
 const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
@@ -173,5 +174,69 @@ describe("PatientAsidePanel (NEO-153, NEO-203)", () => {
     const wrapper = await mountPanel();
     expect(wrapper.findAll(".patient-aside__note")).toHaveLength(1);
     expect(wrapper.find(".patient-aside__note-body").text()).toBe("Latest note");
+  });
+});
+
+describe("PatientAsidePanel — Siguiente paso after the patient's part (NEO-258)", () => {
+  const hc = (oral: string, tmj: string) => [
+    item("informedConsent", "consent", "done"),
+    item("medicalHistory", "patient", "done"),
+    item("stopBang", "patient", "done"),
+    item("oralExam", "doctor", oral, false),
+    item("tmjExam", "doctor", tmj, false),
+    item("historiaEndo", "doctor", "missing", false),
+  ];
+
+  it("D2: patient done, exploration open → 'Complete exploration' opens the first open section", async () => {
+    checklistItems = hc("done", "missing");
+    const wrapper = await mountPanel();
+    expect(wrapper.find("[data-testid=next-step-title]").text()).toBe("To complete in the clinic: 1");
+    await wrapper.find("[data-testid=next-step-complete]").trigger("click");
+    expect(wrapper.emitted("open-study")).toEqual([["tmjExam", "document"]]);
+  });
+
+  it("every section done → print and (doctor only) email the Historia clínica; no email on file disables it with the reason", async () => {
+    checklistItems = hc("done", "done");
+    const manager = await mountPanel({ patient: { id: "p-1", email: "lucia@example.mx" } });
+    useAuthStore().user = { id: "u-2", email: "mgr@x.mx", role: "manager" };
+    await flushPromises();
+    expect(manager.find("[data-testid=next-step-title]").text()).toBe("Clinical history complete");
+    expect(manager.find("[data-testid=next-step-print]").exists()).toBe(true);
+    expect(manager.find("[data-testid=next-step-email]").exists()).toBe(false);
+
+    const noEmail = await mountPanel({ patient: { id: "p-1", email: null } });
+    useAuthStore().user = { id: "u-1", email: "doc@x.mx", role: "doctor" };
+    await flushPromises();
+    expect(noEmail.find("[data-testid=next-step-email]").attributes("disabled")).toBeDefined();
+    expect(noEmail.find("[data-testid=next-step-no-email]").text()).toBe("Add the patient's email to send it");
+  });
+
+  it("D3: the doctor signs, then the signed Historia clínica is emailed — the signature goes with the request", async () => {
+    checklistItems = hc("done", "done");
+    const wrapper = await mountPanel({ patient: { id: "p-1", email: "lucia@example.mx" } });
+    useAuthStore().user = { id: "u-1", email: "doc@x.mx", role: "doctor" };
+    await flushPromises();
+    const sent = vi.fn();
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === "/api/v1/patient/p-1/historia-clinica/email") {
+        sent(JSON.parse(String(init?.body)));
+        return { ok: true, status: 201, json: async () => ({ sent_to: "l***@example.mx" }) } as Response;
+      }
+      return base(path, init);
+    });
+
+    await wrapper.find("[data-testid=next-step-email]").trigger("click");
+    const dialog = wrapper.findComponent(DoctorSignatureDialog);
+    expect(dialog.props()).toMatchObject({ modelValue: true, purpose: "email" });
+    dialog.vm.$emit("print", "data:image/png;base64,AAAA");
+    await flushPromises();
+    expect(sent).toHaveBeenCalledWith({ doctorSignature: "data:image/png;base64,AAAA" });
+  });
+
+  it("a tenant without the Historia clínica keeps the old end state", async () => {
+    checklistItems = [item("informedConsent", "consent", "done")];
+    const wrapper = await mountPanel();
+    expect(qrButton(wrapper).text()).toContain("All done");
   });
 });
