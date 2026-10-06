@@ -65,15 +65,22 @@
           <p class="partner-doc-dialog__intent">
             {{ t('user.partnerRegistration.dialog.intent', { version: preview?.versionLabel ?? '' }) }}
           </p>
-          <!-- As wide as a signature line in the document, not the whole dialog. -->
-          <div class="partner-doc-dialog__pad">
-            <SignaturePad
-              ref="padRef"
-              :clear-label="t('user.partnerRegistration.form.signatureClear')"
-              :placeholder="t('user.partnerRegistration.dialog.signHere')"
-              clear-placement="overlay"
-              @change="padEmpty = $event"
-            />
+          <!-- Computers get both side by side: the mouse pad and a QR to sign on the phone (CORE-166). -->
+          <div class="partner-doc-dialog__sign-row">
+            <!-- As wide as a signature line in the document, not the whole dialog. -->
+            <div class="partner-doc-dialog__pad">
+              <SignaturePad
+                ref="padRef"
+                :clear-label="t('user.partnerRegistration.form.signatureClear')"
+                :placeholder="t('user.partnerRegistration.dialog.signHere')"
+                clear-placement="overlay"
+                @change="padEmpty = $event"
+              />
+            </div>
+            <template v-if="!xs">
+              <span class="partner-doc-dialog__or">{{ t('user.partnerRegistration.dialog.or') }}</span>
+              <PartnerPhoneSignPanel :token="token" class="partner-doc-dialog__phone" @signed="onPhoneSigned" />
+            </template>
           </div>
         </section>
       </VCardText>
@@ -118,6 +125,7 @@ import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import AppLoadingState from "../AppLoadingState.vue";
 import SignaturePad from "../SignaturePad.vue";
+import PartnerPhoneSignPanel from "./PartnerPhoneSignPanel.vue";
 import { apiFetch } from "../../composables/useApi";
 
 /**
@@ -344,6 +352,14 @@ function onSign(): void {
   resigning.value = false;
 }
 
+/** The phone's signature counts exactly like one drawn here; it just has no pad to fly from. */
+function onPhoneSigned(signatureDataUrl: string): void {
+  if (!preview.value) return;
+  pendingFlight = null;
+  emit("signed", { signatureDataUrl, versionIds: preview.value.versionIds });
+  resigning.value = false;
+}
+
 function onAcknowledge(): void {
   if (!preview.value) return;
   emit("acknowledged", { versionIds: preview.value.versionIds });
@@ -415,6 +431,27 @@ function onAcknowledge(): void {
   width: 100%;
   max-width: 360px;
   margin: 4px auto 0;
+}
+
+.partner-doc-dialog__sign-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+}
+
+.partner-doc-dialog__sign-row .partner-doc-dialog__pad {
+  margin: 4px 0 0;
+}
+
+.partner-doc-dialog__or {
+  flex: none;
+  font-size: 0.8125rem;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+}
+
+.partner-doc-dialog__phone {
+  flex: 0 1 220px;
 }
 
 .partner-doc-dialog__signature--signed .partner-doc-dialog__pad {

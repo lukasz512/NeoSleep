@@ -32,6 +32,20 @@ export const invitePreviewLimiter = rateLimit({
   message: { error: "Too many requests, please try again later" },
 });
 
+/**
+ * Applied to the "sign on your phone" routes (CORE-166) — public, token-gated.
+ * The desktop polls pickup every 4 s while the QR (15 min) is open: ≤225
+ * requests, plus the phone's few; 300 per 15 minutes per IP covers one
+ * session and still caps guessing.
+ */
+export const inviteSignHandoffLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many requests, please try again later" },
+});
+
 /** Applied to GET /booking/slots and POST /booking/book — public, unauthenticated; 20 requests per 15 minutes per IP. */
 export const bookingLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
