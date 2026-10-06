@@ -41,6 +41,22 @@
     animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
   }
 
+  /* CORE-163: a theme switch is one picture crossfading into the next.
+     The theme store sets data-theme-transition only while it runs; it
+     un-names every element (page sheet, calendar, chrome), because a named
+     group is drawn above the root snapshot — it covered the open account
+     menu and moved on its own track. html keeps its implicit "root" name. */
+  html[data-theme-transition] body,
+  html[data-theme-transition] body * {
+    view-transition-name: none !important;
+  }
+
+  html[data-theme-transition]::view-transition-old(root),
+  html[data-theme-transition]::view-transition-new(root) {
+    animation-duration: 420ms;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
   @supports not (view-transition-name: none) {
     html,
     body {

@@ -38,7 +38,8 @@ describe("installSessionLossRedirect", () => {
     await flush();
     expect(router.currentRoute.value.path).toBe("/login");
     expect(router.currentRoute.value.query.redirect).toBe("/patients/42");
-    expect(notify).toHaveBeenCalledWith("Session ended", "warning", "session-ended");
+    // No toast key: AppNotifications would render t(key) over the translated text (CORE-171).
+    expect(notify).toHaveBeenCalledWith("Session ended", "warning");
   });
 
   it("does nothing while still signed in or when the user only changes", async () => {

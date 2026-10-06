@@ -33,7 +33,8 @@ afterEach(() => {
 
 async function mountDialog(props: Record<string, unknown>) {
   setActivePinia(createPinia());
-  apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => PREVIEW } as Response);
+  // A test that routed the API itself (CORE-166) keeps its routing.
+  if (!apiFetch.getMockImplementation()) apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => PREVIEW } as Response);
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
   const wrapper = mount(PartnerDocumentDialog, {
@@ -92,5 +93,68 @@ describe("PartnerDocumentDialog — privacy notice", () => {
     expect(apiFetch).toHaveBeenCalledWith(expect.stringContaining("type=notice"), expect.anything());
     expect(buttonByText(en["user.partnerRegistration.dialog.done"])).toBeDefined();
     expect(buttonByText(en["user.partnerRegistration.dialog.acknowledge"])).toBeUndefined();
+  });
+});
+
+describe("PartnerDocumentDialog — sign on your phone (CORE-166)", () => {
+  function json(body: unknown): Response {
+    return { ok: true, status: 200, json: async () => body } as Response;
+  }
+
+  /** Document preview, then the handoff start, then pickup polls answered by `pickups` in order. */
+  function routeApi(pickups: unknown[]) {
+    apiFetch.mockImplementation(async (url: string) => {
+      if (url.startsWith("/api/v1/invite/document")) return json(PREVIEW);
+      if (url === "/api/v1/invite/sign-handoff") return json({ handoffToken: "qr-token", expiresAt: "2099-01-01T00:00:00Z" });
+      if (url.startsWith("/api/v1/invite/sign-handoff/pickup")) return json(pickups.shift() ?? { status: "pending" });
+      throw new Error(`unexpected ${url}`);
+    });
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("shows the pad and a QR for a sign-only link together, then hands the phone's signature over", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    routeApi([{ status: "pending" }, { status: "signed", signatureDataUrl: SIGNATURE }]);
+    const wrapper = await mountDialog({ signature: null });
+    await flushPromises();
+
+    const start = apiFetch.mock.calls.find(([url]) => url === "/api/v1/invite/sign-handoff");
+    expect(JSON.parse((start![1] as RequestInit).body as string)).toEqual({ token: "t" });
+    expect(document.querySelector<HTMLImageElement>(".phone-sign__code")?.src).toMatch(/^data:image\/svg\+xml/);
+    // Both ways at once on a computer: the mouse pad with its Sign button stays.
+    expect(document.querySelector(".signature-pad")).not.toBeNull();
+    expect(buttonByText(en["user.partnerRegistration.dialog.sign"])).toBeDefined();
+
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(wrapper.emitted("signed")).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(4000);
+    await flushPromises();
+
+    const pickup = apiFetch.mock.calls.find(([url]) => String(url).startsWith("/api/v1/invite/sign-handoff/pickup"));
+    expect(pickup![0]).toBe("/api/v1/invite/sign-handoff/pickup?token=t&h=qr-token");
+    expect(wrapper.emitted("signed")).toEqual([[{ signatureDataUrl: SIGNATURE, versionIds: ["agr-1", "dpa-1"] }]]);
+  });
+
+  it("an expired code offers a new one, and the pad stays usable", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    routeApi([{ status: "expired" }]);
+    await mountDialog({ signature: null });
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(4000);
+    await flushPromises();
+
+    expect(document.body.textContent).toContain(en["user.partnerRegistration.dialog.phoneExpired"]);
+    expect(buttonByText(en["user.partnerRegistration.dialog.phoneNewCode"])).toBeDefined();
+    expect(document.querySelector(".signature-pad")).not.toBeNull();
+  });
+
+  it("an already signed agreement shows no QR", async () => {
+    routeApi([]);
+    await mountDialog({ signature: SIGNATURE });
+    expect(document.querySelector(".phone-sign")).toBeNull();
+    expect(apiFetch.mock.calls.some(([url]) => url === "/api/v1/invite/sign-handoff")).toBe(false);
   });
 });
