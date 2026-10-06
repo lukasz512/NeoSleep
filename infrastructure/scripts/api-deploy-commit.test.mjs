@@ -32,8 +32,10 @@ test("a commit that touches no API path maps to the last one that did", () => {
   const head = git("rev-parse", "HEAD");
   const expected = apiDeployCommit(head);
   assert.match(expected, /^[0-9a-f]{40}$/);
-  // The expected commit itself touched an API path...
-  const touched = git("show", "--name-only", "--format=", expected).split("\n");
+  // The expected commit itself touched an API path... A PR merge commit lists no files
+  // in a plain `git show`; compare it with its first parent, which is what it brought in.
+  // (CI has the full history since CORE-152, so the expected commit is usually a merge.)
+  const touched = git("show", "--diff-merges=first-parent", "--name-only", "--format=", expected).split("\n");
   const paths = apiDeployPaths();
   const hit = touched.some((f) => paths.some((p) => (p.endsWith("/**") ? f.startsWith(p.slice(0, -2)) : p.includes("*") ? f.startsWith(p.split("*")[0]) : f === p)));
   assert.ok(hit, `${expected} touched none of: ${paths.join(", ")}`);

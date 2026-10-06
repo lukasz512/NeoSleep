@@ -47,8 +47,9 @@ jobs:
     if: github.event_name != 'pull_request' || !(startsWith(github.head_ref, 'worktree-') || startsWith(github.head_ref, 'worker/') || startsWith(github.head_ref, 'claude/'))
     runs-on: ubuntu-latest
     # CORE-151: a hung e2e used to hold the job (and the session waiting on it) for up
-    # to an hour; the default limit is 6 h. A full 3-engine run takes ~20-30 min.
-    timeout-minutes: 45
+    # to an hour; the default limit is 6 h. The nightly 3-engine e2e alone takes ~23 min
+    # (2026-10-06: 507 tests in 22.8 min), so the nightly/manual run gets more room.
+    timeout-minutes: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 60 || 45 }}
 
     services:
       postgres:
@@ -225,7 +226,7 @@ jobs:
 
       - name: Test — pwa e2e (blocking)
         if: steps.scope.outputs.run_app == 'true'
-        timeout-minutes: 25
+        timeout-minutes: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 40 || 25 }}
         env:
           E2E_BROWSERS: ${{ steps.scope.outputs.browsers }}
           E2E_SPECS: ${{ steps.scope.outputs.e2e_specs }}
