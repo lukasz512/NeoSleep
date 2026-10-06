@@ -23,11 +23,19 @@ export async function setAppointmentPatientToken(
   opts: { clearResponse: boolean; stamp?: { confirmRequest?: boolean; dayBefore?: boolean; todayReminder?: boolean } }
 ): Promise<void> {
   const sets = ["patient_token_hash = $2", "patient_token_expires_at = $3"];
-  // CORE-113 part 2: a reschedule clears today_reminder_sent_at too — the new time gets its own 2-hour reminder.
-  if (opts.clearResponse) sets.push("patient_response = NULL", "patient_responded_at = NULL", "confirm_request_sent_at = NULL", "day_before_sent_at = NULL", "today_reminder_sent_at = NULL");
-  if (opts.stamp?.confirmRequest) sets.push("confirm_request_sent_at = now()");
-  if (opts.stamp?.dayBefore) sets.push("day_before_sent_at = now()");
-  if (opts.stamp?.todayReminder) sets.push("today_reminder_sent_at = now()");
+  if (opts.clearResponse) sets.push("patient_response = NULL", "patient_responded_at = NULL", "patient_response_note = NULL");
+  // Each stamp column is assigned once: now() when this email covers the step, else NULL on a
+  // reschedule (CORE-169 — assigning both is a Postgres error). CORE-113 part 2: a reschedule
+  // clears today_reminder_sent_at too — the new time gets its own 2-hour reminder.
+  const stamps = [
+    ["confirm_request_sent_at", opts.stamp?.confirmRequest],
+    ["day_before_sent_at", opts.stamp?.dayBefore],
+    ["today_reminder_sent_at", opts.stamp?.todayReminder],
+  ] as const;
+  for (const [column, stamped] of stamps) {
+    if (stamped) sets.push(`${column} = now()`);
+    else if (opts.clearResponse) sets.push(`${column} = NULL`);
+  }
   try {
     await client.query(`UPDATE appointment SET ${sets.join(", ")} WHERE id = $1`, [appointmentId, tokenHash, expiresAt]);
   } catch (err) {
@@ -110,11 +118,12 @@ export async function getAppointmentIdByPatientTokenHash(client: PoolClient, tok
   }
 }
 
-export async function setAppointmentPatientResponse(client: PoolClient, appointmentId: string, response: AppointmentPatientResponse): Promise<void> {
+/** `note`: the day/time the patient suggests with "I can't come" (NEO-254); null for any other answer. */
+export async function setAppointmentPatientResponse(client: PoolClient, appointmentId: string, response: AppointmentPatientResponse, note: string | null = null): Promise<void> {
   try {
     await client.query(
-      `UPDATE appointment SET patient_response = $2, patient_responded_at = now(), updated_at = now() WHERE id = $1`,
-      [appointmentId, response]
+      `UPDATE appointment SET patient_response = $2, patient_responded_at = now(), patient_response_note = $3, updated_at = now() WHERE id = $1`,
+      [appointmentId, response, note]
     );
   } catch (err) {
     throw new DatabaseError("setAppointmentPatientResponse", err);

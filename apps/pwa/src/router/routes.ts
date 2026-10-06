@@ -38,6 +38,8 @@ export const routes: RouteRecordRaw[] = [
   { path: "/auth/callback", name: "auth-callback", component: () => import("../views/AuthCallbackView.vue"), meta: { layout: "public", public: true } },
   { path: "/change-password", name: "change-password", component: () => import("../views/ChangePasswordView.vue"), meta: { layout: "public", requiresAuth: true } },
   { path: "/partner-register", name: "partner-register", component: () => import("../views/PartnerRegistrationView.vue"), meta: { layout: "public", public: true } },
+  // Phone half of "sign on your phone" for the partner agreement (CORE-166) — same #<token> rule as /q.
+  { path: "/partner-sign", name: "partner-sign", component: () => import("../views/PartnerSignView.vue"), meta: { layout: "public", public: true } },
   // Patient self-fill questionnaire from a doctor's QR code (NEO-36) — no account; the token is the
   // credential and lives in the URL #fragment (/q#<token>), which browsers never send to any server.
   { path: "/q", name: "patient-questionnaire", component: () => import("../views/PatientQuestionnaireView.vue"), meta: { layout: "public", public: true } },

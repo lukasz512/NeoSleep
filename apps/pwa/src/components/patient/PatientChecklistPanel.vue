@@ -175,6 +175,7 @@
       :format-date-time="formatDateTime"
       @send="onEmailSend"
     />
+    <DoctorSignatureDialog v-model="doctorSignatureOpen" @print="onDoctorSignaturePrint" />
     <StudyUploadDialog
       v-model="uploadDialog.open"
       :items="items"
@@ -379,6 +380,7 @@ import AppIcon from "../AppIcon.vue";
 import AppLoadingState from "../AppLoadingState.vue";
 import AppErrorState from "../AppErrorState.vue";
 import ClinicalQuestionnaireDialog from "../questionnaire/ClinicalQuestionnaireDialog.vue";
+import DoctorSignatureDialog from "./DoctorSignatureDialog.vue";
 import QuestionnaireQrDialog from "../questionnaire/QuestionnaireQrDialog.vue";
 import QrStatusButton from "../questionnaire/QrStatusButton.vue";
 import StudyUploadDialog from "../questionnaire/StudyUploadDialog.vue";
@@ -681,13 +683,31 @@ const PRINT_KEY_FOR_FORM: Record<ClinicalRecordKind, string> = {
   tmj_exam: "tmjExam",
 };
 
+/** NEO-255 D1: a doctor signs the Historia clínica in a dialog before it prints. */
+const HISTORIA_CLINICA_KEY = "historiaEndo";
+const doctorSignatureOpen = ref(false);
+
 async function onPrint(key: string, recordId?: string) {
+  if (key === HISTORIA_CLINICA_KEY && authStore.user?.role === "doctor") {
+    doctorSignatureOpen.value = true;
+    return;
+  }
+  await printNow(key, recordId);
+}
+
+async function printNow(key: string, recordId?: string, doctorSignature?: string) {
   printingKey.value = key;
   try {
-    await checklistApi.print(key, recordId);
+    await checklistApi.print(key, recordId, doctorSignature);
   } finally {
     printingKey.value = null;
   }
+}
+
+/** Called inside the dialog's click, so the PDF tab still opens past popup blockers. */
+function onDoctorSignaturePrint(signature: string | null) {
+  doctorSignatureOpen.value = false;
+  void printNow(HISTORIA_CLINICA_KEY, undefined, signature ?? undefined);
 }
 
 function onPrintRecord() {

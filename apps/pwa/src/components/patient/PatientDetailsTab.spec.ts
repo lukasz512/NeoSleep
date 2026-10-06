@@ -94,7 +94,9 @@ async function mountTab(
   return wrapper;
 }
 
-const tileKeys = (w: VueWrapper) => w.findAll(".patient-details__tile").map((t) => t.attributes("data-testid"));
+const tileKeys = (w: VueWrapper) => w.findAll('.patient-details__tiles > [data-testid^="tile-"]').map((t) => t.attributes("data-testid"));
+/** The next-visit tile's calendar leaf, read as "MAR 4" (CORE-162). */
+const tileDate = (w: VueWrapper) => `${w.find(".next-visit__month").text()} ${w.find(".next-visit__day").text()}`;
 const groupTitles = (w: VueWrapper) => w.findAll(".patient-details__group-title").map((h) => h.text());
 
 describe("PatientDetailsTab (NEO-206)", () => {
@@ -103,9 +105,9 @@ describe("PatientDetailsTab (NEO-206)", () => {
     expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/p-1/summary", { handleErrors: false });
   });
 
-  it("shows the four tiles in order: diagnosis, PSG, treatment, next appointment", async () => {
+  it("shows the four tiles in order: next appointment first (CORE-162), then diagnosis, PSG, treatment", async () => {
     const w = await mountTab(FULL);
-    expect(tileKeys(w)).toEqual(["tile-diagnosis", "tile-psg", "tile-treatment", "tile-appointment"]);
+    expect(tileKeys(w)).toEqual(["tile-appointment", "tile-diagnosis", "tile-psg", "tile-treatment"]);
     expect(w.find('[data-testid="tile-diagnosis"]').text()).toContain("G47.33 · OSA");
     const psg = w.find('[data-testid="tile-psg"]').text();
     expect(psg).toContain("22.4 /h");
@@ -113,14 +115,36 @@ describe("PatientDetailsTab (NEO-206)", () => {
     expect(w.find('[data-testid="tile-treatment"]').text()).toContain("Ordered");
   });
 
-  it("hides empty tiles; no strip at all when nothing is known", async () => {
+  it("hides empty tiles; with nothing known only the empty next-visit slot is left (CORE-162)", async () => {
     const w = await mountTab(EMPTY, { patient: { diagnosis_code: null, ahi_baseline: null } });
-    expect(w.find('[data-testid="summary-strip"]').exists()).toBe(false);
+    expect(tileKeys(w)).toEqual(["tile-appointment-empty"]);
+  });
+
+  it("nothing booked: the empty slot says so and asks the card to book (CORE-162)", async () => {
+    const w = await mountTab(EMPTY);
+    const empty = w.find('[data-testid="tile-appointment-empty"]');
+    expect(empty.text()).toContain("Nothing booked");
+    expect(empty.text()).toContain("Book");
+    await empty.trigger("click");
+    expect(w.emitted("book")).toHaveLength(1);
+  });
+
+  it("the empty slot waits for the visit lists: it never flashes before they answer", async () => {
+    setActivePinia(createPinia());
+    apiFetch.mockImplementation(() => new Promise(() => {}));
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { template: "<div />" } }, { path: "/hcp/:id", name: "hcp-detail", component: { template: "<div />" } }] });
+    const w = mount(PatientDetailsTab, {
+      props: { patient: PATIENT, canSeeStudies: true },
+      global: { plugins: [createI18n({ legacy: false, locale: "en", messages: { en } }), createVuetify({ components: vuetifyComponents }), router] },
+    });
+    wrappers.push(w);
+    await flushPromises();
+    expect(w.find('[data-testid="tile-appointment-empty"]').exists()).toBe(false);
   });
 
   it("no scored study: the IAH tile shows the baseline, with the severity scale (NEO-247)", async () => {
     const w = await mountTab(EMPTY);
-    expect(tileKeys(w)).toEqual(["tile-diagnosis", "tile-ahiBaseline"]);
+    expect(tileKeys(w)).toEqual(["tile-appointment-empty", "tile-diagnosis", "tile-ahiBaseline"]);
     const tile = w.find('[data-testid="tile-ahiBaseline"]');
     expect(tile.text()).toContain("AHI baseline");
     expect(tile.text()).toContain("18 /h");
@@ -145,7 +169,7 @@ describe("PatientDetailsTab (NEO-206)", () => {
 
   it("commercial field force: no diagnosis tile even when the record has one", async () => {
     const w = await mountTab({ ...FULL, latest_study: null }, { canSeeStudies: false });
-    expect(tileKeys(w)).toEqual(["tile-treatment", "tile-appointment"]);
+    expect(tileKeys(w)).toEqual(["tile-appointment", "tile-treatment"]);
   });
 
   it("PSG and treatment tiles open their tabs; diagnosis is not a button; the next visit is a button (CORE-159)", async () => {
@@ -154,7 +178,7 @@ describe("PatientDetailsTab (NEO-206)", () => {
     await w.find('[data-testid="tile-treatment"]').trigger("click");
     expect(w.emitted("open-tab")).toEqual([["studies"], ["orthoapnea"]]);
     expect(w.find('[data-testid="tile-diagnosis"]').element.tagName).toBe("DIV");
-    expect(w.find('[data-testid="tile-appointment"]').element.tagName).toBe("BUTTON");
+    expect(w.find('[data-testid="next-visit-open"]').element.tagName).toBe("BUTTON");
   });
 
   it("groups the rows; keeps IAH basal and CPAP; extra rows only when set", async () => {
@@ -183,63 +207,26 @@ describe("PatientDetailsTab (NEO-206)", () => {
   });
 });
 
-describe("PatientDetailsTab — every appointment (CORE-133)", () => {
+// NEO-256: Citas = appointments (CORE-133) and events (CORE-137) in one list, drawn by the calendar's day list.
+describe("PatientDetailsTab — Citas: appointments and events in the calendar's day list (NEO-256)", () => {
   const APPTS = [
     { id: "a-past", status: "completed", start_at: "2026-09-01T16:00:00.000Z", end_at: "2026-09-01T17:00:00.000Z", timezone: "America/Mexico_City", practitioner_name: "Dra. Ruiz" },
     { id: "a-late", status: "scheduled", start_at: "2031-03-05T22:00:00.000Z", end_at: "2031-03-05T23:00:00.000Z", timezone: "America/Mexico_City", practitioner_name: "Dra. Ruiz" },
     { id: "a-soon", status: "scheduled", start_at: "2031-03-04T21:00:00.000Z", end_at: "2031-03-04T22:00:00.000Z", timezone: "America/Mexico_City", practitioner_name: "Dra. Ruiz" },
     { id: "a-off", status: "cancelled", start_at: "2031-03-06T15:00:00.000Z", end_at: "2031-03-06T16:00:00.000Z", timezone: "America/Mexico_City", practitioner_name: "Dra. Ruiz" },
   ];
-
-  async function mountWithAppointments() {
-    setActivePinia(createPinia());
-    apiFetch.mockImplementation(async (path: string) =>
-      path.startsWith("/api/v1/appointments?")
-        ? { ok: true, status: 200, json: async () => ({ items: APPTS }) }
-        : path.endsWith("/care-team")
-          ? { ok: true, status: 200, json: async () => [] }
-          : { ok: true, status: 200, json: async () => EMPTY },
-    );
-    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { template: "<div />" } }, { path: "/hcp/:id", name: "hcp-detail", component: { template: "<div />" } }, { path: "/calendar", name: "calendar", component: { template: "<div />" } }] });
-    const wrapper = mount(PatientDetailsTab, {
-      props: { patient: PATIENT, canSeeStudies: true },
-      global: { plugins: [createI18n({ legacy: false, locale: "en", messages: { en } }), createVuetify({ components: vuetifyComponents }), router] },
-    });
-    wrappers.push(wrapper);
-    await flushPromises();
-    return wrapper;
-  }
-
-  it("lists all of the patient's appointments — upcoming soonest first, then past — in clinic time", async () => {
-    const w = await mountWithAppointments();
-    expect(apiFetch).toHaveBeenCalledWith("/api/v1/appointments?patient_id=p-1", { handleErrors: false });
-    const rows = w.findAll('[data-testid="patient-appointment"]');
-    expect(rows.map((r) => r.attributes("data-id"))).toEqual(["a-soon", "a-late", "a-off", "a-past"]);
-    // 21:00Z is 15:00 at the Mexico City clinic, whatever the reader's zone.
-    expect(rows[0]!.text()).toMatch(/0?3:00\s?PM|15:00/);
-    expect(rows[2]!.text()).toContain("Cancelled");
-  });
-
-  it("the next-appointment tile is the first upcoming scheduled visit, in clinic time", async () => {
-    const w = await mountWithAppointments();
-    const tile = w.find('[data-testid="tile-appointment"]');
-    expect(tile.text()).toContain("Mar 4");
-    expect(tile.text()).toMatch(/0?3:00\s?PM|15:00/);
-  });
-});
-
-describe("PatientDetailsTab — events for the patient (CORE-137)", () => {
   const EVENTS = [
-    { id: "e-past", type: "visit", status: "completed", start_at: "2026-09-01T16:00:00.000Z", end_at: "2026-09-01T17:00:00.000Z", metadata: { title: "Follow-up at home" } },
-    { id: "e-soon", type: "call", status: "scheduled", start_at: "2031-03-04T21:00:00.000Z", end_at: "2031-03-04T22:00:00.000Z", metadata: { title: "Video check-in" } },
-    { id: "e-off", type: "visit", status: "cancelled", start_at: "2031-03-06T15:00:00.000Z", end_at: null, metadata: null },
+    { id: "e-past", type: "visit", status: "completed", start_at: "2026-08-01T16:00:00.000Z", end_at: "2026-08-01T17:00:00.000Z", metadata: { title: "Follow-up at home" } },
+    { id: "e-early", type: "call", status: "scheduled", start_at: "2031-03-04T12:00:00.000Z", end_at: "2031-03-04T13:00:00.000Z", metadata: { title: "Video check-in" } },
   ];
 
-  async function mountWithEvents(items: unknown[]) {
+  async function mountWith(appointments: unknown[], events: unknown[], role?: string) {
     setActivePinia(createPinia());
+    if (role) useAuthStore().user = { id: "u-1", role } as NonNullable<ReturnType<typeof useAuthStore>["user"]>;
     apiFetch.mockImplementation(async (path: string) => {
-      if (path.startsWith("/api/v1/encounter?")) return { ok: true, status: 200, json: async () => ({ items, total: items.length }) };
-      if (path.startsWith("/api/v1/appointments?")) return { ok: true, status: 200, json: async () => ({ items: [] }) };
+      if (path.startsWith("/api/v1/appointments?")) return { ok: true, status: 200, json: async () => ({ items: appointments }) };
+      if (path.startsWith("/api/v1/encounter?")) return { ok: true, status: 200, json: async () => ({ items: events, total: events.length }) };
+      if (path.endsWith("/care-team")) return { ok: true, status: 200, json: async () => [] };
       return { ok: true, status: 200, json: async () => EMPTY };
     });
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { template: "<div />" } }, { path: "/hcp/:id", name: "hcp-detail", component: { template: "<div />" } }, { path: "/calendar", name: "calendar", component: { template: "<div />" } }] });
@@ -251,29 +238,53 @@ describe("PatientDetailsTab — events for the patient (CORE-137)", () => {
     await flushPromises();
     return wrapper;
   }
+  const rowIds = (w: VueWrapper) => w.findAll('[data-testid="patient-visits"] [data-testid="calendar-row"]').map((r) => r.attributes("data-id"));
 
-  it("asks for the patient's events and lists them — upcoming soonest first, then past — with the type label", async () => {
-    const w = await mountWithEvents(EVENTS);
+  it("asks for the patient's appointments and events", async () => {
+    await mountWith(APPTS, EVENTS);
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/appointments?patient_id=p-1", { handleErrors: false });
     expect(apiFetch).toHaveBeenCalledWith("/api/v1/encounter?patient_id=p-1", { handleErrors: false });
-    const rows = w.findAll('[data-testid="patient-event"]');
-    expect(rows.map((r) => r.attributes("data-id"))).toEqual(["e-soon", "e-off", "e-past"]);
-    expect(rows[0]!.text()).toContain("Video check-in");
-    expect(rows[0]!.text()).toContain("Video call");
-    expect(rows[2]!.text()).toContain("Face-to-face");
-    expect(rows[1]!.text()).toContain("Cancelled");
-    expect(groupTitles(w)).toContain("Events");
+  });
+
+  it("one list of both — upcoming days soonest first, then past days; by time within a day", async () => {
+    const w = await mountWith(APPTS, EVENTS);
+    expect(rowIds(w)).toEqual(["e-early", "a-soon", "a-late", "a-off", "a-past", "e-past"]);
+    expect(groupTitles(w)).not.toContain("Events");
+  });
+
+  it("is the calendar's own day list: one per day, titled with the day, rows in clinic time", async () => {
+    const w = await mountWith(APPTS, []);
+    const lists = w.findAllComponents({ name: "CalendarDayList" });
+    expect(lists).toHaveLength(4);
+    expect(lists[0]!.props("mode")).toBe("inline");
+    expect(lists[0]!.text()).toContain("Tuesday, March 4, 2031");
+    // 21:00Z is 15:00 at the Mexico City clinic, whatever the reader's zone.
+    expect(w.find('[data-id="a-soon"]').text()).toContain("15:00");
+    expect(w.find('[data-id="a-off"]').classes()).toContain("cal-dl__row--cancelled");
+  });
+
+  it("the next-appointment tile is the first upcoming scheduled visit, in clinic time", async () => {
+    const w = await mountWith(APPTS, []);
+    const tile = w.find('[data-testid="tile-appointment"]');
+    expect(tileDate(w)).toBe("MAR 4");
+    expect(tile.text()).toMatch(/0?3:00\s?PM|15:00/);
   });
 
   it("lists an event that is shared with other patients", async () => {
-    const w = await mountWithEvents([{ ...EVENTS[1]!, id: "e-shared", patient_ids: ["p-1", "p-2"] }]);
-    const rows = w.findAll('[data-testid="patient-event"]');
-    expect(rows.map((r) => r.attributes("data-id"))).toEqual(["e-shared"]);
+    const w = await mountWith([], [{ ...EVENTS[1]!, id: "e-shared", patient_ids: ["p-1", "p-2"] }]);
+    expect(rowIds(w)).toEqual(["e-shared"]);
   });
 
-  it("shows no Events group for a patient without events", async () => {
-    const w = await mountWithEvents([]);
-    expect(w.findAll('[data-testid="patient-event"]')).toHaveLength(0);
-    expect(groupTitles(w)).not.toContain("Events");
+  it("no appointments and no events: no Citas group", async () => {
+    const w = await mountWith([], []);
+    expect(w.find('[data-testid="patient-visits"]').exists()).toBe(false);
+  });
+
+  it("a doctor does not see Territory; the field force does", async () => {
+    const doctor = await mountWith([], [], "doctor");
+    expect(doctor.find('[data-testid="patient-region"]').exists()).toBe(false);
+    const rep = await mountWith([], [], "rep");
+    expect(rep.find('[data-testid="patient-region"]').exists()).toBe(true);
   });
 });
 
@@ -355,7 +366,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
     await flushPromises();
     return wrapper;
   }
-  const rowIds = (w: VueWrapper) => w.findAll('[data-testid="patient-appointment"]').map((r) => r.attributes("data-id"));
+  const rowIds = (w: VueWrapper) => w.findAll('[data-testid="calendar-row"]').map((r) => r.attributes("data-id"));
   const calls = (part: string) => apiFetch.mock.calls.filter(([p]) => String(p).includes(part)).length;
 
   it("a visit booked from the card shows up without remounting the tab", async () => {
@@ -419,7 +430,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
 
   it("the next-appointment tile opens that visit's detail dialog on the card", async () => {
     const w = await mountLive();
-    await w.find('[data-testid="tile-appointment"]').trigger("click");
+    await w.find('[data-testid="next-visit-open"]').trigger("click");
     await flushPromises();
     const dialog = w.findComponent({ name: "AppointmentDetailDialog" });
     expect(dialog.props("modelValue")).toBe(true);
@@ -428,7 +439,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
 
   it("every visit row opens the same detail dialog", async () => {
     const w = await mountLive();
-    await w.find('[data-testid="patient-appointment-open"]').trigger("click");
+    await w.find('[data-id="a-soon"]').trigger("click");
     await flushPromises();
     expect(w.findComponent({ name: "AppointmentDetailDialog" }).props("appointment")).toMatchObject({ id: "a-soon" });
   });
@@ -438,8 +449,8 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
     server.events = [EVENT_SOONER];
     emitPatientChanged("p-1", "visits");
     await flushPromises();
-    expect(w.find('[data-testid="tile-appointment"]').text()).toContain("Mar 1");
-    await w.find('[data-testid="tile-appointment"]').trigger("click");
+    expect(tileDate(w)).toBe("MAR 1");
+    await w.find('[data-testid="next-visit-open"]').trigger("click");
     await flushPromises();
     const form = w.findComponent({ name: "EventForm" });
     expect(form.props("modelValue")).toBe(true);
@@ -451,7 +462,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
     server.events = [{ ...EVENT_SOONER, status: "cancelled" }];
     emitPatientChanged("p-1", "visits");
     await flushPromises();
-    expect(w.find('[data-testid="tile-appointment"]').text()).toContain("Mar 4");
+    expect(tileDate(w)).toBe("MAR 4");
   });
 
   it("an event edited from the card is saved and the tile follows without F5", async () => {
@@ -459,7 +470,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
     server.events = [EVENT_SOONER];
     emitPatientChanged("p-1", "visits");
     await flushPromises();
-    await w.find('[data-testid="patient-event-open"]').trigger("click");
+    await w.find('[data-id="e-sooner"]').trigger("click");
     await flushPromises();
     const moved = { ...EVENT_SOONER, start_at: "2031-03-03T18:00:00.000Z", end_at: "2031-03-03T19:00:00.000Z" };
     server.events = [moved];
@@ -472,7 +483,64 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
     await flushPromises();
     expect(server.patched.map((p) => p.path)).toEqual(["/api/v1/encounter/e-sooner"]);
     expect(done).toHaveBeenCalledWith(true);
-    expect(w.find('[data-testid="tile-appointment"]').text()).toContain("Mar 3");
+    expect(tileDate(w)).toBe("MAR 3");
+  });
+
+  // CORE-162 (variant C): what the visit is, the patient's answer, and Reschedule / Done on the tile.
+  it("the tile names the visit and shows the patient's answer", async () => {
+    const w = await mountLive({ role: "manager" });
+    server.appointments = [{ ...SOON, patient_response: "confirmed" }];
+    emitPatientChanged("p-1", "visits");
+    await flushPromises();
+    expect(w.find(".next-visit__title").text()).toBe("Appointment with Dra. Ruiz");
+    expect(w.find('[data-testid="next-visit-chip"]').text()).toBe("Patient confirmed");
+  });
+
+  it("an event shows its title and kind, never a patient answer", async () => {
+    const w = await mountLive({ role: "manager" });
+    server.events = [EVENT_SOONER];
+    emitPatientChanged("p-1", "visits");
+    await flushPromises();
+    expect(w.find(".next-visit__title").text()).toBe("Home visit");
+    expect(w.find('[data-testid="next-visit-chip"]').text()).toBe("Face-to-face");
+  });
+
+  it("Done asks first, then marks the appointment completed without opening it", async () => {
+    const w = await mountLive({ role: "manager" });
+    await w.find('[data-testid="next-visit-complete"]').trigger("click");
+    await flushPromises();
+    expect(server.patched).toEqual([]);
+    w.findAllComponents({ name: "AppConfirmDialog" }).find((c) => c.props("text") === "Mark this visit as completed?")!.vm.$emit("primary");
+    await flushPromises();
+    expect(server.patched).toEqual([{ path: "/api/v1/appointments/a-soon", body: { status: "completed" } }]);
+    expect(w.findComponent({ name: "AppointmentDetailDialog" }).props("modelValue")).toBe(false);
+  });
+
+  it("Done on an event sets only its status", async () => {
+    const w = await mountLive({ role: "manager" });
+    server.events = [EVENT_SOONER];
+    emitPatientChanged("p-1", "visits");
+    await flushPromises();
+    await w.find('[data-testid="next-visit-complete"]').trigger("click");
+    w.findAllComponents({ name: "AppConfirmDialog" }).find((c) => c.props("text") === "Mark this visit as completed?")!.vm.$emit("primary");
+    await flushPromises();
+    expect(server.patched).toEqual([{ path: "/api/v1/encounter/e-sooner", body: { status: "completed" } }]);
+  });
+
+  it("Reschedule opens the booking dialog for that appointment, on the card", async () => {
+    const w = await mountLive({ role: "manager" });
+    await w.find('[data-testid="next-visit-reschedule"]').trigger("click");
+    await flushPromises();
+    const booking = w.findComponent({ name: "AppointmentDialog" });
+    expect(booking.props("modelValue")).toBe(true);
+    expect(booking.props("appointment")).toMatchObject({ id: "a-soon" });
+  });
+
+  it("a rep who didn't book the visit gets no quick actions — only what the API would allow", async () => {
+    const w = await mountLive({ role: "rep" });
+    expect(w.find('[data-testid="next-visit-open"]').exists()).toBe(true);
+    expect(w.find('[data-testid="next-visit-reschedule"]').exists()).toBe(false);
+    expect(w.find('[data-testid="next-visit-complete"]').exists()).toBe(false);
   });
 
   it("a doctor sees HCP names as plain text (doctors have no HCP detail); other roles get links", async () => {

@@ -149,7 +149,7 @@ appointmentRouter.post(
   })
 );
 
-// PATCH /api/v1/appointments/:id — reschedule, status (incl. cancel), notes, clinical links
+// PATCH /api/v1/appointments/:id — reschedule, status (incl. cancel), notes, clinical links, patient_response "confirmed" (NEO-254)
 appointmentRouter.patch(
   "/appointments/:id",
   requireAuth,
@@ -165,6 +165,7 @@ appointmentRouter.patch(
       notes: body.notes === null ? null : typeof body.notes === "string" ? body.notes.trim() || null : undefined,
       sleep_study_id: nullableUuid(body.sleep_study_id, "sleep_study_id"),
       treatment_plan_id: nullableUuid(body.treatment_plan_id, "treatment_plan_id"),
+      patient_response: str(body.patient_response),
     };
     const slug = tenantSlugFromHost(req.hostname);
     const effects = newAppointmentEffects();

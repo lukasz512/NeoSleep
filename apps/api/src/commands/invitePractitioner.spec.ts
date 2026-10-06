@@ -16,8 +16,13 @@ import {
   AcceptPractitionerInviteCommand,
   ValidateInviteTokenQuery,
   GetPartnerDocumentPreviewQuery,
+  StartPartnerSignHandoffCommand,
+  GetPartnerSignHandoffQuery,
+  SignPartnerSignHandoffCommand,
+  PickUpPartnerSignHandoffQuery,
   type AcceptInviteInput,
 } from "./invitePractitioner.js";
+import { hashToken } from "../utils/hashToken.js";
 import { CreatePractitionerCommand, ActivatePractitionerCommand } from "./practitioner.js";
 import { ApprovePartnerDocumentVersionCommand } from "./partnerDocuments.js";
 import { getPartnerSignatoryConfig, approvalKey } from "../db/partnerSignatories.js";
@@ -476,6 +481,108 @@ describe("ApprovePartnerDocumentVersionCommand", () => {
 
       // Sanity: the practitioner created above still resolves by identity.
       expect(await getPractitionerIdByIdentityId(client, "00000000-0000-0000-0000-000000000000")).toBeNull();
+    });
+  }, 30000);
+});
+
+describe("Sign on your phone (CORE-166)", () => {
+  it("hands the phone's signature to the desktop exactly once, and the QR token cannot read documents or accept", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const { token } = await activateAndCaptureToken(ctx, `qa-handoff-${uniqueSuffix()}@example.com`, { region: "PL" });
+
+      const started = await StartPartnerSignHandoffCommand(client, token);
+      expect(started).not.toBeNull();
+      const h = started!.handoffToken;
+      expect(h).not.toBe(token);
+
+      const phone = await GetPartnerSignHandoffQuery(client, h);
+      expect(phone).toMatchObject({ status: "pending", firstName: "Accept", lastName: "Flow", jurisdiction: "PL" });
+      expect(phone?.versionLabel).toMatch(/^\d+\.\d+$/);
+      expect(await PickUpPartnerSignHandoffQuery(client, token, h)).toEqual({ status: "pending" });
+
+      // Sign-only: the QR token is not an invite token.
+      expect(await GetPartnerDocumentPreviewQuery(client, h, "agreement")).toBeNull();
+      expect(await ValidateInviteTokenQuery(client, h)).toBeNull();
+      // Pickup needs the invite token too — the QR alone can't read the signature back.
+      expect(await PickUpPartnerSignHandoffQuery(client, h, h)).toBeNull();
+
+      expect(await SignPartnerSignHandoffCommand(client, { handoffToken: h, signatureDataUrl: FAKE_SIGNATURE_DATA_URL }, META())).toBe(true);
+      expect(await SignPartnerSignHandoffCommand(client, { handoffToken: h, signatureDataUrl: FAKE_SIGNATURE_DATA_URL }, META())).toBe(false);
+      expect((await GetPartnerSignHandoffQuery(client, h))?.status).toBe("signed");
+
+      expect(await PickUpPartnerSignHandoffQuery(client, token, h)).toEqual({ status: "signed", signatureDataUrl: FAKE_SIGNATURE_DATA_URL });
+      expect(await PickUpPartnerSignHandoffQuery(client, token, h)).toEqual({ status: "expired" });
+      expect(await GetPartnerSignHandoffQuery(client, h)).toBeNull();
+    });
+  }, 30000);
+
+  it("records the phone signing in the audit log with the phone's IP", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const { token } = await activateAndCaptureToken(ctx, `qa-handoff-audit-${uniqueSuffix()}@example.com`, { region: "PL" });
+      const h = (await StartPartnerSignHandoffCommand(client, token))!.handoffToken;
+      const meta = META();
+      await SignPartnerSignHandoffCommand(client, { handoffToken: h, signatureDataUrl: FAKE_SIGNATURE_DATA_URL }, meta);
+
+      const { rows } = await client.query<{ user_ip: string | null }>(
+        `SELECT user_ip FROM audit_log WHERE action = 'sign_on_phone' AND request_id = $1`,
+        [meta.requestId],
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.user_ip).toBe("203.0.113.7");
+    });
+  }, 30000);
+
+  it("expires after 15 minutes, and a new QR replaces the old one", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const { token } = await activateAndCaptureToken(ctx, `qa-handoff-exp-${uniqueSuffix()}@example.com`, { region: "MX" });
+      const now = new Date();
+      const later = new Date(now.getTime() + 15 * 60 * 1000 + 1);
+
+      const first = (await StartPartnerSignHandoffCommand(client, token, now))!.handoffToken;
+      expect(await GetPartnerSignHandoffQuery(client, first, later)).toBeNull();
+      expect(await SignPartnerSignHandoffCommand(client, { handoffToken: first, signatureDataUrl: FAKE_SIGNATURE_DATA_URL }, META(), later)).toBe(false);
+      expect(await PickUpPartnerSignHandoffQuery(client, token, first, later)).toEqual({ status: "expired" });
+
+      const second = (await StartPartnerSignHandoffCommand(client, token, now))!.handoffToken;
+      expect(await GetPartnerSignHandoffQuery(client, first, now)).toBeNull();
+      expect((await GetPartnerSignHandoffQuery(client, second, now))?.status).toBe("pending");
+    });
+  }, 30000);
+
+  it("rejects a non-PNG or oversized signature and an invalid invite", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const { token } = await activateAndCaptureToken(ctx, `qa-handoff-bad-${uniqueSuffix()}@example.com`, { region: "PL" });
+      const h = (await StartPartnerSignHandoffCommand(client, token))!.handoffToken;
+
+      await expect(SignPartnerSignHandoffCommand(client, { handoffToken: h, signatureDataUrl: "data:image/svg+xml;base64,AAAA" }, META())).rejects.toThrow(ValidationError);
+      await expect(
+        SignPartnerSignHandoffCommand(client, { handoffToken: h, signatureDataUrl: `data:image/png;base64,${"A".repeat(400_001)}` }, META()),
+      ).rejects.toThrow(ValidationError);
+      expect(await StartPartnerSignHandoffCommand(client, "not-a-real-token")).toBeNull();
+    });
+  }, 30000);
+
+  it("drops a phone signature nobody picked up when the invite is accepted", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const { token } = await activateAndCaptureToken(ctx, `qa-handoff-acc-${uniqueSuffix()}@example.com`, { region: "PL" });
+      const h = (await StartPartnerSignHandoffCommand(client, token))!.handoffToken;
+      await SignPartnerSignHandoffCommand(client, { handoffToken: h, signatureDataUrl: FAKE_SIGNATURE_DATA_URL }, META());
+
+      const input = await acceptInput(client, token);
+      await AcceptPractitionerInviteCommand(client, input, META());
+
+      const { rows } = await client.query<{ handoff: Record<string, unknown> }>(
+        `SELECT metadata->'sign_handoff' AS handoff FROM invite_tokens WHERE metadata->'sign_handoff'->>'token_hash' = $1`,
+        [hashToken(h)],
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.handoff.signature).toBeUndefined();
+      expect(rows[0]?.handoff.signed_at).toBeTruthy();
     });
   }, 30000);
 });

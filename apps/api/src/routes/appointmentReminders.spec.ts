@@ -194,6 +194,29 @@ describe("scheduled appointment emails (CORE-116)", () => {
     expect(emailsFor(id).at(-1)?.kind).toBe("ask");
   });
 
+  it("CORE-169: a reschedule into the 2-day window saves and asks right away (stamps set once, not cleared twice)", async () => {
+    const a = await admin();
+    const s = await setup();
+    const id = await book(a.auth, s, visitStart());
+    await respond(id, "confirmed");
+
+    const soon = new Date(Date.now() + 30 * 3_600_000).toISOString();
+    const res = await request(app).patch(`/api/v1/appointments/${id}`).set("Authorization", a.auth).send({ start_at: soon });
+    expect(res.status).toBe(200);
+    const email = emailsFor(id).at(-1);
+    expect(email?.kind).toBe("rescheduled");
+    expect(email?.links.confirm).not.toBeNull();
+
+    await withTenant(TENANT_SLUG, async (client) => {
+      const row = await client.query<{ patient_response: string | null; confirm_request_sent_at: Date | null }>(
+        `SELECT patient_response, confirm_request_sent_at FROM appointment WHERE id = $1`,
+        [id]
+      );
+      expect(row.rows[0]?.patient_response).toBeNull();
+      expect(row.rows[0]?.confirm_request_sent_at).not.toBeNull();
+    });
+  });
+
   it("the job endpoint needs the internal job secret", async () => {
     const res = await request(app).post("/api/v1/appointments/jobs/reminders").send({});
     expect(res.status).toBe(401);

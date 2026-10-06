@@ -439,6 +439,13 @@ describe("/api/v1/patient/:id/checklist + print + uploads (Estudios, ADR-024)", 
     expect(Buffer.from(res.body as Buffer).subarray(0, 5).toString("latin1")).toBe("%PDF-");
   }, 60000);
 
+  it("print takes a real-size drawn doctor signature past the 50 KB default body limit (NEO-255)", async () => {
+    const { auth, patientId } = await authAndPatient("doctor");
+    const doctorSignature = `data:image/png;base64,${"A".repeat(100_000)}`;
+    const res = await request(app).post(`/api/v1/patient/${patientId}/checklist/medicalHistory/print`).set("Authorization", auth).send({ doctorSignature });
+    expect(res.status).toBe(400); // parsed and rejected by the command (wrong document), not a 413
+  });
+
   it("uploads a study (multipart) that completes polysomnography; only an admin may delete it", async () => {
     const { auth, patientId } = await authAndPatient("doctor");
     const upload = await request(app)

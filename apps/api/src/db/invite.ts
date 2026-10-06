@@ -18,6 +18,24 @@ import { DatabaseError } from "../errors.js";
 export interface InviteTokenMetadata {
   counterparty_signed_at?: string;
   jurisdiction?: "PL" | "MX";
+  sign_handoff?: InviteSignHandoff;
+}
+
+/**
+ * CORE-166: "sign on your phone". The desktop registration page mints a
+ * short-lived, sign-only token shown as a QR; the phone stores its drawn
+ * signature here and the desktop picks it up once. Lives on the invite row
+ * (one live handoff per invite, a new QR replaces the old one) so it dies
+ * with the invite. `signature` is removed at pickup; the evidence stays.
+ */
+export interface InviteSignHandoff {
+  token_hash: string;
+  expires_at: string;
+  signature?: string;
+  signed_at?: string;
+  signed_ip?: string | null;
+  signed_user_agent?: string | null;
+  picked_up_at?: string;
 }
 
 export interface InviteToken {
@@ -101,5 +119,45 @@ export async function invalidateUnusedInviteTokensForUser(client: PoolClient, us
     );
   } catch (err) {
     throw new DatabaseError("invalidateUnusedInviteTokensForUser", err);
+  }
+}
+
+/** Replaces the invite's sign handoff (CORE-166); null drops it. */
+export async function setInviteSignHandoff(
+  client: PoolClient,
+  inviteId: string,
+  handoff: InviteSignHandoff | null
+): Promise<void> {
+  try {
+    if (handoff) {
+      await client.query(
+        `UPDATE invite_tokens SET metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{sign_handoff}', $2::jsonb) WHERE id = $1`,
+        [inviteId, JSON.stringify(handoff)]
+      );
+    } else {
+      await client.query(`UPDATE invite_tokens SET metadata = metadata - 'sign_handoff' WHERE id = $1`, [inviteId]);
+    }
+  } catch (err) {
+    throw new DatabaseError("setInviteSignHandoff", err);
+  }
+}
+
+/** The live invite holding this sign-handoff hash — same validity rule as getInviteTokenByHash; the handoff's own expiry is the caller's check. */
+export async function getInviteBySignHandoffHash(
+  client: PoolClient,
+  handoffHash: string
+): Promise<InviteTokenWithIdentity | null> {
+  try {
+    const r = await client.query<InviteTokenWithIdentity>(
+      `SELECT it.id, it.user_id, it.lead_id, it.metadata, it.created_by, u.identity_id, i.email, i.first_name, i.last_name
+       FROM invite_tokens it
+       JOIN users u ON u.id = it.user_id
+       JOIN identities i ON i.id = u.identity_id
+       WHERE it.metadata->'sign_handoff'->>'token_hash' = $1 AND it.used_at IS NULL AND it.expires_at > now()`,
+      [handoffHash]
+    );
+    return r.rows[0] ?? null;
+  } catch (err) {
+    throw new DatabaseError("getInviteBySignHandoffHash", err);
   }
 }
