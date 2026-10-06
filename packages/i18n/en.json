@@ -2367,6 +2367,7 @@
   "user.users.detail.notFound": "User not found",
   "user.users.detail.edit": "Edit user",
   "user.users.detail.email": "Email",
+  "user.users.detail.loginEmail": "Sign-in email",
   "user.users.detail.role": "Role",
   "user.users.detail.status": "Status",
   "user.users.detail.region": "Region",

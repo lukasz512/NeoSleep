@@ -2285,6 +2285,7 @@
   "user.users.detail.notFound": "Usuario no encontrado",
   "user.users.detail.edit": "Editar usuario",
   "user.users.detail.email": "Correo electrónico",
+  "user.users.detail.loginEmail": "Correo de acceso",
   "user.users.detail.role": "Rol",
   "user.users.detail.status": "Estado",
   "user.users.detail.region": "Región",
