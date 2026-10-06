@@ -19,7 +19,7 @@
         <p class="partner-sign__text">{{ t('user.partnerSign.intro', { name: signerName, version: view?.versionLabel ?? '' }) }}</p>
         <ConsentSignatureField ref="fieldRef" @change="empty = $event" />
         <p v-if="sendFailed" class="partner-sign__error" role="alert">{{ t('user.partnerSign.sendError') }}</p>
-        <AppButton color="primary" size="large" block :disabled="empty || sending" @click="send">
+        <AppButton color="primary" size="large" block class="partner-sign__submit" :disabled="empty || sending" @click="send">
           {{ t('user.partnerSign.send') }}
         </AppButton>
       </div>
@@ -114,14 +114,29 @@ onMounted(() => void load());
 </script>
 
 <style scoped>
+/* Same card insets and type as PartnerRegistrationView. */
 .partner-sign__body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  padding: 8px 32px 32px;
+}
+
+@media (max-width: 480px) {
+  .partner-sign__body {
+    padding: 8px 20px 24px;
+  }
 }
 
 .partner-sign__text {
   margin: 0;
+  font-size: 0.875rem;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+}
+
+.partner-sign__submit {
+  text-transform: none;
+  letter-spacing: normal;
 }
 
 .partner-sign__error {
