@@ -123,7 +123,7 @@ export async function resolveGoogleSignInUser(
     if (!emailVerified || !normalizedEmail) return { kind: "no_account" };
 
     const byEmail = await client.query<User>(
-      `SELECT ${USER_COLS} ${USER_JOIN} WHERE lower(i.email) = $1 AND u.deleted_at IS NULL`,
+      `SELECT ${USER_COLS} ${USER_JOIN} WHERE (lower(i.email) = $1 OR lower(u.login_email) = $1) AND u.deleted_at IS NULL`,
       [normalizedEmail]
     );
     const candidate = byEmail.rows[0];
@@ -158,7 +158,7 @@ export async function getUserById(client: PoolClient, id: string): Promise<User 
 export async function getStaffUserByEmail(client: PoolClient, email: string): Promise<StaffUser | null> {
   try {
     const r = await client.query<StaffUser>(
-      `SELECT ${STAFF_AUTH_COLS} ${USER_JOIN} WHERE i.email = $1 AND u.deleted_at IS NULL`,
+      `SELECT ${STAFF_AUTH_COLS} ${USER_JOIN} WHERE (i.email = $1 OR lower(u.login_email) = $1) AND u.deleted_at IS NULL`,
       [email.trim().toLowerCase()]
     );
     return r.rows[0] ?? null;
@@ -333,7 +333,7 @@ export async function getUsersWithoutPassword(client: PoolClient): Promise<{ id:
 export async function getUserIdByEmail(client: PoolClient, email: string): Promise<string | null> {
   try {
     const r = await client.query<{ id: string }>(
-      `SELECT u.id FROM users u JOIN identities i ON u.identity_id = i.id WHERE i.email = $1 AND u.deleted_at IS NULL`,
+      `SELECT u.id FROM users u JOIN identities i ON u.identity_id = i.id WHERE (i.email = $1 OR lower(u.login_email) = $1) AND u.deleted_at IS NULL`,
       [email.trim().toLowerCase()]
     );
     return r.rows[0]?.id ?? null;

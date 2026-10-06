@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import request from "supertest";
 import bcrypt from "bcrypt";
 import { app } from "../server.js";
-import { getDb, withTenant, insertStaffUser, insertPractitioner, insertPatient, isUserLinkedToPractitioner } from "../db.js";
+import { getDb, withTenant, insertStaffUser, insertPractitioner, insertPatient, isUserLinkedToPractitioner, getStaffUserByEmail, getUserIdByEmail } from "../db.js";
 import { signAuthToken } from "../utils/jwt.js";
 import { DOCTOR_NOT_LINKED_PREFIX, reportUnlinkedDoctor, resetDoctorLinkAlertThrottle } from "../services/doctorLinkAlert.js";
 
@@ -46,6 +46,20 @@ describe("CORE-173 one identity per doctor, whatever the email's case", () => {
       const user = await insertStaffUser(client, `${local}@neosleepcare.com`, "Lorena", "Case", "doctor", null, true);
       expect(practitioner.email).toBe(`${local}@neosleepcare.com`);
       expect(await isUserLinkedToPractitioner(client, user!.id, practitioner.id)).toBe(true);
+    });
+  });
+});
+
+describe("CORE-173 login email separate from the contact email", () => {
+  it("signs in with users.login_email while the identity keeps the contact email", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const contact = `qa-core173-contact-${uniqueSuffix()}@gmail.example`;
+      const login = `QA-core173-work-${uniqueSuffix()}@NeoSleepCare.com`;
+      const user = await insertStaffUser(client, contact, "Lorena", "Login", "doctor", null, true);
+      await client.query(`UPDATE users SET login_email = $1 WHERE id = $2`, [login, user!.id]);
+      expect((await getStaffUserByEmail(client, login))?.id).toBe(user!.id);
+      expect(await getUserIdByEmail(client, login)).toBe(user!.id);
+      expect((await getStaffUserByEmail(client, contact))?.id).toBe(user!.id);
     });
   });
 });
