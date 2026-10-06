@@ -26,14 +26,18 @@ test("desktop column: 4 columns that wrap, next visit first at half width, group
   const small = (await page.locator(".patient-details__tile").first().boundingBox())!;
   expect(await page.locator(".patient-details__tiles > *").first().getAttribute("data-testid")).toBe("tile-appointment");
   expect(Math.round(next.x)).toBe(Math.round(strip.x));
-  expect(Math.abs(next.width - (strip.width - 8) / 2)).toBeLessThanOrEqual(1);
-  expect(Math.abs(small.width - (strip.width - 24) / 4)).toBeLessThanOrEqual(1);
+  // CORE-170: one 16px gutter for tiles and groups.
+  expect(Math.abs(next.width - (strip.width - 16) / 2)).toBeLessThanOrEqual(1);
+  expect(Math.abs(small.width - (strip.width - 48) / 4)).toBeLessThanOrEqual(1);
   expect(await tilesPerRow(page)).toBe(3);
   // The row stretches to its tallest tile; the next visit's own content must not be what makes it taller.
   const content = (await page.locator(".next-visit__text").boundingBox())!;
   expect(content.height + 24).toBeLessThanOrEqual(small.height);
   const lefts = await page.locator(".patient-details__group").evaluateAll((els) => new Set(els.map((el) => Math.round(el.getBoundingClientRect().left))).size);
   expect(lefts).toBe(2);
+  // CORE-170: the second group column starts where the tile after the next visit does.
+  const groupLefts = await page.locator(".patient-details__group").evaluateAll((els) => [...new Set(els.map((el) => Math.round(el.getBoundingClientRect().left)))].sort((a, b) => a - b));
+  expect(Math.abs(groupLefts[1] - small.x)).toBeLessThanOrEqual(1);
 });
 
 test("phone 360px: next visit a full row, then two tiles per row, one column, no sideways scroll", async ({ page }) => {
