@@ -651,7 +651,8 @@ const nextVisitView = computed(() => {
       startAt: next.start_at,
       timeZone: undefined,
       title: next.event.title || t("user.calendar.kind.encounter"),
-      chip: { text: `${t("user.calendar.kind.encounter")} · ${type}` },
+      // The title already says what it is; the chip only says how (space: two tiles wide).
+      chip: { text: type },
       canReschedule: true,
       canComplete: true,
     };

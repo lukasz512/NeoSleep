@@ -493,7 +493,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
     emitPatientChanged("p-1", "visits");
     await flushPromises();
     expect(w.find(".next-visit__title").text()).toBe("Home visit");
-    expect(w.find('[data-testid="next-visit-chip"]').text()).toBe("Event · Face-to-face");
+    expect(w.find('[data-testid="next-visit-chip"]').text()).toBe("Face-to-face");
   });
 
   it("Done asks first, then marks the appointment completed without opening it", async () => {
