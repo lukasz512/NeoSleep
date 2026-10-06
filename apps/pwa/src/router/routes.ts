@@ -45,6 +45,8 @@ export const routes: RouteRecordRaw[] = [
   { path: "/q", name: "patient-questionnaire", component: () => import("../views/PatientQuestionnaireView.vue"), meta: { layout: "public", public: true } },
   // Patient's appointment page from the appointment email (CORE-25): confirm, "I can't come", stop emails. Same /a#<token> rule as /q.
   { path: "/a", name: "patient-appointment", component: () => import("../views/PatientAppointmentView.vue"), meta: { layout: "public", public: true } },
+  // The patient's signed Historia clínica from the emailed link (NEO-258). Same /d#<token> rule as /q.
+  { path: "/d", name: "patient-document", component: () => import("../views/PatientDocumentView.vue"), meta: { layout: "public", public: true } },
   { path: "/dev", name: "dev", component: () => import("../views/DevView.vue"), meta: { layout: "app", devOnly: true } },
   { path: "/dashboard", name: "dashboard", component: () => import("../views/DashboardView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "doctor"] } }, // admin + doctor (NEO-233 Panel v2, behind its switch — see router/index.ts); everyone else lands on homePathForRole()
   { path: "/leads", name: "leads", component: () => import("../views/LeadsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },

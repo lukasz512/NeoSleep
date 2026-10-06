@@ -23,6 +23,7 @@ import {
   OptOutPublicAppointmentCommand,
   type PublicAppointmentMeta,
 } from "../commands/appointmentPatient.js";
+import { DownloadPublicDocumentCommand } from "../commands/historiaClinicaEmail.js";
 import { ValidationError } from "../errors.js";
 import { routeParam } from "./utils.js";
 
@@ -133,6 +134,23 @@ publicRouter.post(
       }
     );
     res.status(201).json(result);
+  })
+);
+
+/**
+ * The patient's signed Historia clínica (apps/pwa /d#<token>, NEO-258), opened
+ * from the emailed link. Token in the body like the questionnaire's; any
+ * unusable link → 410 {code:"LINK_INVALID"}.
+ */
+publicRouter.post(
+  "/public/document",
+  publicQuestionnaireReadLimiter,
+  asyncHandler(async (req: Request, res: Response) => {
+    const slug = tenantSlugFromHost(req.hostname);
+    const document = await withTenant(slug, (client) => DownloadPublicDocumentCommand(client, bodyToken(req)));
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${document.filename.replace(/[^A-Za-z0-9._-]/g, "_")}"`);
+    res.send(Buffer.from(document.bytes));
   })
 );
 

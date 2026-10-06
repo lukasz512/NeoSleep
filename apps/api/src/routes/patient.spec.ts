@@ -446,6 +446,23 @@ describe("/api/v1/patient/:id/checklist + print + uploads (Estudios, ADR-024)", 
     expect(res.status).toBe(400); // parsed and rejected by the command (wrong document), not a 413
   });
 
+  it("emailing the Historia clínica: 403 for rep, a real-size signature passes the body limit, an incomplete one is refused (NEO-258)", async () => {
+    const rep = await authAndPatient("rep");
+    const denied = await request(app).post(`/api/v1/patient/${rep.patientId}/historia-clinica/email`).set("Authorization", rep.auth).send({});
+    expect(denied.status).toBe(403);
+
+    const { auth, patientId } = await authAndPatient("doctor");
+    const doctorSignature = `data:image/png;base64,${"A".repeat(100_000)}`;
+    const res = await request(app).post(`/api/v1/patient/${patientId}/historia-clinica/email`).set("Authorization", auth).send({ doctorSignature });
+    expect(res.status).toBe(400); // parsed (not a 413) and refused: no section is done yet
+  });
+
+  it("the public document link: 410 for an unknown token, whatever its shape (NEO-258)", async () => {
+    const res = await request(app).post("/api/v1/public/document").send({ token: "A".repeat(43) });
+    expect(res.status).toBe(410);
+    expect(res.body.code).toBe("LINK_INVALID");
+  });
+
   it("uploads a study (multipart) that completes polysomnography; only an admin may delete it", async () => {
     const { auth, patientId } = await authAndPatient("doctor");
     const upload = await request(app)

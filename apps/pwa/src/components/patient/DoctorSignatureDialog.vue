@@ -6,14 +6,15 @@
     @update:model-value="emit('update:modelValue', $event)"
     @close="emit('update:modelValue', false)"
   >
-    <p class="doctor-signature__hint text-body-medium text-medium-emphasis">{{ t("app.clinical.doctorSignature.hint") }}</p>
+    <p class="doctor-signature__hint text-body-medium text-medium-emphasis">{{ t(purpose === "email" ? "app.clinical.doctorSignature.hintEmail" : "app.clinical.doctorSignature.hint") }}</p>
     <ConsentSignatureField v-if="modelValue" ref="fieldRef" data-testid="doctor-signature-field" @change="empty = $event" />
     <template #actions>
-      <AppButton variant="text" data-testid="doctor-signature-skip" @click="emit('print', null)">
+      <!-- NEO-258 D3: what goes to the patient by email is always signed — no unsigned way out there. -->
+      <AppButton v-if="purpose === 'print'" variant="text" data-testid="doctor-signature-skip" @click="emit('print', null)">
         {{ t("app.clinical.doctorSignature.printUnsigned") }}
       </AppButton>
       <AppButton color="primary" :disabled="empty" data-testid="doctor-signature-sign" @click="sign">
-        {{ t("app.clinical.doctorSignature.signAndPrint") }}
+        {{ t(purpose === "email" ? "app.clinical.doctorSignature.signAndSend" : "app.clinical.doctorSignature.signAndPrint") }}
       </AppButton>
     </template>
   </AppFormDialog>
@@ -33,9 +34,11 @@ import ConsentSignatureField from "../questionnaire/ConsentSignatureField.vue";
  * patient's) and is never stored; "Print unsigned"
  * keeps the blank line to sign on paper. `print` fires inside the click, so
  * the caller can still open the PDF tab without a popup blocker.
+ * `purpose: "email"` (NEO-258): the same pad before the Historia clínica is
+ * emailed to the patient — signing is required, `print` carries the signature.
  */
 
-const props = defineProps<{ modelValue: boolean }>();
+const props = withDefaults(defineProps<{ modelValue: boolean; purpose?: "print" | "email" }>(), { purpose: "print" });
 const emit = defineEmits<{ "update:modelValue": [value: boolean]; print: [signature: string | null] }>();
 
 const { t } = useI18n();
