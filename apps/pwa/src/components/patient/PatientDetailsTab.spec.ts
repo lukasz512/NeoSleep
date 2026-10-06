@@ -183,63 +183,26 @@ describe("PatientDetailsTab (NEO-206)", () => {
   });
 });
 
-describe("PatientDetailsTab — every appointment (CORE-133)", () => {
+// NEO-256: Citas = appointments (CORE-133) and events (CORE-137) in one list, drawn by the calendar's day list.
+describe("PatientDetailsTab — Citas: appointments and events in the calendar's day list (NEO-256)", () => {
   const APPTS = [
     { id: "a-past", status: "completed", start_at: "2026-09-01T16:00:00.000Z", end_at: "2026-09-01T17:00:00.000Z", timezone: "America/Mexico_City", practitioner_name: "Dra. Ruiz" },
     { id: "a-late", status: "scheduled", start_at: "2031-03-05T22:00:00.000Z", end_at: "2031-03-05T23:00:00.000Z", timezone: "America/Mexico_City", practitioner_name: "Dra. Ruiz" },
     { id: "a-soon", status: "scheduled", start_at: "2031-03-04T21:00:00.000Z", end_at: "2031-03-04T22:00:00.000Z", timezone: "America/Mexico_City", practitioner_name: "Dra. Ruiz" },
     { id: "a-off", status: "cancelled", start_at: "2031-03-06T15:00:00.000Z", end_at: "2031-03-06T16:00:00.000Z", timezone: "America/Mexico_City", practitioner_name: "Dra. Ruiz" },
   ];
-
-  async function mountWithAppointments() {
-    setActivePinia(createPinia());
-    apiFetch.mockImplementation(async (path: string) =>
-      path.startsWith("/api/v1/appointments?")
-        ? { ok: true, status: 200, json: async () => ({ items: APPTS }) }
-        : path.endsWith("/care-team")
-          ? { ok: true, status: 200, json: async () => [] }
-          : { ok: true, status: 200, json: async () => EMPTY },
-    );
-    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { template: "<div />" } }, { path: "/hcp/:id", name: "hcp-detail", component: { template: "<div />" } }, { path: "/calendar", name: "calendar", component: { template: "<div />" } }] });
-    const wrapper = mount(PatientDetailsTab, {
-      props: { patient: PATIENT, canSeeStudies: true },
-      global: { plugins: [createI18n({ legacy: false, locale: "en", messages: { en } }), createVuetify({ components: vuetifyComponents }), router] },
-    });
-    wrappers.push(wrapper);
-    await flushPromises();
-    return wrapper;
-  }
-
-  it("lists all of the patient's appointments — upcoming soonest first, then past — in clinic time", async () => {
-    const w = await mountWithAppointments();
-    expect(apiFetch).toHaveBeenCalledWith("/api/v1/appointments?patient_id=p-1", { handleErrors: false });
-    const rows = w.findAll('[data-testid="patient-appointment"]');
-    expect(rows.map((r) => r.attributes("data-id"))).toEqual(["a-soon", "a-late", "a-off", "a-past"]);
-    // 21:00Z is 15:00 at the Mexico City clinic, whatever the reader's zone.
-    expect(rows[0]!.text()).toMatch(/0?3:00\s?PM|15:00/);
-    expect(rows[2]!.text()).toContain("Cancelled");
-  });
-
-  it("the next-appointment tile is the first upcoming scheduled visit, in clinic time", async () => {
-    const w = await mountWithAppointments();
-    const tile = w.find('[data-testid="tile-appointment"]');
-    expect(tile.text()).toContain("Mar 4");
-    expect(tile.text()).toMatch(/0?3:00\s?PM|15:00/);
-  });
-});
-
-describe("PatientDetailsTab — events for the patient (CORE-137)", () => {
   const EVENTS = [
-    { id: "e-past", type: "visit", status: "completed", start_at: "2026-09-01T16:00:00.000Z", end_at: "2026-09-01T17:00:00.000Z", metadata: { title: "Follow-up at home" } },
-    { id: "e-soon", type: "call", status: "scheduled", start_at: "2031-03-04T21:00:00.000Z", end_at: "2031-03-04T22:00:00.000Z", metadata: { title: "Video check-in" } },
-    { id: "e-off", type: "visit", status: "cancelled", start_at: "2031-03-06T15:00:00.000Z", end_at: null, metadata: null },
+    { id: "e-past", type: "visit", status: "completed", start_at: "2026-08-01T16:00:00.000Z", end_at: "2026-08-01T17:00:00.000Z", metadata: { title: "Follow-up at home" } },
+    { id: "e-early", type: "call", status: "scheduled", start_at: "2031-03-04T12:00:00.000Z", end_at: "2031-03-04T13:00:00.000Z", metadata: { title: "Video check-in" } },
   ];
 
-  async function mountWithEvents(items: unknown[]) {
+  async function mountWith(appointments: unknown[], events: unknown[], role?: string) {
     setActivePinia(createPinia());
+    if (role) useAuthStore().user = { id: "u-1", role } as NonNullable<ReturnType<typeof useAuthStore>["user"]>;
     apiFetch.mockImplementation(async (path: string) => {
-      if (path.startsWith("/api/v1/encounter?")) return { ok: true, status: 200, json: async () => ({ items, total: items.length }) };
-      if (path.startsWith("/api/v1/appointments?")) return { ok: true, status: 200, json: async () => ({ items: [] }) };
+      if (path.startsWith("/api/v1/appointments?")) return { ok: true, status: 200, json: async () => ({ items: appointments }) };
+      if (path.startsWith("/api/v1/encounter?")) return { ok: true, status: 200, json: async () => ({ items: events, total: events.length }) };
+      if (path.endsWith("/care-team")) return { ok: true, status: 200, json: async () => [] };
       return { ok: true, status: 200, json: async () => EMPTY };
     });
     const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { template: "<div />" } }, { path: "/hcp/:id", name: "hcp-detail", component: { template: "<div />" } }, { path: "/calendar", name: "calendar", component: { template: "<div />" } }] });
@@ -251,29 +214,46 @@ describe("PatientDetailsTab — events for the patient (CORE-137)", () => {
     await flushPromises();
     return wrapper;
   }
+  const rowIds = (w: VueWrapper) => w.findAll('[data-testid="patient-visits"] [data-testid="calendar-row"]').map((r) => r.attributes("data-id"));
 
-  it("asks for the patient's events and lists them — upcoming soonest first, then past — with the type label", async () => {
-    const w = await mountWithEvents(EVENTS);
+  it("asks for the patient's appointments and events", async () => {
+    await mountWith(APPTS, EVENTS);
+    expect(apiFetch).toHaveBeenCalledWith("/api/v1/appointments?patient_id=p-1", { handleErrors: false });
     expect(apiFetch).toHaveBeenCalledWith("/api/v1/encounter?patient_id=p-1", { handleErrors: false });
-    const rows = w.findAll('[data-testid="patient-event"]');
-    expect(rows.map((r) => r.attributes("data-id"))).toEqual(["e-soon", "e-off", "e-past"]);
-    expect(rows[0]!.text()).toContain("Video check-in");
-    expect(rows[0]!.text()).toContain("Video call");
-    expect(rows[2]!.text()).toContain("Face-to-face");
-    expect(rows[1]!.text()).toContain("Cancelled");
-    expect(groupTitles(w)).toContain("Events");
+  });
+
+  it("one list of both — upcoming days soonest first, then past days; by time within a day", async () => {
+    const w = await mountWith(APPTS, EVENTS);
+    expect(rowIds(w)).toEqual(["e-early", "a-soon", "a-late", "a-off", "a-past", "e-past"]);
+    expect(groupTitles(w)).not.toContain("Events");
+  });
+
+  it("is the calendar's own day list: one per day, titled with the day, rows in clinic time", async () => {
+    const w = await mountWith(APPTS, []);
+    const lists = w.findAllComponents({ name: "CalendarDayList" });
+    expect(lists).toHaveLength(4);
+    expect(lists[0]!.props("mode")).toBe("inline");
+    expect(lists[0]!.text()).toContain("Tuesday, March 4, 2031");
+    // 21:00Z is 15:00 at the Mexico City clinic, whatever the reader's zone.
+    expect(w.find('[data-id="a-soon"]').text()).toContain("15:00");
+    expect(w.find('[data-id="a-off"]').classes()).toContain("cal-dl__row--cancelled");
   });
 
   it("lists an event that is shared with other patients", async () => {
-    const w = await mountWithEvents([{ ...EVENTS[1]!, id: "e-shared", patient_ids: ["p-1", "p-2"] }]);
-    const rows = w.findAll('[data-testid="patient-event"]');
-    expect(rows.map((r) => r.attributes("data-id"))).toEqual(["e-shared"]);
+    const w = await mountWith([], [{ ...EVENTS[1]!, id: "e-shared", patient_ids: ["p-1", "p-2"] }]);
+    expect(rowIds(w)).toEqual(["e-shared"]);
   });
 
-  it("shows no Events group for a patient without events", async () => {
-    const w = await mountWithEvents([]);
-    expect(w.findAll('[data-testid="patient-event"]')).toHaveLength(0);
-    expect(groupTitles(w)).not.toContain("Events");
+  it("no appointments and no events: no Citas group", async () => {
+    const w = await mountWith([], []);
+    expect(w.find('[data-testid="patient-visits"]').exists()).toBe(false);
+  });
+
+  it("a doctor does not see Territory; the field force does", async () => {
+    const doctor = await mountWith([], [], "doctor");
+    expect(doctor.find('[data-testid="patient-region"]').exists()).toBe(false);
+    const rep = await mountWith([], [], "rep");
+    expect(rep.find('[data-testid="patient-region"]').exists()).toBe(true);
   });
 });
 
@@ -355,7 +335,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
     await flushPromises();
     return wrapper;
   }
-  const rowIds = (w: VueWrapper) => w.findAll('[data-testid="patient-appointment"]').map((r) => r.attributes("data-id"));
+  const rowIds = (w: VueWrapper) => w.findAll('[data-testid="calendar-row"]').map((r) => r.attributes("data-id"));
   const calls = (part: string) => apiFetch.mock.calls.filter(([p]) => String(p).includes(part)).length;
 
   it("a visit booked from the card shows up without remounting the tab", async () => {
@@ -428,7 +408,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
 
   it("every visit row opens the same detail dialog", async () => {
     const w = await mountLive();
-    await w.find('[data-testid="patient-appointment-open"]').trigger("click");
+    await w.find('[data-id="a-soon"]').trigger("click");
     await flushPromises();
     expect(w.findComponent({ name: "AppointmentDetailDialog" }).props("appointment")).toMatchObject({ id: "a-soon" });
   });
@@ -459,7 +439,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
     server.events = [EVENT_SOONER];
     emitPatientChanged("p-1", "visits");
     await flushPromises();
-    await w.find('[data-testid="patient-event-open"]').trigger("click");
+    await w.find('[data-id="e-sooner"]').trigger("click");
     await flushPromises();
     const moved = { ...EVENT_SOONER, start_at: "2031-03-03T18:00:00.000Z", end_at: "2031-03-03T19:00:00.000Z" };
     server.events = [moved];

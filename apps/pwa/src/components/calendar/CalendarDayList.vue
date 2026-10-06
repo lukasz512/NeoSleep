@@ -36,6 +36,7 @@
       :class="{ 'cal-dl__row--cancelled': e.status === 'cancelled', 'cal-dl__row--past': e.past }"
       :style="{ '--cal-color': e.color }"
       data-testid="calendar-row"
+      :data-id="e.id"
       @click="emit('open', e.id)"
     >
       <span class="cal-dl__time">

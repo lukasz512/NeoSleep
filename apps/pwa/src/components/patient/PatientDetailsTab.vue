@@ -103,7 +103,8 @@
               </VChip>
             </dd>
           </div>
-          <div class="patient-details__row">
+          <!-- NEO-256: territory is a field-force notion; a doctor has none. -->
+          <div v-if="!isDoctor" class="patient-details__row" data-testid="patient-region">
             <dt>{{ t("app.patients.detail.region") }}</dt>
             <dd>{{ regionBreadcrumb }}</dd>
           </div>
@@ -114,45 +115,10 @@
         </dl>
       </section>
 
-      <section v-if="appointments.length" class="patient-details__group" aria-labelledby="pd-appointments">
+      <!-- NEO-256: appointments and events in one list, drawn by the calendar's own day list. -->
+      <section v-if="visitDays.length" class="patient-details__group patient-details__visits" aria-labelledby="pd-appointments" data-testid="patient-visits">
         <h3 id="pd-appointments" class="patient-details__group-title">{{ t("app.patients.detail.groups.appointments") }}</h3>
-        <dl class="patient-details__rows">
-          <div
-            v-for="a in appointments"
-            :key="a.id"
-            class="patient-details__row"
-            :class="{ 'patient-details__row--muted': a.status === 'cancelled' }"
-            data-testid="patient-appointment"
-            :data-id="a.id"
-          >
-            <dt>{{ formatDayLabel(a.start_at, a.timezone, intlLocale(locale)) }}</dt>
-            <dd>
-              <button type="button" class="patient-details__link" data-testid="patient-appointment-open" @click="openAppointment(a.id)">{{ formatTimeRange(a.start_at, a.end_at, a.timezone, intlLocale(locale)) }}</button><template v-if="a.practitioner_name"> · {{ a.practitioner_name }}</template>
-              <VChip v-if="a.status !== 'scheduled'" size="x-small" variant="tonal" class="ml-1">{{ t(`user.appointments.status.${a.status}`) }}</VChip>
-            </dd>
-          </div>
-        </dl>
-      </section>
-
-      <!-- CORE-137: events (Evento) made for this patient, next to their appointments. -->
-      <section v-if="events.length" class="patient-details__group" aria-labelledby="pd-events" data-testid="patient-events">
-        <h3 id="pd-events" class="patient-details__group-title">{{ t("app.patients.detail.groups.events") }}</h3>
-        <dl class="patient-details__rows">
-          <div
-            v-for="e in events"
-            :key="e.id"
-            class="patient-details__row"
-            :class="{ 'patient-details__row--muted': e.status === 'cancelled' }"
-            data-testid="patient-event"
-            :data-id="e.id"
-          >
-            <dt>{{ formatDate(e.start_at) }}</dt>
-            <dd>
-              <button type="button" class="patient-details__link" data-testid="patient-event-open" @click="openEvent(e)">{{ formatEventTime(e.start_at) }}</button> · {{ e.title || t("user.planner.form.fieldTitle") }} · {{ t(e.type === "video" ? "user.planner.form.typeVideo" : "user.planner.form.typeF2f") }}
-              <VChip v-if="e.status !== 'scheduled'" size="x-small" variant="tonal" class="ml-1">{{ t(`user.appointments.status.${e.status}`) }}</VChip>
-            </dd>
-          </div>
-        </dl>
+        <CalendarDayList v-for="day in visitDays" :key="day.key" mode="inline" :label="day.label" :events="day.events" @open="openVisit" />
       </section>
 
       <!-- CORE-132: every other HCP with access — specialty says who does what; when and how they got it (D1). -->
@@ -290,6 +256,10 @@ import type { EventFormInitialData, EventSubmitPayload } from "../EventForm.vue"
 import { useVisiblePolling } from "../../composables/useVisiblePolling";
 import { useAuthStore } from "../../stores/auth";
 import EntityLink from "../EntityLink.vue";
+import CalendarDayList from "../calendar/CalendarDayList.vue";
+import { appointmentEntry, encounterEntry, toGridEvent } from "../calendar/calendarEntries";
+import type { CalendarGridEvent } from "../calendar/calendarTypes";
+import { capitalizeFirst, dateKey } from "../../utils/calendarLayout";
 import { apiFetch } from "../../composables/useApi";
 import { usePatientCareTeam, type CareTeamMember } from "../../composables/usePatientCareTeam";
 import { useIdentity } from "../../composables/useIdentity";
@@ -297,7 +267,6 @@ import { formatDiagnosis } from "../../utils/diagnosis";
 import { deviceOrderState } from "../../utils/treatmentPlanStatus";
 import { patientStatusColor, patientStatusLabel } from "../../utils/patientStatus";
 import { fromEncounter, type PlannerEvent } from "../../utils/encounterMapping";
-import { formatDayLabel, formatTimeRange } from "../../utils/appointmentTime";
 import type { PatientDetailsTabPatient, PatientSummary } from "./patientSummary";
 
 /**
@@ -343,6 +312,8 @@ const canOpenHcp = computed(() => {
   const roles = router.resolve({ name: "hcp-detail", params: { id: "_" } }).meta.roles as string[] | undefined;
   return !roles || roles.includes(authStore.user?.role ?? "");
 });
+
+const isDoctor = computed(() => authStore.user?.role === "doctor");
 
 const summary = ref<PatientSummary | null>(null);
 
@@ -509,8 +480,36 @@ const events = computed(() => {
   const past = eventItems.value.filter((e) => at(e) < now).sort((a, b) => at(b) - at(a));
   return [...upcoming, ...past];
 });
-function formatEventTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(intlLocale(locale.value), { hour: "numeric", minute: "2-digit" });
+
+/**
+ * Citas (NEO-256): appointments and events as calendar rows, one day list per
+ * day — upcoming days soonest first, then past days most recent first.
+ */
+const visitDays = computed(() => {
+  const now = Date.now();
+  const rows = [
+    ...appointmentItems.value.map((a) => appointmentEntry(a)),
+    ...eventItems.value.map((e) => encounterEntry(e, t("user.planner.form.fieldTitle"))),
+  ]
+    .map((e) => ({ at: new Date(e.start_at).getTime(), row: toGridEvent(e, now) }))
+    .sort((x, y) => x.at - y.at);
+  const byDay = new Map<string, CalendarGridEvent[]>();
+  for (const { row } of rows) byDay.set(row.dayKey, [...(byDay.get(row.dayKey) ?? []), row]);
+  const todayKey = dateKey(new Date(now));
+  const days = [...byDay.entries()].map(([key, events]) => ({ key, label: dayLabel(key), events }));
+  return [...days.filter((d) => d.key >= todayKey), ...days.filter((d) => d.key < todayKey).reverse()];
+});
+/** The calendar's day title ("Tuesday, 6 October"), plus the year when it is not this year. */
+function dayLabel(key: string): string {
+  const [y, m, d] = key.split("-").map(Number);
+  const sameYear = y === new Date().getFullYear();
+  const format = new Intl.DateTimeFormat(intlLocale(locale.value), { weekday: "long", day: "numeric", month: "long", ...(sameYear ? {} : { year: "numeric" }) });
+  return capitalizeFirst(format.format(new Date(y, m - 1, d, 12)));
+}
+function openVisit(id: string): void {
+  const event = eventItems.value.find((e) => e.id === id);
+  if (event) openEvent(event);
+  else void openAppointment(id);
 }
 
 /**
@@ -823,10 +822,6 @@ const tiles = computed<Tile[]>(() => {
   border-radius: var(--pwa-radius, 12px);
   background: rgba(var(--v-theme-on-surface), 0.04);
 }
-.patient-details__row--muted {
-  opacity: 0.6;
-}
-
 .patient-details__row {
   display: flex;
   align-items: center;
@@ -887,12 +882,12 @@ const tiles = computed<Tile[]>(() => {
   text-decoration: none;
 }
 
-/* A visit row opens its dialog (CORE-159): a button that reads like the links. */
-button.patient-details__link {
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  cursor: pointer;
+/* NEO-256: the calendar's day list reads these tokens from its host (CalendarView defines the same). */
+.patient-details__visits {
+  --cal-line-strong: rgba(var(--v-theme-on-surface), 0.14);
+  --cal-muted: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  --cal-hover: rgba(var(--v-theme-on-surface), 0.08);
+  display: grid;
+  gap: 12px;
 }
 </style>

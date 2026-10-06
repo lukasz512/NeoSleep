@@ -191,7 +191,7 @@ import { useDisplay } from "vuetify";
 import { useRoute, useRouter } from "vue-router";
 import { intlLocale } from "@i18n/language-options";
 import { apiFetch } from "../composables/useApi";
-import { useAppointments, appointmentResponseState, type Appointment, type AppointmentResponseState } from "../composables/useAppointments";
+import { useAppointments, type Appointment } from "../composables/useAppointments";
 import { fromEncounter, type PlannerEvent } from "../utils/encounterMapping";
 import { toZonedCalendarDateTime, deviceTimeZone, zonedInputToIso } from "../utils/appointmentTime";
 import {
@@ -222,6 +222,7 @@ import CalendarMiniMonth from "../components/calendar/CalendarMiniMonth.vue";
 import CalendarDayList from "../components/calendar/CalendarDayList.vue";
 import { usePersistedState } from "@prefs";
 import type { CalendarGridEvent } from "../components/calendar/calendarTypes";
+import { appointmentEntry, clockLabel, encounterEntry, toGridEvent, type CalendarEntry, type CalendarItemKind } from "../components/calendar/calendarEntries";
 
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 const AppointmentDialog = defineAsyncComponent(() => import("../components/AppointmentDialog.vue"));
@@ -312,7 +313,6 @@ watch([calendarType, phone, narrow, locale], () => void nextTick(measure), { flu
 
 // ── data: the union list ────────────────────────────────────────────────────
 
-type CalendarItemKind = "encounter" | "appointment";
 const KINDS: readonly CalendarItemKind[] = ["appointment", "encounter"];
 const KIND_COLOR: Record<CalendarItemKind, string> = { appointment: "#128F83", encounter: "#F59E0B" };
 const visibleKinds = reactive<Record<CalendarItemKind, boolean>>({ appointment: true, encounter: true });
@@ -325,84 +325,15 @@ interface CalendarItemDto {
   data: Record<string, unknown>;
 }
 
-interface CalendarEntry {
-  kind: CalendarItemKind;
-  id: string;
-  title: string;
-  start_at: string;
-  end_at: string;
-  timezone: string;
-  status: string;
-  color: string;
-  meta?: string;
-  response?: AppointmentResponseState | null;
-  encounter?: PlannerEvent;
-  appointment?: Appointment;
-}
-
 const entries = ref<CalendarEntry[]>([]);
 const loading = ref(false);
 const loadFailed = ref(false);
 const loadFailure = ref<unknown>(null);
 
-/** Map event type+status to a warm/varied color for visual richness (encounters only). */
-function encounterColor(type: "f2f" | "video", status: string): string {
-  if (status === "cancelled") return "#9E9E9E";
-  if (status === "completed") return "#4CAF50";
-  if (status === "no_show") return "#FF7043";
-  return type === "video" ? "#F59E0B" : "#128F83";
-}
-
-/** Status → tint, Apple Calendar-style (appointments only). */
-const STATUS_TINT: Record<Appointment["status"], string> = { scheduled: "#128F83", completed: "#34C759", cancelled: "#8E8E93", no_show: "#FF9500" };
-
 function toEntry(item: CalendarItemDto): CalendarEntry {
-  if (item.kind === "encounter") {
-    const encounter = fromEncounter(item.data as Parameters<typeof fromEncounter>[0]);
-    return {
-      kind: "encounter",
-      id: encounter.id,
-      title: encounter.title || t("user.planner.form.fieldTitle"),
-      start_at: encounter.start_at,
-      end_at: encounter.end_at,
-      timezone: deviceTimeZone(),
-      status: encounter.status,
-      color: encounterColor(encounter.type, encounter.status),
-      meta: encounter.location || encounter.video_link || undefined,
-      response: null,
-      encounter,
-    };
-  }
-  const appointment = item.data as unknown as Appointment;
-  return {
-    kind: "appointment",
-    id: appointment.id,
-    title: appointment.patient_name ?? "",
-    start_at: appointment.start_at,
-    end_at: appointment.end_at,
-    timezone: appointment.timezone,
-    status: appointment.status,
-    color: STATUS_TINT[appointment.status],
-    meta: [appointment.practitioner_name, appointment.organization_name].filter(Boolean).join(" · "),
-    response: appointmentResponseState(appointment),
-    appointment,
-  };
+  if (item.kind === "encounter") return encounterEntry(fromEncounter(item.data as Parameters<typeof fromEncounter>[0]), t("user.planner.form.fieldTitle"));
+  return appointmentEntry(item.data as unknown as Appointment);
 }
-
-function kindIcon(kind: CalendarItemKind): AppIconName {
-  return kind === "appointment" ? "nav-appointments" : "nav-planner";
-}
-
-function responseIcon(response: AppointmentResponseState): AppIconName {
-  if (response === "awaiting") return "clock";
-  return response === "confirmed" ? "check-circle" : "alert-triangle";
-}
-
-const RESPONSE_COLOR: Record<AppointmentResponseState, string> = {
-  confirmed: "rgb(var(--v-theme-success))",
-  cannot_attend: "rgb(var(--v-theme-warning))",
-  awaiting: "rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity))",
-};
 
 function windowOf(): { start: Date; end: Date } {
   return viewWindow(calendarType.value, calendarValue.value);
@@ -440,11 +371,6 @@ watch(() => [calendarType.value, dateKey(windowOf().start)], () => void fetchIte
 
 // ── what the grids draw ─────────────────────────────────────────────────────
 
-function clockLabel(minutes: number): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
-}
-
 /** The fetched entries whose wall-clock day is on screen — the fetch is padded (CORE-139). */
 const shownEntries = computed(() => {
   const window = windowOf();
@@ -455,30 +381,7 @@ const gridEvents = computed<CalendarGridEvent[]>(() => {
   const now = Date.now();
   return shownEntries.value
     .filter((e) => !showSide.value || visibleKinds[e.kind])
-    .map((e) => {
-      const start = parseWallTime(toZonedCalendarDateTime(e.start_at, e.timezone));
-      const end = parseWallTime(toZonedCalendarDateTime(e.end_at, e.timezone));
-      // An entry running past midnight is drawn to the end of its first day.
-      const endMin = Math.min(Math.max(end.key === start.key ? end.minutes : MINUTES_PER_DAY, start.minutes + 15), MINUTES_PER_DAY);
-      // 24 h like the hour gutter: "11:30–12:15" fits a narrow week column or month cell, "11:30 a.m.–…" does not.
-      const startLabel = clockLabel(start.minutes);
-      return {
-        id: e.id,
-        title: e.title,
-        dayKey: start.key,
-        startMin: start.minutes,
-        endMin,
-        timeLabel: `${startLabel}–${clockLabel(endMin)}`,
-        startLabel,
-        meta: e.meta || undefined,
-        color: e.color,
-        status: e.status,
-        icon: kindIcon(e.kind),
-        responseIcon: e.response ? responseIcon(e.response) : undefined,
-        responseColor: e.response ? RESPONSE_COLOR[e.response] : undefined,
-        past: new Date(e.end_at).getTime() < now,
-      };
-    });
+    .map((e) => toGridEvent(e, now));
 });
 
 const gridDays = computed(() => (calendarType.value === "day" ? [calendarValue.value] : weekDays(calendarValue.value)));
