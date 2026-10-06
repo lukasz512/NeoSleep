@@ -89,6 +89,26 @@
                 <AppIcon name="mail" /> {{ appointment.contact_email }}
               </a>
             </div>
+            <!-- NEO-254: an optional day/time the patient prefers; the doctor sees it in the appointment dialog. -->
+            <p v-if="appointment.patient_response_note" class="patient-appointment__suggest-done" data-testid="appointment-suggest-done">
+              {{ t("publicAppointment.suggestDone", { note: appointment.patient_response_note }) }}
+            </p>
+            <div v-else class="patient-appointment__suggest" data-testid="appointment-suggest">
+              <label for="patient-appointment-suggest" class="patient-appointment__suggest-label">{{ t("publicAppointment.suggestLabel") }}</label>
+              <VTextarea
+                id="patient-appointment-suggest"
+                v-model="suggestion"
+                :placeholder="t('publicAppointment.suggestPlaceholder')"
+                :maxlength="SUGGESTION_MAX"
+                rows="2"
+                auto-grow
+                variant="outlined"
+                hide-details="auto"
+              />
+              <AppButton variant="tonal" color="primary" block data-testid="appointment-suggest-send" :disabled="busy || !suggestion.trim()" @click="sendSuggestion">
+                {{ t("publicAppointment.suggestSend") }}
+              </AppButton>
+            </div>
             <button type="button" class="patient-appointment__link" @click="changing = true">{{ t("publicAppointment.changeAnswer") }}</button>
           </section>
 
@@ -191,6 +211,8 @@ interface PublicAppointment {
   contact_phone: string | null;
   contact_email: string | null;
   patient_response: Response | null;
+  /** NEO-254: the day/time this patient suggested with "I can't come". */
+  patient_response_note: string | null;
   opted_out: boolean;
   locale: string;
   /** CORE-116: the same event as .ics + Google / Outlook links; null once cancelled or over. */
@@ -198,6 +220,8 @@ interface PublicAppointment {
 }
 
 const DATE_LOCALES: Record<string, string> = { en: "en-GB", pl: "pl-PL", mx: "es-MX" };
+/** Same limit as the API (PATIENT_RESPONSE_NOTE_MAX). */
+const SUGGESTION_MAX = 200;
 
 const route = useRoute();
 const { t, locale } = useI18n();
@@ -211,6 +235,7 @@ const busy = ref(false);
 const changing = ref(false);
 const actionError = ref(false);
 const optOutOpen = ref(intent.value === "stop");
+const suggestion = ref("");
 
 const open = computed(() => appointment.value?.status === "scheduled" && !appointment.value.past);
 
@@ -312,6 +337,11 @@ async function act(path: "respond" | "opt-out", body: Record<string, unknown> = 
 
 async function respond(response: Response) {
   if (await act("respond", { response })) changing.value = false;
+}
+
+async function sendSuggestion() {
+  const note = suggestion.value.trim();
+  if (note && (await act("respond", { response: "cannot_attend", note }))) suggestion.value = "";
 }
 
 async function optOut() {
@@ -680,6 +710,25 @@ onMounted(load);
   color: rgb(var(--v-theme-on-primary));
   font-weight: 700;
   text-decoration: none;
+}
+
+.patient-appointment__suggest {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.patient-appointment__suggest-label {
+  font-weight: 600;
+  text-align: center;
+}
+
+.patient-appointment__suggest-done {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(var(--v-theme-primary), 0.06);
+  text-align: center;
 }
 
 .patient-appointment__contact-btn--quiet {
