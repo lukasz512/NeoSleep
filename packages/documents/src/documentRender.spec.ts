@@ -268,6 +268,14 @@ describe("document system (header, title, banner, sections, signatures, footer)"
     expect(body.indexOf('<svg class="hc-gauge"')).toBeLessThan(body.indexOf('<p class="hc-sb-note">'));
   });
 
+  it("Historia clínica header lets values wrap so a long patient name never runs over the date of birth (NEO-257)", () => {
+    const html = renderDocumentHtml("historiaEndo", "mx", "<p>x</p>");
+    const css = html.slice(0, html.indexOf("<body>"));
+    expect(css).not.toMatch(/\.doc-fields dd\s*\{[^}]*white-space:\s*nowrap/);
+    expect(css).not.toMatch(/\.doc-fields dt,\s*body > \.doc-fields dd\s*\{[^}]*nowrap/);
+    expect(css).toMatch(/body > \.doc-fields dd\s*\{[^}]*overflow-wrap:\s*break-word/);
+  });
+
   it("footer escapes names typed into the app", () => {
     const html = renderDocumentFooterHtml("NSL-SB v1", "mx", { subject: '<img src=x onerror="alert(1)">', issuer: ["A & B <Clinic>"] });
     expect(html).not.toContain("<img");

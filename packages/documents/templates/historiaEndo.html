@@ -96,7 +96,9 @@
   .hc-cont { font-size: 7pt; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0 0 2mm; }
   body > .doc-fields { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1.25fr) minmax(0, 0.6fr) minmax(0, 1.65fr) minmax(0, 0.9fr); margin-bottom: 3mm; }
   body > .doc-fields .hc-span2 { grid-column: span 2; }
-  body > .doc-fields dt, body > .doc-fields dd { white-space: nowrap; }
+  body > .doc-fields dt { white-space: nowrap; }
+  /* Values wrap inside their own column: a long name or email drops to a second line instead of running over the next field (NEO-257). */
+  body > .doc-fields dd { overflow-wrap: break-word; }
   .doc-field--patient { grid-column: auto; padding-bottom: 0; border-bottom: 0; }
   .doc-field--patient dd { font-size: 11pt; }
   .hc-sex .choice { width: auto !important; margin-right: 6px; }
