@@ -167,11 +167,16 @@ describe("SetTreatmentAdvanceLevelCommand", () => {
       const cleared = await SetTreatmentAdvanceLevelCommand(ctx, id, null);
       expect(cleared.metadata).toEqual({ orthoapneaDraft: false, note: "keep" });
 
+      // Both audits share one transaction's now(), so created_at can't order them; the before → after chain does.
       const { rows: audits } = await client.query(
-        `SELECT entity_after FROM audit_log WHERE entity_type = 'TreatmentPlan' AND entity_id = $1 ORDER BY created_at`,
+        `SELECT entity_before, entity_after FROM audit_log WHERE entity_type = 'TreatmentPlan' AND entity_id = $1`,
         [id],
       );
-      expect(audits.map((a) => a.entity_after)).toEqual([{ advance_level: 3 }, { advance_level: null }]);
+      expect(audits).toHaveLength(2);
+      expect(audits).toEqual(expect.arrayContaining([
+        { entity_before: { advance_level: null }, entity_after: { advance_level: 3 } },
+        { entity_before: { advance_level: 3 }, entity_after: { advance_level: null } },
+      ]));
 
       await expect(SetTreatmentAdvanceLevelCommand(ctx, id, 0)).rejects.toThrow(/advance_level/);
       await expect(SetTreatmentAdvanceLevelCommand(ctx, id, 2.5)).rejects.toThrow(/advance_level/);
