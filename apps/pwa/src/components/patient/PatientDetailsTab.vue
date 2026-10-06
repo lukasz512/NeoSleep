@@ -8,8 +8,19 @@
     <!-- A: what you read in five seconds. Each tile shows only when it has something to say. -->
     <section v-if="tiles.length" class="patient-details__tiles" :aria-label="t('app.patients.detail.summaryLabel')" data-testid="summary-strip">
       <template v-for="tile in tiles" :key="tile.key">
+        <!-- CORE-162: the next visit is a wider tile with its own actions. -->
+        <NextVisitTile
+          v-if="tile.key === 'appointment' && nextVisitView"
+          v-bind="nextVisitView"
+          :label="tile.label"
+          :busy="completing"
+          @open="tile.open?.()"
+          @reschedule="rescheduleNextVisit"
+          @complete="confirmComplete = true"
+        />
         <component
           :is="tile.tab || tile.open ? 'button' : 'div'"
+          v-else
           :type="tile.tab || tile.open ? 'button' : undefined"
           class="patient-details__tile"
           :class="{ 'patient-details__tile--link': tile.tab || tile.open }"
@@ -266,6 +277,15 @@
       @saved="onVisitSaved"
     />
     <EventForm v-model="showEventForm" :initial-data="eventFormInitial" @submit="onEventFormSubmit" />
+    <AppConfirmDialog
+      v-model="confirmComplete"
+      :text="t('app.patients.detail.nextVisit.completeConfirm')"
+      :secondary-label="t('app.common.no')"
+      :secondary-color="null"
+      :primary-label="t('app.patients.detail.nextVisit.done')"
+      @secondary="confirmComplete = false"
+      @primary="completeNextVisit"
+    />
   </div>
 </template>
 
@@ -285,7 +305,9 @@ import { onPatientChecklistUpdated, type ChecklistCategory } from "../../composa
 import { emitPatientChanged, onPatientChanged } from "../../composables/usePatientChanged";
 import { useEventSave } from "../../composables/useEventSave";
 import type { SubmitDone } from "../../composables/useEntitySubmit";
-import type { Appointment } from "../../composables/useAppointments";
+import { useAppointments, appointmentResponseState, type Appointment } from "../../composables/useAppointments";
+import { useNotifications } from "../../composables/useNotifications";
+import NextVisitTile from "./NextVisitTile.vue";
 import type { EventFormInitialData, EventSubmitPayload } from "../EventForm.vue";
 import { useVisiblePolling } from "../../composables/useVisiblePolling";
 import { useAuthStore } from "../../stores/auth";
@@ -614,6 +636,77 @@ function onEventFormSubmit(payload: EventSubmitPayload, done: SubmitDone): Promi
   return saveEvent(payload, done, onVisitSaved);
 }
 
+// ── the next-visit tile (CORE-162): what it shows and its two quick actions ──
+
+const appointmentRights = useAppointments();
+const notifications = useNotifications();
+const RESPONSE_COLOR = { confirmed: "success", awaiting: "warning", cannot_attend: "error" } as const;
+
+const nextVisitView = computed(() => {
+  const next = nextVisit.value;
+  if (!next) return null;
+  if (next.kind === "event") {
+    const type = t(next.event.type === "video" ? "user.planner.form.typeVideo" : "user.planner.form.typeF2f");
+    return {
+      startAt: next.start_at,
+      timeZone: undefined,
+      title: next.event.title || t("user.calendar.kind.encounter"),
+      chip: { text: `${t("user.calendar.kind.encounter")} · ${type}` },
+      canReschedule: true,
+      canComplete: true,
+    };
+  }
+  const a = next.appointment;
+  const state = a ? appointmentResponseState(a) : null;
+  return {
+    startAt: next.start_at,
+    timeZone: a?.timezone,
+    title: a?.practitioner_name ? t("app.patients.detail.nextVisit.withDoctor", { name: a.practitioner_name }) : t("user.calendar.kind.appointment"),
+    chip: state ? { text: t(`user.appointments.patientResponse.${state}`), color: RESPONSE_COLOR[state] } : null,
+    // Until the list loads only the summary's id is known: open works, the actions wait for the full record.
+    canReschedule: !!a && appointmentRights.canChange(a),
+    canComplete: !!a && appointmentRights.canClose.value,
+  };
+});
+
+function rescheduleNextVisit(): void {
+  const next = nextVisit.value;
+  if (next?.kind === "event") openEvent(next.event);
+  else if (next?.appointment) onReschedule(next.appointment);
+}
+
+const confirmComplete = ref(false);
+const completing = ref(false);
+/** "Done" on the tile: the same status change as the visit dialog, without opening it. */
+async function completeNextVisit(): Promise<void> {
+  confirmComplete.value = false;
+  const next = nextVisit.value;
+  if (!next) return;
+  completing.value = true;
+  try {
+    if (next.kind === "appointment") {
+      const result = await appointmentRights.update(next.id, { status: "completed" });
+      if (!result.ok) throw new Error("appointment update failed");
+      notifications.show(t("user.appointments.detail.saved.completed"), "success", undefined, { icon: "nav-appointments" });
+    } else {
+      const res = await apiFetch(`/api/v1/encounter/${encodeURIComponent(next.id)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "completed" }),
+        handleErrors: false,
+      });
+      if (!res.ok) throw new Error(`encounter update ${res.status}`);
+      notifications.show(t("app.patients.detail.nextVisit.eventCompleted"), "success", undefined, { icon: "nav-planner" });
+    }
+    onVisitSaved();
+  } catch (err) {
+    reportCaught(err, { where: "PatientDetailsTab.completeNextVisit" });
+    notifications.show(t("user.appointments.form.errorSave"), "error");
+  } finally {
+    completing.value = false;
+  }
+}
+
 const numberFormat = computed(() => new Intl.NumberFormat(intlLocale(locale.value), { maximumFractionDigits: 1 }));
 const fmt = (n: number) => numberFormat.value.format(n);
 
@@ -732,9 +825,10 @@ const tiles = computed<Tile[]>(() => {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2, 8px);
 }
+/* Five columns: three small tiles + the next visit, which spans two (CORE-162). */
 @container (min-width: 560px) {
   .patient-details__tiles {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 }
 

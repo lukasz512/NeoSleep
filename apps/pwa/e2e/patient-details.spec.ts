@@ -12,14 +12,15 @@ async function open(page: Page, query = ""): Promise<void> {
 }
 
 async function tilesPerRow(page: Page): Promise<number> {
-  const tops = await page.locator(".patient-details__tile").evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)));
+  const tops = await page.locator(".patient-details__tiles > *").evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().top)));
   return tops.filter((top) => top === tops[0]).length;
 }
 
 test("desktop column: four tiles in one row, groups in two columns", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await open(page, "?lang=mx");
-  await expect(page.locator(".patient-details__tile")).toHaveCount(4);
+  // Three small tiles + the next visit, which spans two columns (CORE-162).
+  await expect(page.locator(".patient-details__tiles > *")).toHaveCount(4);
   expect(await tilesPerRow(page)).toBe(4);
   const lefts = await page.locator(".patient-details__group").evaluateAll((els) => new Set(els.map((el) => Math.round(el.getBoundingClientRect().left))).size);
   expect(lefts).toBe(2);

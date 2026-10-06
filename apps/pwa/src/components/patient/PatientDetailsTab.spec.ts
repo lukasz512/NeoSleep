@@ -94,7 +94,9 @@ async function mountTab(
   return wrapper;
 }
 
-const tileKeys = (w: VueWrapper) => w.findAll(".patient-details__tile").map((t) => t.attributes("data-testid"));
+const tileKeys = (w: VueWrapper) => w.findAll('.patient-details__tiles > [data-testid^="tile-"]').map((t) => t.attributes("data-testid"));
+/** The next-visit tile's calendar leaf, read as "MAR 4" (CORE-162). */
+const tileDate = (w: VueWrapper) => `${w.find(".next-visit__month").text()} ${w.find(".next-visit__day").text()}`;
 const groupTitles = (w: VueWrapper) => w.findAll(".patient-details__group-title").map((h) => h.text());
 
 describe("PatientDetailsTab (NEO-206)", () => {
@@ -154,7 +156,7 @@ describe("PatientDetailsTab (NEO-206)", () => {
     await w.find('[data-testid="tile-treatment"]').trigger("click");
     expect(w.emitted("open-tab")).toEqual([["studies"], ["orthoapnea"]]);
     expect(w.find('[data-testid="tile-diagnosis"]').element.tagName).toBe("DIV");
-    expect(w.find('[data-testid="tile-appointment"]').element.tagName).toBe("BUTTON");
+    expect(w.find('[data-testid="next-visit-open"]').element.tagName).toBe("BUTTON");
   });
 
   it("groups the rows; keeps IAH basal and CPAP; extra rows only when set", async () => {
@@ -223,7 +225,7 @@ describe("PatientDetailsTab — every appointment (CORE-133)", () => {
   it("the next-appointment tile is the first upcoming scheduled visit, in clinic time", async () => {
     const w = await mountWithAppointments();
     const tile = w.find('[data-testid="tile-appointment"]');
-    expect(tile.text()).toContain("Mar 4");
+    expect(tileDate(w)).toBe("MAR 4");
     expect(tile.text()).toMatch(/0?3:00\s?PM|15:00/);
   });
 });
@@ -419,7 +421,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
 
   it("the next-appointment tile opens that visit's detail dialog on the card", async () => {
     const w = await mountLive();
-    await w.find('[data-testid="tile-appointment"]').trigger("click");
+    await w.find('[data-testid="next-visit-open"]').trigger("click");
     await flushPromises();
     const dialog = w.findComponent({ name: "AppointmentDetailDialog" });
     expect(dialog.props("modelValue")).toBe(true);
@@ -438,8 +440,8 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
     server.events = [EVENT_SOONER];
     emitPatientChanged("p-1", "visits");
     await flushPromises();
-    expect(w.find('[data-testid="tile-appointment"]').text()).toContain("Mar 1");
-    await w.find('[data-testid="tile-appointment"]').trigger("click");
+    expect(tileDate(w)).toBe("MAR 1");
+    await w.find('[data-testid="next-visit-open"]').trigger("click");
     await flushPromises();
     const form = w.findComponent({ name: "EventForm" });
     expect(form.props("modelValue")).toBe(true);
@@ -451,7 +453,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
     server.events = [{ ...EVENT_SOONER, status: "cancelled" }];
     emitPatientChanged("p-1", "visits");
     await flushPromises();
-    expect(w.find('[data-testid="tile-appointment"]').text()).toContain("Mar 4");
+    expect(tileDate(w)).toBe("MAR 4");
   });
 
   it("an event edited from the card is saved and the tile follows without F5", async () => {
@@ -472,7 +474,64 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
     await flushPromises();
     expect(server.patched.map((p) => p.path)).toEqual(["/api/v1/encounter/e-sooner"]);
     expect(done).toHaveBeenCalledWith(true);
-    expect(w.find('[data-testid="tile-appointment"]').text()).toContain("Mar 3");
+    expect(tileDate(w)).toBe("MAR 3");
+  });
+
+  // CORE-162 (variant C): what the visit is, the patient's answer, and Reschedule / Done on the tile.
+  it("the tile names the visit and shows the patient's answer", async () => {
+    const w = await mountLive({ role: "manager" });
+    server.appointments = [{ ...SOON, patient_response: "confirmed" }];
+    emitPatientChanged("p-1", "visits");
+    await flushPromises();
+    expect(w.find(".next-visit__title").text()).toBe("Appointment with Dra. Ruiz");
+    expect(w.find('[data-testid="next-visit-chip"]').text()).toBe("Patient confirmed");
+  });
+
+  it("an event shows its title and kind, never a patient answer", async () => {
+    const w = await mountLive({ role: "manager" });
+    server.events = [EVENT_SOONER];
+    emitPatientChanged("p-1", "visits");
+    await flushPromises();
+    expect(w.find(".next-visit__title").text()).toBe("Home visit");
+    expect(w.find('[data-testid="next-visit-chip"]').text()).toBe("Event · Face-to-face");
+  });
+
+  it("Done asks first, then marks the appointment completed without opening it", async () => {
+    const w = await mountLive({ role: "manager" });
+    await w.find('[data-testid="next-visit-complete"]').trigger("click");
+    await flushPromises();
+    expect(server.patched).toEqual([]);
+    w.findAllComponents({ name: "AppConfirmDialog" }).find((c) => c.props("text") === "Mark this visit as completed?")!.vm.$emit("primary");
+    await flushPromises();
+    expect(server.patched).toEqual([{ path: "/api/v1/appointments/a-soon", body: { status: "completed" } }]);
+    expect(w.findComponent({ name: "AppointmentDetailDialog" }).props("modelValue")).toBe(false);
+  });
+
+  it("Done on an event sets only its status", async () => {
+    const w = await mountLive({ role: "manager" });
+    server.events = [EVENT_SOONER];
+    emitPatientChanged("p-1", "visits");
+    await flushPromises();
+    await w.find('[data-testid="next-visit-complete"]').trigger("click");
+    w.findAllComponents({ name: "AppConfirmDialog" }).find((c) => c.props("text") === "Mark this visit as completed?")!.vm.$emit("primary");
+    await flushPromises();
+    expect(server.patched).toEqual([{ path: "/api/v1/encounter/e-sooner", body: { status: "completed" } }]);
+  });
+
+  it("Reschedule opens the booking dialog for that appointment, on the card", async () => {
+    const w = await mountLive({ role: "manager" });
+    await w.find('[data-testid="next-visit-reschedule"]').trigger("click");
+    await flushPromises();
+    const booking = w.findComponent({ name: "AppointmentDialog" });
+    expect(booking.props("modelValue")).toBe(true);
+    expect(booking.props("appointment")).toMatchObject({ id: "a-soon" });
+  });
+
+  it("a rep who didn't book the visit gets no quick actions — only what the API would allow", async () => {
+    const w = await mountLive({ role: "rep" });
+    expect(w.find('[data-testid="next-visit-open"]').exists()).toBe(true);
+    expect(w.find('[data-testid="next-visit-reschedule"]').exists()).toBe(false);
+    expect(w.find('[data-testid="next-visit-complete"]').exists()).toBe(false);
   });
 
   it("a doctor sees HCP names as plain text (doctors have no HCP detail); other roles get links", async () => {
