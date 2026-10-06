@@ -56,6 +56,18 @@ export function zonedInputToIso(wall: string, timeZone: string): string {
   return new Date(guess).toISOString();
 }
 
+/**
+ * Default start of a new booking (CORE-167): tomorrow as the viewer sees it, at
+ * the clinic's next full hour. Reading the date in the clinic zone put it on
+ * "yesterday" for a viewer already past midnight (PL viewer, MX clinic).
+ */
+export function defaultBookingWall(now: Date, clinicZone: string, viewerZone: string): string {
+  const nextHour = new Date(Math.floor(now.getTime() / 3_600_000 + 1) * 3_600_000).toISOString();
+  const [y, m, d] = zonedDateKey(now.toISOString(), viewerZone).split("-").map(Number);
+  const tomorrow = new Date(Date.UTC(y!, m! - 1, d! + 1)).toISOString().slice(0, 10);
+  return `${tomorrow}T${toZonedInputValue(nextHour, clinicZone).slice(11)}`;
+}
+
 /** The viewer's own zone — used for a new booking, before the server has fixed the clinic's. */
 export function deviceTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
