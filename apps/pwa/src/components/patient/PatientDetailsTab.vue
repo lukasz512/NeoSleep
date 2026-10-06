@@ -808,12 +808,15 @@ const tiles = computed<Tile[]>(() => {
 
 <style scoped>
 /* Container queries, not media queries: the tab column is 720px wide next to
-   the side panel and full width on a tablet — the layout follows the column. */
+   the side panel and full width on a tablet — the layout follows the column.
+   One gutter for tiles and groups, so the tile grid lines up with the two
+   group columns under it. */
 .patient-details {
   container-type: inline-size;
+  --pd-gutter: var(--space-4, 16px);
   display: flex;
   flex-direction: column;
-  gap: var(--space-5, 20px);
+  gap: var(--pd-gutter);
 }
 
 .patient-details__banner {
@@ -835,7 +838,7 @@ const tiles = computed<Tile[]>(() => {
 .patient-details__tiles {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2, 8px);
+  gap: var(--pd-gutter);
 }
 /* Four columns that wrap: the next visit first at half the width, the rest after it (CORE-162). */
 @container (min-width: 560px) {
@@ -903,7 +906,7 @@ const tiles = computed<Tile[]>(() => {
 /* One column on a phone, two from 640px of column; a group never splits. */
 .patient-details__groups {
   columns: 1;
-  column-gap: var(--space-6, 24px);
+  column-gap: var(--pd-gutter);
 }
 @container (min-width: 640px) {
   .patient-details__groups {
@@ -913,7 +916,7 @@ const tiles = computed<Tile[]>(() => {
 
 .patient-details__group {
   break-inside: avoid;
-  margin-bottom: var(--space-4, 16px);
+  margin-bottom: var(--pd-gutter);
 }
 .patient-details__group-title {
   margin: 0 0 var(--space-1, 4px) 2px;
