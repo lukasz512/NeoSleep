@@ -1177,7 +1177,7 @@
   "user.partnerRegistration.dialog.phoneWaiting": "Waiting for your signature…",
   "user.partnerRegistration.dialog.phoneExpired": "This code has expired.",
   "user.partnerRegistration.dialog.phoneNewCode": "Show a new code",
-  "user.partnerRegistration.dialog.phoneUseMouse": "Sign here instead",
+  "user.partnerRegistration.dialog.or": "or",
   "user.partnerSign.title": "Sign the partner agreement",
   "user.partnerSign.intro": "{name}, sign below. Your signature goes onto the agreement open on your computer (version {version}).",
   "user.partnerSign.send": "Send signature",

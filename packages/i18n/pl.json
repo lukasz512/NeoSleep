@@ -1174,7 +1174,7 @@
   "user.partnerRegistration.dialog.phoneWaiting": "Czekam na Twój podpis…",
   "user.partnerRegistration.dialog.phoneExpired": "Ten kod wygasł.",
   "user.partnerRegistration.dialog.phoneNewCode": "Pokaż nowy kod",
-  "user.partnerRegistration.dialog.phoneUseMouse": "Podpisz jednak tutaj",
+  "user.partnerRegistration.dialog.or": "lub",
   "user.partnerSign.title": "Podpisz umowę partnerską",
   "user.partnerSign.intro": "{name}, podpisz się poniżej. Podpis trafi na umowę otwartą na Twoim komputerze (wersja {version}).",
   "user.partnerSign.send": "Wyślij podpis",

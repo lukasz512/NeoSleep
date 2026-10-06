@@ -1174,7 +1174,7 @@
   "user.partnerRegistration.dialog.phoneWaiting": "Esperando tu firma…",
   "user.partnerRegistration.dialog.phoneExpired": "Este código expiró.",
   "user.partnerRegistration.dialog.phoneNewCode": "Mostrar un código nuevo",
-  "user.partnerRegistration.dialog.phoneUseMouse": "Mejor firmar aquí",
+  "user.partnerRegistration.dialog.or": "o",
   "user.partnerSign.title": "Firma el contrato de colaboración",
   "user.partnerSign.intro": "{name}, firma abajo. Tu firma se agregará al contrato abierto en tu computadora (versión {version}).",
   "user.partnerSign.send": "Enviar firma",

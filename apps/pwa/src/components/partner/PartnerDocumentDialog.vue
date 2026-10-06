@@ -65,33 +65,22 @@
           <p class="partner-doc-dialog__intent">
             {{ t('user.partnerRegistration.dialog.intent', { version: preview?.versionLabel ?? '' }) }}
           </p>
-          <!-- Computers: sign on the phone through a QR instead of with the mouse (CORE-166). -->
-          <PartnerPhoneSignPanel
-            v-if="phoneMode"
-            :token="token"
-            class="partner-doc-dialog__phone"
-            @signed="onPhoneSigned"
-            @cancel="phoneMode = false"
-          />
-          <!-- As wide as a signature line in the document, not the whole dialog. -->
-          <div v-else class="partner-doc-dialog__pad">
-            <SignaturePad
-              ref="padRef"
-              :clear-label="t('user.partnerRegistration.form.signatureClear')"
-              :placeholder="t('user.partnerRegistration.dialog.signHere')"
-              clear-placement="overlay"
-              @change="padEmpty = $event"
-            />
-            <AppButton
-              v-if="!xs"
-              variant="text"
-              color="primary"
-              class="partner-doc-dialog__phone-toggle"
-              @click="phoneMode = true"
-            >
-              <template #prepend><AppIcon name="qr-code" /></template>
-              {{ t('user.partnerRegistration.dialog.phoneButton') }}
-            </AppButton>
+          <!-- Computers get both side by side: the mouse pad and a QR to sign on the phone (CORE-166). -->
+          <div class="partner-doc-dialog__sign-row">
+            <!-- As wide as a signature line in the document, not the whole dialog. -->
+            <div class="partner-doc-dialog__pad">
+              <SignaturePad
+                ref="padRef"
+                :clear-label="t('user.partnerRegistration.form.signatureClear')"
+                :placeholder="t('user.partnerRegistration.dialog.signHere')"
+                clear-placement="overlay"
+                @change="padEmpty = $event"
+              />
+            </div>
+            <template v-if="!xs">
+              <span class="partner-doc-dialog__or">{{ t('user.partnerRegistration.dialog.or') }}</span>
+              <PartnerPhoneSignPanel :token="token" class="partner-doc-dialog__phone" @signed="onPhoneSigned" />
+            </template>
           </div>
         </section>
       </VCardText>
@@ -106,7 +95,7 @@
             {{ t('user.partnerRegistration.dialog.keepSignature') }}
           </AppButton>
           <AppButton v-else variant="text" @click="close">{{ t('user.partnerRegistration.dialog.close') }}</AppButton>
-          <AppButton v-if="!phoneMode" color="primary" variant="flat" :disabled="state !== 'ready' || padEmpty" @click="onSign">
+          <AppButton color="primary" variant="flat" :disabled="state !== 'ready' || padEmpty" @click="onSign">
             {{ t('user.partnerRegistration.dialog.sign') }}
           </AppButton>
         </template>
@@ -193,14 +182,12 @@ const frameKey = ref(0);
 // "Change signature" swaps the signed preview back to the pad; the current
 // signature only goes away if the doctor actually signs again.
 const resigning = ref(false);
-const phoneMode = ref(false);
 const shownSignature = computed(() => (props.kind === "agreement" && !resigning.value ? props.signature ?? null : null));
 
 async function load(): Promise<void> {
   state.value = "loading";
   padEmpty.value = true;
   resigning.value = false;
-  phoneMode.value = false;
   frameKey.value += 1;
   try {
     const res = await apiFetch(
@@ -369,7 +356,6 @@ function onSign(): void {
 function onPhoneSigned(signatureDataUrl: string): void {
   if (!preview.value) return;
   pendingFlight = null;
-  phoneMode.value = false;
   emit("signed", { signatureDataUrl, versionIds: preview.value.versionIds });
   resigning.value = false;
 }
@@ -447,15 +433,25 @@ function onAcknowledge(): void {
   margin: 4px auto 0;
 }
 
-.partner-doc-dialog__phone-toggle {
+.partner-doc-dialog__sign-row {
   display: flex;
-  margin: 8px auto 0;
-  text-transform: none;
-  letter-spacing: normal;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+}
+
+.partner-doc-dialog__sign-row .partner-doc-dialog__pad {
+  margin: 4px 0 0;
+}
+
+.partner-doc-dialog__or {
+  flex: none;
+  font-size: 0.8125rem;
+  color: rgba(var(--v-theme-on-surface), 0.6);
 }
 
 .partner-doc-dialog__phone {
-  margin-top: 4px;
+  flex: 0 1 220px;
 }
 
 .partner-doc-dialog__signature--signed .partner-doc-dialog__pad {

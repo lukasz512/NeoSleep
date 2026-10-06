@@ -33,7 +33,8 @@ afterEach(() => {
 
 async function mountDialog(props: Record<string, unknown>) {
   setActivePinia(createPinia());
-  apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => PREVIEW } as Response);
+  // A test that routed the API itself (CORE-166) keeps its routing.
+  if (!apiFetch.getMockImplementation()) apiFetch.mockResolvedValue({ ok: true, status: 200, json: async () => PREVIEW } as Response);
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
   const wrapper = mount(PartnerDocumentDialog, {
@@ -114,19 +115,18 @@ describe("PartnerDocumentDialog — sign on your phone (CORE-166)", () => {
     vi.useRealTimers();
   });
 
-  it("shows a QR for a sign-only link, then hands the phone's signature over as the signature", async () => {
+  it("shows the pad and a QR for a sign-only link together, then hands the phone's signature over", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const wrapper = await mountDialog({ signature: null });
     routeApi([{ status: "pending" }, { status: "signed", signatureDataUrl: SIGNATURE }]);
-
-    buttonByText(en["user.partnerRegistration.dialog.phoneButton"])!.click();
+    const wrapper = await mountDialog({ signature: null });
     await flushPromises();
 
     const start = apiFetch.mock.calls.find(([url]) => url === "/api/v1/invite/sign-handoff");
     expect(JSON.parse((start![1] as RequestInit).body as string)).toEqual({ token: "t" });
     expect(document.querySelector<HTMLImageElement>(".phone-sign__code")?.src).toMatch(/^data:image\/svg\+xml/);
-    expect(document.querySelector(".signature-pad")).toBeNull();
-    expect(buttonByText(en["user.partnerRegistration.dialog.sign"])).toBeUndefined();
+    // Both ways at once on a computer: the mouse pad with its Sign button stays.
+    expect(document.querySelector(".signature-pad")).not.toBeNull();
+    expect(buttonByText(en["user.partnerRegistration.dialog.sign"])).toBeDefined();
 
     await vi.advanceTimersByTimeAsync(4000);
     expect(wrapper.emitted("signed")).toBeUndefined();
@@ -138,21 +138,23 @@ describe("PartnerDocumentDialog — sign on your phone (CORE-166)", () => {
     expect(wrapper.emitted("signed")).toEqual([[{ signatureDataUrl: SIGNATURE, versionIds: ["agr-1", "dpa-1"] }]]);
   });
 
-  it("an expired code offers a new one; Sign here instead goes back to the pad", async () => {
+  it("an expired code offers a new one, and the pad stays usable", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    await mountDialog({ signature: null });
     routeApi([{ status: "expired" }]);
-
-    buttonByText(en["user.partnerRegistration.dialog.phoneButton"])!.click();
+    await mountDialog({ signature: null });
     await flushPromises();
     await vi.advanceTimersByTimeAsync(4000);
     await flushPromises();
 
     expect(document.body.textContent).toContain(en["user.partnerRegistration.dialog.phoneExpired"]);
     expect(buttonByText(en["user.partnerRegistration.dialog.phoneNewCode"])).toBeDefined();
-
-    buttonByText(en["user.partnerRegistration.dialog.phoneUseMouse"])!.click();
-    await flushPromises();
     expect(document.querySelector(".signature-pad")).not.toBeNull();
+  });
+
+  it("an already signed agreement shows no QR", async () => {
+    routeApi([]);
+    await mountDialog({ signature: SIGNATURE });
+    expect(document.querySelector(".phone-sign")).toBeNull();
+    expect(apiFetch.mock.calls.some(([url]) => url === "/api/v1/invite/sign-handoff")).toBe(false);
   });
 });

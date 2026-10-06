@@ -1,6 +1,6 @@
 <template>
   <div class="phone-sign" role="region" :aria-label="t('user.partnerRegistration.dialog.phoneButton')">
-    <img v-if="state === 'waiting' && qrDataUrl" :src="qrDataUrl" :alt="t('user.partnerRegistration.dialog.phoneButton')" class="phone-sign__code" width="200" height="200" />
+    <img v-if="state === 'waiting' && qrDataUrl" :src="qrDataUrl" :alt="t('user.partnerRegistration.dialog.phoneButton')" class="phone-sign__code" width="148" height="148" />
     <div v-else-if="state === 'loading'" class="phone-sign__code phone-sign__code--empty" role="status">
       <VProgressCircular indeterminate color="primary" size="40" width="4" />
     </div>
@@ -17,8 +17,6 @@
         {{ t('user.partnerRegistration.dialog.phoneWaiting') }}
       </p>
     </template>
-
-    <AppButton variant="text" class="phone-sign__back" @click="emit('cancel')">{{ t('user.partnerRegistration.dialog.phoneUseMouse') }}</AppButton>
   </div>
 </template>
 
@@ -40,7 +38,7 @@ import { useVisiblePolling } from "../../composables/useVisiblePolling";
  * treats it exactly like one drawn with the mouse.
  */
 const props = defineProps<{ token: string }>();
-const emit = defineEmits<{ signed: [signatureDataUrl: string]; cancel: [] }>();
+const emit = defineEmits<{ signed: [signatureDataUrl: string] }>();
 const { t } = useI18n();
 
 const POLL_MS = 4000;
@@ -113,8 +111,8 @@ onMounted(() => void start());
 }
 
 .phone-sign__code {
-  width: 200px;
-  height: 200px;
+  width: 148px;
+  height: 148px;
   background: #fff;
   border-radius: var(--pwa-radius);
 }
@@ -128,7 +126,7 @@ onMounted(() => void start());
 
 .phone-sign__text {
   margin: 0;
-  max-width: 360px;
+  max-width: 220px;
   font-size: 0.8125rem;
   color: rgba(var(--v-theme-on-surface), 0.75);
 }
@@ -139,10 +137,5 @@ onMounted(() => void start());
   gap: 8px;
   margin: 0;
   font-size: 0.8125rem;
-}
-
-.phone-sign__back {
-  text-transform: none;
-  letter-spacing: normal;
 }
 </style>
