@@ -160,12 +160,13 @@
   /* Yes/no questions in columns: answered "Sí" first and tinted, "No" muted, unanswered left as a blank form row. */
   .hc-qs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5mm 3mm; }
   .hc-q { display: flex; justify-content: space-between; align-items: center; gap: 1mm; padding: 0.35mm 1.6mm; border-radius: 1.2mm; font-size: 7.8pt; color: var(--secondary); }
-  .hc-q .q-answer .choice { width: auto !important; margin-left: 1.4mm; }
+  /* Fixed-width slots (NEO-253): the last option ends flush right and every row shares one grid, so Clase esqueletal's III sits under No, II under Sí. */
+  .hc-q .q-answer { flex: none; }
+  .hc-q .q-answer .choice { width: 9mm !important; margin-left: 1.4mm; }
   .hc-q > span:first-child { min-width: 0; }
   .hc-q .q-answer .choice-label { font-size: 7pt; }
   .hc-q:has(.choice:first-child.choice--on) { order: -1; background: var(--soft); color: var(--text); font-weight: 400; }
   .hc-q:has(.choice:last-child.choice--on) > span:first-child { color: #8a9694; }
-  .hc-q--class .q-answer .choice { margin-left: 1.6mm; }
   .hc-legend { font-size: 6.8pt; color: var(--muted); }
 
   /* Write-in lines and boxes for what the app doesn't capture yet. */
