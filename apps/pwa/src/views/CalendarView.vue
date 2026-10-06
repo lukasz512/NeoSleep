@@ -1383,8 +1383,10 @@ function onEntryClick(entry: CalendarEntry) {
  *   next / prev — a slide with a fade, like paging through a paper planner.
  * The toolbar keeps its own snapshot above the grid and does not move.
  */
+/* CORE-165: the overlay ignores .cal__main's overflow, so the group clips the slide/zoom to the grid box itself. */
 html[data-cal-transition]::view-transition-group(cal-body) {
   animation-duration: 420ms;
+  overflow: clip;
 }
 html[data-cal-transition]::view-transition-group(cal-toolbar) {
   animation: none;
