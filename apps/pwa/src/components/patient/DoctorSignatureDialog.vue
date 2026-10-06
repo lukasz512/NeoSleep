@@ -1,13 +1,19 @@
 <template>
   <AppFormDialog
     :model-value="modelValue"
-    :max-width="560"
+    :max-width="760"
     :title="t('app.clinical.doctorSignature.title')"
     @update:model-value="emit('update:modelValue', $event)"
     @close="emit('update:modelValue', false)"
   >
     <p class="doctor-signature__hint text-body-medium text-medium-emphasis">{{ t("app.clinical.doctorSignature.hint") }}</p>
-    <ConsentSignatureField v-if="modelValue" ref="fieldRef" data-testid="doctor-signature-field" @change="empty = $event" />
+    <ConsentSignatureField
+      v-if="modelValue"
+      ref="fieldRef"
+      data-testid="doctor-signature-field"
+      :phone-start="phoneStart"
+      @change="empty = $event"
+    />
     <template #actions>
       <AppButton variant="text" data-testid="doctor-signature-skip" @click="emit('print', null)">
         {{ t("app.clinical.doctorSignature.printUnsigned") }}
@@ -25,6 +31,7 @@ import { useI18n } from "vue-i18n";
 import AppButton from "../AppButton.vue";
 import AppFormDialog from "../AppFormDialog.vue";
 import ConsentSignatureField from "../questionnaire/ConsentSignatureField.vue";
+import { doctorHandoffStart } from "../../composables/signatureHandoffStart";
 
 /**
  * NEO-255 D1: before a doctor prints a patient's Historia clínica, they sign
@@ -41,6 +48,8 @@ const emit = defineEmits<{ "update:modelValue": [value: boolean]; print: [signat
 const { t } = useI18n();
 const fieldRef = ref<InstanceType<typeof ConsentSignatureField> | null>(null);
 const empty = ref(true);
+/** CORE-172: a QR next to the pad on a computer — the phone signature comes back here, and the doctor still clicks Sign and print. */
+const phoneStart = doctorHandoffStart();
 
 // Every opening starts from an empty pad (the field is re-created by v-if).
 watch(

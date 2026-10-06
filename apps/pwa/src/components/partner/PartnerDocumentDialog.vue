@@ -78,8 +78,8 @@
               />
             </div>
             <template v-if="!xs">
-              <span class="partner-doc-dialog__or">{{ t('user.partnerRegistration.dialog.or') }}</span>
-              <PartnerPhoneSignPanel :token="token" class="partner-doc-dialog__phone" @signed="onPhoneSigned" />
+              <span class="partner-doc-dialog__or">{{ t('app.phoneSign.or') }}</span>
+              <PhoneSignPanel :start="phoneStart" class="partner-doc-dialog__phone" @signed="onPhoneSigned" />
             </template>
           </div>
         </section>
@@ -125,7 +125,8 @@ import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import AppLoadingState from "../AppLoadingState.vue";
 import SignaturePad from "../SignaturePad.vue";
-import PartnerPhoneSignPanel from "./PartnerPhoneSignPanel.vue";
+import PhoneSignPanel from "../PhoneSignPanel.vue";
+import { partnerHandoffStart } from "../../composables/signatureHandoffStart";
 import { apiFetch } from "../../composables/useApi";
 
 /**
@@ -182,6 +183,7 @@ const frameKey = ref(0);
 // "Change signature" swaps the signed preview back to the pad; the current
 // signature only goes away if the doctor actually signs again.
 const resigning = ref(false);
+const phoneStart = computed(() => partnerHandoffStart(props.token));
 const shownSignature = computed(() => (props.kind === "agreement" && !resigning.value ? props.signature ?? null : null));
 
 async function load(): Promise<void> {
