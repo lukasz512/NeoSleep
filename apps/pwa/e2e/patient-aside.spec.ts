@@ -44,3 +44,15 @@ test("the QR button is the panel's first action, full width", async ({ page }) =
   const [qrBox, panelBox] = await Promise.all([qr.boundingBox(), page.locator(".patient-aside__next").boundingBox()]);
   expect(qrBox!.width).toBeGreaterThan(panelBox!.width - 40);
 });
+
+// NEO-258: the finished Historia clínica brings two buttons (print + email) — the panel still fits one window.
+test("the Historia clínica stage (print + email) still fits 1280x720 without scrolling", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await open(page, "?lang=mx&stage=historia&role=doctor");
+  await expect(page.getByTestId("next-step-print")).toBeVisible();
+  await expect(page.getByTestId("next-step-email")).toBeEnabled();
+  const aside = page.getByTestId("aside");
+  const { scrollHeight, clientHeight } = await aside.evaluate((el) => ({ scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }));
+  expect(scrollHeight).toBeLessThanOrEqual(clientHeight);
+  await expect(page.locator(".patient-aside__last-note .patient-aside__note-meta")).toBeInViewport();
+});

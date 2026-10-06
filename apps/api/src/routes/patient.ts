@@ -26,6 +26,7 @@ import {
   SendQuestionnaireEmailCommand,
   GetQuestionnaireRequestStatusQuery,
 } from "../commands/questionnaireRequest.js";
+import { SendHistoriaClinicaEmailCommand } from "../commands/historiaClinicaEmail.js";
 import { AuditHealthDataReadCommand } from "../commands/healthDataReadAudit.js";
 import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
 import { GetPatientEmailSendsQuery } from "../queries/patientEmailSend.js";
@@ -439,6 +440,22 @@ patientRouter.post(
       return SendQuestionnaireEmailCommand(ctx, id, origin, (req.body ?? {}) as { items?: unknown; copy_to_me?: unknown });
     });
     res.status(201).json({ ...result.request, sent_to: result.sent_to, url: result.url });
+  })
+);
+
+// NEO-258: the finished Historia clínica, signed by the doctor, emailed to the patient as a 7-day link.
+patientRouter.post(
+  "/patient/:id/historia-clinica/email",
+  requireStudyRole,
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = uuidParam(req, "id");
+    const slug = tenantSlugFromHost(req.hostname);
+    const origin = resolveFrontendOrigin(req);
+    const result = await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      return SendHistoriaClinicaEmailCommand(ctx, id, origin, { doctorSignature: req.body?.doctorSignature });
+    });
+    res.status(201).json({ sent_to: result.sent_to, expires_at: result.link.expires_at });
   })
 );
 

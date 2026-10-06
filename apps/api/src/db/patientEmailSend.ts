@@ -5,7 +5,7 @@ import type { PoolClient } from "pg";
  * written when Resend accepts the email; Resend's webhook then moves `status`
  * forward (routes/webhooks.ts). No health data, no full address, no link.
  */
-export type PatientEmailKind = "questionnaire_link" | "signed_copy" | "appointment";
+export type PatientEmailKind = "questionnaire_link" | "signed_copy" | "appointment" | "document_link";
 export type PatientEmailStatus = "sent" | "delayed" | "delivered" | "bounced" | "failed" | "suppressed" | "complained";
 
 export interface PatientEmailSend {
