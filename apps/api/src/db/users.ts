@@ -10,6 +10,8 @@ export interface User {
   identity_id: string;
   // From identities JOIN
   email: string;
+  /** Sign-in address when it differs from the contact email above (CORE-173, migration 057). */
+  login_email: string | null;
   salutation: string | null;
   first_name: string | null;
   last_name: string | null;
@@ -71,7 +73,7 @@ const USER_COLS = `
   ${displayNameSql("i")} AS name,
   COALESCE(ur.role, 'rep') AS role,
   ur.territory_id AS scope_territory_id, st.name AS scope_territory_name, st.kind AS scope_territory_kind,
-  u.google_sub, i.region, COALESCE(i.country_code, it.country_code) AS country_code, i.language, i.territory_id, u.status, u.token_version,
+  u.login_email, u.google_sub, i.region, COALESCE(i.country_code, it.country_code) AS country_code, i.language, i.territory_id, u.status, u.token_version,
   (u.password_hash IS NOT NULL) AS has_password,
   u.created_at, u.updated_at`.trim();
 

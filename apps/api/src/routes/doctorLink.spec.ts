@@ -62,6 +62,23 @@ describe("CORE-173 login email separate from the contact email", () => {
       expect((await getStaffUserByEmail(client, contact))?.id).toBe(user!.id);
     });
   });
+
+  it("admin user detail shows both the contact and the sign-in email", async () => {
+    const { userId, contact, login, adminAuth } = await withTenant(TENANT_SLUG, async (client) => {
+      const contact = `qa-core173-show-${uniqueSuffix()}@gmail.example`;
+      const login = `qa-core173-show-${uniqueSuffix()}@neosleepcare.com`;
+      const user = await insertStaffUser(client, contact, "Lorena", "Show", "doctor", null, true);
+      await client.query(`UPDATE users SET login_email = $1 WHERE id = $2`, [login, user!.id]);
+      const adminEmail = `qa-core173-admin-${uniqueSuffix()}@neosleepcare.com`;
+      const admin = await insertStaffUser(client, adminEmail, "Ad", "Min", "admin", null, true);
+      const adminAuth = `Bearer ${signAuthToken({ id: admin!.id, email: adminEmail, role: "admin", token_version: 0 })}`;
+      return { userId: user!.id, contact, login, adminAuth };
+    });
+    const res = await request(app).get(`/api/v1/users/${userId}`).set("Authorization", adminAuth);
+    expect(res.status).toBe(200);
+    expect(res.body.email).toBe(contact);
+    expect(res.body.login_email).toBe(login);
+  });
 });
 
 describe("CORE-173 unlinked doctor → clear 403 + automatic admin report", () => {
