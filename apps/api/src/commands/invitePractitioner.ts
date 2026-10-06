@@ -27,6 +27,7 @@ import {
   insertAuditLog,
   getIdentityIdForUser,
   getActiveAdminManagerIdentityIds,
+  isUserLinkedToPractitioner,
   setInviteSignHandoff,
   getInviteBySignHandoffHash,
   type InviteSignHandoff,
@@ -182,7 +183,7 @@ export async function InvitePractitionerCommand(
   // after they accept the invite. insertPractitioner upserts `identities` by
   // email (same email as above) and no-ops if a practitioner row already
   // exists for that identity — see ADR-012 follow-up notes.
-  await insertPractitioner(ctx.client, {
+  const practitioner = await insertPractitioner(ctx.client, {
     first_name: firstName,
     last_name: lastName,
     email,
@@ -193,6 +194,14 @@ export async function InvitePractitionerCommand(
     institution: lead.institution ?? undefined,
     national_ids: nationalIds && Object.keys(nationalIds).length > 0 ? nationalIds : null,
   });
+  // CORE-173: the login and the practitioner record must be one identity, or the
+  // doctor logs in to an empty app. Fail the invite now, not at their first login.
+  if (!(await isUserLinkedToPractitioner(ctx.client, user.id, practitioner.id))) {
+    throw new ConflictError(
+      `The login for ${email} would not be linked to its practitioner record — fix the duplicate person first`,
+      "DOCTOR_LINK_MISMATCH"
+    );
+  }
 
   // The actual "set your password" registration email (with its 7-day-expiry
   // token) is deliberately NOT sent here — it's deferred to

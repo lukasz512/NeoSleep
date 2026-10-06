@@ -54,8 +54,18 @@ export function errorClassOf(err: unknown): ErrorMessageClass {
   }
 }
 
+/** 403 codes whose cause the user can't fix by signing in again — their own title/body under common.error.<key>. */
+const FORBIDDEN_CODE_KEYS: Readonly<Record<string, string>> = {
+  // CORE-173: the admins already got an automatic report.
+  DOCTOR_NOT_LINKED: "accountNotLinked",
+};
+
 export function errorMessageKeys(err: unknown): ErrorMessageKeys {
   const cls = errorClassOf(err);
+  const special = cls === "forbidden" && isApiError(err) && err.code ? FORBIDDEN_CODE_KEYS[err.code] : undefined;
+  if (special) {
+    return { cls, title: `common.error.${special}.title`, body: `common.error.${special}.body`, reference: null };
+  }
   const withReference = cls === "server" || cls === "unexpected";
   return {
     cls,

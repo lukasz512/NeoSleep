@@ -11,6 +11,7 @@ import {
   getCountryTerritoryId,
   createInviteToken,
   invalidateUnusedInviteTokensForUser,
+  isUserLinkedToPractitioner,
   updateUser,
   type InsertPractitionerInput,
   type UpdatePractitionerInput,
@@ -318,6 +319,15 @@ export async function ActivatePractitionerCommand(
     // 'inactive' until the doctor accepts the invite (AcceptPractitionerInviteCommand
     // sets 'active'), so it can't be used before the documents are signed.
     if (userId) await updateUser(ctx.client, userId, { status: "inactive" });
+  }
+
+  // CORE-173: a login found by email may sit on another identity than this
+  // practitioner (a split person) — inviting it would open an empty app.
+  if (userId && !(await isUserLinkedToPractitioner(ctx.client, userId, practitioner.id))) {
+    throw new ConflictError(
+      `The login for ${practitioner.email} is not linked to this practitioner record — fix the duplicate person first`,
+      "DOCTOR_LINK_MISMATCH"
+    );
   }
 
   if (userId) {
