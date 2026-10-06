@@ -5,7 +5,7 @@
   <div
     ref="rootEl"
     class="view-calendar cal"
-    :class="{ 'cal--narrow': narrow, 'cal--phone': phone, 'cal--side-open': sideOpen, 'cal--no-side': !showSide }"
+    :class="{ 'cal--narrow': narrow, 'cal--phone': phone, 'cal--side-open': sideOpen, 'cal--no-side': !showSide, 'cal--day-pinned': pinnedShown }"
     :style="{ '--cal-top': `${toolbarBottom}px` }"
   >
     <aside v-show="showSide" class="cal__side" data-testid="calendar-sidebar" :aria-hidden="narrow && !sideOpen ? 'true' : undefined" :inert="narrow && !sideOpen ? true : undefined">
@@ -28,8 +28,16 @@
       </section>
     </aside>
 
-    <div class="cal__main">
-      <div ref="bodyEl" class="cal__body" :class="`cal__body--${calendarType}`" @pointerdown="onSwipeStart" @pointerup="onSwipeEnd" @pointercancel="onSwipeCancel">
+    <div ref="mainEl" class="cal__main">
+      <div
+        ref="bodyEl"
+        class="cal__body"
+        :class="`cal__body--${calendarType}`"
+        @pointerdown="onSwipeStart"
+        @pointerup="onSwipeEnd"
+        @pointercancel="onSwipeCancel"
+        @scroll.passive="dayPopover = null"
+      >
         <AppErrorState v-if="loadFailed" class="cal__error" :error="loadFailure" :refresh-label="t('app.errorState.refresh')" :loading="loading" @refresh="fetchItems" />
 
         <CalendarTimeGrid
@@ -56,40 +64,48 @@
             :locale="lang"
             :compact="phone"
             data-testid="calendar-month"
+            :fold-week="phoneFoldWeek"
             @open="onOpen"
-            @select="(day) => (selectedDay = day)"
-            @day="(day, el) => navigate('day', day, el)"
+            @select="onDaySelect"
           />
-          <!-- Phone: the selected day's entries under the month, like iOS Calendar. -->
-          <section v-if="phone" class="cal__agenda" data-testid="calendar-list">
-            <h2 class="cal__agenda-title">{{ selectedDayLabel }}</h2>
-            <p v-if="!selectedDayEvents.length" class="cal__agenda-empty">{{ t("user.calendar.dayEmpty") }}</p>
-            <button
-              v-for="e in selectedDayEvents"
-              :key="e.id"
-              type="button"
-              class="cal__row"
-              :class="{ 'cal__row--cancelled': e.status === 'cancelled', 'cal__row--past': e.past }"
-              :style="{ '--cal-color': e.color }"
-              data-testid="calendar-row"
-              @click="onOpen(e.id)"
-            >
-              <span class="cal__row-time">
-                <span>{{ e.startLabel }}</span>
-                <span class="cal__row-end">{{ clockLabel(e.endMin) }}</span>
-              </span>
-              <span class="cal__row-main">
-                <span class="cal__row-title">
-                  <AppIcon :name="e.icon" class="cal__row-icon" />
-                  <span class="cal__row-name">{{ e.title }}</span>
-                  <AppIcon v-if="e.responseIcon" :name="e.responseIcon" class="cal__row-icon" :style="{ color: e.responseColor }" />
-                </span>
-                <span v-if="e.meta" class="cal__row-meta">{{ e.meta }}</span>
-              </span>
-            </button>
-          </section>
+          <!-- Phone: the selected day's entries under the month, like iOS Calendar; scrolling the list
+               folds the month to the selected week (CORE-161). -->
+          <div v-if="phone" ref="agendaEl" class="cal__agenda" :class="{ 'cal__agenda--folded': phoneFoldWeek != null }" @scroll.passive="onAgendaScroll">
+            <CalendarDayList mode="inline" :label="selectedDayLabel" :events="selectedDayEvents" @open="onOpen" />
+          </div>
         </template>
       </div>
+
+      <!-- CORE-161: tablet/desktop — the clicked day's list as a glass popover by the day, or pinned on the right. -->
+      <CalendarDayList
+        v-if="pinnedShown"
+        class="cal__day-pinned cal-glass"
+        mode="pinned"
+        can-pin
+        :label="selectedDayLabel"
+        :events="selectedDayEvents"
+        data-testid="calendar-day-pinned"
+        @open="onOpen"
+        @add="onDayAdd"
+        @open-day="onOpenDay"
+        @pin="onPin"
+      />
+      <CalendarDayList
+        v-else-if="dayPopover"
+        ref="popoverEl"
+        class="cal__day-pop cal-glass"
+        mode="popover"
+        :can-pin="canPin"
+        :label="selectedDayLabel"
+        :events="selectedDayEvents"
+        :style="dayPopoverStyle"
+        data-testid="calendar-day-popover"
+        @open="onOpen"
+        @add="onDayAdd"
+        @open-day="onOpenDay"
+        @close="dayPopover = null"
+        @pin="onPin"
+      />
 
       <!-- After the body in the DOM so its View Transition snapshot paints above the sliding grid. -->
       <div ref="toolbarEl" class="cal__toolbar cal-glass">
@@ -203,6 +219,8 @@ import AppErrorState from "../components/AppErrorState.vue";
 import CalendarTimeGrid from "../components/calendar/CalendarTimeGrid.vue";
 import CalendarMonthGrid from "../components/calendar/CalendarMonthGrid.vue";
 import CalendarMiniMonth from "../components/calendar/CalendarMiniMonth.vue";
+import CalendarDayList from "../components/calendar/CalendarDayList.vue";
+import { usePersistedState } from "@prefs";
 import type { CalendarGridEvent } from "../components/calendar/calendarTypes";
 
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
@@ -279,11 +297,13 @@ onMounted(() => {
   }
   scrollToMorning();
   window.addEventListener("keydown", onKey);
+  document.addEventListener("pointerdown", onDocPointerDown, true);
 });
 onBeforeUnmount(() => {
   resizeObserver?.disconnect();
   clearInterval(clock);
   window.removeEventListener("keydown", onKey);
+  document.removeEventListener("pointerdown", onDocPointerDown, true);
 });
 watch([narrow, showSide], ([isNarrow, hasSide]) => {
   if (!isNarrow || !hasSide) sideOpen.value = false;
@@ -469,6 +489,97 @@ const selectedDayEvents = computed(() => {
 });
 const selectedDayLabel = computed(() => capitalizeFirst(new Intl.DateTimeFormat(lang.value, { weekday: "long", day: "numeric", month: "long" }).format(selectedDay.value)));
 
+// ── CORE-161: the clicked day's list ────────────────────────────────────────
+// Tablet/desktop: a glass popover by the day, or (pinned) a panel on the right that follows the
+// selected day. Phone: the list under the month; scrolling it folds the month to the selected week.
+
+/** Popover / pinned panel width; the pin needs a wide screen so the month keeps usable columns. */
+const DAY_LIST_WIDTH = 304;
+/** Gap between the clicked cell and the popover, and the popover's distance to the edges. */
+const DAY_POP_GAP = 8;
+/** Where "+" in the day list puts a new booking on that day. */
+const DAY_ADD_MINUTES = 9 * 60;
+
+const mainEl = ref<HTMLElement | null>(null);
+const popoverEl = ref<InstanceType<typeof CalendarDayList> | null>(null);
+const agendaEl = ref<HTMLElement | null>(null);
+const dayPopover = ref<{ left: number; width: number; top?: number; bottom?: number; maxHeight: number } | null>(null);
+const dayListPinned = usePersistedState<boolean>("view:calendar:dayListPinned", false);
+const canPin = computed(() => !narrow.value);
+const pinnedShown = computed(() => calendarType.value === "month" && canPin.value && dayListPinned.value);
+const agendaFolded = ref(false);
+
+const dayPopoverStyle = computed(() => {
+  const p = dayPopover.value;
+  if (!p) return undefined;
+  const px = (n: number | undefined) => (n === undefined ? undefined : `${Math.round(n)}px`);
+  return { left: px(p.left), width: px(p.width), top: px(p.top), bottom: px(p.bottom), maxHeight: px(p.maxHeight) };
+});
+
+/** The selected day's week row (0–5) while the phone list is scrolled; null shows the whole month. */
+const phoneFoldWeek = computed(() => {
+  if (!phone.value || !agendaFolded.value) return null;
+  const index = monthCells(calendarValue.value).findIndex((d) => dateKey(d) === dateKey(selectedDay.value));
+  return index < 0 ? null : Math.floor(index / 7);
+});
+
+function onDaySelect(day: Date, cell: HTMLElement) {
+  selectedDay.value = day;
+  if (phone.value || pinnedShown.value) return;
+  dayPopover.value = popoverPlacement(cell);
+}
+
+/** Centred under the cell, or above it when there is more room there; kept inside the calendar. */
+function popoverPlacement(cell: HTMLElement): NonNullable<typeof dayPopover.value> {
+  const main = mainEl.value;
+  const box = main?.getBoundingClientRect() ?? { left: 0, top: 0, width: DAY_LIST_WIDTH, height: 0, bottom: 0 };
+  const r = cell.getBoundingClientRect();
+  const width = Math.min(DAY_LIST_WIDTH, box.width - 2 * DAY_POP_GAP);
+  const left = Math.min(Math.max(r.left - box.left + r.width / 2 - width / 2, DAY_POP_GAP), box.width - width - DAY_POP_GAP);
+  const below = box.bottom - r.bottom - 2 * DAY_POP_GAP;
+  const above = r.top - box.top - toolbarBottom.value - 2 * DAY_POP_GAP;
+  return below >= above
+    ? { left, width, top: r.bottom - box.top + DAY_POP_GAP, maxHeight: Math.max(below, 160) }
+    : { left, width, bottom: box.bottom - r.top + DAY_POP_GAP, maxHeight: Math.max(above, 160) };
+}
+
+function onPin(on: boolean) {
+  dayListPinned.value = on;
+  dayPopover.value = null;
+}
+
+function onOpenDay() {
+  dayPopover.value = null;
+  navigate("day", selectedDay.value);
+}
+
+function onDayAdd() {
+  dayPopover.value = null;
+  onSlot(dateKey(selectedDay.value), DAY_ADD_MINUTES);
+}
+
+function onAgendaScroll() {
+  const top = agendaEl.value?.scrollTop ?? 0;
+  if (top > 8) agendaFolded.value = true;
+  else if (top <= 0) agendaFolded.value = false;
+}
+
+/** A click outside the popover closes it; a click on another day re-anchors it instead (onDaySelect). */
+function onDocPointerDown(event: PointerEvent) {
+  if (!dayPopover.value) return;
+  const target = event.target as Node | null;
+  const pop = popoverEl.value?.$el as HTMLElement | undefined;
+  if (target && (pop?.contains(target) || (target instanceof Element && target.closest(".cal-mo__cell")))) return;
+  dayPopover.value = null;
+}
+
+watch([calendarType, calendarValue], () => {
+  dayPopover.value = null;
+  agendaFolded.value = false;
+  if (agendaEl.value) agendaEl.value.scrollTop = 0;
+});
+watch(narrow, () => (dayPopover.value = null));
+
 /** Toolbar title as [bold, regular] — "Octubre 2026", "4 de octubre 2026", "Domingo 4". */
 const titleParts = computed<[string, string]>(() => {
   const d = calendarValue.value;
@@ -575,6 +686,10 @@ function onMiniPick(day: Date) {
 
 /** Keyboard, as in macOS Calendar: ← → move, T today, 1/2/3 day/week/month. Ignored while typing or in a dialog. */
 function onKey(event: KeyboardEvent) {
+  if (event.key === "Escape" && dayPopover.value) {
+    dayPopover.value = null;
+    return;
+  }
   if (event.metaKey || event.ctrlKey || event.altKey) return;
   const target = event.target as HTMLElement | null;
   if (target?.closest("input, textarea, select, [contenteditable='true'], .v-overlay")) return;
@@ -614,6 +729,7 @@ function onSwipeEnd(event: PointerEvent) {
 // ── a click on the grid ─────────────────────────────────────────────────────
 
 function onOpen(id: string) {
+  dayPopover.value = null;
   const entry = entries.value.find((e) => e.id === id);
   if (entry) onEntryClick(entry);
 }
@@ -1176,102 +1292,79 @@ function onEntryClick(entry: CalendarEntry) {
   transform: none;
 }
 
+/* CORE-161: on a phone the month stays put and the list under it scrolls; scrolling folds the month. */
+.cal--phone .cal__body--month {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.cal--phone .cal__body--month > .cal-mo {
+  flex: none;
+}
+
 .cal__agenda {
-  display: grid;
-  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 14px 12px 24px;
   border-top: 0.5px solid var(--cal-line-strong);
 }
 
-.cal__agenda-title {
-  margin: 0 4px 2px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--cal-muted);
+/* Folded, the list always scrolls a little, so it doesn't snap back open when it gets the month's room. */
+.cal__agenda--folded > .cal-dl {
+  min-height: calc(100% + 40px);
 }
 
-.cal__agenda-empty {
-  margin: 0;
-  padding: 20px 0;
-  text-align: center;
-  color: var(--cal-muted);
+/* ── CORE-161: the day list as liquid glass — a popover by the day, or pinned on the right ── */
+.cal__day-pop,
+.cal__day-pinned {
+  position: absolute;
+  z-index: 25;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px 10px 8px 12px;
+  background: var(--cal-glass-strong);
 }
 
-.cal__row {
-  display: grid;
-  grid-template-columns: 56px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 12px;
-  border: 0;
-  border-radius: 14px;
-  background: rgb(var(--v-theme-surface));
-  box-shadow: 0 0 0 0.5px var(--cal-line-strong);
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+.cal__day-pop {
+  border-radius: 20px;
+  animation: cal-pop-in var(--menu-dur-in, 260ms) var(--menu-spring, cubic-bezier(0.22, 1, 0.36, 1)) both;
 }
 
-.cal__row:focus-visible {
-  outline: 2px solid rgb(var(--v-theme-primary));
-  outline-offset: 2px;
+.cal__day-pinned {
+  top: calc(var(--cal-top, 72px) + 8px);
+  right: 8px;
+  bottom: 8px;
+  width: 304px;
+  border-radius: 20px;
+  animation: cal-dock-in var(--menu-dur-in, 320ms) var(--menu-spring, cubic-bezier(0.22, 1, 0.36, 1)) both;
 }
 
-.cal__row--past {
-  opacity: 0.7;
+.cal--day-pinned .cal__body {
+  right: 320px;
 }
 
-.cal__row--cancelled .cal__row-name {
-  text-decoration: line-through;
+@keyframes cal-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
 }
 
-.cal__row-time {
-  display: grid;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.3;
+@keyframes cal-dock-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
 }
 
-.cal__row-end {
-  font-weight: 400;
-  color: var(--cal-muted);
-}
-
-.cal__row-main {
-  display: grid;
-  min-width: 0;
-  padding-left: 10px;
-  border-left: 3px solid var(--cal-color);
-}
-
-.cal__row-title {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  font-weight: 600;
-}
-
-.cal__row-icon {
-  flex: none;
-  width: 14px;
-  height: 14px;
-}
-
-.cal__row-name,
-.cal__row-meta {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.cal__row-meta {
-  font-size: 0.8125rem;
-  color: var(--cal-muted);
+@media (prefers-reduced-motion: reduce) {
+  .cal__day-pop,
+  .cal__day-pinned {
+    animation: none;
+  }
 }
 
 @keyframes cal-fade-in {

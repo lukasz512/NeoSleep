@@ -1,10 +1,11 @@
 <template>
   <!-- Month grid (CORE-122). Desktop/tablet: up to 3 entries per day plus "n more".
-       Phone (compact): a date and coloured dots; the selected day's list sits below, in CalendarView. -->
-  <div class="cal-mo" :class="{ 'cal-mo--compact': compact }">
+       Phone (compact): a date and coloured dots; the selected day's list sits below, in CalendarView.
+       CORE-161: a click on a day (its number, the cell or "n more") selects it and CalendarView shows its list. -->
+  <div class="cal-mo" :class="{ 'cal-mo--compact': compact, 'cal-mo--folded': foldWeek != null }" :style="rowsStyle">
     <div v-for="(label, i) in weekdayLabels" :key="'w' + i" class="cal-mo__wd">{{ label }}</div>
     <div
-      v-for="day in cells"
+      v-for="(day, i) in cells"
       :key="dateKey(day)"
       class="cal-mo__cell"
       :class="{
@@ -12,16 +13,12 @@
         'cal-mo__cell--today': isSameDay(day, today),
         'cal-mo__cell--weekend': day.getDay() % 6 === 0,
         'cal-mo__cell--selected': isSameDay(day, selected),
+        'cal-mo__cell--hidden': foldWeek != null && Math.floor(i / 7) !== foldWeek,
       }"
-      @click="emit('select', day)"
+      data-testid="calendar-day"
+      @click="emit('select', day, $event.currentTarget as HTMLElement)"
     >
-      <button
-        type="button"
-        class="cal-mo__num"
-        :aria-label="fullDate(day)"
-        data-testid="calendar-day-link"
-        @click.stop="compact ? emit('select', day) : emit('day', day, $event.currentTarget as HTMLElement)"
-      >
+      <button type="button" class="cal-mo__num" :aria-label="fullDate(day)" data-testid="calendar-day-link">
         {{ day.getDate() }}
       </button>
       <template v-if="!compact">
@@ -39,7 +36,7 @@
           <span class="cal-mo__time">{{ e.startLabel }}</span>
           <span class="cal-mo__title">{{ e.title }}</span>
         </button>
-        <button v-if="hidden(day) > 0" type="button" class="cal-mo__more" @click.stop="emit('day', day, $event.currentTarget as HTMLElement)">
+        <button v-if="hidden(day) > 0" type="button" class="cal-mo__more" data-testid="calendar-day-more">
           {{ t("user.calendar.more", { count: hidden(day) }) }}
         </button>
       </template>
@@ -67,12 +64,14 @@ const props = defineProps<{
   selected: Date;
   locale: string;
   compact?: boolean;
+  /** CORE-161: phone — only this week row (0–5) stays; the others fold away. */
+  foldWeek?: number | null;
 }>();
 
 const emit = defineEmits<{
   open: [id: string];
-  day: [day: Date, el: HTMLElement];
-  select: [day: Date];
+  /** el is the day's cell, which the day list anchors to (CORE-161). */
+  select: [day: Date, el: HTMLElement];
 }>();
 
 const { t } = useI18n();
@@ -96,6 +95,13 @@ const dotColors = (day: Date) => [...new Set(list(day).map((e) => e.color))].sli
 const weekdayLabels = computed(() => {
   const fmt = new Intl.DateTimeFormat(props.locale, { weekday: props.compact ? "narrow" : "short" });
   return props.cells.slice(0, 7).map((d) => fmt.format(d).replace(".", ""));
+});
+
+/** Folding animates grid-template-rows, so all six week tracks stay; the folded ones go to 0. */
+const rowsStyle = computed(() => {
+  if (props.foldWeek == null) return undefined;
+  const rows = Array.from({ length: Math.ceil(props.cells.length / 7) }, (_, w) => (w === props.foldWeek ? "52px" : "0px"));
+  return { gridTemplateRows: `auto ${rows.join(" ")}` };
 });
 
 function fullDate(day: Date): string {
@@ -254,6 +260,27 @@ function fullDate(day: Date): string {
 .cal-mo--compact {
   grid-template-rows: auto repeat(6, 52px);
   min-height: 0;
+  transition: grid-template-rows 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* CORE-161: folded weeks shrink to nothing, as in iOS Calendar; only the selected week stays. */
+.cal-mo__cell--hidden {
+  overflow: hidden;
+  padding-block: 0;
+  border-bottom-width: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cal-mo--compact .cal-mo__cell {
+  transition: opacity 0.2s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cal-mo--compact,
+  .cal-mo--compact .cal-mo__cell {
+    transition: none;
+  }
 }
 
 .cal-mo--compact .cal-mo__wd {

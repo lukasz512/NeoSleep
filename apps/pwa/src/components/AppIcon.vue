@@ -669,6 +669,12 @@ const ICONS = {
     paths: `<path d="M12 22s7-6.5 7-12a7 7 0 0 0-14 0c0 5.5 7 12 7 12z" />
             <circle cx="12" cy="10" r="2.5" />`,
   },
+  /** CORE-161: pins the calendar's day list to the side. */
+  "pin": {
+    strokeWidth: 1.75,
+    paths: `<path d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6z" />
+            <path d="M12 15v6" />`,
+  },
   "at": {
     strokeWidth: 1.75,
     paths: `<circle cx="12" cy="12" r="4" />
