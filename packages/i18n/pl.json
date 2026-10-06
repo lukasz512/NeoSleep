@@ -67,6 +67,8 @@
   "common.error.notFound.body": "Mogło zostać przeniesione lub usunięte albo link jest już nieważny.",
   "common.error.forbidden.title": "Brak dostępu",
   "common.error.forbidden.body": "Nie masz uprawnień, aby to zobaczyć. Zaloguj się ponownie lub skontaktuj się z administratorem.",
+  "common.error.accountNotLinked.title": "Twoje konto nie jest jeszcze gotowe",
+  "common.error.accountNotLinked.body": "Twoje logowanie nie jest jeszcze połączone z Twoim profilem lekarza, więc nie możemy pokazać Twoich pacjentów. Administrator został automatycznie powiadomiony i to naprawi.",
   "common.error.invalid.title": "Nie udało się wykonać żądania",
   "common.error.invalid.body": "Sprawdź dane i spróbuj ponownie.",
   "common.error.rateLimited.title": "Zbyt wiele prób",

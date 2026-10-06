@@ -255,3 +255,21 @@ export async function setDiagnosticStatus(id: string, status: DiagnosticStatus):
   );
   return rows[0] ?? null;
 }
+
+/** Is there still an open (new / in progress) report from this user whose description starts with `prefix`? Dedups automatic reports (CORE-173). */
+export async function hasOpenProblemReportWithPrefix(
+  tenantSlug: string,
+  reporterUserId: string,
+  prefix: string
+): Promise<boolean> {
+  const { rows } = await getDb().query<{ open: boolean }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM platform.problem_report
+        WHERE tenant_slug = $1 AND reporter_user_id = $2
+          AND status IN ('new', 'in_progress')
+          AND left(description, length($3)) = $3
+     ) AS open`,
+    [tenantSlug, reporterUserId, prefix]
+  );
+  return rows[0]?.open ?? false;
+}

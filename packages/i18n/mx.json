@@ -67,6 +67,8 @@
   "common.error.notFound.body": "Puede que se haya movido o eliminado, o que el enlace ya no sea válido.",
   "common.error.forbidden.title": "Sin acceso",
   "common.error.forbidden.body": "No tienes permiso para ver esto. Vuelve a iniciar sesión o consulta a tu administrador.",
+  "common.error.accountNotLinked.title": "Tu cuenta aún no está lista",
+  "common.error.accountNotLinked.body": "Tu acceso todavía no está vinculado a tu perfil de médico, por eso no podemos mostrar tus pacientes. Ya avisamos automáticamente al administrador para que lo corrija.",
   "common.error.invalid.title": "No se pudo completar la solicitud",
   "common.error.invalid.body": "Revisa los datos e inténtalo de nuevo.",
   "common.error.rateLimited.title": "Demasiados intentos",

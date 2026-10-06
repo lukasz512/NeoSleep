@@ -1,5 +1,5 @@
 import type { PoolClient } from "pg";
-import { toArray, trimOrNull, trimOrEmpty } from "./helpers.js";
+import { toArray, trimOrNull, trimOrEmpty, normalizeEmail } from "./helpers.js";
 import { AppError, DatabaseError, ValidationError } from "../errors.js";
 import { assertEmailNotTaken } from "./identityEmail.js";
 
@@ -349,7 +349,7 @@ export async function insertPractitioner(client: PoolClient, input: InsertPracti
         trimOrNull(input.salutation),
         firstName,
         lastName,
-        trimOrNull(input.email),
+        normalizeEmail(input.email),
         trimOrNull(input.phone),
         // identities.language is NOT NULL — listing the column explicitly (for
         // social_links/region right after it) means the table's own DEFAULT
@@ -410,7 +410,7 @@ export async function updatePractitioner(client: PoolClient, id: string, input: 
     const firstName = input.first_name !== undefined ? trimOrEmpty(input.first_name) : existing.first_name;
     const lastName = input.last_name !== undefined ? trimOrEmpty(input.last_name) : existing.last_name;
     const salutation = input.salutation !== undefined ? trimOrNull(input.salutation) : existing.salutation;
-    const email = input.email !== undefined ? trimOrNull(input.email) : existing.email;
+    const email = input.email !== undefined ? normalizeEmail(input.email) : existing.email;
     const phone = input.phone !== undefined ? trimOrNull(input.phone) : existing.phone;
     const language = input.language !== undefined ? trimOrNull(input.language) : existing.language;
     const primarySpecialty = input.primary_specialty !== undefined ? trimOrNull(input.primary_specialty) : existing.primary_specialty;
