@@ -128,7 +128,7 @@ branch_artifact_check() {
     jq -e '(.url // "") != "" and (.linearUrl // "") != "" and ((.vscodeUrl // "") | startswith("vscode://"))' "$marker" >/dev/null 2>&1 \
       || FAILS+=("$marker is missing one of the 3 links (url = Artifact, linearUrl, vscodeUrl). Re-run .claude/skills/ship-artifact/build.mjs render + finalize from this Claude session.")
     jq -e '.indexed == true' "$marker" >/dev/null 2>&1 \
-      || FAILS+=("${ticket} isn't in the artifact index yet: node .claude/skills/ship-artifact/build.mjs index, publish the page (url from its output), then build.mjs index --published <url> — ship-artifact Step 5.")
+      || FAILS+=("${ticket} isn't in the artifact index yet: node .claude/skills/ship-artifact/build.mjs index, store the row it prints via ArtifactData (no page republish), then build.mjs index --published <url> — ship-artifact Step 5b.")
   fi
   dev_mergeable_check
   ci_green_check "$marker"
