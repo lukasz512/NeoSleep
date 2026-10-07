@@ -270,7 +270,7 @@ import AppConfirmDialog from "../AppConfirmDialog.vue";
 import AppIcon from "../AppIcon.vue";
 import PatientTmjCard from "./PatientTmjCard.vue";
 import { onPatientChecklistUpdated, type ChecklistCategory } from "../../composables/usePatientChecklist";
-import { emitPatientChanged, onPatientChanged } from "../../composables/usePatientChanged";
+import { patientKeys, usePatientPartQuery, useInvalidatePatient } from "../../composables/usePatientQueries";
 import { useEventSave } from "../../composables/useEventSave";
 import type { SubmitDone } from "../../composables/useEntitySubmit";
 import { useAppointments, appointmentResponseState, type Appointment } from "../../composables/useAppointments";
@@ -340,48 +340,22 @@ const canOpenHcp = computed(() => {
 
 const isDoctor = computed(() => authStore.user?.role === "doctor");
 
-const summary = ref<PatientSummary | null>(null);
-
 type PatientAppointment = Appointment;
-const appointmentItems = ref<PatientAppointment[]>([]);
-const eventItems = ref<PlannerEvent[]>([]);
+type EncounterRow = Parameters<typeof fromEncounter>[0];
 
-async function load(): Promise<void> {
-  const id = props.patient.id;
-  try {
-    const res = await apiFetch(`/api/v1/patient/${id}/summary`, { handleErrors: false });
-    if (id !== props.patient.id) return;
-    if (res.ok) summary.value = (await res.json()) as PatientSummary;
-    else await reportFailedResponse(res, { where: "PatientDetailsTab.summary", path: "/api/v1/patient/:id/summary" });
-  } catch (err) {
-    reportCaught(err, { where: "PatientDetailsTab.summary" });
-  }
-}
-
+// CORE-181 (ADR-029): each part of the card is a query under ["patient", id]; a write
+// anywhere invalidates that prefix (useInvalidatePatient), so they refetch together.
+const patientId = () => props.patient.id;
+const summaryQuery = usePatientPartQuery<PatientSummary>(patientKeys.summary, (id) => `/api/v1/patient/${id}/summary`, patientId);
 /** Every appointment of the patient, not only the next one (CORE-133). */
-async function loadAppointments(): Promise<void> {
-  const id = props.patient.id;
-  try {
-    const res = await apiFetch(`/api/v1/appointments?patient_id=${id}`, { handleErrors: false });
-    if (id !== props.patient.id || !res.ok) return;
-    appointmentItems.value = ((await res.json()) as { items?: PatientAppointment[] }).items ?? [];
-  } catch (err) {
-    reportCaught(err, { where: "PatientDetailsTab.appointments" });
-  }
-}
-
+const appointmentsQuery = usePatientPartQuery<{ items?: PatientAppointment[] }>(patientKeys.appointments, (id) => `/api/v1/appointments?patient_id=${id}`, patientId);
 /** Events (encounters) made for the patient (CORE-137). */
-async function loadEvents(): Promise<void> {
-  const id = props.patient.id;
-  try {
-    const res = await apiFetch(`/api/v1/encounter?patient_id=${id}`, { handleErrors: false });
-    if (id !== props.patient.id || !res.ok) return;
-    const rows = ((await res.json()) as { items?: Parameters<typeof fromEncounter>[0][] }).items ?? [];
-    eventItems.value = rows.map(fromEncounter);
-  } catch (err) {
-    reportCaught(err, { where: "PatientDetailsTab.events" });
-  }
-}
+const eventsQuery = usePatientPartQuery<{ items?: EncounterRow[] }>(patientKeys.events, (id) => `/api/v1/encounter?patient_id=${id}`, patientId);
+const summary = computed<PatientSummary | null>(() => summaryQuery.data.value ?? null);
+const appointmentItems = computed<PatientAppointment[]>(() => appointmentsQuery.data.value?.items ?? []);
+const eventItems = computed<PlannerEvent[]>(() => (eventsQuery.data.value?.items ?? []).map(fromEncounter));
+watch(() => summaryQuery.error.value, (err) => err && reportCaught(err, { where: "PatientDetailsTab.summary", level: "warn" }));
+const invalidatePatient = useInvalidatePatient();
 
 const careTeam = usePatientCareTeam(toRef(() => props.patient.id));
 /** The primary doctor has their own row in "care"; this group lists everyone else. */
@@ -434,19 +408,12 @@ async function onRemove(): Promise<void> {
   if (await careTeam.remove(removing.value.practitioner_id)) removing.value = null;
 }
 
-/**
- * Reloads what Details shows while keeping it on screen: every loader only
- * replaces its data on success, so a failed refresh leaves the old values.
- */
 /** Both visit lists answered once: only then can "nothing booked" be told apart from "still loading". */
-const visitsLoaded = ref(false);
-async function loadVisits(): Promise<void> {
-  await Promise.all([loadAppointments(), loadEvents()]);
-  visitsLoaded.value = true;
-}
+const visitsLoaded = computed(() => appointmentsQuery.data.value !== undefined && eventsQuery.data.value !== undefined);
 
+/** Refetch every part of the card; each keeps its old data on screen until the new one arrives. */
 async function refresh(): Promise<void> {
-  await Promise.all([load(), loadVisits(), careTeam.load()]);
+  await Promise.all([invalidatePatient(props.patient.id), careTeam.load()]);
 }
 
 /** Fingerprint of the card (GET /patient/:id/version) — compared to know when someone else changed it. */
@@ -467,13 +434,16 @@ async function refreshIfChanged(): Promise<void> {
 }
 
 onMounted(async () => {
-  await refresh();
+  void careTeam.load();
   // benign: without a baseline the first poll only records the fingerprint.
   version = await fetchVersion().catch(() => null);
 });
-// A visit booked or the record edited on this card; a study or document saved (NEO-173).
-onPatientChanged(() => props.patient.id, () => void refresh());
-onPatientChecklistUpdated(() => props.patient.id, () => void load());
+// A booking can add a doctor to the care team (CORE-132): reload it whenever the visits change.
+watch(() => appointmentsQuery.data.value, (_now, before) => {
+  if (before !== undefined) void careTeam.load();
+});
+// A study or document saved (NEO-173): the summary's tiles change.
+onPatientChecklistUpdated(() => props.patient.id, () => void invalidatePatient(props.patient.id));
 watch(() => props.active, (active, was) => {
   if (active && was === false) void refresh();
 });
@@ -482,15 +452,9 @@ useVisiblePolling(() => (props.active === false ? null : 60_000), refreshIfChang
 watch(
   () => props.patient.id,
   () => {
-    summary.value = null;
-    appointmentItems.value = [];
-    eventItems.value = [];
     careTeam.members.value = [];
     adding.value = false;
     version = null;
-    visitsLoaded.value = false;
-    void load();
-    void loadVisits();
     void careTeam.load();
   },
 );
@@ -597,9 +561,9 @@ async function openAppointment(id: string): Promise<void> {
   showAppointment.value = true;
 }
 
-/** Tell the whole card (side panel too); this tab reloads through onPatientChanged. */
+/** Every query of this patient refetches: this tab, the next-visit tile, the side panel. */
 function onVisitSaved(): void {
-  emitPatientChanged(props.patient.id, "visits");
+  void invalidatePatient(props.patient.id);
 }
 function onAppointmentChanged(appointment: Appointment): void {
   selectedAppointment.value = appointment;

@@ -11,7 +11,9 @@ import type { PatientDetailsTabPatient, PatientSummary } from "./patientSummary"
 import type { CareTeamMember } from "../../composables/usePatientCareTeam";
 import { useAuthStore } from "../../stores/auth";
 import { CHECKLIST_UPDATED } from "../../composables/usePatientChecklist";
-import { emitPatientChanged } from "../../composables/usePatientChanged";
+import { useQueryCache } from "@pinia/colada";
+/** CORE-181: a write anywhere invalidates the patient's queries — what the card's parts listen to. */
+const invalidatePatient = (id: string) => useQueryCache().invalidateQueries({ key: ["patient", id] });
 import { routes } from "../../router/routes";
 
 const apiFetch = vi.fn();
@@ -372,7 +374,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
   it("a visit booked from the card shows up without remounting the tab", async () => {
     const w = await mountLive();
     server.appointments = [SOON, NEW];
-    emitPatientChanged("p-1", "visits");
+    invalidatePatient("p-1");
     await flushPromises();
     expect(rowIds(w)).toEqual(["a-new", "a-soon"]);
   });
@@ -380,7 +382,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
   it("a change on another patient's card is ignored", async () => {
     const w = await mountLive();
     server.appointments = [SOON, NEW];
-    emitPatientChanged("p-2", "visits");
+    invalidatePatient("p-2");
     await flushPromises();
     expect(rowIds(w)).toEqual(["a-soon"]);
   });
@@ -396,7 +398,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
   it("a silent refresh that fails keeps what is on screen", async () => {
     const w = await mountLive();
     server.fail = true;
-    emitPatientChanged("p-1", "visits");
+    invalidatePatient("p-1");
     await flushPromises();
     expect(rowIds(w)).toEqual(["a-soon"]);
   });
@@ -447,7 +449,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
   it("an event sooner than the next appointment is the next visit, and the tile opens it in the event form", async () => {
     const w = await mountLive();
     server.events = [EVENT_SOONER];
-    emitPatientChanged("p-1", "visits");
+    invalidatePatient("p-1");
     await flushPromises();
     expect(tileDate(w)).toBe("MAR 1");
     await w.find('[data-testid="next-visit-open"]').trigger("click");
@@ -460,7 +462,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
   it("a cancelled event is never the next visit", async () => {
     const w = await mountLive();
     server.events = [{ ...EVENT_SOONER, status: "cancelled" }];
-    emitPatientChanged("p-1", "visits");
+    invalidatePatient("p-1");
     await flushPromises();
     expect(tileDate(w)).toBe("MAR 4");
   });
@@ -468,7 +470,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
   it("an event edited from the card is saved and the tile follows without F5", async () => {
     const w = await mountLive();
     server.events = [EVENT_SOONER];
-    emitPatientChanged("p-1", "visits");
+    invalidatePatient("p-1");
     await flushPromises();
     await w.find('[data-id="e-sooner"]').trigger("click");
     await flushPromises();
@@ -490,7 +492,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
   it("the tile names the visit and shows the patient's answer", async () => {
     const w = await mountLive({ role: "manager" });
     server.appointments = [{ ...SOON, patient_response: "confirmed" }];
-    emitPatientChanged("p-1", "visits");
+    invalidatePatient("p-1");
     await flushPromises();
     expect(w.find(".next-visit__title").text()).toBe("Appointment with Dra. Ruiz");
     expect(w.find('[data-testid="next-visit-chip"]').text()).toBe("Patient confirmed");
@@ -499,7 +501,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
   it("an event shows its title and kind, never a patient answer", async () => {
     const w = await mountLive({ role: "manager" });
     server.events = [EVENT_SOONER];
-    emitPatientChanged("p-1", "visits");
+    invalidatePatient("p-1");
     await flushPromises();
     expect(w.find(".next-visit__title").text()).toBe("Home visit");
     expect(w.find('[data-testid="next-visit-chip"]').text()).toBe("Face-to-face");
@@ -519,7 +521,7 @@ describe("PatientDetailsTab — live refresh, visit links, doctor view (patient 
   it("Done on an event sets only its status", async () => {
     const w = await mountLive({ role: "manager" });
     server.events = [EVENT_SOONER];
-    emitPatientChanged("p-1", "visits");
+    invalidatePatient("p-1");
     await flushPromises();
     await w.find('[data-testid="next-visit-complete"]').trigger("click");
     w.findAllComponents({ name: "AppConfirmDialog" }).find((c) => c.props("text") === "Mark this visit as completed?")!.vm.$emit("primary");

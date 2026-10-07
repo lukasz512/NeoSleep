@@ -24,7 +24,6 @@ vi.mock("../composables/useNotifications", () => ({ useNotifications: () => ({ s
 import FormRenderer from "../components/FormRenderer.vue";
 import AppointmentDialog from "../components/AppointmentDialog.vue";
 import "../components/EventForm.vue";
-import { PATIENT_CHANGED } from "../composables/usePatientChanged";
 import PatientDetailView from "./PatientDetailView.vue";
 import QuestionnaireQrDialog from "../components/questionnaire/QuestionnaireQrDialog.vue";
 
@@ -282,7 +281,7 @@ describe("PatientDetailView — QR opens straight to a loader (NEO-235)", () => 
 });
 
 describe("PatientDetailView — the card refreshes in place (patient card refresh)", () => {
-  it("saving an edit keeps the record on screen while it reloads, then shows the new values", async () => {
+  it("@CORE-181 AC4 saving an edit shows it at once (optimistic) and keeps the record on screen while it reloads", async () => {
     let releaseReload: () => void = () => {};
     let loads = 0;
     apiFetch.mockImplementation(async (path: string, init?: RequestInit) => {
@@ -301,27 +300,29 @@ describe("PatientDetailView — the card refreshes in place (patient card refres
 
     wrapper.findComponent(FormRenderer).vm.$emit("submit", { last_name: "Nowak" }, vi.fn());
     await vi.waitFor(() => expect(loads).toBe(2));
-    expect(wrapper.text()).toContain("Jan Kowalski"); // no blank screen while it reloads
+    expect(wrapper.text()).toContain("Jan Nowak"); // the edit shows before the server answers, no blank screen
 
     releaseReload();
     await vi.waitFor(() => expect(wrapper.text()).toContain("Jan Nowak"));
     await flushPromises();
   });
 
-  it("a booked visit tells the rest of the card (patient-changed, visits)", async () => {
+  it("@CORE-181 AC1 a booked visit refetches every part of the card, without a window event", async () => {
     routeApi();
     const { wrapper } = await mountPatientDetail();
     await vi.waitFor(() => expect(wrapper.text()).toContain("Jan Kowalski"));
-    const heard = vi.fn();
-    const listener = (e: Event) => heard((e as CustomEvent).detail);
-    window.addEventListener(PATIENT_CHANGED, listener);
+    await flushPromises();
+    const summaries = () => apiFetch.mock.calls.filter(([p]) => String(p) === "/api/v1/patient/patient-1/summary").length;
+    const before = summaries();
+    const dispatch = vi.spyOn(window, "dispatchEvent");
 
     await wrapper.find('[data-testid="patient-book-appointment"]').trigger("click");
     await vi.waitFor(() => expect(wrapper.findComponent(AppointmentDialog).exists()).toBe(true));
     wrapper.findComponent(AppointmentDialog).vm.$emit("saved", { id: "a-1" });
-    expect(heard).toHaveBeenCalledWith({ patientId: "patient-1", scope: "visits" });
+    await vi.waitFor(() => expect(summaries()).toBe(before + 1));
+    expect(dispatch.mock.calls.map(([e]) => e.type)).not.toContain("patient-changed");
 
-    window.removeEventListener(PATIENT_CHANGED, listener);
+    dispatch.mockRestore();
     await flushPromises();
   });
 });

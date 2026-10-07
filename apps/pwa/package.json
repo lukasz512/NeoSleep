@@ -19,6 +19,7 @@
     "@neo/stores": "workspace:*",
     "@neo/ui": "workspace:*",
     "@neo/vuetify": "workspace:*",
+    "@pinia/colada": "^1.4.7",
     "@tiptap/core": "^3.31.3",
     "@tiptap/extension-underline": "^3.31.3",
     "@tiptap/pm": "^3.31.3",

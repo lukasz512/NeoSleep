@@ -28,7 +28,7 @@
       :back-label="t('app.patients.detail.back')"
       :record-title="patient?.name ?? ''"
       :not-found-label="t('app.patients.detail.notFound')"
-      @retry="loadPatient()"
+      @retry="patientQuery.refetch()"
     >
       <template v-if="patient" #record-tile>
         <AppAvatar :name="patient.name" entity-type="patient" :first-name="patient.first_name" :last-name="patient.last_name" :size="48" />
@@ -155,7 +155,7 @@
 
 <script setup lang="ts">
 import { reportCaught, reportFailedResponse } from "@api";
-import { ref, computed, onMounted, watch, defineAsyncComponent, provide } from "vue";
+import { ref, computed, watch, defineAsyncComponent, provide } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { usePermissions } from "../composables/usePermissions";
@@ -183,7 +183,7 @@ import { PATIENT_QR_DIALOG, createQrDialogState, openQrLoader } from "../composa
 import { patientFormFields, patientFormDerive } from "../config/forms/patientForm";
 import { STUDY_ROLES } from "../config/questionnaires";
 import { CHECKLIST_TAB, type ChecklistCategory } from "../composables/usePatientChecklist";
-import { emitPatientChanged } from "../composables/usePatientChanged";
+import { ApiReadError, useInvalidatePatient, usePatientQuery, useUpdatePatient } from "../composables/usePatientQueries";
 import { useAuthStore } from "../stores/auth";
 import { entityActionIcon, entityActionBtnClass } from "../config/entityActions";
 
@@ -230,13 +230,32 @@ const router = useRouter();
 const notifications = useNotifications();
 const { submit } = useEntitySubmit();
 
-const patient = ref<PatientDetail | null>(null);
-
-const loading = ref(true);
-/** True when loadPatient() failed for a reason other than a genuine 404 (network/server) — see loadPatient(). */
-const loadFailed = ref(false);
+/**
+ * CORE-181 (ADR-029): the record is a query under ["patient", id]. A card opened
+ * again shows the cached record at once and revalidates in the background; any
+ * write about the patient invalidates the prefix, so every part of the card refreshes.
+ */
+const patientQuery = usePatientQuery<PatientDetail>(() => (route.params.id as string) ?? "");
+const patient = computed<PatientDetail | null>(() => patientQuery.data.value ?? null);
+/** Spinner only on a first load — never over a cached record that is revalidating. */
+const loading = computed(() => !patient.value && patientQuery.isLoading.value);
+const notFound = computed(() => patientQuery.error.value instanceof ApiReadError && patientQuery.error.value.status === 404);
+/** Failed for a reason other than a genuine 404 (network/server): ItemDetailLayout shows retry. */
+const loadFailed = computed(() => !patient.value && !!patientQuery.error.value && !notFound.value);
 /** The error behind loadFailed (NEO-81) — lets the error state say offline vs. server problem. */
 const loadFailure = ref<unknown>(null);
+watch(
+  () => patientQuery.error.value,
+  async (err) => {
+    if (!err || notFound.value) return;
+    loadFailure.value = err instanceof ApiReadError && err.response
+      ? await reportFailedResponse(err.response, { where: "PatientDetailView.load", path: "/api/v1/patient/:id" })
+      : err;
+    if (!(err instanceof ApiReadError)) reportCaught(err, { where: "PatientDetailView.load" });
+  },
+);
+const invalidatePatient = useInvalidatePatient();
+const updatePatient = useUpdatePatient<PatientDetail>();
 const showEditModal = ref(false);
 const showAppointmentDialog = ref(false);
 /** "Umów wizytę" books a patient↔doctor appointment (NEO-34), with the patient's assigned doctor pre-selected. */
@@ -312,9 +331,9 @@ function onBookAppointment() {
   showAppointmentDialog.value = true;
 }
 
-/** The Details tab and the side panel stay mounted, so tell them instead of waiting for F5. */
+/** Every query of this patient refetches: next-visit tile, visits list, side panel. */
 function onAppointmentSaved() {
-  if (patient.value) emitPatientChanged(patient.value.id, "visits");
+  if (patient.value) void invalidatePatient(patient.value.id);
 }
 
 async function onPatientSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
@@ -322,20 +341,22 @@ async function onPatientSubmit(data: Record<string, unknown>, done: (ok: boolean
   if (!id) { done(false); return; }
   await submit(
     {
-      request: () =>
-        apiFetch(`/api/v1/patient/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(data),
-        }),
+      // Optimistic (useUpdatePatient): the card shows the edit at once and rolls back on failure.
+      request: async () => {
+        try {
+          await updatePatient.mutateAsync({ id, data });
+          return { ok: true };
+        } catch (err) {
+          if (err instanceof ApiReadError && err.response) return err.response;
+          throw err;
+        }
+      },
       successMessage: t("app.patients.form.editSuccess"),
       icon: "nav-patients",
       context: patient.value?.name,
       errorMessage: t("app.patients.form.errorSave"),
-      onSuccess: async () => {
-        await loadPatient({ silent: true });
-        emitPatientChanged(id, "profile");
-      },
+      // The patient queries refetch themselves (onSettled); no window event (CORE-181).
+      refresh: false,
     },
     done,
   );
@@ -350,60 +371,16 @@ const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
   if (res.ok) {
     showDeleteConfirm.value = false;
     notifications.show(t("app.patients.actions.deleteSuccess"), "success", undefined, { icon: "nav-patients", context: patient.value?.name });
-    window.dispatchEvent(new Event("entity-list-refresh"));
+    // The list refetches when it mounts; drop this patient's cached queries (CORE-181).
+    void invalidatePatient(id);
     router.push({ name: "patients" });
   }
 });
 
-/**
- * `silent` reloads the record that is already on screen (after an edit): no
- * spinner, no blank screen, and a failure keeps what is shown.
- */
-async function loadPatient(opts: { silent?: boolean } = {}) {
-  const id = route.params.id as string;
-  if (!id) {
-    loading.value = false;
-    return;
-  }
-  if (opts.silent && patient.value?.id === id) {
-    try {
-      const res = await apiFetch(`/api/v1/patient/${id}`, { handleErrors: false });
-      if (res.ok && route.params.id === id) patient.value = (await res.json()) as PatientDetail;
-    } catch (err) {
-      reportCaught(err, { where: "PatientDetailView.reload", level: "warn" });
-    }
-    return;
-  }
-  loading.value = true;
-  patient.value = null;
-  loadFailed.value = false;
-  try {
-    const res = await apiFetch(`/api/v1/patient/${id}`, { handleErrors: false });
-    if (res.ok) {
-      patient.value = (await res.json()) as PatientDetail;
-    } else if (res.status !== 404) {
-      // Not a genuine 404 — ItemDetailLayout renders its own "connection
-      // problem" + retry state for this (see :load-error), so no separate
-      // toast on top of it.
-      loadFailure.value = await reportFailedResponse(res, { where: "PatientDetailView.load", path: "/api/v1/patient/:id" });
-      loadFailed.value = true;
-    }
-  } catch (err) {
-    reportCaught(err, { where: "PatientDetailView.load" });
-    loadFailure.value = err;
-    loadFailed.value = true;
-    patient.value = null;
-  } finally {
-    loading.value = false;
-  }
-}
-
-onMounted(() => loadPatient());
 // The record never came (404 / offline): no Documentos tab to fill the QR loader, so close it.
 watch(loading, (isLoading) => {
   if (!isLoading && !patient.value && !qrDialog.url) qrDialog.open = false;
 });
-watch(() => route.params.id, () => loadPatient());
 </script>
 
 <style scoped>

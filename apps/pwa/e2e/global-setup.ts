@@ -6,10 +6,17 @@ import { E2E_EMAIL as EMAIL, e2ePassword, ensureE2EPassword } from "./credential
  *  see apps/api/scripts/seed-e2e-user.ts. Runs once before the whole suite,
  *  against whichever DATABASE_URL the API webServer process is using. */
 function seedE2EUser(): void {
-  execFileSync("pnpm", ["--filter", "@neo/api", "seed:e2e-user"], {
+  const out = execFileSync("pnpm", ["--filter", "@neo/api", "seed:e2e-user"], {
     cwd: "../..",
-    stdio: "inherit",
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "inherit"],
   });
+  // CORE-181: the seeded patient/doctor ids reach every test worker through env.
+  const line = out.split("\n").find((l) => l.startsWith("E2E_SEED "));
+  if (!line) throw new Error(`seed:e2e-user printed no E2E_SEED line:\n${out}`);
+  const ids = JSON.parse(line.slice("E2E_SEED ".length)) as { patientId: string; practitionerId: string };
+  process.env.E2E_PATIENT_ID = ids.patientId;
+  process.env.E2E_PRACTITIONER_ID = ids.practitionerId;
 }
 
 /**

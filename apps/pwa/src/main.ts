@@ -1,6 +1,7 @@
 import { computed, createApp } from "vue";
 import { createGtag } from "vue-gtag";
 import { createPinia } from "pinia";
+import { PiniaColada } from "@pinia/colada";
 import App from "./App.vue";
 import router from "./router";
 import { installChunkRecovery, browserChunkRecoveryDeps } from "./router/chunkRecovery";
@@ -71,7 +72,10 @@ configureErrorReporting({
 initInstallPrompt();
 
 const app = createApp(App);
-app.use(createPinia());
+const pinia = createPinia();
+app.use(pinia);
+// CORE-181 (ADR-029): query cache — data under keys, writes invalidate them.
+app.use(PiniaColada);
 app.use(vuetify);
 app.use(router);
 // After a deploy, an already-open tab can't fetch its old lazy chunks —

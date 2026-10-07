@@ -18,3 +18,6 @@ export function e2ePassword(): string {
   if (!value) throw new Error("E2E_USER_PASSWORD is unset — globalSetup did not run");
   return value;
 }
+
+/** CORE-181: the admin the real-backend flow specs log in as (same per-run password). */
+export const E2E_ADMIN_EMAIL = "e2e-admin@neosleepcare.com";
