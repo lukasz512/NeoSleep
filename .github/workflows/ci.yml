@@ -288,7 +288,7 @@ jobs:
       - name: Tooling self-tests
         run: |
           git config --global user.name ci && git config --global user.email ci@example.com
-          node --test .claude/skills/ship-artifact/ticket.test.mjs .claude/skills/ship-artifact/index-rows.test.mjs
-          bash .claude/hooks/pre-tool-linear-ticket-format.test.sh
+          node --test .claude/skills/ship-artifact/ticket.test.mjs .claude/skills/ship-artifact/index-rows.test.mjs infrastructure/scripts/board.test.mjs
+          bash .claude/hooks/pre-tool-linear-readonly.test.sh
           bash infrastructure/scripts/worktree-clean.test.sh
           bash infrastructure/scripts/test-db.test.sh

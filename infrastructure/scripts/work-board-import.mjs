@@ -5,6 +5,7 @@
 //   node infrastructure/scripts/work-board-import.mjs --fetch         # refresh the export from Linear first
 //   DATABASE_URL=... node infrastructure/scripts/work-board-import.mjs --apply
 //   node infrastructure/scripts/work-board-import.mjs --sql apps/api/migrations/0NN_x.sql  # reviewed migration
+//   … --sql <new.sql> --skip-in <earlier.sql>   # only issues the earlier import didn't carry (CORE-187)
 //
 // The shared Supabase DB holds production data: land the history there with --sql (a PR),
 // keep --apply for a local or test database.
@@ -143,9 +144,16 @@ async function apply(slim) {
 try {
   if (args.has("--fetch")) await fetchExport();
   const { exportedAt, issues } = loadExport();
-  const slim = issues.map(slimIssue).filter(Boolean);
-  summarize(slim);
   const argv = process.argv.slice(2);
+  let slim = issues.map(slimIssue).filter(Boolean);
+  // --skip-in <earlier migration.sql>: only the issues that migration doesn't already carry
+  // (CORE-187: the final import after 060 is a short tail, not a second 900 KB copy).
+  const skipIn = argv.includes("--skip-in") ? argv[argv.indexOf("--skip-in") + 1] : null;
+  if (skipIn) {
+    const done = new Set([...readFileSync(resolve(skipIn), "utf8").matchAll(/'linear_import', '([A-Z][A-Z0-9]*-\d+)'/g)].map((m) => m[1]));
+    slim = slim.filter((s) => !done.has(s.item.linear_identifier));
+  }
+  summarize(slim);
   const sqlOut = argv.includes("--sql") ? argv[argv.indexOf("--sql") + 1] : null;
   if (sqlOut) {
     writeFileSync(resolve(sqlOut), buildImportSql(slim, { exportedAt }));

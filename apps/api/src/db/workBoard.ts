@@ -24,7 +24,7 @@ export type WorkStatus = (typeof WORK_STATUSES)[number];
 export const WORK_LINK_KINDS = ["artifact", "spec", "pr", "ci", "other"] as const;
 export type WorkLinkKind = (typeof WORK_LINK_KINDS)[number];
 
-export type WorkActorKind = "human" | "agent" | "import";
+export type WorkActorKind = "human" | "agent" | "session" | "import";
 export interface WorkActor {
   name: string;
   kind: WorkActorKind;
@@ -172,7 +172,7 @@ export interface WorkItemInsert {
   priority?: number;
   labels?: string[];
   links?: WorkLink[];
-  source?: "manual" | "agent" | "problem_report";
+  source?: "manual" | "agent" | "session" | "problem_report";
 }
 
 /** Takes the team's next number under a row lock, so KEY-n never repeats. */
@@ -202,7 +202,7 @@ export async function createWorkItem(input: WorkItemInsert, actor: WorkActor): P
         input.priority ?? 0,
         input.labels ?? [],
         JSON.stringify(input.links ?? []),
-        input.source ?? (actor.kind === "agent" ? "agent" : "manual"),
+        input.source ?? (actor.kind === "agent" || actor.kind === "session" ? actor.kind : "manual"),
         actor.name,
       ]
     );
@@ -324,4 +324,50 @@ export async function addWorkItemComment(
     await client.query(`UPDATE platform.work_item SET updated_at = now() WHERE id = $1`, [current.id]);
     return rows[0]!;
   });
+}
+
+export interface WorkSessionTokenRow {
+  id: string;
+  name: string;
+  created_by: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+}
+
+const TOKEN_COLUMNS = "id, name, created_by, created_at, last_used_at, revoked_at";
+
+/** Stores only the token's SHA-256; the caller hands the plaintext out once (CORE-187). */
+export async function insertSessionToken(name: string, tokenSha256: string, createdBy: string): Promise<WorkSessionTokenRow> {
+  const { rows } = await getDb().query<WorkSessionTokenRow>(
+    `INSERT INTO platform.work_session_token (name, token_sha256, created_by) VALUES ($1, $2, $3) RETURNING ${TOKEN_COLUMNS}`,
+    [name, tokenSha256, createdBy]
+  );
+  return rows[0]!;
+}
+
+export async function listSessionTokens(): Promise<WorkSessionTokenRow[]> {
+  const { rows } = await getDb().query<WorkSessionTokenRow>(
+    `SELECT ${TOKEN_COLUMNS} FROM platform.work_session_token ORDER BY revoked_at IS NOT NULL, created_at DESC`
+  );
+  return rows;
+}
+
+/** False when the token does not exist or was already revoked. */
+export async function revokeSessionToken(id: string): Promise<boolean> {
+  const { rowCount } = await getDb().query(
+    `UPDATE platform.work_session_token SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL`,
+    [id]
+  );
+  return (rowCount ?? 0) > 0;
+}
+
+/** The live token with this hash (touching last_used_at), or null. */
+export async function touchSessionToken(tokenSha256: string): Promise<WorkSessionTokenRow | null> {
+  const { rows } = await getDb().query<WorkSessionTokenRow>(
+    `UPDATE platform.work_session_token SET last_used_at = now()
+      WHERE token_sha256 = $1 AND revoked_at IS NULL RETURNING ${TOKEN_COLUMNS}`,
+    [tokenSha256]
+  );
+  return rows[0] ?? null;
 }

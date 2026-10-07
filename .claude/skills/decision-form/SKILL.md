@@ -27,7 +27,7 @@ Ask only what a test can't settle: product, business, legal and priority calls. 
   "title": "Remembered filters",
   "summary": "≤ 2 sentences: where things stand and what the answers unblock.",
   "context": ["Facts needed to answer. Short, optional."],
-  "links": [{"label": "CORE-45", "url": "https://linear.app/neosleep/issue/CORE-45"}],
+  "links": [{"label": "CORE-45", "url": "https://pwa.neosleepcare.com/platform/board?item=CORE-45"}],
   "ui": {"send": "Wyślij do Claude", "notesTitle": "Notatki", "recommended": "rekomendacja", "defaultsTitle": "Zdecydowane bez pytania — test to udowodni"},
   "defaults": [{"text": "Page number resets on reload", "test": "useEntityList.spec › page resets to 1"}],
   "questions": [{

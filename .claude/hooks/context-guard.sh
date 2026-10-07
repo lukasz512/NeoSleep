@@ -36,6 +36,6 @@ LEVEL=0
 printf '%s' "$LEVEL" > "$FIRED_FILE"
 
 K=$(( TOKENS / 1000 ))
-MSG="Context guard: this session is at ~${K}k tokens of context, and every further prompt re-sends all of it. Auto-compact fires by itself near ~180k (CLAUDE_CODE_AUTO_COMPACT_WINDOW), so before you start new work in this turn write a handoff to .claude/local/handoff/<branch-or-topic>.md (≤40 lines: goal, ticket, branch/worktree, what is done, what is left, open decisions, key file paths, artifact links); the compacted session resumes from it. 1 ticket = 1 session (CORE-175): if this ticket is already handed over (Artifact or light Linear comment), end the reply with one line for Łukasz: next ticket → /clear."
+MSG="Context guard: this session is at ~${K}k tokens of context, and every further prompt re-sends all of it. Auto-compact fires by itself near ~180k (CLAUDE_CODE_AUTO_COMPACT_WINDOW), so before you start new work in this turn write a handoff to .claude/local/handoff/<branch-or-topic>.md (≤40 lines: goal, ticket, branch/worktree, what is done, what is left, open decisions, key file paths, artifact links); the compacted session resumes from it. 1 ticket = 1 session (CORE-175): if this ticket is already handed over (Artifact or light board comment), end the reply with one line for Łukasz: next ticket → /clear."
 jq -n --arg ctx "$MSG" --arg sys "Context ~${K}k — handoff written; auto-compact near 180k." \
   '{systemMessage: $sys, hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext: $ctx}}'
