@@ -1,0 +1,7 @@
+# CORE-185 (decision D1): owner-run dev scripts and the backend-less e2e harness
+# take input from our own APIs or the URL bar by design, so their alerts were
+# triaged as false positives. Keep them out of the scan instead of re-dismissing.
+paths-ignore:
+  - infrastructure/scripts
+  - apps/*/scripts
+  - apps/pwa/e2e/harness

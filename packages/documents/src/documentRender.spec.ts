@@ -30,6 +30,12 @@ describe("fillContentParams", () => {
 });
 
 describe("renderDocumentHtml", () => {
+  // CORE-185 / CodeQL #4: a template name is a key, never a path — even if a
+  // future caller passes a URL param straight through.
+  it("rejects a template name that is not a plain key", () => {
+    expect(() => renderDocumentHtml("../templates/informedConsent", "en")).toThrow(/Invalid template name/);
+  });
+
   it("renders a known real template without contentHtml exactly as before (backward compatible)", () => {
     const html = renderDocumentHtml("informedConsent", "mx");
     expect(html).toContain("<html");

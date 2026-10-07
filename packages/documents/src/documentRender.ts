@@ -161,6 +161,8 @@ function getDocThemeCss(): string {
 }
 
 function loadTemplate(name: string): string {
+  // A key like "informedConsent" or "gdprConsent.mx", never a path (CORE-185).
+  if (!/^[A-Za-z_]+(\.[a-z]{2})?$/.test(name)) throw new Error(`Invalid template name: ${JSON.stringify(name)}`);
   return fs.readFileSync(path.join(TEMPLATES_DIR, `${name}.html`), "utf-8");
 }
 
