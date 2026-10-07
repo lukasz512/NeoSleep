@@ -10,7 +10,7 @@
   >
     <div
       class="app-segmented-tabs__thumb position-absolute"
-      :class="underline ? 'rounded bg-primary' : ''"
+      :class="underline ? 'rounded' : ''"
       :style="thumbStyle"
       aria-hidden="true"
     />
@@ -258,6 +258,9 @@ watch(
   bottom: -1px;
   height: 2px;
   border-radius: 2px;
+  /* CORE-179: set here, not via bg-primary — Vuetify 4's layered utilities lose
+     to the shared thumb's surface background above, which hid the bar. */
+  background: rgb(var(--v-theme-primary));
   box-shadow: none;
   transition:
     transform 300ms var(--pwa-ease-spring, cubic-bezier(0.34, 1.2, 0.64, 1)),
@@ -272,8 +275,9 @@ watch(
     background-color 150ms ease,
     color 150ms ease;
 }
+/* CORE-179: the selected label wears the bar's color, so "where am I" reads at a glance. */
 .app-segmented-tabs--underline .app-segmented-tabs__tab--active {
-  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  color: rgb(var(--v-theme-primary));
 }
 .app-segmented-tabs--underline .app-segmented-tabs__tab:hover {
   background-color: rgba(var(--v-theme-on-surface), 0.04);
