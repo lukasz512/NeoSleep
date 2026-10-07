@@ -6,11 +6,15 @@
  * floats over scrolling content, "Close" sits exactly where "More" was, and
  * the capsule/card land where they should.
  *
+ * The theme comes from the real theme store (CORE-163), so the account
+ * menu's Light/Dark/Auto buttons switch it exactly as in the app.
+ *
  * `?theme=dark` · `?open=account` (opens the account menu once the router is ready)
  * · `?labels=long` (CORE-91: the longest real module names in the pill's row).
  */
-import { createApp, defineComponent, h, nextTick, onMounted, ref } from "vue";
-import { createPinia } from "pinia";
+import { createApp, defineComponent, h, nextTick, onMounted, ref, watch } from "vue";
+import { createPinia, setActivePinia } from "pinia";
+import { useThemeStore, type ThemePreference } from "@stores";
 import { createRouter, createMemoryHistory } from "vue-router";
 import { VApp, VAvatar } from "vuetify/components";
 import vuetify, { darkTheme, lightTheme } from "../../src/plugins/vuetify";
@@ -18,6 +22,7 @@ import { i18n } from "../../src/plugins/i18n";
 import "../../src/styles/theme.scss";
 import "../../src/styles/app-responsive.scss";
 import "../../src/styles/page-transitions.css";
+import "@brand/transitions.css";
 import { AppShell } from "@neo/ui";
 import AppIcon, { type AppIconName } from "../../src/components/AppIcon.vue";
 import AppAccountMenu from "../../src/layouts/components/AppAccountMenu.vue";
@@ -25,9 +30,18 @@ import AppUserMenuPanel from "../../src/layouts/components/AppUserMenuPanel.vue"
 import { MENU_AVATAR_SIZE } from "../../src/composables/useGlassPopoverMotion";
 
 const params = new URLSearchParams(location.search);
-const theme = params.get("theme") === "dark" ? darkTheme : lightTheme;
-vuetify.theme.change(theme);
-document.documentElement.setAttribute("data-theme", theme);
+const themeParam = params.get("theme");
+try {
+  if (themeParam === "dark" || themeParam === "light") localStorage.setItem("neosleep-theme", themeParam);
+  else localStorage.removeItem("neosleep-theme");
+} catch {
+  // benign: storage blocked — the store falls back to the OS theme.
+}
+const pinia = createPinia();
+setActivePinia(pinia);
+const themeStore = useThemeStore();
+// Same Vuetify side effect as composables/useLayoutState.ts.
+watch(() => themeStore.mode, (m) => vuetify.theme.change(m === "dark" ? darkTheme : lightTheme), { immediate: true, flush: "sync" });
 
 const NAV = [
   ["dashboard", "Dashboard"],
@@ -112,10 +126,11 @@ const Harness = defineComponent({
                       roleLabel: "Rep",
                       initials: "AN",
                       region: "PL",
-                      themePreference: "system",
+                      themePreference: themeStore.preference,
+                      "onSet-theme": (p: ThemePreference) => themeStore.setPreference(p),
                       locale: "en",
                       canChangePassword: true,
-                      version: "Version 2.14.0 (build 412)",
+                      version: "Version 2.14.0.412",
                       channel: "DEV",
                       avatarSize: MENU_AVATAR_SIZE,
                     }),
@@ -150,4 +165,4 @@ style.textContent = `
 document.head.appendChild(style);
 
 document.getElementById("boot-splash")?.remove();
-createApp(Harness).use(createPinia()).use(router).use(vuetify).use(i18n).mount("#app");
+createApp(Harness).use(pinia).use(router).use(vuetify).use(i18n).mount("#app");

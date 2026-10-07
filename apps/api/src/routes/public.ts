@@ -23,6 +23,7 @@ import {
   OptOutPublicAppointmentCommand,
   type PublicAppointmentMeta,
 } from "../commands/appointmentPatient.js";
+import { DownloadPublicDocumentCommand } from "../commands/historiaClinicaEmail.js";
 import { ValidationError } from "../errors.js";
 import { routeParam } from "./utils.js";
 
@@ -137,6 +138,23 @@ publicRouter.post(
 );
 
 /**
+ * The patient's signed Historia clínica (apps/pwa /d#<token>, NEO-258), opened
+ * from the emailed link. Token in the body like the questionnaire's; any
+ * unusable link → 410 {code:"LINK_INVALID"}.
+ */
+publicRouter.post(
+  "/public/document",
+  publicQuestionnaireReadLimiter,
+  asyncHandler(async (req: Request, res: Response) => {
+    const slug = tenantSlugFromHost(req.hostname);
+    const document = await withTenant(slug, (client) => DownloadPublicDocumentCommand(client, bodyToken(req)));
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${document.filename.replace(/[^A-Za-z0-9._-]/g, "_")}"`);
+    res.send(Buffer.from(document.bytes));
+  })
+);
+
+/**
  * The patient's appointment page (apps/pwa /a#<token>, CORE-25), opened from
  * the appointment email. Same rules as the questionnaire link: the token
  * travels in the POST body, any unusable link → 410 {code:"LINK_INVALID"}.
@@ -163,9 +181,11 @@ publicRouter.post(
   "/public/appointment/respond",
   publicAppointmentWriteLimiter,
   asyncHandler(async (req: Request, res: Response) => {
-    const response = (req.body as { response?: unknown } | undefined)?.response;
+    const body = req.body as { response?: unknown; note?: unknown } | undefined;
+    const response = typeof body?.response === "string" ? body.response : "";
+    const note = typeof body?.note === "string" ? body.note : undefined;
     const slug = tenantSlugFromHost(req.hostname);
-    res.json(await withTenant(slug, (client) => RespondPublicAppointmentCommand(client, bodyToken(req), typeof response === "string" ? response : "", publicAppointmentMeta(req))));
+    res.json(await withTenant(slug, (client) => RespondPublicAppointmentCommand(client, bodyToken(req), response, publicAppointmentMeta(req), note)));
   })
 );
 

@@ -1,5 +1,5 @@
 import type { PoolClient } from "pg";
-import { toArray, trimOrNull, trimOrEmpty } from "./helpers.js";
+import { toArray, trimOrNull, trimOrEmpty, normalizeEmail } from "./helpers.js";
 import { AppError, DatabaseError, ValidationError } from "../errors.js";
 import { assertEmailNotTaken } from "./identityEmail.js";
 import { formatDisplayName } from "../utils/personName.js";
@@ -243,13 +243,13 @@ export async function insertLead(client: PoolClient, input: InsertLeadInput): Pr
   if (!firstName || !lastName) throw new ValidationError("Lead first_name and last_name are required", "first_name");
 
   try {
-    await assertEmailNotTaken(client, trimOrNull(input.email), null);
+    await assertEmailNotTaken(client, normalizeEmail(input.email), null);
     const identityResult = await client.query<{ id: string }>(
       `INSERT INTO identities (title, first_name, last_name, email, phone, region, country_code, territory_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id`,
       [
-        trimOrNull(input.salutation), firstName, lastName, trimOrNull(input.email), trimOrNull(input.phone),
+        trimOrNull(input.salutation), firstName, lastName, normalizeEmail(input.email), trimOrNull(input.phone),
         trimOrEmpty(input.region) || null, trimOrNull(input.country_code), input.territory_id ?? null,
       ]
     );
@@ -307,8 +307,8 @@ export async function updateLead(client: PoolClient, id: string, input: UpdateLe
       identitySets.push(`last_name = $${iidx++}`);
     }
     if (input.email !== undefined) {
-      await assertEmailNotTaken(client, trimOrNull(input.email), lead.identity_id);
-      identityParams.push(trimOrNull(input.email));
+      await assertEmailNotTaken(client, normalizeEmail(input.email), lead.identity_id);
+      identityParams.push(normalizeEmail(input.email));
       identitySets.push(`email = $${iidx++}`);
     }
     if (input.phone !== undefined) {

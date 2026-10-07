@@ -120,7 +120,7 @@
     </button>
 
     <button
-      v-if="accountActions"
+      v-if="accountActions && hasReports"
       type="button"
       class="user-menu__row"
       data-motion="row"
@@ -185,7 +185,7 @@ withDefaults(defineProps<{
   locale: string;
   /** False for Google-only accounts — they have no password to change. */
   canChangePassword: boolean;
-  /** "Version 1.0.0 (build 105)" — empty hides the line. */
+  /** "Version 1.1.0.105" — empty hides the line. */
   version: string;
   /** "DEV" / "LOCAL" on non-prod builds, null on prod. */
   channel: string | null;
@@ -193,7 +193,9 @@ withDefaults(defineProps<{
   avatarSize?: number;
   /** Password / log out / install app — false for someone without an account (the patient on a QR link, NEO-126). */
   accountActions?: boolean;
-}>(), { email: undefined, region: undefined, role: null, avatarSize: 56, accountActions: true });
+  /** The user has sent at least one report — "My reports" is hidden until then (CORE-158). */
+  hasReports?: boolean;
+}>(), { email: undefined, region: undefined, role: null, avatarSize: 56, accountActions: true, hasReports: false });
 
 const emit = defineEmits<{
   "set-theme": [preference: ThemePreference];

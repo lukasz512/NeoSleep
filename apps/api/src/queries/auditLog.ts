@@ -21,6 +21,8 @@ export interface PatientHistoryEntryDto {
   entity_id: string | null;
   entity_before: Record<string, unknown> | null;
   entity_after: Record<string, unknown> | null;
+  /** "patient" when the patient did it from a link (confirm, can't come, signed consent); null = user_name or the system. */
+  actor: "patient" | null;
 }
 
 export interface PatientHistoryDto {
@@ -44,15 +46,22 @@ export interface PatientHistoryDto {
  * fields at all (fail safe, not fail open).
  */
 const AUDIT_FIELD_ALLOWLIST: Record<string, readonly string[]> = {
-  Patient: ["id", "status", "region"],
+  // `practitioner` is the doctor's name the timeline query adds for practitioner_id (CORE-160); the raw id stays out.
+  // `appointment_emails` = the patient stopped appointment emails from the link.
+  Patient: ["id", "status", "region", "practitioner", "appointment_emails"],
   SleepStudy: ["patient_id", "status"],
   TreatmentPlan: ["patient_id", "type", "status"],
   Practitioner: ["id", "primary_specialty", "region", "status"],
   Organization: ["id", "name", "type", "status", "region"],
   // CORE-133: when, and what state — never notes or clinical links. `channel`/`kind` say which email went out.
-  Appointment: ["start_at", "end_at", "timezone", "status", "channel", "kind"],
+  // CORE-160: `patient_response` = the patient's "confirm" / "can't come" from the email.
+  Appointment: ["start_at", "end_at", "timezone", "status", "channel", "kind", "patient_response"],
   Encounter: ["type", "status", "start_at"],
   QuestionnaireRequest: ["items", "status", "expires_at"],
+  // CORE-160: what was signed, uploaded or who joined the team — never answers, scores or exam findings.
+  PatientCareTeam: ["practitioner", "source"],
+  Consent: ["purpose"],
+  FileAttachment: ["document_type", "title"],
 };
 
 function redactAuditFields(
@@ -84,17 +93,26 @@ export interface EntityHistoryDto {
   entries: PatientHistoryEntryDto[];
 }
 
+/**
+ * A comment on a device order is stored as a PartnerOrder "create" whose
+ * entity_after.action says add_comment; it must not read as a second order.
+ */
+function displayAction(entityType: string, action: string, after: Record<string, unknown> | null): string {
+  return entityType === "PartnerOrder" && action === "create" && after?.action === "add_comment" ? "comment" : action;
+}
+
 function toEntries(rows: Awaited<ReturnType<typeof getAuditLogForEntities>>): PatientHistoryEntryDto[] {
   return rows.map((r) => ({
     id: r.id,
     created_at: r.created_at,
     user_id: r.user_id,
     user_name: r.user_name,
-    action: r.action,
+    action: displayAction(r.entity_type, r.action, r.entity_after),
     entity_type: r.entity_type,
     entity_id: r.entity_id,
     entity_before: redactAuditFields(r.entity_type, r.entity_before),
     entity_after: redactAuditFields(r.entity_type, r.entity_after),
+    actor: r.actor === "patient" ? "patient" : null,
   }));
 }
 

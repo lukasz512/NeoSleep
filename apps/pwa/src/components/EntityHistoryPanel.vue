@@ -82,7 +82,7 @@
                   :to="userDetailLink(authStore.user?.role, entry.user_id)"
                   :label="entry.user_name"
                 />
-                <span v-else>{{ entry.user_name ?? t("app.history.actor.system") }}</span>
+                <span v-else>{{ historyActorLabel(t, entry) }}</span>
                 <span aria-hidden="true" class="entity-history-panel__sep">·</span>
                 <time :datetime="entry.created_at" :title="fullTimestamp(entry.created_at)">
                   {{ timeOfDay(entry.created_at) }}
@@ -137,7 +137,7 @@
                     </div>
                     <div>
                       <dt>{{ t("app.history.details.author") }}</dt>
-                      <dd>{{ entry.user_name ?? t("app.history.actor.system") }}</dd>
+                      <dd>{{ historyActorLabel(t, entry) }}</dd>
                     </div>
                     <div>
                       <dt>{{ t("app.history.details.record") }}</dt>
@@ -205,6 +205,7 @@ import {
   isClinicalHistoryEntry,
   groupHistoryByDay,
   historyDayLabel,
+  historyActorLabel,
   type HistoryFieldChange,
   type HistoryValueLookups,
 } from "../utils/historyLabels";
@@ -236,6 +237,8 @@ interface HistoryEntry {
   entity_id: string | null;
   entity_before: Record<string, unknown> | null;
   entity_after: Record<string, unknown> | null;
+  /** "patient" when the patient acted from a link (CORE-160). */
+  actor: "patient" | null;
 }
 
 interface EntityHistory {

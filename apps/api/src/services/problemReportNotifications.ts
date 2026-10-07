@@ -100,13 +100,16 @@ export async function notifyProblemReportCreated(input: {
   number: number;
   reporterUserId: string;
   reporterEmail: string | null;
+  /** false for a report the system filed on the user's behalf (CORE-173): admins only, no receipt. */
+  notifyReporter?: boolean;
 }): Promise<void> {
+  const notifyReporter = input.notifyReporter ?? true;
   try {
     const reporter = await withTenant(input.tenantSlug, async (client) => {
       const found = await getReporter(client, input.reporterUserId);
       const reporterIdentityId = found?.identityId ?? (await getIdentityIdForUser(client, input.reporterUserId));
       const meta = { number: input.number };
-      if (reporterIdentityId) {
+      if (notifyReporter && reporterIdentityId) {
         await notify(client, { type: "problem_report_received", recipients: [reporterIdentityId], entityId: input.reportId, meta });
       }
       await notify(client, {
@@ -118,7 +121,7 @@ export async function notifyProblemReportCreated(input: {
       });
       return found;
     });
-    await emailReporter(reporter, input.reporterEmail, "received", {
+    if (notifyReporter) await emailReporter(reporter, input.reporterEmail, "received", {
       id: input.reportId,
       number: input.number,
       trackerRef: null,

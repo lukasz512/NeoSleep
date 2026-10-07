@@ -1,6 +1,7 @@
 import type { TenantContext } from "../context/TenantContext.js";
 import { getPatientById, getPractitionerById, getOrganizationById, getIdentityIdForUser, getPractitionerIdByIdentityId, isOnCareTeam, type Patient } from "../db.js";
-import { ForbiddenError, NotFoundError } from "../errors.js";
+import { DoctorNotLinkedError, ForbiddenError, NotFoundError } from "../errors.js";
+import { reportUnlinkedDoctor } from "../services/doctorLinkAlert.js";
 import { assertTerritoryAccessByTerritoryId, getAllowedScopePaths } from "../middleware/requireScope.js";
 
 /**
@@ -46,7 +47,17 @@ async function resolveViewer(ctx: TenantContext): Promise<Viewer> {
   if (role === "doctor") {
     const identityId = await getIdentityIdForUser(ctx.client, ctx.user.id);
     const practitionerId = identityId ? await getPractitionerIdByIdentityId(ctx.client, identityId) : null;
-    if (!practitionerId) throw new ForbiddenError("This doctor account is not linked to a practitioner record");
+    if (!practitionerId) {
+      // CORE-173: an admin must hear about this at once, not from the doctor days later.
+      void reportUnlinkedDoctor({
+        tenantSlug: ctx.slug,
+        userId: ctx.user.id,
+        email: ctx.user.email,
+        name: ctx.user.name ?? null,
+        requestId: ctx.requestId,
+      });
+      throw new DoctorNotLinkedError();
+    }
     return { kind: "doctor", practitionerId, scopePaths: null };
   }
   const scopePaths = await getAllowedScopePaths(ctx.client, ctx.user.roles);

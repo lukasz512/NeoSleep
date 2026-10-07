@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { historiaClinicaPrintFields, clinicInitials, ageOn } from "./historiaClinicaPrint.js";
+import { historiaClinicaPrintFields, ageOn } from "./historiaClinicaPrint.js";
 import type { MedicalHistoryRecord, OralExamRecord, StopBangRecord, TmjExamRecord } from "../db/clinicalRecords.js";
 
 const TODAY = new Date("2026-10-05T12:00:00Z");
@@ -50,7 +50,7 @@ const history = { has_smoking: true, has_alcoholism: false } as unknown as Medic
 
 describe("historiaClinicaPrintFields", () => {
   it("a recorded patient: gauge, zone, skull levels per side, findings count and measures", () => {
-    const { fields, states } = historiaClinicaPrintFields("mx", { organizationName: "Consultorio Dra. Lorena González", birthDate: "1971-03-14", today: TODAY, history, oral, tmj, screening });
+    const { fields, states } = historiaClinicaPrintFields("mx", { patientPhone: "55 1234 5678", patientEmail: "ana@example.mx", birthDate: "1971-03-14", gender: null, today: TODAY, history, oral, tmj, screening });
     expect(states.score_state).toBe("4");
     expect(states.score_zone_state).toBe("intermediate");
     expect(fields.score_zone_label).toContain("Riesgo intermedio");
@@ -60,11 +60,11 @@ describe("historiaClinicaPrintFields", () => {
     expect(fields.bmi_value).toBe("29,4");
     expect([fields.weight_value, fields.height_value, fields.neck_value]).toEqual(["77 kg", "162 cm", "38 cm"]);
     expect(fields.edad).toBe("55 años");
-    expect(fields.clinic_initials).toBe("LG");
+    expect([fields.telefono, fields.email]).toEqual(["55 1234 5678", "ana@example.mx"]);
   });
 
   it("STOP-Bang answers and habits become ticked boxes; a 'no' stays an empty box", () => {
-    const { states } = historiaClinicaPrintFields("mx", { organizationName: null, birthDate: null, today: TODAY, history, oral, tmj, screening });
+    const { states } = historiaClinicaPrintFields("mx", { patientPhone: null, patientEmail: null, birthDate: null, gender: null, today: TODAY, history, oral, tmj, screening });
     expect(states.sb_snoring).toBe("on");
     expect(states.sb_observed_apnea).toBe("off");
     expect(states.sb_neck_over_40).toBe("off");
@@ -73,30 +73,30 @@ describe("historiaClinicaPrintFields", () => {
   });
 
   it("a blank form (nothing recorded): no needle, no levels, no counts, every box empty", () => {
-    const { fields, states, choices } = historiaClinicaPrintFields("mx", { organizationName: null, birthDate: null, today: TODAY, history: null, oral: null, tmj: null, screening: null });
+    const { fields, states, choices } = historiaClinicaPrintFields("mx", { patientPhone: null, patientEmail: null, birthDate: null, gender: null, today: TODAY, history: null, oral: null, tmj: null, screening: null });
     expect(states).toEqual({});
     expect(fields.oral_findings_count).toBe("");
     expect(fields.tmj_count_right).toBe("");
     expect(fields.edad).toBe("");
-    expect(fields.clinic_initials).toBe("");
+    expect([fields.telefono, fields.email]).toEqual(["", ""]); // write-in lines
     expect(choices.sexo).toEqual(["Mujer", "Hombre", "Otro"]);
     expect(choices.dq_blank).toEqual(["Sí", "No"]);
   });
 
   it("sex is only marked when the record says male; a 'no' to G is not assumed to mean female", () => {
-    const male = historiaClinicaPrintFields("mx", { organizationName: null, birthDate: null, today: TODAY, history: null, oral: null, tmj: null, screening: { ...screening, is_male: true } as StopBangRecord });
+    const male = historiaClinicaPrintFields("mx", { patientPhone: null, patientEmail: null, birthDate: null, gender: null, today: TODAY, history: null, oral: null, tmj: null, screening: { ...screening, is_male: true } as StopBangRecord });
     expect(male.choices.sexo).toEqual({ options: ["Mujer", "Hombre", "Otro"], selected: "Hombre" });
-    const notMale = historiaClinicaPrintFields("mx", { organizationName: null, birthDate: null, today: TODAY, history: null, oral: null, tmj: null, screening });
+    const notMale = historiaClinicaPrintFields("mx", { patientPhone: null, patientEmail: null, birthDate: null, gender: null, today: TODAY, history: null, oral: null, tmj: null, screening });
     expect(notMale.choices.sexo).toEqual(["Mujer", "Hombre", "Otro"]);
   });
-});
-
-describe("clinicInitials", () => {
-  it("takes the clinic's own name, skipping titles and generic words", () => {
-    expect(clinicInitials("Consultorio Dra. Lorena González")).toBe("LG");
-    expect(clinicInitials("Clínica Dental Polanco")).toBe("P");
-    expect(clinicInitials("NeoSleep")).toBe("N");
-    expect(clinicInitials("  ")).toBe("");
+  it("the patient's recorded gender ticks its Sexo box, ahead of the STOP-Bang G answer (NEO-253)", () => {
+    const base = { patientPhone: null, patientEmail: null, birthDate: null, today: TODAY, history: null, oral: null, tmj: null };
+    const sexOf = (gender: string | null, s: StopBangRecord | null = null) => historiaClinicaPrintFields("mx", { ...base, gender, screening: s }).choices.sexo;
+    expect(sexOf("female")).toEqual({ options: ["Mujer", "Hombre", "Otro"], selected: "Mujer" });
+    expect(sexOf("male")).toEqual({ options: ["Mujer", "Hombre", "Otro"], selected: "Hombre" });
+    expect(sexOf("other")).toEqual({ options: ["Mujer", "Hombre", "Otro"], selected: "Otro" });
+    expect(sexOf("prefer_not_to_say")).toEqual(["Mujer", "Hombre", "Otro"]);
+    expect(sexOf("female", { ...screening, is_male: true } as StopBangRecord)).toEqual({ options: ["Mujer", "Hombre", "Otro"], selected: "Mujer" });
   });
 });
 

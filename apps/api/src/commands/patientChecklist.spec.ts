@@ -3,23 +3,30 @@ import bcrypt from "bcrypt";
 import { withTenant, insertStaffUser, insertPatient, insertPractitioner, insertSleepStudy, getGlobalTerritoryId } from "../db.js";
 import { ensureDocumentContent } from "../testing/documentContentFixture.js";
 import type { TenantContext } from "../context/TenantContext.js";
-import { ValidationError } from "../errors.js";
+import { ForbiddenError, ValidationError } from "../errors.js";
 import { RecordClinicalQuestionnaireCommand } from "./clinicalRecords.js";
 import { PrintChecklistItemCommand, UploadPatientStudyCommand, DeletePatientStudyUploadCommand } from "./patientChecklist.js";
 import { GetPatientChecklistQuery } from "../queries/patientChecklist.js";
+import { GetCurrentDocumentContentQuery } from "../queries/documentContent.js";
+import { insertConsent } from "../db/consent.js";
 
 /**
  * Patient Estudios checklist (ADR-024) — real Postgres, real PDF rendering;
  * only the Supabase Storage boundary is mocked.
  */
-const { uploadMock, deleteMock } = vi.hoisted(() => ({
+const ONE_PIXEL_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+const { uploadMock, deleteMock, downloadMock } = vi.hoisted(() => ({
   uploadMock: vi.fn(async (path: string) => ({ path, bucket: "partner-documents" })),
   deleteMock: vi.fn(async (_path: string) => undefined),
+  downloadMock: vi.fn(async (_path: string): Promise<Uint8Array> => {
+    throw new Error("not stored");
+  }),
 }));
 vi.mock("../services/partnerDocuments.js", async (importActual) => ({
   ...(await importActual<typeof import("../services/partnerDocuments.js")>()),
   uploadPartnerDocument: uploadMock,
   deletePartnerDocument: deleteMock,
+  downloadPartnerDocument: downloadMock,
 }));
 
 // Still the real renderer — only wrapped, to read back which fields each print sent.
@@ -50,6 +57,23 @@ async function buildContext(client: Client): Promise<TenantContext> {
   const territory = await getGlobalTerritoryId(client);
   const user = await insertStaffUser(client, email, "QA", "Doctor", "admin", hash, false, null, null, territory);
   return { slug: TENANT_SLUG, client, user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", territory_id: territory }] }, requestId: `test-${uniqueSuffix()}` };
+}
+
+/** A doctor login sharing its identity with a practitioner (ADR-014), plus one patient of theirs (CORE-104). */
+async function doctorWithPatient(client: Client): Promise<{ ctx: TenantContext; patientId: string }> {
+  const email = `qa-checklist-doc-${uniqueSuffix()}@neosleepcare.com`;
+  const practitioner = await insertPractitioner(client, { first_name: "Lorena", last_name: `Firma-${uniqueSuffix()}`, email });
+  const hash = await bcrypt.hash("irrelevant-not-logged-in-with", 4);
+  const territory = await getGlobalTerritoryId(client);
+  const user = await insertStaffUser(client, email, "Lorena", "Firma", "doctor", hash, false, null, null, territory);
+  const patient = await insertPatient(client, { first_name: "Ana", last_name: `Signed-${uniqueSuffix()}`, practitioner_id: practitioner.id });
+  const ctx: TenantContext = {
+    slug: TENANT_SLUG,
+    client,
+    user: { id: user!.id, email, name: "Dra. Lorena Firma", role: "doctor", roles: [{ role: "doctor", territory_id: territory }] },
+    requestId: `test-${uniqueSuffix()}`,
+  };
+  return { ctx, patientId: patient.id };
 }
 
 const newPatient = (client: Client) => insertPatient(client, { first_name: "Ana", last_name: `Checklist-${uniqueSuffix()}` });
@@ -195,6 +219,93 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
       await expect(PrintChecklistItemCommand(ctx, patient.id, "polysomnography")).rejects.toThrow(ValidationError);
     });
   }, 90000);
+
+  it("the Historia clínica prints the patient's phone + email and the current informed consent as its last page, for any patient (NEO-249)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await insertPatient(client, { first_name: "Ana", last_name: `Contact-${uniqueSuffix()}`, phone: "+52 55 1234 5678", email: `ana-${uniqueSuffix()}@example.mx` });
+      const consent = (await GetCurrentDocumentContentQuery("informedConsent", "mx")).content_html;
+
+      renderSpy.mockClear();
+      await PrintChecklistItemCommand(ctx, patient.id, "historiaEndo");
+      const [html, options] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string> }];
+      expect(options.dataFields.telefono).toBe("+52 55 1234 5678");
+      expect(options.dataFields.email).toMatch(/^ana-.*@example\.mx$/);
+      expect(html.slice(html.indexOf('<div class="hc-p3">'))).toContain(consent);
+      expect(options.dataFields.consent_stamp).toBe(""); // not signed yet → the empty line to sign on paper
+
+      // NEO-249 D2: signed electronically → a dated stamp instead of the line.
+      await insertConsent(client, { entity_type: "patient", entity_id: patient.id, legal_basis: "consent", jurisdiction: "MX", purpose: "informedConsent" });
+      renderSpy.mockClear();
+      await PrintChecklistItemCommand(ctx, patient.id, "historiaEndo");
+      const [, signed] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string>; dataImages: Record<string, string> }];
+      expect(signed.dataFields.consent_stamp).toMatch(/^Firmado electrónicamente por el paciente · \d{2}\/\d{2}\/\d{4}$/);
+      expect(signed.dataImages).toEqual({}); // signed before NEO-252: no stored signature, the stamp alone
+
+      // NEO-252: the drawn signature stored with the consent prints above the stamp; storage failing never fails the print.
+      await client.query(`UPDATE consent SET withdrawn_at = now() WHERE entity_id = $1`, [patient.id]);
+      await insertConsent(client, {
+        entity_type: "patient", entity_id: patient.id, legal_basis: "consent", jurisdiction: "MX", purpose: "informedConsent",
+        metadata: { signature_path: `patient/${patient.id}/consent-informedConsent-1-signature.png` },
+      });
+      downloadMock.mockResolvedValueOnce(new Uint8Array(Buffer.from(ONE_PIXEL_PNG, "base64")));
+      renderSpy.mockClear();
+      await PrintChecklistItemCommand(ctx, patient.id, "historiaEndo");
+      const [, drawn] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string>; dataImages: Record<string, string> }];
+      expect(downloadMock).toHaveBeenLastCalledWith(`patient/${patient.id}/consent-informedConsent-1-signature.png`);
+      expect(drawn.dataImages).toEqual({ firma_paciente: `data:image/png;base64,${ONE_PIXEL_PNG}` });
+      expect(drawn.dataFields.consent_stamp).not.toBe("");
+
+      renderSpy.mockClear();
+      await PrintChecklistItemCommand(ctx, patient.id, "historiaEndo"); // download rejects (the default mock)
+      expect((renderSpy.mock.calls[0] as [string, { dataImages: Record<string, string> }])[1].dataImages).toEqual({});
+    });
+  }, 60000);
+
+  it("the patient signs the consent page, the doctor the Historia's page 2; a doctor's drawn signature signs that panel (NEO-255)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const { ctx, patientId } = await doctorWithPatient(client);
+      const signature = `data:image/png;base64,${ONE_PIXEL_PNG}`;
+
+      // Unsigned: the doctor panel keeps the patient's doctor and the blank line to sign on paper.
+      renderSpy.mockClear();
+      await PrintChecklistItemCommand(ctx, patientId, "historiaEndo");
+      const [html, unsigned] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string>; dataImages: Record<string, string> }];
+      const consentPage = html.slice(html.indexOf('<div class="hc-p3">'));
+      expect(consentPage).toContain('data-field="firma_paciente"');
+      expect(consentPage).not.toContain('data-field="firma_doctor"'); // the consent is the patient's alone
+      expect(html.match(/data-field="firma_doctor"/g)).toHaveLength(1); // page 2
+      expect(unsigned.dataFields.doctor_stamp).toBe("");
+      expect(unsigned.dataFields.nombre_medico_firma).toMatch(/Lorena Firma-/);
+      expect(unsigned.dataImages.firma_doctor).toBeUndefined();
+
+      // Signed in the print dialog: the image, the signer's name and a dated stamp; the signing is audit-logged.
+      renderSpy.mockClear();
+      await PrintChecklistItemCommand(ctx, patientId, "historiaEndo", { doctorSignature: signature });
+      const [, signed] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string>; dataImages: Record<string, string> }];
+      expect(signed.dataImages.firma_doctor).toBe(signature);
+      expect(signed.dataFields.nombre_medico_firma).toBe("Dra. Lorena Firma");
+      expect(signed.dataFields.doctor_stamp).toMatch(/^Firmado electrónicamente por Dra\. Lorena Firma · \d{2}\/\d{2}\/\d{4}$/);
+      const { rows } = await client.query<{ entity_after: Record<string, unknown> }>(
+        `SELECT entity_after FROM audit_log WHERE entity_type = 'ChecklistItemPrint' AND entity_id = $1 AND user_id = $2`,
+        [patientId, ctx.user.id]
+      );
+      expect(rows.map((r) => r.entity_after.doctor_signed ?? false).sort()).toEqual([false, true]); // the unsigned print, then the signed one
+    });
+  }, 60000);
+
+  it("only a doctor signs, only the Historia clínica, only with a drawn PNG (NEO-255)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const signature = `data:image/png;base64,${ONE_PIXEL_PNG}`;
+      const admin = await buildContext(client);
+      const patient = await newPatient(client);
+      await expect(PrintChecklistItemCommand(admin, patient.id, "historiaEndo", { doctorSignature: signature })).rejects.toThrow(ForbiddenError);
+
+      const { ctx, patientId } = await doctorWithPatient(client);
+      await expect(PrintChecklistItemCommand(ctx, patientId, "medicalHistory", { doctorSignature: signature })).rejects.toThrow(ValidationError);
+      await expect(PrintChecklistItemCommand(ctx, patientId, "historiaEndo", { doctorSignature: "data:image/svg+xml;base64,PHN2Zz4=" })).rejects.toThrow(ValidationError);
+    });
+  }, 60000);
 
   const PATIENT_FORMS = ["medicalHistory", "oralExam", "tmjExam", "historiaEndo", "informedConsent", "stopBang"];
 

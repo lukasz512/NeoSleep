@@ -305,14 +305,16 @@ export function usePatientChecklist(patientId: () => string) {
    * Opens the print PDF in a new tab: a freshly rendered one (streamed as a
    * blob) or, for a signed consent, the stored document. The tab is opened
    * synchronously inside the click so popup blockers (Safari) allow it.
+   * `doctorSignature`: the doctor's drawn signature for the Historia clínica (NEO-255).
    */
-  async function print(key: string, recordId?: string): Promise<void> {
+  async function print(key: string, recordId?: string, doctorSignature?: string): Promise<void> {
     const tab = window.open("", "_blank");
     if (tab) tab.opener = null; // what "noopener" would do — passing it would make window.open return null
-    const res = await apiFetch(`/api/v1/patient/${patientId()}/checklist/${key}/print`, { ...json(recordId ? { recordId } : {}), handleErrors: false });
+    const body = { ...(recordId ? { recordId } : {}), ...(doctorSignature ? { doctorSignature } : {}) };
+    const res = await apiFetch(`/api/v1/patient/${patientId()}/checklist/${key}/print`, { ...json(body), handleErrors: false });
     if (!res.ok) {
       tab?.close();
-      await failWith(res, "app.clinical.generatePdfError", "printer", () => print(key, recordId));
+      await failWith(res, "app.clinical.generatePdfError", "printer", () => print(key, recordId, doctorSignature));
       return;
     }
     const target = res.headers.get("Content-Type")?.includes("application/pdf")
@@ -379,6 +381,22 @@ export function usePatientChecklist(patientId: () => string) {
     return { sent_to, url };
   }
 
+  /** NEO-258: the finished Historia clínica, signed by the doctor, emailed to the patient as a 7-day link. */
+  async function sendHistoriaByEmail(doctorSignature: string): Promise<boolean> {
+    const res = await apiFetch(`/api/v1/patient/${patientId()}/historia-clinica/email`, { ...json({ doctorSignature }), handleErrors: false });
+    if (res.status === 422) {
+      notifications.show(t("app.clinical.email.noEmail"), "warning", undefined, { icon: "mail" });
+      return false;
+    }
+    if (!res.ok) {
+      await failWith(res, "app.clinical.email.failed", "mail");
+      return false;
+    }
+    const { sent_to } = (await res.json()) as { sent_to: string };
+    notifications.show(t("app.patients.detail.aside.hcSent", { email: sent_to }), "success", undefined, { icon: "mail" });
+    return true;
+  }
+
   async function cancelRequest(requestId: string): Promise<void> {
     await send(`/questionnaire-requests/${requestId}`, { method: "DELETE" }, { icon: "qr-code", errorKey: "app.clinical.saveError", retryable: true });
   }
@@ -405,5 +423,5 @@ export function usePatientChecklist(patientId: () => string) {
     await send(`/studies/uploads/${attachmentId}`, { method: "DELETE" }, { icon: "file", errorKey: "app.clinical.upload.deleteError", successKey: "app.clinical.upload.deleted", retryable: true });
   }
 
-  return { checklist, loading, loadError, loadFailure, load, refreshIfChanged, markOpened, recordQuestionnaire, completeBang, print, openFile, createRequest, requestStatus, sendByEmail, loadEmailSends, cancelRequest, upload, deleteUpload };
+  return { checklist, loading, loadError, loadFailure, load, refreshIfChanged, markOpened, recordQuestionnaire, completeBang, print, openFile, createRequest, requestStatus, sendByEmail, sendHistoriaByEmail, loadEmailSends, cancelRequest, upload, deleteUpload };
 }

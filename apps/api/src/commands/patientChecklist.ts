@@ -11,11 +11,14 @@ import {
 } from "../queries/patientChecklist.js";
 import { AuditHealthDataReadCommand } from "./healthDataReadAudit.js";
 import { GetCurrentDocumentContentQuery } from "../queries/documentContent.js";
+import { INFORMED_CONSENT_KEY } from "../db/informedConsentState.js";
 import { renderDocumentHtml, renderDocumentFooterHtml, getDocumentRefCode, documentT, DOCUMENT_MANIFEST } from "@neo/documents";
 import { renderHtmlToPdf, type ChoiceField } from "../services/documentRenderer.js";
 import { formatFormDate, formatFormDateTime } from "../utils/formDate.js";
-import { uploadPartnerDocument, deletePartnerDocument, getPartnerDocumentSignedUrl } from "../services/partnerDocuments.js";
-import { NotFoundError, ValidationError } from "../errors.js";
+import { uploadPartnerDocument, deletePartnerDocument, downloadPartnerDocument, getPartnerDocumentSignedUrl } from "../services/partnerDocuments.js";
+import { listConsentsForEntity } from "../db/consent.js";
+import { ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
+import { isSignatureDataUrl } from "../utils/signatureDataUrl.js";
 import { MEDICAL_HISTORY_QUESTIONS, ORAL_EXAM_QUESTIONS, STOP_QUESTIONS, BANG_QUESTIONS, TMJ_FINDINGS } from "./clinicalRecordFields.js";
 import { historiaClinicaPrintFields, formatMeasure } from "./historiaClinicaPrint.js";
 
@@ -94,6 +97,22 @@ export type PrintResult =
   /** An already stored document (a consent the patient signed) — a short-lived signed URL to it. */
   | { kind: "stored"; url: string };
 
+/**
+ * The drawn signature stored next to a consent signed through the patient link (consent.metadata.signature_path), as a PNG data URL.
+ * Null when there is none (signed before NEO-252) or storage can't serve it: the print then keeps the stamp alone.
+ */
+async function consentSignatureDataUrl(ctx: TenantContext, patientId: string, consentId: string): Promise<string | null> {
+  const consent = (await listConsentsForEntity(ctx.client, "patient", patientId)).find((c) => c.id === consentId);
+  const path = consent?.metadata?.signature_path;
+  if (typeof path !== "string") return null;
+  try {
+    return `data:image/png;base64,${Buffer.from(await downloadPartnerDocument(path)).toString("base64")}`;
+  } catch (err) {
+    console.error(`[patientChecklist] could not load the consent signature ${path}:`, err);
+    return null;
+  }
+}
+
 function recordOf<T>(item: ChecklistItem, recordId: string | undefined): T | null {
   const entries = item.history.filter((h) => h.type === "record" && h.record);
   const entry = recordId ? entries.find((h) => h.id === recordId) : entries[0];
@@ -101,12 +120,26 @@ function recordOf<T>(item: ChecklistItem, recordId: string | undefined): T | nul
   return (entry?.record as T | undefined) ?? null;
 }
 
+export interface PrintOptions {
+  recordId?: string;
+  /**
+   * NEO-255 D1: the doctor's signature, drawn in the print dialog (a PNG data URL), for the
+   * Historia clínica only. Used for this one PDF, never stored; the signing is audit-logged.
+   */
+  doctorSignature?: unknown;
+}
+
 export async function PrintChecklistItemCommand(
   ctx: TenantContext,
   patientId: string,
   key: string,
-  recordId?: string
+  { recordId, doctorSignature }: PrintOptions = {}
 ): Promise<PrintResult> {
+  if (doctorSignature != null) {
+    if (key !== "historiaEndo") throw new ValidationError(`"${key}" has no doctor signature`);
+    if (ctx.user.role !== "doctor") throw new ForbiddenError("Only a doctor can sign the Historia clínica");
+    if (!isSignatureDataUrl(doctorSignature)) throw new ValidationError("A drawn signature (PNG) is required");
+  }
   const checklist = await GetPatientChecklistQuery(ctx, patientId); // territory-checked
   const item = checklist.items.find((i) => i.key === key);
   if (!item) throw new NotFoundError("Checklist item", key);
@@ -126,6 +159,7 @@ export async function PrintChecklistItemCommand(
   const fields: Record<string, string> = {};
   const choices: Record<string, ChoiceField> = {};
   const states: Record<string, string> = {};
+  const images: Record<string, string> = {};
 
   if (key === "medicalHistory" || key === "historiaEndo") {
     const history =
@@ -165,14 +199,35 @@ export async function PrintChecklistItemCommand(
     fields.score = screening?.score == null ? "" : String(screening.score);
     Object.assign(fields, measurementDetails(locale, screening));
     const print = historiaClinicaPrintFields(locale, {
-      organizationName: pdfContext.organization_name,
+      patientPhone: pdfContext.patient_phone,
+      patientEmail: pdfContext.patient_email,
       birthDate: pdfContext.patient_birth_date,
+      gender: pdfContext.patient_gender,
       today: date,
       history: latest<MedicalHistoryRecord>("medicalHistory"),
       oral: latest<OralExamRecord>("oralExam"),
       tmj: latest<TmjExamRecord>("tmjExam"),
       screening,
     });
+    // NEO-249 D2: a consent already signed electronically prints as a dated stamp, not an empty line.
+    const signedConsent = checklist.items.find((i) => i.key === INFORMED_CONSENT_KEY)?.history.find((h) => h.type === "consent");
+    fields.consent_stamp = signedConsent
+      ? documentT(locale, "documents.historiaEndo.consentSignedStamp", { date: formatFormDate(signedConsent.created_at, locale) })
+      : "";
+    // NEO-252: and the patient's drawn signature above it, when it was stored on its own (signed after NEO-252).
+    if (signedConsent) {
+      const signature = await consentSignatureDataUrl(ctx, patientId, signedConsent.id);
+      if (signature) images.firma_paciente = signature;
+    }
+    // NEO-255 D1: the doctor's panels carry who signed; without a drawn signature they keep the patient's doctor and a blank line.
+    fields.nombre_medico_firma = pdfContext.practitioner_name ?? "";
+    fields.doctor_stamp = "";
+    if (isSignatureDataUrl(doctorSignature)) {
+      const signer = ctx.user.name?.trim() || ctx.user.email;
+      images.firma_doctor = doctorSignature;
+      fields.nombre_medico_firma = signer;
+      fields.doctor_stamp = documentT(locale, "documents.historiaEndo.doctorSignedStamp", { name: signer, date: formatFormDate(new Date(), locale) });
+    }
     Object.assign(fields, print.fields);
     Object.assign(choices, print.choices);
     Object.assign(states, print.states);
@@ -196,9 +251,11 @@ export async function PrintChecklistItemCommand(
   } catch (err) {
     if (!(err instanceof NotFoundError)) throw err;
   }
+  // The Historia clínica carries the full Consentimiento informado as its last page, for every patient (NEO-249).
+  const slots = key === "historiaEndo" ? { informedConsent: (await GetCurrentDocumentContentQuery(INFORMED_CONSENT_KEY, locale)).content_html } : undefined;
   let html: string;
   try {
-    html = renderDocumentHtml(key, locale, content);
+    html = renderDocumentHtml(key, locale, content, slots);
   } catch {
     html = renderDocumentHtml(key, locale); // content exists but this template has no slot for it
   }
@@ -218,6 +275,7 @@ export async function PrintChecklistItemCommand(
     },
     choiceFields: choices,
     stateFields: states,
+    dataImages: images,
   });
 
   await insertAuditLog(ctx.client, {
@@ -225,7 +283,7 @@ export async function PrintChecklistItemCommand(
     action: "read",
     entity_type: "ChecklistItemPrint",
     entity_id: patientId,
-    entity_after: { item: key, record_id: recordId ?? null },
+    entity_after: { item: key, record_id: recordId ?? null, ...(images.firma_doctor ? { doctor_signed: true } : {}) },
     request_id: ctx.requestId,
   });
 

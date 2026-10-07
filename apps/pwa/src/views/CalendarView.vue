@@ -5,7 +5,7 @@
   <div
     ref="rootEl"
     class="view-calendar cal"
-    :class="{ 'cal--narrow': narrow, 'cal--phone': phone, 'cal--side-open': sideOpen, 'cal--no-side': !showSide }"
+    :class="{ 'cal--narrow': narrow, 'cal--phone': phone, 'cal--side-open': sideOpen, 'cal--no-side': !showSide, 'cal--day-pinned': pinnedShown }"
     :style="{ '--cal-top': `${toolbarBottom}px` }"
   >
     <aside v-show="showSide" class="cal__side" data-testid="calendar-sidebar" :aria-hidden="narrow && !sideOpen ? 'true' : undefined" :inert="narrow && !sideOpen ? true : undefined">
@@ -28,8 +28,16 @@
       </section>
     </aside>
 
-    <div class="cal__main">
-      <div ref="bodyEl" class="cal__body" :class="`cal__body--${calendarType}`" @pointerdown="onSwipeStart" @pointerup="onSwipeEnd" @pointercancel="onSwipeCancel">
+    <div ref="mainEl" class="cal__main">
+      <div
+        ref="bodyEl"
+        class="cal__body"
+        :class="`cal__body--${calendarType}`"
+        @pointerdown="onSwipeStart"
+        @pointerup="onSwipeEnd"
+        @pointercancel="onSwipeCancel"
+        @scroll.passive="dayPopover = null"
+      >
         <AppErrorState v-if="loadFailed" class="cal__error" :error="loadFailure" :refresh-label="t('app.errorState.refresh')" :loading="loading" @refresh="fetchItems" />
 
         <CalendarTimeGrid
@@ -56,40 +64,48 @@
             :locale="lang"
             :compact="phone"
             data-testid="calendar-month"
+            :fold-week="phoneFoldWeek"
             @open="onOpen"
-            @select="(day) => (selectedDay = day)"
-            @day="(day, el) => navigate('day', day, el)"
+            @select="onDaySelect"
           />
-          <!-- Phone: the selected day's entries under the month, like iOS Calendar. -->
-          <section v-if="phone" class="cal__agenda" data-testid="calendar-list">
-            <h2 class="cal__agenda-title">{{ selectedDayLabel }}</h2>
-            <p v-if="!selectedDayEvents.length" class="cal__agenda-empty">{{ t("user.calendar.dayEmpty") }}</p>
-            <button
-              v-for="e in selectedDayEvents"
-              :key="e.id"
-              type="button"
-              class="cal__row"
-              :class="{ 'cal__row--cancelled': e.status === 'cancelled', 'cal__row--past': e.past }"
-              :style="{ '--cal-color': e.color }"
-              data-testid="calendar-row"
-              @click="onOpen(e.id)"
-            >
-              <span class="cal__row-time">
-                <span>{{ e.startLabel }}</span>
-                <span class="cal__row-end">{{ clockLabel(e.endMin) }}</span>
-              </span>
-              <span class="cal__row-main">
-                <span class="cal__row-title">
-                  <AppIcon :name="e.icon" class="cal__row-icon" />
-                  <span class="cal__row-name">{{ e.title }}</span>
-                  <AppIcon v-if="e.responseIcon" :name="e.responseIcon" class="cal__row-icon" :style="{ color: e.responseColor }" />
-                </span>
-                <span v-if="e.meta" class="cal__row-meta">{{ e.meta }}</span>
-              </span>
-            </button>
-          </section>
+          <!-- Phone: the selected day's entries under the month, like iOS Calendar; scrolling the list
+               folds the month to the selected week (CORE-161). -->
+          <div v-if="phone" ref="agendaEl" class="cal__agenda" :class="{ 'cal__agenda--folded': phoneFoldWeek != null }" @scroll.passive="onAgendaScroll">
+            <CalendarDayList mode="inline" :label="selectedDayLabel" :events="selectedDayEvents" @open="onOpen" />
+          </div>
         </template>
       </div>
+
+      <!-- CORE-161: tablet/desktop — the clicked day's list as a glass popover by the day, or pinned on the right. -->
+      <CalendarDayList
+        v-if="pinnedShown"
+        class="cal__day-pinned cal-glass"
+        mode="pinned"
+        can-pin
+        :label="selectedDayLabel"
+        :events="selectedDayEvents"
+        data-testid="calendar-day-pinned"
+        @open="onOpen"
+        @add="onDayAdd"
+        @open-day="onOpenDay"
+        @pin="onPin"
+      />
+      <CalendarDayList
+        v-else-if="dayPopover"
+        ref="popoverEl"
+        class="cal__day-pop cal-glass"
+        mode="popover"
+        :can-pin="canPin"
+        :label="selectedDayLabel"
+        :events="selectedDayEvents"
+        :style="dayPopoverStyle"
+        data-testid="calendar-day-popover"
+        @open="onOpen"
+        @add="onDayAdd"
+        @open-day="onOpenDay"
+        @close="dayPopover = null"
+        @pin="onPin"
+      />
 
       <!-- After the body in the DOM so its View Transition snapshot paints above the sliding grid. -->
       <div ref="toolbarEl" class="cal__toolbar cal-glass">
@@ -104,28 +120,41 @@
         >
           <AppIcon name="calendar" />
         </button>
+        <!-- CORE-153: wide screens read ‹ › · month · Hoy … Día/Semana/Mes; the phone places these by grid area. -->
+        <div class="cal__nav">
+          <button type="button" class="cal__icon-btn" :aria-label="t('user.planner.prev')" data-testid="calendar-prev" @click="step(-1)">
+            <AppIcon name="chevron-left" />
+          </button>
+          <button type="button" class="cal__icon-btn" :aria-label="t('user.planner.next')" data-testid="calendar-next" @click="step(1)">
+            <AppIcon name="chevron-right" />
+          </button>
+        </div>
         <h2 class="cal__title" data-testid="calendar-title">
           <strong>{{ titleParts[0] }}</strong> <span>{{ titleParts[1] }}</span>
         </h2>
+        <button type="button" class="cal__today" data-testid="calendar-today" @click="goToday">{{ t("user.planner.today") }}</button>
         <AppSegmentedTabs
           class="cal__seg"
           :aria-label="t('user.calendar.viewSwitch')"
           :model-value="calendarType"
           :options="viewOptions"
+          :fit="!phone"
           @update:model-value="(v: string) => navigate(v as CalendarViewType, calendarValue)"
         />
-        <div class="cal__nav">
-          <button type="button" class="cal__icon-btn" :aria-label="t('user.planner.prev')" data-testid="calendar-prev" @click="step(-1)">
-            <AppIcon name="chevron-left" />
+        <!-- CORE-153: on wide screens "+" sits in the page header, where the lists keep theirs. -->
+        <Teleport :to="pageHeader.to" defer :disabled="headerAddOff">
+          <button
+            type="button"
+            class="cal__add"
+            :class="{ 'cal__add--header': !headerAddOff }"
+            data-testid="calendar-add"
+            :aria-label="t('user.calendar.add')"
+            :title="t('user.calendar.add')"
+            @click="openAdd()"
+          >
+            <AppIcon name="plus" />
           </button>
-          <button type="button" class="cal__today" data-testid="calendar-today" @click="goToday">{{ t("user.planner.today") }}</button>
-          <button type="button" class="cal__icon-btn" :aria-label="t('user.planner.next')" data-testid="calendar-next" @click="step(1)">
-            <AppIcon name="chevron-right" />
-          </button>
-        </div>
-        <button type="button" class="cal__add" data-testid="calendar-add" :aria-label="t('user.calendar.add')" :title="t('user.calendar.add')" @click="openAdd()">
-          <AppIcon name="plus" />
-        </button>
+        </Teleport>
         <VProgressLinear v-if="loading" indeterminate absolute location="bottom" height="2" color="primary" class="cal__progress" />
       </div>
 
@@ -162,9 +191,8 @@ import { useDisplay } from "vuetify";
 import { useRoute, useRouter } from "vue-router";
 import { intlLocale } from "@i18n/language-options";
 import { apiFetch } from "../composables/useApi";
-import { useNotifications } from "../composables/useNotifications";
-import { useAppointments, appointmentResponseState, type Appointment, type AppointmentResponseState } from "../composables/useAppointments";
-import { toEncounterBody, fromEncounter, type PlannerEvent } from "../utils/encounterMapping";
+import { useAppointments, type Appointment } from "../composables/useAppointments";
+import { fromEncounter, type PlannerEvent } from "../utils/encounterMapping";
 import { toZonedCalendarDateTime, deviceTimeZone, zonedInputToIso } from "../utils/appointmentTime";
 import {
   MINUTES_PER_DAY,
@@ -182,7 +210,8 @@ import {
   type CalendarMotion,
   type CalendarViewType,
 } from "../utils/calendarLayout";
-import { fieldErrorsFromResponse } from "../composables/useFormErrors";
+import { useEventSave } from "../composables/useEventSave";
+import { usePageHeaderTeleport } from "../composables/usePageHeader";
 import type { SubmitDone } from "../composables/useEntitySubmit";
 import type { EventFormInitialData, EventSubmitPayload } from "../components/EventForm.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
@@ -190,7 +219,10 @@ import AppErrorState from "../components/AppErrorState.vue";
 import CalendarTimeGrid from "../components/calendar/CalendarTimeGrid.vue";
 import CalendarMonthGrid from "../components/calendar/CalendarMonthGrid.vue";
 import CalendarMiniMonth from "../components/calendar/CalendarMiniMonth.vue";
+import CalendarDayList from "../components/calendar/CalendarDayList.vue";
+import { usePersistedState } from "@prefs";
 import type { CalendarGridEvent } from "../components/calendar/calendarTypes";
+import { appointmentEntry, clockLabel, encounterEntry, toGridEvent, type CalendarEntry, type CalendarItemKind } from "../components/calendar/calendarEntries";
 
 const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
 const AppointmentDialog = defineAsyncComponent(() => import("../components/AppointmentDialog.vue"));
@@ -198,7 +230,6 @@ const AppointmentDetailDialog = defineAsyncComponent(() => import("../components
 
 const { t, locale } = useI18n();
 const { smAndUp } = useDisplay();
-const notifications = useNotifications();
 const { isDoctor } = useAppointments();
 
 const lang = computed(() => intlLocale(locale.value));
@@ -234,7 +265,10 @@ const bodyEl = ref<HTMLElement | null>(null);
 const toolbarEl = ref<HTMLElement | null>(null);
 const containerWidth = ref(smAndUp.value ? 1200 : 400);
 const narrow = computed(() => containerWidth.value < NARROW_PX);
+const pageHeader = usePageHeaderTeleport();
 const phone = computed(() => containerWidth.value < PHONE_PX);
+/** The phone bar keeps its own "+" (it is that screen's only header); elsewhere it moves to the page header. */
+const headerAddOff = computed(() => phone.value || pageHeader.disabled.value);
 const showSide = computed(() => SIDEBAR_ON_WIDE || phone.value);
 const sideOpen = ref(false);
 const toolbarBottom = ref(72);
@@ -264,11 +298,13 @@ onMounted(() => {
   }
   scrollToMorning();
   window.addEventListener("keydown", onKey);
+  document.addEventListener("pointerdown", onDocPointerDown, true);
 });
 onBeforeUnmount(() => {
   resizeObserver?.disconnect();
   clearInterval(clock);
   window.removeEventListener("keydown", onKey);
+  document.removeEventListener("pointerdown", onDocPointerDown, true);
 });
 watch([narrow, showSide], ([isNarrow, hasSide]) => {
   if (!isNarrow || !hasSide) sideOpen.value = false;
@@ -277,7 +313,6 @@ watch([calendarType, phone, narrow, locale], () => void nextTick(measure), { flu
 
 // ── data: the union list ────────────────────────────────────────────────────
 
-type CalendarItemKind = "encounter" | "appointment";
 const KINDS: readonly CalendarItemKind[] = ["appointment", "encounter"];
 const KIND_COLOR: Record<CalendarItemKind, string> = { appointment: "#128F83", encounter: "#F59E0B" };
 const visibleKinds = reactive<Record<CalendarItemKind, boolean>>({ appointment: true, encounter: true });
@@ -290,84 +325,15 @@ interface CalendarItemDto {
   data: Record<string, unknown>;
 }
 
-interface CalendarEntry {
-  kind: CalendarItemKind;
-  id: string;
-  title: string;
-  start_at: string;
-  end_at: string;
-  timezone: string;
-  status: string;
-  color: string;
-  meta?: string;
-  response?: AppointmentResponseState | null;
-  encounter?: PlannerEvent;
-  appointment?: Appointment;
-}
-
 const entries = ref<CalendarEntry[]>([]);
 const loading = ref(false);
 const loadFailed = ref(false);
 const loadFailure = ref<unknown>(null);
 
-/** Map event type+status to a warm/varied color for visual richness (encounters only). */
-function encounterColor(type: "f2f" | "video", status: string): string {
-  if (status === "cancelled") return "#9E9E9E";
-  if (status === "completed") return "#4CAF50";
-  if (status === "no_show") return "#FF7043";
-  return type === "video" ? "#F59E0B" : "#128F83";
-}
-
-/** Status → tint, Apple Calendar-style (appointments only). */
-const STATUS_TINT: Record<Appointment["status"], string> = { scheduled: "#128F83", completed: "#34C759", cancelled: "#8E8E93", no_show: "#FF9500" };
-
 function toEntry(item: CalendarItemDto): CalendarEntry {
-  if (item.kind === "encounter") {
-    const encounter = fromEncounter(item.data as Parameters<typeof fromEncounter>[0]);
-    return {
-      kind: "encounter",
-      id: encounter.id,
-      title: encounter.title || t("user.planner.form.fieldTitle"),
-      start_at: encounter.start_at,
-      end_at: encounter.end_at,
-      timezone: deviceTimeZone(),
-      status: encounter.status,
-      color: encounterColor(encounter.type, encounter.status),
-      meta: encounter.location || encounter.video_link || undefined,
-      response: null,
-      encounter,
-    };
-  }
-  const appointment = item.data as unknown as Appointment;
-  return {
-    kind: "appointment",
-    id: appointment.id,
-    title: appointment.patient_name ?? "",
-    start_at: appointment.start_at,
-    end_at: appointment.end_at,
-    timezone: appointment.timezone,
-    status: appointment.status,
-    color: STATUS_TINT[appointment.status],
-    meta: [appointment.practitioner_name, appointment.organization_name].filter(Boolean).join(" · "),
-    response: appointmentResponseState(appointment),
-    appointment,
-  };
+  if (item.kind === "encounter") return encounterEntry(fromEncounter(item.data as Parameters<typeof fromEncounter>[0]), t("user.planner.form.fieldTitle"));
+  return appointmentEntry(item.data as unknown as Appointment);
 }
-
-function kindIcon(kind: CalendarItemKind): AppIconName {
-  return kind === "appointment" ? "nav-appointments" : "nav-planner";
-}
-
-function responseIcon(response: AppointmentResponseState): AppIconName {
-  if (response === "awaiting") return "clock";
-  return response === "confirmed" ? "check-circle" : "alert-triangle";
-}
-
-const RESPONSE_COLOR: Record<AppointmentResponseState, string> = {
-  confirmed: "rgb(var(--v-theme-success))",
-  cannot_attend: "rgb(var(--v-theme-warning))",
-  awaiting: "rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity))",
-};
 
 function windowOf(): { start: Date; end: Date } {
   return viewWindow(calendarType.value, calendarValue.value);
@@ -405,11 +371,6 @@ watch(() => [calendarType.value, dateKey(windowOf().start)], () => void fetchIte
 
 // ── what the grids draw ─────────────────────────────────────────────────────
 
-function clockLabel(minutes: number): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
-}
-
 /** The fetched entries whose wall-clock day is on screen — the fetch is padded (CORE-139). */
 const shownEntries = computed(() => {
   const window = windowOf();
@@ -420,30 +381,7 @@ const gridEvents = computed<CalendarGridEvent[]>(() => {
   const now = Date.now();
   return shownEntries.value
     .filter((e) => !showSide.value || visibleKinds[e.kind])
-    .map((e) => {
-      const start = parseWallTime(toZonedCalendarDateTime(e.start_at, e.timezone));
-      const end = parseWallTime(toZonedCalendarDateTime(e.end_at, e.timezone));
-      // An entry running past midnight is drawn to the end of its first day.
-      const endMin = Math.min(Math.max(end.key === start.key ? end.minutes : MINUTES_PER_DAY, start.minutes + 15), MINUTES_PER_DAY);
-      // 24 h like the hour gutter: "11:30–12:15" fits a narrow week column or month cell, "11:30 a.m.–…" does not.
-      const startLabel = clockLabel(start.minutes);
-      return {
-        id: e.id,
-        title: e.title,
-        dayKey: start.key,
-        startMin: start.minutes,
-        endMin,
-        timeLabel: `${startLabel}–${clockLabel(endMin)}`,
-        startLabel,
-        meta: e.meta || undefined,
-        color: e.color,
-        status: e.status,
-        icon: kindIcon(e.kind),
-        responseIcon: e.response ? responseIcon(e.response) : undefined,
-        responseColor: e.response ? RESPONSE_COLOR[e.response] : undefined,
-        past: new Date(e.end_at).getTime() < now,
-      };
-    });
+    .map((e) => toGridEvent(e, now));
 });
 
 const gridDays = computed(() => (calendarType.value === "day" ? [calendarValue.value] : weekDays(calendarValue.value)));
@@ -453,6 +391,97 @@ const selectedDayEvents = computed(() => {
   return gridEvents.value.filter((e) => e.dayKey === key).sort((a, b) => a.startMin - b.startMin);
 });
 const selectedDayLabel = computed(() => capitalizeFirst(new Intl.DateTimeFormat(lang.value, { weekday: "long", day: "numeric", month: "long" }).format(selectedDay.value)));
+
+// ── CORE-161: the clicked day's list ────────────────────────────────────────
+// Tablet/desktop: a glass popover by the day, or (pinned) a panel on the right that follows the
+// selected day. Phone: the list under the month; scrolling it folds the month to the selected week.
+
+/** Popover / pinned panel width; the pin needs a wide screen so the month keeps usable columns. */
+const DAY_LIST_WIDTH = 304;
+/** Gap between the clicked cell and the popover, and the popover's distance to the edges. */
+const DAY_POP_GAP = 8;
+/** Where "+" in the day list puts a new booking on that day. */
+const DAY_ADD_MINUTES = 9 * 60;
+
+const mainEl = ref<HTMLElement | null>(null);
+const popoverEl = ref<InstanceType<typeof CalendarDayList> | null>(null);
+const agendaEl = ref<HTMLElement | null>(null);
+const dayPopover = ref<{ left: number; width: number; top?: number; bottom?: number; maxHeight: number } | null>(null);
+const dayListPinned = usePersistedState<boolean>("view:calendar:dayListPinned", false);
+const canPin = computed(() => !narrow.value);
+const pinnedShown = computed(() => calendarType.value === "month" && canPin.value && dayListPinned.value);
+const agendaFolded = ref(false);
+
+const dayPopoverStyle = computed(() => {
+  const p = dayPopover.value;
+  if (!p) return undefined;
+  const px = (n: number | undefined) => (n === undefined ? undefined : `${Math.round(n)}px`);
+  return { left: px(p.left), width: px(p.width), top: px(p.top), bottom: px(p.bottom), maxHeight: px(p.maxHeight) };
+});
+
+/** The selected day's week row (0–5) while the phone list is scrolled; null shows the whole month. */
+const phoneFoldWeek = computed(() => {
+  if (!phone.value || !agendaFolded.value) return null;
+  const index = monthCells(calendarValue.value).findIndex((d) => dateKey(d) === dateKey(selectedDay.value));
+  return index < 0 ? null : Math.floor(index / 7);
+});
+
+function onDaySelect(day: Date, cell: HTMLElement) {
+  selectedDay.value = day;
+  if (phone.value || pinnedShown.value) return;
+  dayPopover.value = popoverPlacement(cell);
+}
+
+/** Centred under the cell, or above it when there is more room there; kept inside the calendar. */
+function popoverPlacement(cell: HTMLElement): NonNullable<typeof dayPopover.value> {
+  const main = mainEl.value;
+  const box = main?.getBoundingClientRect() ?? { left: 0, top: 0, width: DAY_LIST_WIDTH, height: 0, bottom: 0 };
+  const r = cell.getBoundingClientRect();
+  const width = Math.min(DAY_LIST_WIDTH, box.width - 2 * DAY_POP_GAP);
+  const left = Math.min(Math.max(r.left - box.left + r.width / 2 - width / 2, DAY_POP_GAP), box.width - width - DAY_POP_GAP);
+  const below = box.bottom - r.bottom - 2 * DAY_POP_GAP;
+  const above = r.top - box.top - toolbarBottom.value - 2 * DAY_POP_GAP;
+  return below >= above
+    ? { left, width, top: r.bottom - box.top + DAY_POP_GAP, maxHeight: Math.max(below, 160) }
+    : { left, width, bottom: box.bottom - r.top + DAY_POP_GAP, maxHeight: Math.max(above, 160) };
+}
+
+function onPin(on: boolean) {
+  dayListPinned.value = on;
+  dayPopover.value = null;
+}
+
+function onOpenDay() {
+  dayPopover.value = null;
+  navigate("day", selectedDay.value);
+}
+
+function onDayAdd() {
+  dayPopover.value = null;
+  onSlot(dateKey(selectedDay.value), DAY_ADD_MINUTES);
+}
+
+function onAgendaScroll() {
+  const top = agendaEl.value?.scrollTop ?? 0;
+  if (top > 8) agendaFolded.value = true;
+  else if (top <= 0) agendaFolded.value = false;
+}
+
+/** A click outside the popover closes it; a click on another day re-anchors it instead (onDaySelect). */
+function onDocPointerDown(event: PointerEvent) {
+  if (!dayPopover.value) return;
+  const target = event.target as Node | null;
+  const pop = popoverEl.value?.$el as HTMLElement | undefined;
+  if (target && (pop?.contains(target) || (target instanceof Element && target.closest(".cal-mo__cell")))) return;
+  dayPopover.value = null;
+}
+
+watch([calendarType, calendarValue], () => {
+  dayPopover.value = null;
+  agendaFolded.value = false;
+  if (agendaEl.value) agendaEl.value.scrollTop = 0;
+});
+watch(narrow, () => (dayPopover.value = null));
 
 /** Toolbar title as [bold, regular] — "Octubre 2026", "4 de octubre 2026", "Domingo 4". */
 const titleParts = computed<[string, string]>(() => {
@@ -560,6 +589,10 @@ function onMiniPick(day: Date) {
 
 /** Keyboard, as in macOS Calendar: ← → move, T today, 1/2/3 day/week/month. Ignored while typing or in a dialog. */
 function onKey(event: KeyboardEvent) {
+  if (event.key === "Escape" && dayPopover.value) {
+    dayPopover.value = null;
+    return;
+  }
   if (event.metaKey || event.ctrlKey || event.altKey) return;
   const target = event.target as HTMLElement | null;
   if (target?.closest("input, textarea, select, [contenteditable='true'], .v-overlay")) return;
@@ -599,6 +632,7 @@ function onSwipeEnd(event: PointerEvent) {
 // ── a click on the grid ─────────────────────────────────────────────────────
 
 function onOpen(id: string) {
+  dayPopover.value = null;
   const entry = entries.value.find((e) => e.id === id);
   if (entry) onEntryClick(entry);
 }
@@ -642,52 +676,9 @@ function openEncounter(encounter: PlannerEvent) {
   showEventForm.value = true;
 }
 
-async function rejectEventSave(res: Response, done: SubmitDone) {
-  const fieldErrors = await fieldErrorsFromResponse(res);
-  if (fieldErrors) {
-    done(false, fieldErrors);
-    return;
-  }
-  notifications.show(t("user.planner.form.errorSave"), "error", undefined, { icon: "nav-planner" });
-  done(false);
-}
-
-async function onEventFormSubmit(payload: EventSubmitPayload, done: SubmitDone) {
-  try {
-    if (payload.id) {
-      const res = await apiFetch(`/api/v1/encounter/${payload.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(toEncounterBody(payload)),
-        handleErrors: false,
-      });
-      if (res.ok) {
-        notifications.show(t("user.planner.form.editSuccess"), "success", undefined, { icon: "nav-planner" });
-        await fetchItems();
-        done(true);
-      } else {
-        await rejectEventSave(res, done);
-      }
-    } else {
-      const res = await apiFetch("/api/v1/encounter", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(toEncounterBody(payload)),
-        handleErrors: false,
-      });
-      if (res.ok) {
-        notifications.show(t("user.planner.form.success"), "success", undefined, { icon: "nav-planner" });
-        await fetchItems();
-        done(true);
-      } else {
-        await rejectEventSave(res, done);
-      }
-    }
-  } catch (err) {
-    reportCaught(err, { where: "CalendarView.onEventFormSubmit" });
-    notifications.show(t("user.planner.form.errorSave"), "error", undefined, { icon: "nav-planner" });
-    done(false);
-  }
+const saveEvent = useEventSave("CalendarView.onEventFormSubmit");
+function onEventFormSubmit(payload: EventSubmitPayload, done: SubmitDone) {
+  return saveEvent(payload, done, fetchItems);
 }
 
 // ── appointment dialogs (AppointmentDialog / AppointmentDetailDialog) ──────
@@ -1000,6 +991,59 @@ function onEntryClick(entry: CalendarEntry) {
   box-shadow: 0 4px 12px -4px rgb(var(--v-theme-primary));
 }
 
+/* ── CORE-153: tablet and desktop — a flat line under the page header, not a floating glass bar ── */
+.cal:not(.cal--phone) .cal__toolbar.cal-glass {
+  top: 0;
+  left: 0;
+  right: 0;
+  gap: 8px;
+  padding: 6px 12px 6px 8px;
+  border-radius: 0;
+  border-bottom: 0.5px solid var(--cal-line);
+  background: var(--pwa-sheet, rgb(var(--v-theme-surface)));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.cal:not(.cal--phone) .cal__title {
+  flex: 0 1 auto;
+}
+
+.cal:not(.cal--phone) .cal__today {
+  min-height: 28px;
+  border: 1px solid var(--cal-line-strong);
+  border-radius: 8px;
+}
+
+.cal:not(.cal--phone) .cal__seg {
+  margin-left: auto;
+}
+
+/* "+" off the phone wears the lists' add button: plain teal glyph, teal tint on hover (AppEntityList.css).
+   --header is the copy teleported into the page header, outside .cal. */
+.cal:not(.cal--phone) .cal__add,
+.cal__add.cal__add--header {
+  flex-shrink: 0;
+  min-width: 48px;
+  min-height: 48px;
+  border-radius: 50%;
+  background: transparent;
+  color: rgb(var(--v-theme-primary));
+  box-shadow: none;
+}
+
+.cal:not(.cal--phone) .cal__add:hover,
+.cal__add.cal__add--header:hover {
+  background: rgba(var(--v-theme-primary), 0.12);
+}
+
+.cal:not(.cal--phone) .cal__add :deep(svg),
+.cal__add.cal__add--header :deep(svg) {
+  width: 22px;
+  height: 22px;
+}
+
 .cal__icon-btn:focus-visible,
 .cal__today:focus-visible,
 .cal__add:focus-visible {
@@ -1151,102 +1195,79 @@ function onEntryClick(entry: CalendarEntry) {
   transform: none;
 }
 
+/* CORE-161: on a phone the month stays put and the list under it scrolls; scrolling folds the month. */
+.cal--phone .cal__body--month {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.cal--phone .cal__body--month > .cal-mo {
+  flex: none;
+}
+
 .cal__agenda {
-  display: grid;
-  gap: 8px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 14px 12px 24px;
   border-top: 0.5px solid var(--cal-line-strong);
 }
 
-.cal__agenda-title {
-  margin: 0 4px 2px;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--cal-muted);
+/* Folded, the list always scrolls a little, so it doesn't snap back open when it gets the month's room. */
+.cal__agenda--folded > .cal-dl {
+  min-height: calc(100% + 40px);
 }
 
-.cal__agenda-empty {
-  margin: 0;
-  padding: 20px 0;
-  text-align: center;
-  color: var(--cal-muted);
+/* ── CORE-161: the day list as liquid glass — a popover by the day, or pinned on the right ── */
+.cal__day-pop,
+.cal__day-pinned {
+  position: absolute;
+  z-index: 25;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px 10px 8px 12px;
+  background: var(--cal-glass-strong);
 }
 
-.cal__row {
-  display: grid;
-  grid-template-columns: 56px minmax(0, 1fr);
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 12px;
-  border: 0;
-  border-radius: 14px;
-  background: rgb(var(--v-theme-surface));
-  box-shadow: 0 0 0 0.5px var(--cal-line-strong);
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
+.cal__day-pop {
+  border-radius: 20px;
+  animation: cal-pop-in var(--menu-dur-in, 260ms) var(--menu-spring, cubic-bezier(0.22, 1, 0.36, 1)) both;
 }
 
-.cal__row:focus-visible {
-  outline: 2px solid rgb(var(--v-theme-primary));
-  outline-offset: 2px;
+.cal__day-pinned {
+  top: calc(var(--cal-top, 72px) + 8px);
+  right: 8px;
+  bottom: 8px;
+  width: 304px;
+  border-radius: 20px;
+  animation: cal-dock-in var(--menu-dur-in, 320ms) var(--menu-spring, cubic-bezier(0.22, 1, 0.36, 1)) both;
 }
 
-.cal__row--past {
-  opacity: 0.7;
+.cal--day-pinned .cal__body {
+  right: 320px;
 }
 
-.cal__row--cancelled .cal__row-name {
-  text-decoration: line-through;
+@keyframes cal-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
 }
 
-.cal__row-time {
-  display: grid;
-  font-size: 0.8125rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.3;
+@keyframes cal-dock-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
 }
 
-.cal__row-end {
-  font-weight: 400;
-  color: var(--cal-muted);
-}
-
-.cal__row-main {
-  display: grid;
-  min-width: 0;
-  padding-left: 10px;
-  border-left: 3px solid var(--cal-color);
-}
-
-.cal__row-title {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  font-weight: 600;
-}
-
-.cal__row-icon {
-  flex: none;
-  width: 14px;
-  height: 14px;
-}
-
-.cal__row-name,
-.cal__row-meta {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.cal__row-meta {
-  font-size: 0.8125rem;
-  color: var(--cal-muted);
+@media (prefers-reduced-motion: reduce) {
+  .cal__day-pop,
+  .cal__day-pinned {
+    animation: none;
+  }
 }
 
 @keyframes cal-fade-in {
@@ -1265,8 +1286,10 @@ function onEntryClick(entry: CalendarEntry) {
  *   next / prev — a slide with a fade, like paging through a paper planner.
  * The toolbar keeps its own snapshot above the grid and does not move.
  */
+/* CORE-165: the overlay ignores .cal__main's overflow, so the group clips the slide/zoom to the grid box itself. */
 html[data-cal-transition]::view-transition-group(cal-body) {
   animation-duration: 420ms;
+  overflow: clip;
 }
 html[data-cal-transition]::view-transition-group(cal-toolbar) {
   animation: none;

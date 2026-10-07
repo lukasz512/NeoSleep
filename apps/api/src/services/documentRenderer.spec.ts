@@ -117,6 +117,24 @@ describe.skipIf(!launch)("renderHtmlToPdf (real Chromium)", () => {
     expect(await noteDisplay()).toBe("block");
   });
 
+  it("NEO-252: a consent signed through the link prints the drawn signature on its line and the stamp under it", { timeout: 60_000 }, async () => {
+    const onePixel = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+    browser ??= await puppeteer.launch({ ...launch!, headless: true });
+    const page = await browser.newPage();
+    await page.setContent(renderDocumentHtml("historiaEndo", "mx", "<p>x</p>", { informedConsent: "<p>y</p>" }), { waitUntil: "load" });
+    const panel = () =>
+      page.evaluate(() => {
+        const root = document.querySelector('[data-field="consent_stamp"]')!.closest(".sig-panel")!;
+        const shown = (sel: string) => getComputedStyle(root.querySelector(sel)!).display !== "none";
+        return { area: shown(".sig-area"), stamp: shown(".sig-stamp"), note: shown(".sig-e-note") };
+      });
+
+    await applyDataFields(page, { consent_stamp: "Firmado electrónicamente por el paciente · 05/10/2026" });
+    expect(await panel()).toEqual({ area: false, stamp: true, note: false }); // no stored signature: the stamp alone
+    await applyDataImages(page, { firma_paciente: onePixel });
+    expect(await panel()).toEqual({ area: true, stamp: true, note: false }); // signature + stamp, no second "firmado" note
+  });
+
   it("partner agreement path: variant pruned, data-image signatures decoded and fonts settled before print", { timeout: 60_000 }, async () => {
     const onePixel = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
     const html = renderDocumentHtml("partnerAgreement", "mx", "<p>Cláusula de prueba.</p>", { annex: "<p>Anexo DPA.</p>" });
@@ -260,6 +278,32 @@ describe.skipIf(!launch)("renderHtmlToPdf (real Chromium)", () => {
 
       expect(countPdfPages(pdf)).toBe(compactPages);
       expect(await page.evaluate(() => document.documentElement.classList.contains("doc-roomy"))).toBe(false);
+    });
+
+    it("NEO-252: every page's signature block goes to its own page bottom, measured from that section's forced page break", { timeout: 60_000 }, async () => {
+      browser ??= await puppeteer.launch({ ...launch!, headless: true });
+      const page = await browser.newPage();
+      const para = "<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore.</p>";
+      // Page 1 is short, the consent section after the forced break is short too: both blocks start high on their page.
+      await page.setContent(
+        `<html><head><style>@page { size: A4; margin: 18mm 14mm 18mm; } body { margin: 0; font: 11pt sans-serif; } .sig-panels { margin-top: 20px; height: 60px; break-inside: avoid; } .p2 { break-before: page; }</style></head>` +
+          `<body><h1>Exam</h1>${para.repeat(4)}<div class="sig-panels">doctor</div><div class="p2"><h1>Consent</h1>${para.repeat(6)}<div class="sig-panels">patient</div></div></body></html>`
+      );
+      const print = () => page.pdf({ format: "A4", margin });
+      const pdf = await fitPageLayout(page, print, margin);
+
+      expect(countPdfPages(pdf)).toBe(2);
+      const pageHeight = ((297 - 36) * 96) / 25.4;
+      const bottoms = await page.evaluate(() =>
+        Array.from(document.querySelectorAll<HTMLElement>(".sig-panels")).map((el) => {
+          const origin = (el.closest(".p2") ?? document.body).getBoundingClientRect().top;
+          return el.getBoundingClientRect().bottom - origin;
+        })
+      );
+      for (const bottom of bottoms) {
+        expect(bottom).toBeLessThanOrEqual(pageHeight);
+        expect(bottom).toBeGreaterThan(pageHeight - 40); // within ~1 cm of the page's bottom edge
+      }
     });
 
     it("no signature block: returns the first print untouched", { timeout: 60_000 }, async () => {

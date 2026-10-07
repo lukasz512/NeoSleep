@@ -25,6 +25,7 @@ import { documentContentRouter } from "./routes/documentContent.js";
 import { inviteRouter } from "./routes/invite.js";
 import { notificationRouter } from "./routes/notification.js";
 import { orthoapneaResourcesRouter } from "./routes/partners/orthoapnea-resources.js";
+import { resourceDocumentsRouter } from "./routes/resourceDocuments.js";
 import { orthoapneaStatusRouter } from "./routes/partners/orthoapnea-status.js";
 import { orthoapneaTreatmentsRouter } from "./routes/partners/orthoapnea-treatments.js";
 import { deviceOrdersRouter } from "./routes/deviceOrders.js";
@@ -133,6 +134,14 @@ app.use(
 // validated in commands/questionnaireRequest.ts) — its own larger parser,
 // mounted first; body-parser then skips the already-parsed body below.
 app.use("/api/v1/public/questionnaire/submit", express.json({ limit: "600kb" }));
+// Same for the partner agreement: a phone signature (CORE-166) is far bigger
+// than a mouse one, and accept carries whichever the doctor used.
+app.use("/api/v1/invite/sign-handoff/sign", express.json({ limit: "600kb" }));
+app.use("/api/v1/invite/accept", express.json({ limit: "600kb" }));
+// Printing the Historia clínica can carry the doctor's drawn signature too (NEO-255).
+app.use("/api/v1/patient/:id/checklist/:key/print", express.json({ limit: "600kb" }));
+// ...and so does emailing it to the patient, signed (NEO-258).
+app.use("/api/v1/patient/:id/historia-clinica/email", express.json({ limit: "600kb" }));
 // The early "opened" ping sends its token as text/plain (no CORS preflight, NEO-123).
 app.use("/api/v1/public/questionnaire/opened", express.text({ type: "text/plain", limit: "1kb" }));
 // Resend signs the exact bytes it sends — keep the raw body for that one path (NEO-190).
@@ -186,6 +195,7 @@ app.use("/api/v1", documentContentRouter);
 app.use("/api/v1", inviteRouter);
 app.use("/api/v1", notificationRouter);
 app.use("/api/v1", orthoapneaResourcesRouter);
+app.use("/api/v1", resourceDocumentsRouter);
 app.use("/api/v1", orthoapneaStatusRouter);
 app.use("/api/v1", orthoapneaTreatmentsRouter);
 app.use("/api/v1", deviceOrdersRouter);

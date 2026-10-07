@@ -9,6 +9,11 @@
  *
  * The list endpoint is answered in the page itself (window.fetch stub), so no
  * API or DB is needed.
+ *
+ * Query params (CORE-149, e2e/entity-list-queues.spec.ts): `queues=1` adds the
+ * doctor's queue chips; `empty=1` answers with no rows and zero counts;
+ * `countsMs` / `listMs` hold the counts and list answers that long, and `hold=1`
+ * never answers, so the loading frames can be measured and shot.
  */
 import { createApp, defineComponent, h } from "vue";
 import { createPinia } from "pinia";
@@ -33,13 +38,26 @@ const ITEMS = [
   { id: "5", name: "Dra. Lorena González", meta: "Dentiflu", kind: "Dentist" },
 ];
 
+const query = new URLSearchParams(window.location.search);
+const withQueues = query.get("queues") === "1";
+const empty = query.get("empty") === "1";
+const hold = query.get("hold") === "1";
+const countsMs = Number(query.get("countsMs") ?? 0);
+const listMs = Number(query.get("listMs") ?? 0);
+const QUEUES_ENDPOINT = `${ENDPOINT}/queues`;
+const rows = empty ? [] : ITEMS;
+
+function answer(body: unknown, ms: number): Promise<Response> {
+  if (hold) return new Promise<Response>(() => {});
+  const res = () => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+  return ms > 0 ? new Promise((resolve) => setTimeout(() => resolve(res()), ms)) : Promise.resolve(res());
+}
+
 const realFetch = window.fetch.bind(window);
 window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-  if (url.includes(ENDPOINT)) {
-    const body = JSON.stringify({ items: ITEMS, total: ITEMS.length });
-    return Promise.resolve(new Response(body, { status: 200, headers: { "Content-Type": "application/json" } }));
-  }
+  if (url.includes(QUEUES_ENDPOINT)) return answer(empty ? { action: 0, active: 0, done: 0 } : { action: 2, active: 3, done: 0 }, countsMs);
+  if (url.includes(ENDPOINT)) return answer({ items: rows, total: rows.length }, listMs);
   return realFetch(input, init);
 };
 
@@ -98,6 +116,20 @@ const Harness = defineComponent({
               ],
               i18n: listI18n,
               cacheable: false,
+              ...(withQueues
+                ? {
+                    queues: {
+                      endpoint: QUEUES_ENDPOINT,
+                      options: [
+                        { value: "action", labelKey: "app.clinicalQueues.queue.action" },
+                        { value: "active", labelKey: "app.clinicalQueues.queue.active" },
+                        { value: "done", labelKey: "app.clinicalQueues.queue.done" },
+                      ],
+                      ariaLabelKey: "app.clinicalQueues.ariaLabel",
+                      attentionValue: "action",
+                    },
+                  }
+                : {}),
             },
             {
               "feed-card-avatar": () => h("div", { style: "width: 48px; height: 48px; border-radius: 50%; background: #dfe3f5" }),

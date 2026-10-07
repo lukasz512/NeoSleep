@@ -27,6 +27,10 @@ import {
   insertAuditLog,
   getIdentityIdForUser,
   getActiveAdminManagerIdentityIds,
+  isUserLinkedToPractitioner,
+  setInviteSignHandoff,
+  getInviteBySignHandoffHash,
+  type InviteSignHandoff,
 } from "../db.js";
 import { notify } from "../notifications/notify.js";
 import type { Organization } from "../db/organization.js";
@@ -38,11 +42,13 @@ import {
   ValidationError,
 } from "../errors.js";
 import { hashToken } from "../utils/hashToken.js";
+import { generateToken } from "../utils/generateToken.js";
 import { normalizeNationalIds } from "../utils/nationalIds.js";
 import { sendPartnerJoinThankYouEmail } from "../mailer.js";
 import { uploadPartnerDocument } from "../services/partnerDocuments.js";
 import { renderHtmlToPdf } from "../services/documentRenderer.js";
 import type { PartnerJurisdiction } from "../db/partnerSignatories.js";
+import { isSignatureDataUrl } from "../utils/signatureDataUrl.js";
 import {
   buildAgreementDocument,
   buildNoticeDocument,
@@ -177,7 +183,7 @@ export async function InvitePractitionerCommand(
   // after they accept the invite. insertPractitioner upserts `identities` by
   // email (same email as above) and no-ops if a practitioner row already
   // exists for that identity — see ADR-012 follow-up notes.
-  await insertPractitioner(ctx.client, {
+  const practitioner = await insertPractitioner(ctx.client, {
     first_name: firstName,
     last_name: lastName,
     email,
@@ -188,6 +194,14 @@ export async function InvitePractitionerCommand(
     institution: lead.institution ?? undefined,
     national_ids: nationalIds && Object.keys(nationalIds).length > 0 ? nationalIds : null,
   });
+  // CORE-173: the login and the practitioner record must be one identity, or the
+  // doctor logs in to an empty app. Fail the invite now, not at their first login.
+  if (!(await isUserLinkedToPractitioner(ctx.client, user.id, practitioner.id))) {
+    throw new ConflictError(
+      `The login for ${email} would not be linked to its practitioner record — fix the duplicate person first`,
+      "DOCTOR_LINK_MISMATCH"
+    );
+  }
 
   // The actual "set your password" registration email (with its 7-day-expiry
   // token) is deliberately NOT sent here — it's deferred to
@@ -425,8 +439,6 @@ export interface AcceptInviteResult {
   documents: SignedDocumentResult[];
 }
 
-const SIGNATURE_DATA_URL_RE = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
-
 function sha256Hex(bytes: Uint8Array): string {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
@@ -451,7 +463,7 @@ export async function AcceptPractitionerInviteCommand(
   }
   const practiceRole: PracticeRole = input.practiceRole;
   if (practiceRole === "owner" && !input.taxId?.trim()) throw new ValidationError("Tax ID is required", "taxId");
-  if (!input.agreementSignatureDataUrl || !SIGNATURE_DATA_URL_RE.test(input.agreementSignatureDataUrl)) {
+  if (!isSignatureDataUrl(input.agreementSignatureDataUrl)) {
     throw new ValidationError("A handwritten signature on the partner agreement is required");
   }
   if (!input.noticeAcknowledged) throw new ValidationError("Please confirm you have read the privacy notice");
@@ -708,8 +720,10 @@ export async function AcceptPractitionerInviteCommand(
     request_id: meta.requestId,
   });
 
-  // 5. Consume the token.
+  // 5. Consume the token. A phone signature nobody picked up (CORE-166) must not outlive the invite.
   await markInviteTokenUsed(client, invite.id);
+  const handoff = invite.metadata?.sign_handoff;
+  if (handoff?.signature) await setInviteSignHandoff(client, invite.id, withoutSignature(handoff));
 
   // 6. Convert the originating Lead, if any.
   if (invite.lead_id) {
@@ -762,4 +776,147 @@ export async function AcceptPractitionerInviteCommand(
     ccEmail: set.signatory.ccEmail,
     documents: documents.map(({ type, filename, bytes }) => ({ type, filename, bytes })),
   };
+}
+
+// ---------------------------------------------------------------------------
+// SIGN ON YOUR PHONE — public, token-gated (CORE-166)
+//
+// Desktop: StartPartnerSignHandoffCommand (invite token) → a sign-only token
+// shown as a QR. Phone: GetPartnerSignHandoffQuery + SignPartnerSignHandoffCommand
+// (handoff token only — it can't read the documents or accept the invite).
+// Desktop polls PickUpPartnerSignHandoffQuery (invite + handoff token) and
+// gets the signature exactly once; Accept then runs as before.
+// ---------------------------------------------------------------------------
+
+const SIGN_HANDOFF_TTL_MS = 15 * 60 * 1000;
+
+export interface PartnerSignHandoffPhoneView {
+  status: "pending" | "signed";
+  firstName: string | null;
+  lastName: string | null;
+  jurisdiction: PartnerJurisdiction | null;
+  /** Agreement + Annex 1 version, as the desktop dialog shows it ("3.2"). */
+  versionLabel: string | null;
+}
+
+export type PartnerSignHandoffPickup =
+  | { status: "pending" }
+  | { status: "expired" }
+  | { status: "signed"; signatureDataUrl: string };
+
+function withoutSignature(handoff: InviteSignHandoff): InviteSignHandoff {
+  const evidence: InviteSignHandoff = { ...handoff };
+  delete evidence.signature;
+  return evidence;
+}
+
+function handoffLive(handoff: InviteSignHandoff | undefined, now: Date): handoff is InviteSignHandoff {
+  return !!handoff && new Date(handoff.expires_at).getTime() > now.getTime() && !handoff.picked_up_at;
+}
+
+/** Mints the QR's sign-only token; a new one replaces any earlier QR for this invite. Null when the invite is invalid. */
+export async function StartPartnerSignHandoffCommand(
+  client: PoolClient,
+  inviteToken: string,
+  now: Date = new Date(),
+): Promise<{ handoffToken: string; expiresAt: string } | null> {
+  const tokenStr = inviteToken?.trim();
+  if (!tokenStr) return null;
+  const invite = await getInviteTokenByHash(client, hashToken(tokenStr));
+  if (!invite) return null;
+  const handoffToken = generateToken();
+  const expiresAt = new Date(now.getTime() + SIGN_HANDOFF_TTL_MS).toISOString();
+  await setInviteSignHandoff(client, invite.id, { token_hash: hashToken(handoffToken), expires_at: expiresAt });
+  return { handoffToken, expiresAt };
+}
+
+async function liveHandoffInvite(client: PoolClient, handoffToken: string, now: Date) {
+  const tokenStr = handoffToken?.trim();
+  if (!tokenStr) return null;
+  const invite = await getInviteBySignHandoffHash(client, hashToken(tokenStr));
+  const handoff = invite?.metadata?.sign_handoff;
+  return invite && handoffLive(handoff, now) ? { invite, handoff } : null;
+}
+
+/** What the phone shows above the pad: who signs and which agreement version. Null = unknown, expired or already picked up. */
+export async function GetPartnerSignHandoffQuery(
+  client: PoolClient,
+  handoffToken: string,
+  now: Date = new Date(),
+): Promise<PartnerSignHandoffPhoneView | null> {
+  const live = await liveHandoffInvite(client, handoffToken, now);
+  if (!live) return null;
+  const { invite, handoff } = live;
+  const { practitioner } = await loadInviteParty(client, invite.identity_id);
+  const jurisdiction = inviteJurisdiction(invite, practitioner?.region);
+  let versionLabel: string | null = null;
+  if (jurisdiction) {
+    try {
+      const set = await resolvePartnerDocumentSet(client, jurisdiction);
+      versionLabel = `${set.agreement.version_number}.${set.dpa.version_number}`;
+    } catch (err) {
+      if (!(err instanceof PartnerDocumentsNotReadyError)) throw err;
+    }
+  }
+  return {
+    status: handoff.signed_at ? "signed" : "pending",
+    firstName: invite.first_name,
+    lastName: invite.last_name,
+    jurisdiction,
+    versionLabel,
+  };
+}
+
+/** Stores the phone's signature, once per QR. False when the QR is unknown, expired or already signed. */
+export async function SignPartnerSignHandoffCommand(
+  client: PoolClient,
+  input: { handoffToken: string; signatureDataUrl: string },
+  meta: AcceptInviteRequestMeta,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const signature = input.signatureDataUrl;
+  if (!isSignatureDataUrl(signature)) {
+    throw new ValidationError("A handwritten signature is required", "signatureDataUrl");
+  }
+  const live = await liveHandoffInvite(client, input.handoffToken, now);
+  if (!live || live.handoff.signed_at) return false;
+  const { invite, handoff } = live;
+  await setInviteSignHandoff(client, invite.id, {
+    ...handoff,
+    signature,
+    signed_at: now.toISOString(),
+    signed_ip: meta.ip,
+    signed_user_agent: meta.userAgent,
+  });
+  await insertAuditLog(client, {
+    user_id: invite.user_id,
+    action: "sign_on_phone",
+    entity_type: "SignedDocument",
+    entity_id: invite.user_id,
+    entity_after: { document_type: "partner_agreement", channel: "qr_phone" },
+    user_ip: meta.ip,
+    user_agent: meta.userAgent,
+    request_id: meta.requestId,
+  });
+  return true;
+}
+
+/** Desktop poll. Hands the phone's signature over exactly once, then the QR is spent. Null = the invite itself is invalid. */
+export async function PickUpPartnerSignHandoffQuery(
+  client: PoolClient,
+  inviteToken: string,
+  handoffToken: string,
+  now: Date = new Date(),
+): Promise<PartnerSignHandoffPickup | null> {
+  const tokenStr = inviteToken?.trim();
+  if (!tokenStr) return null;
+  const invite = await getInviteTokenByHash(client, hashToken(tokenStr));
+  if (!invite) return null;
+  const handoff = invite.metadata?.sign_handoff;
+  if (!handoff || handoff.token_hash !== hashToken(handoffToken?.trim() ?? "") || !handoffLive(handoff, now)) {
+    return { status: "expired" };
+  }
+  if (!handoff.signature) return { status: "pending" };
+  await setInviteSignHandoff(client, invite.id, { ...withoutSignature(handoff), picked_up_at: now.toISOString() });
+  return { status: "signed", signatureDataUrl: handoff.signature };
 }

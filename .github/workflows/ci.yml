@@ -4,10 +4,10 @@
 # container is migrated before tests run, kept separate from the shared
 # Supabase dev/prod DB.
 #
-# apps/pwa and apps/web test suites currently have pre-existing failures
-# being triaged separately (test-quality audit, not caused by a given PR) —
-# they still run for visibility but don't block merge yet via continue-on-error.
-# Once that audit lands, promote them to blocking the same way api/ui are.
+# What a run tests depends on the event (CORE-152, infrastructure/scripts/ci-scope.mjs):
+# work branches run only the e2e specs a change can break, on Chromium; dev/prod pushes
+# run everything on Chromium + WebKit; the nightly run adds Firefox; the dev→prod
+# promote PR copies the result of the dev run of the same commit.
 
 name: CI
 
@@ -18,23 +18,38 @@ on:
     # hands over the "Create PR" link, so CI has to run before a PR exists.
     # Keep in sync with .claude/ci-autofix.json "ciBranchPatterns".
     branches: [dev, prod, "worktree-*", "worker/*", "claude/*"]
+  # Nightly full run incl. Firefox (CORE-152 D1). 08:00 UTC = 02:00 in Mexico City.
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: read # ci-mirror-run.mjs reads the dev run of the promote PR's commit
 
 # One run per commit (CORE-98). Work branches are already tested by their push
 # run, so their pull_request twin skips its jobs (see JOB_IF below) instead of
 # racing the push run — a cancelled twin showed as a red "test" on the PR.
 # The group is per event + branch: a newer push cancels only an older push of
 # the same branch, never the run GitHub shows on the PR.
+# dev and prod never cancel a run in progress (CORE-152 D2): during a burst of merges
+# one run finishes and only the newest waiting one follows, so dev always ends up with
+# a complete result instead of a chain of cancelled runs.
 concurrency:
   group: ci-${{ github.event_name }}-${{ github.head_ref || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/dev' && github.ref != 'refs/heads/prod' }}
 
 jobs:
   test:
     # JOB_IF (CORE-98): pull_request runs only for heads the push trigger doesn't cover
     # (e.g. renovate/*); a skipped job counts as passed for required checks. Head dev =
-    # the dev→prod promote PR: the dev push run already tests that same commit.
-    if: github.event_name != 'pull_request' || !(startsWith(github.head_ref, 'worktree-') || startsWith(github.head_ref, 'worker/') || startsWith(github.head_ref, 'claude/') || github.head_ref == 'dev')
+    # the dev→prod promote PR: it runs, but only to copy the dev run's result (Scope step).
+    if: github.event_name != 'pull_request' || !(startsWith(github.head_ref, 'worktree-') || startsWith(github.head_ref, 'worker/') || startsWith(github.head_ref, 'claude/'))
     runs-on: ubuntu-latest
+    # CORE-151: a hung e2e used to hold the job (and the session waiting on it) for up
+    # to an hour; the default limit is 6 h. The nightly 3-engine e2e alone takes ~23 min
+    # (2026-10-06: 507 tests in 22.8 min), so the nightly/manual run gets more room.
+    timeout-minutes: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 60 || 45 }}
 
     services:
       postgres:
@@ -73,17 +88,34 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # ci-scope.mjs diffs a work branch against origin/dev
+
+      # CORE-152: what this run tests and why (printed in the log).
+      - name: Scope
+        id: scope
+        run: node infrastructure/scripts/ci-scope.mjs
+
+      - name: Promote PR — copy the dev run of this commit
+        if: steps.scope.outputs.mirror == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: node infrastructure/scripts/ci-mirror-run.mjs
 
       - name: Setup pnpm
+        if: steps.scope.outputs.run_app == 'true'
         uses: pnpm/action-setup@v4
 
       - name: Setup Node
+        if: steps.scope.outputs.run_app == 'true'
         uses: actions/setup-node@v4
         with:
           node-version-file: ".nvmrc"
           cache: "pnpm"
 
       - name: Install dependencies
+        if: steps.scope.outputs.run_app == 'true'
         run: pnpm install --frozen-lockfile
 
       # @neo/email and @neo/documents are real compiled packages (dist/ is
@@ -94,24 +126,31 @@ jobs:
       # '@neo/documents'). See infrastructure/scripts/start.sh step 4 for
       # the same requirement in local dev.
       - name: Build @neo/email
+        if: steps.scope.outputs.run_app == 'true'
         run: pnpm --filter @neo/email build
 
       - name: Build @neo/documents
+        if: steps.scope.outputs.run_app == 'true'
         run: pnpm --filter @neo/documents build
 
       - name: Build @neo/device-order
+        if: steps.scope.outputs.run_app == 'true'
         run: pnpm --filter @neo/device-order build
 
       - name: Lint (all workspaces)
+        if: steps.scope.outputs.run_app == 'true'
         run: pnpm -r lint
 
       - name: i18n key parity (en/pl/mx)
+        if: steps.scope.outputs.run_app == 'true'
         run: pnpm i18n:parity
 
       - name: Typecheck (all workspaces)
+        if: steps.scope.outputs.run_app == 'true'
         run: pnpm -r typecheck
 
       - name: Run DB migrations
+        if: steps.scope.outputs.run_app == 'true'
         run: pnpm --filter @neo/api migrate
 
       # Regression guard for the exact drift 027_sync_create_tenant_schema.sql
@@ -120,6 +159,7 @@ jobs:
       # if a future migration touches a tenant table without also updating
       # the function, instead of drifting silently again.
       - name: Check create_tenant_schema() parity
+        if: steps.scope.outputs.run_app == 'true'
         run: pnpm --filter @neo/api check-tenant-schema-parity
 
       # Integration tests must never write into "neosleep" (see
@@ -129,30 +169,36 @@ jobs:
       # accurate again as of 027 — keeps the isolated test schema on its own
       # independent path from the function the parity check above validates.
       - name: Sync isolated test tenant schema
+        if: steps.scope.outputs.run_app == 'true'
         run: pnpm --filter @neo/api sync-test-schema
 
       - name: Test — infrastructure scripts (blocking)
+        if: steps.scope.outputs.run_app == 'true'
         run: node --test "infrastructure/scripts/*.test.mjs"
 
       - name: Video titles have no punctuation (blocking)
+        if: steps.scope.outputs.run_app == 'true'
         run: node infrastructure/scripts/check-video-titles.mjs
 
       - name: Test — api (blocking)
+        if: steps.scope.outputs.run_app == 'true'
         run: pnpm --filter @neo/api test
 
       - name: Test — ui package (blocking)
+        if: steps.scope.outputs.run_app == 'true'
         run: pnpm --filter @neo/ui test
 
       - name: Test — AJM corporativo client site (blocking)
+        if: steps.scope.outputs.run_app == 'true'
         run: pnpm --filter @ajm/corporativo test
 
-      - name: Test — pwa (informational — pre-existing failures being triaged, not yet a merge gate)
+      - name: Test — pwa (blocking)
+        if: steps.scope.outputs.run_app == 'true'
         run: pnpm --filter @neo/pwa test
-        continue-on-error: true
 
-      - name: Test — web (informational — pre-existing failures being triaged, not yet a merge gate)
+      - name: Test — web (blocking)
+        if: steps.scope.outputs.run_app == 'true'
         run: pnpm --filter @neo/web test
-        continue-on-error: true
 
       # apps/pwa/e2e/ (Playwright, ADR-020) — real browser engines only for the
       # auth behaviors jsdom/Postgres-integration tests genuinely can't cover
@@ -160,13 +206,17 @@ jobs:
       # scoped coverage — blocking from day one, not inheriting the informational
       # status of the legacy `pnpm --filter @neo/pwa test` step above.
       - name: Install Playwright browsers
-        run: pnpm --filter @neo/pwa exec playwright install --with-deps chromium firefox webkit
+        if: steps.scope.outputs.run_app == 'true'
+        env:
+          E2E_BROWSERS: ${{ steps.scope.outputs.browsers }}
+        run: pnpm --filter @neo/pwa exec playwright install --with-deps $E2E_BROWSERS
 
       # apps/api's dev script (which Playwright's webServer starts) reads
       # ../../.env via tsx --env-file — that file doesn't exist in CI (the
       # job's `env:` block sets real env vars instead), so write one from
       # those same already-known values.
       - name: Write .env for E2E dev servers
+        if: steps.scope.outputs.run_app == 'true'
         run: |
           cat > .env <<EOF
           DATABASE_URL=${DATABASE_URL}
@@ -175,12 +225,25 @@ jobs:
           EOF
 
       - name: Test — pwa e2e (blocking)
-        run: pnpm --filter @neo/pwa test:e2e
+        if: steps.scope.outputs.run_app == 'true'
+        timeout-minutes: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 40 || 25 }}
+        env:
+          E2E_BROWSERS: ${{ steps.scope.outputs.browsers }}
+          E2E_SPECS: ${{ steps.scope.outputs.e2e_specs }}
+          PLAYWRIGHT_JSON_OUTPUT_NAME: e2e-report.json
+        run: |
+          echo "e2e browsers: $E2E_BROWSERS · specs: ${E2E_SPECS:-all}"
+          pnpm --filter @neo/pwa test:e2e --reporter=github,json $(for b in $E2E_BROWSERS; do printf -- '--project=%s ' "$b"; done) $E2E_SPECS
+
+      # A test that passed only on its retry is green but unreliable — say so (CORE-152).
+      - name: Flaky e2e tests
+        if: always() && steps.scope.outputs.run_app == 'true'
+        run: node infrastructure/scripts/e2e-flaky.mjs apps/pwa/e2e-report.json
 
       # Page snapshot + trace of each failing e2e test — the log alone only
       # says "element not found", not what the page showed instead.
       - name: Upload e2e failure traces
-        if: failure()
+        if: failure() && steps.scope.outputs.run_app == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: pwa-e2e-test-results
@@ -228,3 +291,4 @@ jobs:
           node --test .claude/skills/ship-artifact/ticket.test.mjs
           bash .claude/hooks/pre-tool-linear-ticket-format.test.sh
           bash infrastructure/scripts/worktree-clean.test.sh
+          bash infrastructure/scripts/test-db.test.sh

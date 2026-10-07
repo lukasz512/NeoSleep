@@ -123,6 +123,19 @@ save_markers() {
   done
 }
 
+# Dev servers (vite, tsx --watch) started inside a worktree outlive its session —
+# some ran for days (CORE-150). Only node processes whose command line names a file
+# under the worktree are stopped.
+stop_dev_servers() {
+  local pids
+  pids="$(ps -Ao pid=,command= | awk -v p="$1/" '$2 ~ /(^|\/)node$/ && index($0, p) {print $1}')"
+  [ -n "$pids" ] || return 0
+  # shellcheck disable=SC2086
+  kill $pids 2>/dev/null && echo "   stopped dev server(s): $(echo $pids)"
+}
+
+TEST_DB="${WORKTREE_CLEAN_TEST_DB:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/test-db.sh}"
+
 # ─── Collect worktrees: path, branch, locked (\x1f-separated) ─────────────────────────
 git worktree list --porcelain | awk '
   /^worktree /{ if (p != "") print p "\037" b "\037" l; p=substr($0,10); b=""; l=0 }
@@ -174,7 +187,9 @@ apply_branch() {
       echo "   REFUSED: $(printf '%s' "$result" | cut -d"$S" -f2)"; return 1
     fi
     save_markers "$path"
+    stop_dev_servers "$path"
     if git worktree remove "$path"; then echo "   removed worktree $path"; else echo "   FAILED: git worktree remove"; return 1; fi
+    bash "$TEST_DB" down "$(basename "$path")" 2>/dev/null | sed 's/^/   /'
   fi
 
   if git show-ref --verify --quiet "refs/heads/$branch"; then
@@ -250,6 +265,8 @@ if [ "$MODE" = "auto" ]; then
     [ -z "$branch" ] && continue
     apply_branch "$branch" && removed=$((removed + 1))
   done < "$TMP/auto"
+  # Test databases of worktrees removed by hand, and old per-thread containers (CORE-150).
+  bash "$TEST_DB" prune 2>/dev/null
   kept="$(awk -F"$S" '$6=="KEEP"' "$TMP/rows" | wc -l | tr -d ' ')"
   echo "auto: cleaned $removed branch(es); kept $kept (unmerged, dirty, locked or fresh — pnpm worktree:clean lists them)"
   exit 0

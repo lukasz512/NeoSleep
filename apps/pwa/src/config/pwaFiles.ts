@@ -1,9 +1,10 @@
 /**
  * Navigations the service worker must leave to the network (NEO-242).
  * Workbox answers every navigation with index.html by default, so opening a
- * document from public/ in a new tab showed the app instead of the file.
+ * document from public/ in a new tab showed the app instead of the file. The
+ * documents' cover images follow the same rule so a direct visit shows the image.
  */
-export const NAVIGATE_FALLBACK_DENYLIST: RegExp[] = [/\.pdf$/i];
+export const NAVIGATE_FALLBACK_DENYLIST: RegExp[] = [/\.pdf$/i, /\.jpe?g$/i];
 
 export function isServedAsFile(path: string): boolean {
   return NAVIGATE_FALLBACK_DENYLIST.some((re) => re.test(path));

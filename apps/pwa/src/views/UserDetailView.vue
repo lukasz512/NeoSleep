@@ -156,6 +156,12 @@
                 <span v-else class="view-item__empty">—</span>
               </dd>
             </div>
+            <div v-if="user.login_email" class="view-item__row">
+              <dt class="view-item__label">
+                {{ t("user.users.detail.loginEmail") }}
+              </dt>
+              <dd class="view-item__value">{{ user.login_email }}</dd>
+            </div>
             <div class="view-item__row">
               <dt class="view-item__label">
                 {{ t("user.users.detail.role") }}
@@ -286,6 +292,7 @@ interface UserDetail {
   first_name: string | null;
   last_name: string | null;
   email: string;
+  login_email?: string | null;
   role: string;
   status: string;
   region: string | null;

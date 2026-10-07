@@ -138,3 +138,32 @@ test("the account avatar grows into the card's top-right corner, inset like the 
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog", { name: "User menu" })).toHaveCount(0);
 });
+
+// CORE-163: the theme crossfade used to lift the page sheet (a named
+// view-transition group) above the open account menu, and the sheet moved on
+// its own track. While a theme switch runs nothing but the root is named, so
+// the whole screen — the menu on top — fades as one picture; afterwards the
+// sheet gets its page-transition name back.
+test("theme switch: the menu stays open on top and the page is one crossfade", async ({ page }) => {
+  await open(page, "?theme=light&open=account");
+  const menu = page.locator('[data-testid="account-menu"]');
+  await expect(menu).toBeVisible();
+  const sheetName = () => page.locator(".harness-sheet").evaluate((el) => getComputedStyle(el).viewTransitionName);
+  expect(await sheetName()).toBe("pwa-page");
+
+  await page.locator("[data-testid=user-menu-theme] [role=radio]").nth(1).click();
+  const during = await page.evaluate(() => ({
+    supported: typeof document.startViewTransition === "function",
+    flag: document.documentElement.hasAttribute("data-theme-transition"),
+    sheet: getComputedStyle(document.querySelector(".harness-sheet")!).viewTransitionName,
+  }));
+  if (during.supported) {
+    expect(during.flag).toBe(true);
+    expect(during.sheet).toBe("none");
+  }
+
+  await expect.poll(() => page.evaluate(() => document.documentElement.hasAttribute("data-theme-transition"))).toBe(false);
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(menu).toBeVisible();
+  expect(await sheetName()).toBe("pwa-page");
+});

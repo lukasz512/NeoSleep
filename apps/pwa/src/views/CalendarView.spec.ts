@@ -6,6 +6,7 @@ import { createVuetify } from "vuetify";
 import * as vuetifyComponents from "vuetify/components";
 import * as vuetifyDirectives from "vuetify/directives";
 import { createRouter, createMemoryHistory } from "vue-router";
+import { defineComponent, h, ref } from "vue";
 import en from "@i18n/en.json";
 import { routes, navRoutesForRole } from "../router/routes";
 import { useAuthStore } from "../stores/auth";
@@ -13,6 +14,7 @@ import "../components/EventForm.vue";
 import "../components/AppointmentDialog.vue";
 import "../components/AppointmentDetailDialog.vue";
 import CalendarView from "./CalendarView.vue";
+import { providePageHeader, PAGE_HEADER_ACTIONS_ID } from "../composables/usePageHeader";
 
 /**
  * CORE-117: CalendarView merges the old PlannerView (encounters) and
@@ -44,7 +46,7 @@ afterEach(() => {
   apiFetch.mockReset();
 });
 
-async function mountView(role: string, path = "/calendar") {
+async function mountView(role: string, path = "/calendar", opts: { pageHeader?: boolean } = {}) {
   setActivePinia(createPinia());
   useAuthStore().user = { id: "u-1", email: "qa@clinic.test", role } as ReturnType<typeof useAuthStore>["user"];
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
@@ -52,7 +54,16 @@ async function mountView(role: string, path = "/calendar") {
   const router = createRouter({ history: createMemoryHistory(), routes });
   await router.push(path);
   await router.isReady();
-  const wrapper = mount(CalendarView, { global: { plugins: [i18n, vuetify, router] } });
+  // With pageHeader, stand in for AppLayout: its header-actions slot is shown, so "+" can move there (CORE-153).
+  const Host = defineComponent({
+    setup() {
+      providePageHeader(ref(true));
+      return () => h("div", [h("div", { id: PAGE_HEADER_ACTIONS_ID }), h(CalendarView)]);
+    },
+  });
+  const wrapper = opts.pageHeader
+    ? mount(Host, { attachTo: document.body, global: { plugins: [i18n, vuetify, router] } })
+    : mount(CalendarView, { global: { plugins: [i18n, vuetify, router] } });
   wrappers.push(wrapper);
   await flushPromises();
   return Object.assign(wrapper, { router });
@@ -156,8 +167,10 @@ describe("CalendarView (CORE-117)", () => {
       await wrapper.find('[data-testid="calendar-view-month"]').trigger("click");
       await flushPromises();
       apiFetch.mockClear();
+      // CORE-161: a date opens its list first; "Open day" goes on to the day view.
       const fifth = wrapper.findAll('[data-testid="calendar-day-link"]').find((b) => b.text() === "5");
       await fifth!.trigger("click");
+      await wrapper.find('[data-testid="calendar-list-open-day"]').trigger("click");
       await flushPromises();
 
       expect(wrapper.find('[data-testid="calendar-view-day"]').attributes("aria-selected")).toBe("true");
@@ -343,5 +356,175 @@ describe("CalendarView (CORE-117)", () => {
       vi.useRealTimers();
       process.env.TZ = tz;
     }
+  });
+  describe("CORE-153: calmer toolbar", () => {
+    it("on a wide screen \"+\" moves into the page header, in the lists' plain style", async () => {
+      apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
+      const wrapper = await mountView("manager", "/calendar", { pageHeader: true });
+      const add = document.getElementById(PAGE_HEADER_ACTIONS_ID)!.querySelector('[data-testid="calendar-add"]');
+      expect(add).not.toBeNull();
+      expect(add!.classList).toContain("cal__add--header");
+      expect(wrapper.find(".cal__toolbar [data-testid=\"calendar-add\"]").exists()).toBe(false);
+    });
+
+    it("on a wide screen the view switch is fitted to its labels, so \"Week\" is never cut", async () => {
+      apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
+      const wrapper = await mountView("manager");
+      expect(wrapper.find(".cal__seg").classes()).toContain("app-segmented-tabs--fit");
+    });
+
+    it("the toolbar reads arrows, month, Today, then the view switch", async () => {
+      apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
+      const wrapper = await mountView("manager");
+      const order = Array.from(wrapper.find(".cal__toolbar").element.children).map((el) => ["cal__nav", "cal__title", "cal__today", "cal__seg"].find((c) => el.classList.contains(c)));
+      expect(order.slice(0, 4)).toEqual(["cal__nav", "cal__title", "cal__today", "cal__seg"]);
+    });
+
+    it("a phone keeps \"+\" in its own bar and equal-width view tabs (CORE-129 unchanged)", async () => {
+      const innerWidth = window.innerWidth;
+      window.innerWidth = 390;
+      try {
+        apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
+        const wrapper = await mountView("manager", "/calendar", { pageHeader: true });
+        const add = wrapper.find(".cal__toolbar [data-testid=\"calendar-add\"]");
+        expect(add.exists()).toBe(true);
+        expect(add.classes()).not.toContain("cal__add--header");
+        expect(wrapper.find(".cal__seg").classes()).not.toContain("app-segmented-tabs--fit");
+      } finally {
+        window.innerWidth = innerWidth;
+      }
+    });
+  });
+
+  describe("CORE-161: the clicked day's list", () => {
+    /** Month view on January 2032, with both fixture entries on the 1st. */
+    async function monthView(opts: { width?: number; items?: unknown } = {}) {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(2032, 0, 1, 9, 0));
+      apiFetch.mockResolvedValue(jsonResponse(true, 200, opts.items ?? TWO_KINDS));
+      const wrapper = await mountView("manager");
+      if (!opts.width || opts.width >= 600) {
+        await wrapper.find('[data-testid="calendar-view-month"]').trigger("click");
+        await flushPromises();
+      }
+      return wrapper;
+    }
+    const day = (wrapper: VueWrapper, n: string) => wrapper.findAll('[data-testid="calendar-day-link"]').find((b) => b.text() === n)!;
+    const popover = (wrapper: VueWrapper) => wrapper.find('[data-testid="calendar-day-popover"]');
+
+    afterEach(() => vi.useRealTimers());
+
+    it("a click on a day opens its entries in a popover and stays on the month", async () => {
+      const wrapper = await monthView();
+      await day(wrapper, "1").trigger("click");
+
+      expect(popover(wrapper).exists()).toBe(true);
+      expect(popover(wrapper).classes()).toContain("cal-glass");
+      expect(popover(wrapper).findAll('[data-testid="calendar-row"]')).toHaveLength(2);
+      expect(popover(wrapper).text()).toContain("Jane Doe");
+      expect(wrapper.find('[data-testid="calendar-view-month"]').attributes("aria-selected")).toBe("true");
+    });
+
+    it("Esc, a click outside, the close button and paging the month close it", async () => {
+      const wrapper = await monthView();
+      await day(wrapper, "1").trigger("click");
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+      await flushPromises();
+      expect(popover(wrapper).exists()).toBe(false);
+
+      await day(wrapper, "1").trigger("click");
+      document.body.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+      await flushPromises();
+      expect(popover(wrapper).exists()).toBe(false);
+
+      await day(wrapper, "1").trigger("click");
+      await wrapper.find('[data-testid="calendar-list-close"]').trigger("click");
+      expect(popover(wrapper).exists()).toBe(false);
+
+      await day(wrapper, "1").trigger("click");
+      await wrapper.find('[data-testid="calendar-next"]').trigger("click");
+      await flushPromises();
+      expect(popover(wrapper).exists()).toBe(false);
+    });
+
+    it("a row opens that entry and closes the popover", async () => {
+      const wrapper = await monthView();
+      await day(wrapper, "1").trigger("click");
+      const row = popover(wrapper).findAll('[data-testid="calendar-row"]').find((r) => r.text().includes("HCO visit"))!;
+      await row.trigger("click");
+      await flushPromises();
+      expect(popover(wrapper).exists()).toBe(false);
+      expect(document.body.querySelector('[data-testid="event-form"], .v-dialog')).not.toBeNull();
+    });
+
+    it("an empty day says so and \"+\" books on that day", async () => {
+      const wrapper = await monthView();
+      await day(wrapper, "7").trigger("click");
+      expect(popover(wrapper).text()).toContain(en["user.calendar.dayEmpty"]);
+      await wrapper.find('[data-testid="calendar-list-add"]').trigger("click");
+      await flushPromises();
+      expect(popover(wrapper).exists()).toBe(false);
+      expect(document.body.querySelector('[data-testid="appointment-submit"]')).not.toBeNull();
+    });
+
+    it("the pin docks the list on the right; it follows the next day clicked; unpinning brings the popover back", async () => {
+      const wrapper = await monthView();
+      await day(wrapper, "1").trigger("click");
+      await wrapper.find('[data-testid="calendar-list-pin"]').trigger("click");
+
+      const pinned = () => wrapper.find('[data-testid="calendar-day-pinned"]');
+      expect(pinned().exists()).toBe(true);
+      expect(pinned().classes()).toContain("cal-glass");
+      expect(wrapper.find(".cal").classes()).toContain("cal--day-pinned");
+      expect(popover(wrapper).exists()).toBe(false);
+      expect(pinned().findAll('[data-testid="calendar-row"]')).toHaveLength(2);
+
+      await day(wrapper, "7").trigger("click");
+      expect(popover(wrapper).exists()).toBe(false);
+      expect(pinned().text()).toContain(en["user.calendar.dayEmpty"]);
+
+      await wrapper.find('[data-testid="calendar-list-pin"]').trigger("click");
+      expect(pinned().exists()).toBe(false);
+      await day(wrapper, "1").trigger("click");
+      expect(popover(wrapper).exists()).toBe(true);
+    });
+
+    it("the pin is offered only where the month keeps room for a side column (900 px and up)", async () => {
+      const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(800);
+      try {
+        const wrapper = await monthView();
+        await day(wrapper, "1").trigger("click");
+        expect(popover(wrapper).exists()).toBe(true);
+        expect(wrapper.find('[data-testid="calendar-list-pin"]').exists()).toBe(false);
+      } finally {
+        width.mockRestore();
+      }
+    });
+
+    it("phone: the list sits under the month and scrolling it folds the month to the selected week", async () => {
+      const innerWidth = window.innerWidth;
+      window.innerWidth = 390;
+      try {
+        const wrapper = await monthView({ width: 390 });
+        expect(popover(wrapper).exists()).toBe(false);
+        const agenda = wrapper.find(".cal__agenda");
+        expect(agenda.find('[data-testid="calendar-list"]').text()).toContain("Jane Doe");
+        const hidden = () => wrapper.findAll(".cal-mo__cell--hidden").length;
+        expect(hidden()).toBe(0);
+
+        (agenda.element as HTMLElement).scrollTop = 40;
+        await agenda.trigger("scroll");
+        // 6 weeks drawn, the 1st's week stays: 35 cells fold.
+        expect(hidden()).toBe(35);
+        const kept = wrapper.findAll(".cal-mo__cell").filter((c) => !c.classes().includes("cal-mo__cell--hidden"));
+        expect(kept.some((c) => c.classes().includes("cal-mo__cell--selected"))).toBe(true);
+
+        (agenda.element as HTMLElement).scrollTop = 0;
+        await agenda.trigger("scroll");
+        expect(hidden()).toBe(0);
+      } finally {
+        window.innerWidth = innerWidth;
+      }
+    });
   });
 });

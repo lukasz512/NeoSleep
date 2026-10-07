@@ -25,7 +25,7 @@ import { GetCurrentDocumentContentQuery } from "../queries/documentContent.js";
 import { sanitizeDocumentContentHtml } from "./documentContent.js";
 import { renderDocumentHtml, renderDocumentFooterHtml, getDocumentRefCode, fillContentForLocale, documentT, DOCUMENT_MANIFEST } from "@neo/documents";
 import { renderHtmlToPdf } from "../services/documentRenderer.js";
-import { uploadPartnerDocument, deletePartnerDocument } from "../services/partnerDocuments.js";
+import { uploadPartnerDocument, deletePartnerDocument, type UploadedDocument } from "../services/partnerDocuments.js";
 import { hashToken } from "../utils/hashToken.js";
 import { generateToken } from "../utils/generateToken.js";
 import { AppError, NotFoundError, ValidationError } from "../errors.js";
@@ -36,6 +36,7 @@ import { maskEmail } from "../utils/maskEmail.js";
 import { patientEmailLocale } from "../utils/patientEmailLocale.js";
 import { PRIVACY_NOTICE_URL } from "../env.js";
 import { validateMedicalHistory, validateStop } from "./clinicalRecordFields.js";
+import { isSignatureDataUrl } from "../utils/signatureDataUrl.js";
 
 /**
  * COMMANDS — patient QR link (migrations 030 + 031, ADR-023/024).
@@ -61,10 +62,6 @@ export const QUESTIONNAIRE_LINK_RETENTION_DAYS = 30;
  * app.questionnaire.consent) — stored on every patient-submitted record.
  */
 export const PATIENT_CONSENT_VERSION = "patient-self-fill-2026-09-26";
-
-/** Largest accepted drawn signature (a PNG data URL) — a finger signature on a phone is ~10-60 KB. */
-const MAX_SIGNATURE_DATA_URL_LENGTH = 400_000;
-const SIGNATURE_DATA_URL_RE = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
 
 /** Unknown, used, cancelled and expired links all look identical from outside — no signal about which tokens ever existed. */
 export class QuestionnaireLinkInvalidError extends AppError {
@@ -562,7 +559,7 @@ export async function SubmitPublicQuestionnaireCommand(
   if (type !== "consent") throw new QuestionnaireLinkInvalidError();
 
   const signature = body.signatureDataUrl;
-  if (typeof signature !== "string" || signature.length > MAX_SIGNATURE_DATA_URL_LENGTH || !SIGNATURE_DATA_URL_RE.test(signature)) {
+  if (!isSignatureDataUrl(signature)) {
     throw new ValidationError("A drawn signature (PNG) is required");
   }
   const locale = documentLocale(step, body.locale);
@@ -608,6 +605,18 @@ export async function SubmitPublicQuestionnaireCommand(
     pdfBytes,
     "application/pdf"
   );
+  // The drawn signature on its own too, so later prints (the Historia clínica's consent page, NEO-252) can show it.
+  let signatureUpload: UploadedDocument;
+  try {
+    signatureUpload = await uploadPartnerDocument(
+      `patient/${prepared.patientId}/consent-${step}-${signedAt.getTime()}-signature.png`,
+      Buffer.from(signature.slice(signature.indexOf(",") + 1), "base64"),
+      "image/png"
+    );
+  } catch (err) {
+    await deletePartnerDocument(uploaded.path).catch(() => undefined);
+    throw err;
+  }
 
   // (3) re-lock, record, mark the step — or undo the upload
   let result: PublicStepResult;
@@ -646,6 +655,7 @@ export async function SubmitPublicQuestionnaireCommand(
           template_key: step,
           content_version_id: prepared.version.id,
           file_attachment_id: attachment.id,
+          signature_path: signatureUpload.path,
           questionnaire_request_id: request.id,
           signature_method: "drawn",
           read_to_end: readToEnd,
@@ -683,9 +693,11 @@ export async function SubmitPublicQuestionnaireCommand(
       };
     });
   } catch (err) {
-    await deletePartnerDocument(uploaded.path).catch((cleanupErr: unknown) =>
-      console.error(`[questionnaireRequest] could not delete orphaned signed consent ${uploaded.path}:`, cleanupErr)
-    );
+    for (const path of [uploaded.path, signatureUpload.path]) {
+      await deletePartnerDocument(path).catch((cleanupErr: unknown) =>
+        console.error(`[questionnaireRequest] could not delete orphaned signed consent ${path}:`, cleanupErr)
+      );
+    }
     throw err;
   }
 

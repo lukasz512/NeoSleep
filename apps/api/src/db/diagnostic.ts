@@ -47,10 +47,17 @@ export function diagnosticMessageHash(message: string): string {
  * one row: repeats bump count and last_seen, a resolved row reopens (a
  * regression), a dismissed row keeps its status so the UI can mute it.
  * Never throws — diagnostics must not break the request that reports them.
+ * Writes of one group are serialised by a transaction-scoped advisory lock: two
+ * simultaneous failures used to both miss the UPDATE and both INSERT (CORE-152).
  */
 export async function insertDiagnostic(row: DiagnosticInsert): Promise<DiagnosticWriteResult> {
   const p = getDb();
   if (!p) return { id: null, isNew: false };
+  const client = await p.connect().catch((err: unknown) => {
+    console.error("insertDiagnostic error:", err);
+    return null;
+  });
+  if (!client) return { id: null, isNew: false };
   try {
     const level = row.level || "log";
     const source = row.source ?? "api";
@@ -58,7 +65,9 @@ export async function insertDiagnostic(row: DiagnosticInsert): Promise<Diagnosti
     const hash = row.message_hash ?? diagnosticMessageHash(row.message);
     const metadata = row.metadata ? JSON.stringify(row.metadata) : null;
 
-    const bumped = await p.query<{ id: string }>(
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`diagnostic|${env}|${source}|${hash}`]);
+    const bumped = await client.query<{ id: string }>(
       `UPDATE platform.diagnostics
           SET count       = count + 1,
               last_seen   = now(),
@@ -73,17 +82,24 @@ export async function insertDiagnostic(row: DiagnosticInsert): Promise<Diagnosti
         RETURNING id`,
       [env, source, hash, row.request_id ?? null, row.user_id ?? null, row.tenant_slug ?? null, metadata]
     );
-    if (bumped.rows[0]) return { id: bumped.rows[0].id, isNew: false };
+    if (bumped.rows[0]) {
+      await client.query("COMMIT");
+      return { id: bumped.rows[0].id, isNew: false };
+    }
 
-    const inserted = await p.query<{ id: string }>(
+    const inserted = await client.query<{ id: string }>(
       `INSERT INTO platform.diagnostics (level, message, message_hash, stack, source, env, tenant_slug, user_id, request_id, metadata)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING id`,
       [level, row.message, hash, row.stack ?? null, source, env, row.tenant_slug ?? null, row.user_id ?? null, row.request_id ?? null, metadata]
     );
+    await client.query("COMMIT");
     return { id: inserted.rows[0]?.id ?? null, isNew: true };
   } catch (err) {
+    await client.query("ROLLBACK").catch(() => undefined);
     console.error("insertDiagnostic error:", err);
     return { id: null, isNew: false };
+  } finally {
+    client.release();
   }
 }

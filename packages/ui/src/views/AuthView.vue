@@ -471,7 +471,7 @@ const badgeVisible = ref(false);
 // they dissolve together with the layout's background, not before or after it.
 const backdropExiting = ref(false);
 
-// "Version 1.0.0 (build 12) · DEV" under the badge (see useAppVersionLabel).
+// "Version 1.1.0.12 · DEV" under the badge (see useAppVersionLabel).
 const appVersionLabel = useAppVersionLabel();
 const BADGE_ENTER_DELAY = 150;
 const BADGE_EXIT_DURATION = 250;

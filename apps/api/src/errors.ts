@@ -86,6 +86,17 @@ export class ForbiddenError extends AppError {
   }
 }
 
+/**
+ * 403 DOCTOR_NOT_LINKED (CORE-173): a doctor login whose identity has no
+ * practitioner record — they can't see a single patient. The client shows its
+ * own message ("an admin has been told"), and the admins get a report.
+ */
+export class DoctorNotLinkedError extends AppError {
+  constructor() {
+    super("This doctor account is not linked to a practitioner record", "DOCTOR_NOT_LINKED", 403);
+  }
+}
+
 export class ConflictError extends AppError {
   constructor(message: string, code = "CONFLICT") {
     super(message, code, 409);

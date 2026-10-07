@@ -1,7 +1,9 @@
 <template>
   <div class="view-resources d-flex flex-column">
-    <!-- Own documents first (NEO-242), outside the partner states so they show even when the lab is down. -->
-    <ResourceFeaturedList />
+    <!-- Own documents show even when the lab is down; otherwise they are the first group under the meter. -->
+    <div v-if="loadError" class="view-resources__topics">
+      <ResourceDocumentGroup :items="FEATURED_RESOURCES" :opened="documentCounts.completed" :total="documentCounts.all" :layout="layout" />
+    </div>
 
     <div v-if="loadError" class="view-resources__state">
       <AppErrorState
@@ -108,58 +110,63 @@
           </div>
 
           <div v-else key="videos">
-            <div v-if="videos.length === 0" class="view-resources__state">
-              <AppEmptyState :title="t('user.resources.emptyVideos')" />
+            <!-- The count line appears once per page (NEO-151): under the title on desktop
+                 (page-header subtitle), and here only on phones, where the header has no subtitle line. -->
+            <p class="view-resources__phone-subtitle">{{ videosSubtitle }}</p>
+            <!-- Watch progress (NEO-209): overall meter + status chips (last choice remembered per user, D3). -->
+            <div class="view-resources__progress" data-testid="resources-progress">
+              <div class="view-resources__meter" role="progressbar" :aria-valuenow="counts.completed" aria-valuemin="0" :aria-valuemax="counts.all" :aria-label="watchedSummary">
+                <i :style="{ width: `${counts.all ? (counts.completed / counts.all) * 100 : 0}%` }" />
+              </div>
+              <span class="view-resources__meter-label">{{ watchedSummary }}</span>
             </div>
-            <template v-else>
-              <!-- "Webinars" appears once per page (NEO-151): under the title on desktop
-                   (page-header subtitle), and here only on phones, where the header has no subtitle line. -->
-              <p class="view-resources__phone-subtitle">{{ videosSubtitle }}</p>
-              <!-- Watch progress (NEO-209): overall meter + status chips (last choice remembered per user, D3). -->
-              <div class="view-resources__progress" data-testid="resources-progress">
-                <div class="view-resources__meter" role="progressbar" :aria-valuenow="counts.completed" aria-valuemin="0" :aria-valuemax="counts.all" :aria-label="watchedSummary">
-                  <i :style="{ width: `${counts.all ? (counts.completed / counts.all) * 100 : 0}%` }" />
+            <div class="view-resources__chips" role="group" :aria-label="t('user.resources.filter.label')">
+              <button
+                v-for="option in STATUS_FILTERS"
+                :key="option"
+                type="button"
+                class="view-resources__chip"
+                :aria-pressed="statusFilter === option"
+                :data-testid="`resources-filter-${option}`"
+                @click="statusFilter = option"
+              >
+                {{ t(`user.resources.filter.${option}`) }}
+                <span class="view-resources__chip-count">{{ counts[option] }}</span>
+              </button>
+            </div>
+            <div v-if="videos.length > 0 && topicGroups.length === 0 && documentItems.length === 0" class="view-resources__state view-resources__state--filtered">
+              <AppEmptyState :title="t('user.resources.filter.empty')" />
+            </div>
+            <!-- The documents first, then the topics = stages of the dentist's work with a patient (NEO-151), in that order. -->
+            <div class="view-resources__topics">
+              <ResourceDocumentGroup
+                v-if="documentItems.length > 0"
+                :items="documentItems"
+                :opened="documentCounts.completed"
+                :total="documentCounts.all"
+                :layout="layout"
+              />
+              <div v-if="videos.length === 0" class="view-resources__state">
+                <AppEmptyState :title="t('user.resources.emptyVideos')" />
+              </div>
+              <section v-for="group in topicGroups" :key="group.topic" class="view-resources__topic">
+                <h2 class="view-resources__topic-title">
+                  {{ t(`user.resources.topic.${group.topic}`) }}
+                  <span class="view-resources__topic-count">
+                    {{ t("user.resources.progress.summary", { watched: group.watched, total: group.total }) }}
+                  </span>
+                </h2>
+                <div class="view-resources__video-grid" :class="{ 'view-resources__video-grid--list': layout === 'list' }">
+                  <ResourceVideoTile
+                    v-for="video in group.videos"
+                    :key="video.id"
+                    :video="video"
+                    :layout="layout === 'list' ? 'row' : 'card'"
+                    @open="openVideo = video"
+                  />
                 </div>
-                <span class="view-resources__meter-label">{{ watchedSummary }}</span>
-              </div>
-              <div class="view-resources__chips" role="group" :aria-label="t('user.resources.filter.label')">
-                <button
-                  v-for="option in STATUS_FILTERS"
-                  :key="option"
-                  type="button"
-                  class="view-resources__chip"
-                  :aria-pressed="statusFilter === option"
-                  :data-testid="`resources-filter-${option}`"
-                  @click="statusFilter = option"
-                >
-                  {{ t(`user.resources.filter.${option}`) }}
-                  <span class="view-resources__chip-count">{{ counts[option] }}</span>
-                </button>
-              </div>
-              <div v-if="topicGroups.length === 0" class="view-resources__state view-resources__state--filtered">
-                <AppEmptyState :title="t('user.resources.filter.empty')" />
-              </div>
-              <!-- Topics = stages of the dentist's work with a patient (NEO-151), in that order. -->
-              <div class="view-resources__topics">
-                <section v-for="group in topicGroups" :key="group.topic" class="view-resources__topic">
-                  <h2 class="view-resources__topic-title">
-                    {{ t(`user.resources.topic.${group.topic}`) }}
-                    <span class="view-resources__topic-count">
-                      {{ t("user.resources.progress.summary", { watched: group.watched, total: group.total }) }}
-                    </span>
-                  </h2>
-                  <div class="view-resources__video-grid" :class="{ 'view-resources__video-grid--list': layout === 'list' }">
-                    <ResourceVideoTile
-                      v-for="video in group.videos"
-                      :key="video.id"
-                      :video="video"
-                      :layout="layout === 'list' ? 'row' : 'card'"
-                      @open="openVideo = video"
-                    />
-                  </div>
-                </section>
-              </div>
-            </template>
+              </section>
+            </div>
           </div>
         </Transition>
       </div>
@@ -195,9 +202,12 @@ import AppErrorState from "../components/AppErrorState.vue";
 import AppEmptyState from "../components/AppEmptyState.vue";
 import ResourceVideoTile from "../components/resources/ResourceVideoTile.vue";
 import ResourceVideoSheet from "../components/resources/ResourceVideoSheet.vue";
-import ResourceFeaturedList from "../components/resources/ResourceFeaturedList.vue";
+import ResourceDocumentGroup from "../components/resources/ResourceDocumentGroup.vue";
+import "../components/resources/resourceCards.css";
+import { FEATURED_RESOURCES } from "../config/featuredResources";
+import { useFeaturedProgress } from "../composables/useFeaturedProgress";
 import { usePartnerResources, type PartnerResourceFileType, type PartnerResourceItem } from "../composables/usePartnerResources";
-import { useResourceProgress, countByStatus, filterByStatus, type StatusFilter } from "../composables/useResourceProgress";
+import { useResourceProgress, countByStatus, filterByStatus, type StatusFilter, type ResourceProgressStatus } from "../composables/useResourceProgress";
 import { usePersistedState } from "@prefs";
 import { usePageHeaderRow, usePageHeaderTeleport } from "../composables/usePageHeader";
 import { useMediaQuery } from "@vueuse/core";
@@ -227,8 +237,31 @@ const STATUS_FILTERS: StatusFilter[] = ["all", "not_started", "in_progress", "co
 const statusFilter = usePersistedState<StatusFilter>("view:resources:statusFilter", "all", {
   validate: (v) => (STATUS_FILTERS.includes(v) ? v : "all"),
 });
-const counts = computed(() => countByStatus(videos.value, progress));
-const watchedSummary = computed(() => t("user.resources.progress.summary", { watched: counts.value.completed, total: counts.value.all }));
+
+/**
+ * The app's own PDFs count with the webinars: opened = completed (never "in
+ * progress"), so the meter, the chips and the totals cover both kinds.
+ */
+const { opened, load: loadOpened } = useFeaturedProgress();
+onMounted(() => void loadOpened());
+const documentStatus = (id: string): ResourceProgressStatus => (id in opened ? "completed" : "not_started");
+const documentProgress = computed(() => Object.fromEntries(FEATURED_RESOURCES.map((d) => [d.id, documentStatus(d.id)])));
+const documentCounts = computed(() => {
+  const counts: Record<StatusFilter, number> = { all: FEATURED_RESOURCES.length, not_started: 0, in_progress: 0, completed: 0 };
+  for (const d of FEATURED_RESOURCES) counts[documentStatus(d.id)] += 1;
+  return counts;
+});
+const documentItems = computed(() =>
+  statusFilter.value === "all" ? FEATURED_RESOURCES : FEATURED_RESOURCES.filter((d) => documentProgress.value[d.id] === statusFilter.value)
+);
+
+const videoCounts = computed(() => countByStatus(videos.value, progress));
+const counts = computed(() => {
+  const total = { ...videoCounts.value };
+  for (const key of STATUS_FILTERS) total[key] += documentCounts.value[key];
+  return total;
+});
+const watchedSummary = computed(() => t("user.resources.progress.completed", { done: counts.value.completed, total: counts.value.all }));
 
 /** Stage order comes from the API (VIDEO_TOPICS); a video without a known stage goes last, under "other". */
 const TOPIC_ORDER = ["detect", "diagnose", "records", "order", "followup", "other"] as const;
@@ -272,8 +305,10 @@ function setLayout(value: ResourcesLayout): void {
 /** The video playing in the cinema sheet — one at a time, so only one download runs. */
 const openVideo = ref<PartnerResourceItem | null>(null);
 
-/** Page subtitle (NEO-151): "Webinars · 15" under the Resources title; "" keeps its placeholder while loading. */
-const videosSubtitle = computed(() => `${t("user.resources.tabs.videos")} · ${videos.value.length}`);
+/** Page subtitle (NEO-151): "12 webinars · 2 documentos" under the Resources title; "" keeps its placeholder while loading. */
+const videosSubtitle = computed(
+  () => `${t("user.resources.count.webinars", videos.value.length)} · ${t("user.resources.count.documents", FEATURED_RESOURCES.length)}`
+);
 const headerRow = usePageHeaderRow();
 let ownSubtitle: string | null = null;
 watch(
@@ -523,43 +558,6 @@ onUnmounted(() => {
   gap: 28px;
   padding-bottom: 16px;
 }
-.view-resources__topic-title {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin: 0 0 12px;
-  font-size: 1rem;
-  font-weight: 650;
-  line-height: 1.3;
-}
-.view-resources__topic-count {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-  font-variant-numeric: tabular-nums;
-}
-.view-resources__video-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px 12px;
-}
-@container (min-width: 560px) {
-  .view-resources__video-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-@container (min-width: 860px) {
-  .view-resources__video-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 20px 16px;
-  }
-}
-
-.view-resources__video-grid--list {
-  grid-template-columns: minmax(0, 1fr) !important;
-  gap: 0 !important;
-}
-
 /* Watch progress (NEO-209): one meter line, then the status chips. */
 .view-resources__progress {
   display: flex;

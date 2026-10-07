@@ -305,6 +305,52 @@ export async function sendQuestionnaireLinkEmail(
   return id;
 }
 
+/**
+ * NEO-258 D1: a link to the patient's signed Historia clínica, valid `validDays`, never the PDF itself — an inbox keeps an
+ * attachment forever. Like the questionnaire link, the email names nothing clinical; replies go to the clinic.
+ */
+export async function sendDocumentLinkEmail(
+  to: string,
+  link: string,
+  recipient: EmailRecipient,
+  clinic: { name: string | null; email: string | null },
+  validDays: number,
+  tags?: EmailTags
+): Promise<string | null> {
+  const locale = recipient.language;
+  const greetingName = formatGreetingName(recipient, to);
+  const clinicName = clinic.name ?? emailT(locale, "email.questionnaireLink.yourClinic");
+
+  const bodyHtml = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.documentLink.title"))}</h1>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: greetingName }))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.documentLink.body", { clinic: clinicName }))}</p>
+    <p style="margin:0 0 16px;font-size:13px;color:#7a827e;">${escapeHtml(emailT(locale, "email.documentLink.expiryDays", { days: String(validDays) }))}</p>
+    <p style="margin:0;font-size:13px;color:#7a827e;">${escapeHtml(emailT(locale, "email.signedCopy.ignore"))}</p>`;
+
+  const socials = getSocialsForRegion(recipient.region);
+  const html = renderEmailLayout({
+    preheader: emailT(locale, "email.documentLink.title"),
+    bodyHtml,
+    cta: { text: emailT(locale, "email.documentLink.cta"), href: link },
+    footerTagline: emailT(locale, "email.footer.tagline"),
+    footerCities: emailT(locale, "email.footer.cities"),
+    footerCopyright: emailT(locale, "email.footer.copyright", { year: String(new Date().getFullYear()) }),
+    supportLeadIn: emailT(locale, "email.footer.support"),
+    socials,
+  });
+
+  return sendEmail("document link email", {
+    to,
+    subject: emailT(locale, "email.documentLink.subject", { clinic: clinicName }),
+    html,
+    attachments: getEmailAttachments(socials),
+    ...(clinic.email ? { replyTo: clinic.email } : {}),
+    fromName: clinicFromName(clinic.name),
+    ...(tags ? { tags } : {}),
+  });
+}
+
 export interface LeadOfferLinks {
   /** Plain link to the marketing page — no prefill, just "learn more". */
   offerLink: string;

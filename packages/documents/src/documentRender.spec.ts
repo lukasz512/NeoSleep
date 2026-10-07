@@ -226,6 +226,56 @@ describe("document system (header, title, banner, sections, signatures, footer)"
     expect(html).toContain("Sí = 1 punto");
   });
 
+  it("Historia clínica (NEO-249): the consent's header, phone + email in the banner, oral exam on page 2, the full informed consent on page 3", () => {
+    const html = renderDocumentHtml("historiaEndo", "mx", "<p>historia</p>", { informedConsent: "<p>CONSENT-DAM-BODY</p>" });
+    const body = html.slice(html.indexOf("<body>"));
+    const page2 = body.indexOf('<div class="hc-p2">');
+    const page3 = body.indexOf('<div class="hc-p3">');
+    expect(body.slice(0, body.indexOf("</header>"))).toContain('<span class="logo">');
+    expect(body).not.toContain("hc-mono");
+    expect(body).toContain('data-field="telefono"');
+    expect(body).toContain('data-field="email"');
+    expect(body).not.toMatch(/Ocupación|Estado civil/);
+    expect(body.indexOf("Exploración de Cavidad Oral")).toBeGreaterThan(page2);
+    expect(page3).toBeGreaterThan(page2);
+    expect(body.indexOf("CONSENT-DAM-BODY")).toBeGreaterThan(page3);
+    expect(body.slice(page3)).toContain('<span class="doc-cat">Consentimiento informado</span>');
+    expect(body.slice(page3)).toContain('data-field="firma_paciente"');
+  });
+
+  it("Historia clínica (NEO-249 D1/D2): one consent — the record consent follows the informed consent on page 3, page 2 keeps only the doctor's signature; a stamp can replace the patient's line", () => {
+    const html = renderDocumentHtml("historiaEndo", "mx", "<p>RECORD-CONSENT</p>", { informedConsent: "<p>CONSENT-DAM-BODY</p>" });
+    const body = html.slice(html.indexOf("<body>"));
+    const page2 = body.slice(body.indexOf('<div class="hc-p2">'), body.indexOf('<div class="hc-p3">'));
+    const page3 = body.slice(body.indexOf('<div class="hc-p3">'));
+    expect(page2).not.toContain("RECORD-CONSENT");
+    expect(page2).not.toContain('data-field="firma_paciente"');
+    expect(page2).toContain('data-field="firma_doctor"');
+    expect(page3.indexOf("RECORD-CONSENT")).toBeGreaterThan(page3.indexOf("CONSENT-DAM-BODY"));
+    expect(page3.indexOf('data-field="consent_stamp"')).toBeGreaterThan(page3.indexOf("RECORD-CONSENT"));
+    expect(body.match(/data-field="firma_paciente"/g)).toHaveLength(1);
+  });
+
+  it("Historia clínica draws the ATM skull and the STOP-Bang gauge once each, both on page 2 next to their tables (NEO-251)", () => {
+    const html = renderDocumentHtml("historiaEndo", "mx", "<p>x</p>");
+    const body = html.slice(html.indexOf("<body>"));
+    const page2 = body.indexOf('<div class="hc-p2">');
+    expect(body.match(/<svg class="hc-skull"/g)).toHaveLength(1);
+    expect(body.match(/<svg class="hc-gauge"/g)).toHaveLength(1);
+    expect(body.indexOf('<svg class="hc-skull"')).toBeGreaterThan(page2);
+    const total = body.indexOf('<div class="hc-sb-t">');
+    expect(body.indexOf('<svg class="hc-gauge"')).toBeGreaterThan(total);
+    expect(body.indexOf('<svg class="hc-gauge"')).toBeLessThan(body.indexOf('<p class="hc-sb-note">'));
+  });
+
+  it("Historia clínica header lets values wrap so a long patient name never runs over the date of birth (NEO-257)", () => {
+    const html = renderDocumentHtml("historiaEndo", "mx", "<p>x</p>");
+    const css = html.slice(0, html.indexOf("<body>"));
+    expect(css).not.toMatch(/\.doc-fields dd\s*\{[^}]*white-space:\s*nowrap/);
+    expect(css).not.toMatch(/\.doc-fields dt,\s*body > \.doc-fields dd\s*\{[^}]*nowrap/);
+    expect(css).toMatch(/body > \.doc-fields dd\s*\{[^}]*overflow-wrap:\s*break-word/);
+  });
+
   it("footer escapes names typed into the app", () => {
     const html = renderDocumentFooterHtml("NSL-SB v1", "mx", { subject: '<img src=x onerror="alert(1)">', issuer: ["A & B <Clinic>"] });
     expect(html).not.toContain("<img");

@@ -389,15 +389,15 @@ export function countPdfPages(pdf: Uint8Array): number {
 const PX_PER_MM = 96 / 25.4;
 const A4_MM = { width: 210, height: 297 };
 /** How many extra print passes the signature push may take on a multi-page document, where the DOM estimate can overshoot. */
-const SIGNATURE_PUSH_ATTEMPTS = 4;
+const SIGNATURE_PUSH_ATTEMPTS = 5;
 
 /**
  * Page-aware layout (Łukasz, 2026-09-26), applied to every generated PDF:
- * - fits on one page → keep the compact layout, only move the signatures
- *   down to the bottom of the page;
+ * - fits on one page → keep the compact layout;
  * - runs onto more pages → switch to the roomier layout (`doc-roomy` on
  *   <html>: more air around the title, see docTheme.css) unless that adds
- *   a page, then move the signatures to the bottom of the last page.
+ *   a page;
+ * - then every signature block moves to the bottom of its page (NEO-252).
  * Orphan control (a heading never ends a page, question rows and signature
  * blocks never split) is plain CSS in the templates.
  *
@@ -427,48 +427,68 @@ export async function fitPageLayout(
   await page.setViewport({ width: Math.round((A4_MM.width - mm(margin.left) - mm(margin.right)) * PX_PER_MM), height: 1000 });
   await page.emulateMediaType("print");
   const pageHeight = (A4_MM.height - mm(margin.top) - mm(margin.bottom)) * PX_PER_MM;
-  const measured = await page.evaluate(() => {
-    const blocks = document.querySelectorAll<HTMLElement>(".sig-panels");
-    const last = blocks[blocks.length - 1];
-    if (!last) return null;
-    // The signatures are the last printed block (only screen-only content follows). Not
-    // documentElement.scrollHeight: that never reports less than the viewport height.
-    return { contentHeight: last.getBoundingClientRect().bottom + window.scrollY, marginTop: parseFloat(getComputedStyle(last).marginTop) || 0 };
-  });
-  if (!measured) return pdf;
+  // Every signature block goes to the bottom of its own page (NEO-252: the Historia clínica's doctor
+  // on page 2 and patient on the consent's last page). Where a block lands is estimated from the
+  // laid-out position inside its section — the run since the last forced page break — so a section
+  // that starts on a fresh page is measured from that page's top, not from the document's.
+  const blocks = await page.evaluate((height) => {
+    const origins = Array.from(document.querySelectorAll<HTMLElement>("body *"))
+      .filter((el) => getComputedStyle(el).breakBefore === "page")
+      .map((el) => el.getBoundingClientRect().top + window.scrollY);
+    const placed = Array.from(document.querySelectorAll<HTMLElement>(".sig-panels")).map((block) => {
+      const box = block.getBoundingClientRect();
+      const top = box.top + window.scrollY;
+      const origin = Math.max(0, ...origins.filter((o) => o <= top));
+      const offset = (top - origin) % height;
+      // A block that doesn't fit where it is moves whole to the next page (break-inside: avoid).
+      const bottom = offset + box.height <= height ? offset + box.height : box.height;
+      return { origin, pageIndex: Math.floor((top - origin) / height), marginTop: parseFloat(getComputedStyle(block).marginTop) || 0, free: height - bottom };
+    });
+    // Only the last block on a page moves; one above it on the same page stays put.
+    return placed.map((b, i) => ({ ...b, pinned: !placed.slice(i + 1).some((n) => n.origin === b.origin && n.pageIndex === b.pageIndex) }));
+  }, pageHeight);
 
-  const setPush = (push: number) =>
-    page.evaluate((top) => {
-      const blocks = document.querySelectorAll<HTMLElement>(".sig-panels");
-      blocks[blocks.length - 1].style.marginTop = `${top}px`;
-    }, measured.marginTop + push);
-  const tryPush = async (push: number) => {
-    await setPush(push);
+  const setPush = (index: number, push: number) =>
+    page.evaluate(
+      (i, top) => {
+        document.querySelectorAll<HTMLElement>(".sig-panels")[i].style.marginTop = `${top}px`;
+      },
+      index,
+      blocks[index].marginTop + push
+    );
+  const tryPush = async (index: number, push: number) => {
+    await setPush(index, push);
     const candidate = await print();
     return countPdfPages(candidate) === pages ? candidate : null;
   };
 
-  // Free space on the last page if nothing were pushed down by break rules (exact on a one-page
-  // document); some slack for rounding. If that overshoots, binary-search the largest push that
-  // keeps the page count.
-  const estimate = Math.floor(pageHeight * pages - measured.contentHeight - 12);
-  if (estimate <= 8) return pdf;
-  const full = await tryPush(estimate);
-  if (full) return full;
-  let best = pdf;
-  let low = 0;
-  let high = estimate;
-  for (let attempt = 0; attempt < SIGNATURE_PUSH_ATTEMPTS; attempt++) {
-    const mid = Math.floor((low + high) / 2);
-    const candidate = await tryPush(mid);
-    if (candidate) {
-      best = candidate;
-      low = mid;
-    } else {
-      high = mid;
+  // Exact on a section without inner break rules; some slack for rounding. If that overshoots
+  // (a page count change), binary-search the largest push that keeps the page count.
+  for (const [index, block] of blocks.entries()) {
+    const estimate = Math.floor(block.free - 12);
+    if (!block.pinned || estimate <= 8) continue;
+    const full = await tryPush(index, estimate);
+    if (full) {
+      pdf = full;
+      continue;
     }
+    let best = 0;
+    let low = 0;
+    let high = estimate;
+    for (let attempt = 0; attempt < SIGNATURE_PUSH_ATTEMPTS; attempt++) {
+      const mid = Math.floor((low + high) / 2);
+      const candidate = await tryPush(index, mid);
+      if (candidate) {
+        pdf = candidate;
+        best = mid;
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+    await setPush(index, best); // the DOM keeps the push the kept PDF was printed with
   }
-  return best;
+  return pdf;
 }
 
 export async function renderHtmlToPdf(html: string, options: RenderHtmlToPdfOptions = {}): Promise<Uint8Array> {

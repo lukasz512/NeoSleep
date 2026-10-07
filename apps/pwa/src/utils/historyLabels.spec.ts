@@ -10,6 +10,7 @@ import {
   isClinicalHistoryEntry,
   groupHistoryByDay,
   historyDayLabel,
+  historyActorLabel,
 } from "./historyLabels";
 import en from "@i18n/en.json";
 import pl from "@i18n/pl.json";
@@ -270,6 +271,68 @@ describe("history sentence i18n parity", () => {
         expect(status, `missing ${locale} statusChanged.${entityType}`).toBeTruthy();
         expect(status as string).toContain("{status}");
       }
+    }
+  });
+});
+
+// CORE-160: the patient's own answers and the clinical entries read as sentences, with the patient as author.
+describe("patient answers and clinical entries (CORE-160)", () => {
+  const h = (action: string, entity_type: string, entity_after: Record<string, unknown> | null = null, entity_before: Record<string, unknown> | null = null) =>
+    historyHeadline(tEn, { action, entity_type, entity_before, entity_after });
+
+  it("says what the patient answered from the appointment email", () => {
+    expect(h("update", "Appointment", { patient_response: "confirmed" }, { patient_response: null })).toBe("Patient confirmed the appointment");
+    expect(h("update", "Appointment", { patient_response: "cannot_attend" }, { patient_response: "confirmed" })).toBe("Patient can't attend the appointment");
+    expect(historyHeadlineCoversChanges({ action: "update", entity_type: "Appointment", entity_before: null, entity_after: { patient_response: "confirmed" } })).toBe(true);
+  });
+
+  it("says the patient stopped appointment emails", () => {
+    expect(h("update", "Patient", { appointment_emails: "stopped" })).toBe("Patient stopped appointment emails");
+  });
+
+  it("names the new primary doctor", () => {
+    expect(h("update", "Patient", { status: "active", practitioner: "Dr. Ana Ruiz" }, { status: "active", practitioner: "Dr. Luis Paz" })).toBe("Primary doctor changed to Dr. Ana Ruiz");
+  });
+
+  it("reads care team, consent, clinical forms, documents and device orders as sentences", () => {
+    expect(h("create", "PatientCareTeam", { practitioner: "Dr. Ana Ruiz", source: "manual" })).toBe("Doctor added to the care team");
+    expect(h("delete", "PatientCareTeam")).toBe("Doctor removed from the care team");
+    expect(h("create", "Consent", { purpose: "informedConsent" })).toBe("Consent signed");
+    expect(h("create", "MedicalHistoryQuestionnaire")).toBe("Medical history filled in");
+    expect(h("create", "StopBangScreening")).toBe("STOP-BANG screening filled in");
+    expect(h("create", "OralExam")).toBe("Oral exam recorded");
+    expect(h("create", "TmjExam")).toBe("TMJ exam recorded");
+    expect(h("create", "FileAttachment", { document_type: "study_upload" })).toBe("Document uploaded");
+    expect(h("delete", "FileAttachment")).toBe("Document deleted");
+    expect(h("create", "PartnerOrder")).toBe("Device order sent");
+    expect(h("status_change", "PartnerOrder")).toBe("Device order status updated");
+    expect(h("comment", "PartnerOrder")).toBe("Comment added to the device order");
+    expect(h("notify", "QuestionnaireRequest")).toBe("Email sent to the patient");
+  });
+
+  it("renders care team source and consent purpose in words, never the code", () => {
+    expect(historyValueLabel(tEn, "PatientCareTeam", "source", "former_primary")).toBe("former primary doctor");
+    expect(historyValueLabel(tEn, "Consent", "purpose", "informedConsent")).toBe("Informed consent");
+  });
+
+  it("marks consent, clinical forms and documents as clinical", () => {
+    for (const entity_type of ["Consent", "MedicalHistoryQuestionnaire", "StopBangScreening", "OralExam", "TmjExam", "FileAttachment"]) {
+      expect(isClinicalHistoryEntry({ entity_type }), entity_type).toBe(true);
+    }
+  });
+
+  it("names the patient as author when they acted from a link, else the user or the system", () => {
+    expect(historyActorLabel(tEn, { user_name: null, actor: "patient" })).toBe("Patient");
+    expect(historyActorLabel(tEn, { user_name: "Ana Ruiz", actor: null })).toBe("Ana Ruiz");
+    expect(historyActorLabel(tEn, { user_name: null, actor: null })).toBe("System");
+  });
+
+  it("has every new headline in every locale", () => {
+    const messages: Record<string, Record<string, unknown>> = { en, pl, mx };
+    const keys = Object.keys(en).filter((k) => /^app\.history\.(patientResponse|appointmentEmails|primaryDoctorChanged|careTeamSource|consentPurpose|actor\.patient)/.test(k));
+    expect(keys.length).toBeGreaterThan(5);
+    for (const [locale, dict] of Object.entries(messages)) {
+      for (const key of keys) expect(dict[key], `missing ${locale}: ${key}`).toBeTruthy();
     }
   });
 });

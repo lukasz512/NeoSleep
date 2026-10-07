@@ -64,6 +64,26 @@ describe("insertDiagnostic dedup (real Postgres)", () => {
     expect(all[0]).toMatchObject({ count: 2, status: "open", user_id: "user-1", tenant_slug: "test" });
   });
 
+  // CORE-152: errorHandler records fire-and-forget, so two failing requests at once used
+  // to both miss the UPDATE and both INSERT — two groups with count 1, two "new error"
+  // emails. CI caught it as a flaky problemReport.spec.
+  it("counts simultaneous repeats into one row and reports it new exactly once", async () => {
+    const own = `zzdedupconcurrent ${uniqueWord()}`;
+    try {
+      // Warm the pool first: opening fresh connections one by one would spread the
+      // writes out in time and hide the race.
+      await Promise.all(Array.from({ length: 10 }, () => getDb().query("SELECT pg_sleep(0.05)")));
+      const results = await Promise.all(
+        Array.from({ length: 10 }, () => insertDiagnostic({ level: "error", message: `${own} order ${randomUUID()}`, source: "api", env: "test" }))
+      );
+      const { rows: r } = await getDb().query("SELECT count FROM platform.diagnostics WHERE message LIKE $1", [`%${own}%`]);
+      expect(r).toEqual([{ count: 10 }]);
+      expect(results.filter((x) => x.isNew)).toHaveLength(1);
+    } finally {
+      await getDb().query("DELETE FROM platform.diagnostics WHERE message LIKE $1", [`%${own}%`]);
+    }
+  });
+
   it("does not merge the same message from another source or env", async () => {
     await insertDiagnostic({ level: "error", message: `${marker} order ${randomUUID()}`, source: "frontend", env: "test" });
     await insertDiagnostic({ level: "error", message: `${marker} order ${randomUUID()}`, source: "api", env: "production" });

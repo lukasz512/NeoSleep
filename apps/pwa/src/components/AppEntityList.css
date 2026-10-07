@@ -521,6 +521,15 @@
   font-variant-numeric: tabular-nums;
   background: rgba(var(--v-theme-on-surface), 0.08);
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  animation: app-entity-list-row-in 200ms cubic-bezier(0, 0, 0.2, 1) both;
+}
+/* Holds the number's place (20 px, as "0") while the counts load, breathing
+   like the skeleton rows, so the chip never changes width when it lands. */
+.app-entity-list__queue-count--pending {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  animation: app-entity-list-skeleton-breathe 1.6s ease-in-out infinite;
 }
 .app-entity-list__queue-count--attention {
   background: rgba(var(--v-theme-warning), 0.16);
@@ -890,7 +899,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .app-entity-list__table-wrap :deep(.v-data-table tbody tr),
-  .app-entity-list__skeleton-row {
+  .app-entity-list__skeleton-row,
+  .app-entity-list__queue-count {
     animation: none;
   }
 

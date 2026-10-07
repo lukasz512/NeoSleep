@@ -146,7 +146,8 @@
                   <template #label>{{ t("app.questionnaire.consentStep.privacyAccept") }}</template>
                 </VCheckbox>
                 <VCheckbox v-model="accepted" hide-details class="patient-questionnaire__consent" data-testid="consent-accept">
-                  <template #label>{{ t("app.questionnaire.consentStep.accept") }}</template>
+                  <!-- CORE-156: names every document this signature covers, plain text like the privacy box, joined the locale's way ("A y B"). -->
+                  <template #label>{{ t("app.questionnaire.consentStep.accept", { documents: signedDocumentList }, signedDocuments.length) }}</template>
                 </VCheckbox>
                 <!-- The patient's own request for a copy (legal, 2026-09-28): unticked by default, offered only for an address that is theirs alone. -->
                 <VCheckbox
@@ -449,6 +450,12 @@ function downloadCopy(copy: SignedCopy) {
 function stepTitle(s: PublicStep): string {
   return checklistItemTitle(t, s.key, s.label);
 }
+
+/** The documents the current signature accepts: one per consent step today, a list so one signature can cover several. */
+const signedDocuments = computed(() => (step.value?.type === "consent" ? [stepTitle(step.value)] : []));
+const signedDocumentList = computed(() =>
+  new Intl.ListFormat(DATE_LOCALES[locale.value as string] ?? "es-MX", { type: "conjunction" }).format(signedDocuments.value),
+);
 
 const cardTitle = computed(() => {
   if (phase.value === "invalid") return t("app.questionnaire.invalid.title");

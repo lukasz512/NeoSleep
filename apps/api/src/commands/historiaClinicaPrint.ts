@@ -13,9 +13,13 @@ import { ORAL_EXAM_QUESTIONS, STOP_QUESTIONS, BANG_QUESTIONS, TMJ_FINDINGS } fro
  */
 
 export interface HistoriaClinicaInput {
-  organizationName: string | null;
+  /** The patient's own contact details, printed in the banner (NEO-249); blank → a write-in line. */
+  patientPhone: string | null;
+  patientEmail: string | null;
   /** "YYYY-MM-DD" */
   birthDate: string | null;
+  /** identities.gender: male | female | other | prefer_not_to_say | null (NEO-253). */
+  gender: string | null;
   today: Date;
   history: MedicalHistoryRecord | null;
   oral: OralExamRecord | null;
@@ -30,6 +34,8 @@ export interface HistoriaClinicaPrint {
 }
 
 const YES_NO = ["Sí", "No"] as const;
+/** identities.gender → its Sexo box (index into sexOptions); prefer_not_to_say has no box. */
+const SEX_BOX: Record<string, number> = { female: 0, male: 1, other: 2 };
 /** The oral exam's yes/no findings still asked (has_tmj_finding was replaced by the ATM evaluation, migration 049). */
 const ORAL_FINDINGS = ORAL_EXAM_QUESTIONS.filter((q) => q !== "has_tmj_finding");
 /** STOP-Bang column → the template's state key (S, T, O, P, B, A, N, G). */
@@ -43,21 +49,10 @@ const SB_STATE: Record<(typeof STOP_QUESTIONS)[number] | (typeof BANG_QUESTIONS)
   neck_circumference_over_40cm: "sb_neck_over_40",
   is_male: "sb_is_male",
 };
-/** Words in a clinic's name that don't identify it (left out of the monogram). */
-const GENERIC_WORDS = new Set(["consultorio", "clínica", "clinica", "centro", "dental", "dentista", "hospital", "odontología", "odontologia", "de", "del", "la", "el", "y"]);
-
 /** A measurement as printed on the form: one decimal, dropped when whole, decimal comma except for English. */
 export function formatMeasure(value: number, locale: string): string {
   const text = Number.isInteger(value) ? String(value) : value.toFixed(1);
   return locale === "en" ? text : text.replace(".", ",");
-}
-
-/** The letterhead monogram: the initials of the last two identifying words ("Consultorio Dra. Lorena González" → "LG"). */
-export function clinicInitials(name: string | null): string {
-  const words = (name ?? "").trim().split(/\s+/).filter(Boolean);
-  const own = words.filter((w) => /^\p{Lu}/u.test(w) && !w.endsWith(".") && !GENERIC_WORDS.has(w.toLowerCase()));
-  const picked = own.length ? own.slice(-2) : words.slice(0, 1);
-  return picked.map((w) => w[0]!.toUpperCase()).join("");
 }
 
 /** Whole years between a "YYYY-MM-DD" birth date and `today` (read as text: no time-zone shift). */
@@ -67,12 +62,22 @@ export function ageOn(birthDate: string, today: Date): number {
   return ty - y - (tm < m || (tm === m && td < d) ? 1 : 0);
 }
 
+/**
+ * The patient's recorded gender ticks its box (NEO-253). Only with no gender on
+ * record does a STOP-Bang "G" = yes stand in for Hombre; a "no" to G is not read as Mujer.
+ */
+function sexChoice(options: string[], gender: string | null, screening: StopBangRecord | null): ChoiceField {
+  const box = gender ? SEX_BOX[gender] : screening?.is_male ? SEX_BOX.male : undefined;
+  return box === undefined ? options : { options, selected: options[box]! };
+}
+
 export function historiaClinicaPrintFields(locale: string, input: HistoriaClinicaInput): HistoriaClinicaPrint {
   const { history, oral, tmj, screening } = input;
   const states: Record<string, string> = {};
   const sexOptions = [documentT(locale, "documents.historiaEndo.sex.female"), documentT(locale, "documents.historiaEndo.sex.male"), documentT(locale, "documents.historiaEndo.sex.other")];
   const fields: Record<string, string> = {
-    clinic_initials: clinicInitials(input.organizationName),
+    telefono: input.patientPhone ?? "",
+    email: input.patientEmail ?? "",
     edad: input.birthDate ? documentT(locale, "documents.historiaEndo.ageYears", { n: String(ageOn(input.birthDate, input.today)) }) : "",
     expediente: "",
     score_zone_label: "",
@@ -85,7 +90,7 @@ export function historiaClinicaPrintFields(locale: string, input: HistoriaClinic
     neck_value: "",
   };
   const choices: Record<string, ChoiceField> = {
-    sexo: screening?.is_male ? { options: sexOptions, selected: sexOptions[1] } : sexOptions,
+    sexo: sexChoice(sexOptions, input.gender, screening),
     dq_blank: YES_NO,
   };
 
