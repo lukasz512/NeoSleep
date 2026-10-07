@@ -55,5 +55,12 @@
     "typescript": "^5.9.3",
     "vite": "catalog:",
     "vue-eslint-parser": "^10.4.1"
+  },
+  "pnpm": {
+    "overrides": {
+      "shell-quote@<1.11.0": "^1.11.0",
+      "source-map-js@<1.2.2": "^1.2.2",
+      "serialize-javascript@<7.0.5": "^7.0.5"
+    }
   }
 }

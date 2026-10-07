@@ -103,6 +103,18 @@ describe("googleCalendar service", () => {
     expect(eventsInsertMock).not.toHaveBeenCalled();
   });
 
+  // CORE-185 / CodeQL #2: the email regex is quadratic on "a@" + many dots, and
+  // POST /booking/book is public — an over-long email must be rejected up front.
+  it("bookSlot rejects a 50k-char email fast (no ReDoS)", async () => {
+    const { bookSlot, ValidationError } = await importService(true);
+    const { start, end } = validSlotFixture();
+    const t0 = performance.now();
+    await expect(
+      bookSlot({ start, end, name: "Dr. Test", email: "a@" + ".".repeat(50_000) + " " })
+    ).rejects.toThrow(ValidationError);
+    expect(performance.now() - t0).toBeLessThan(50);
+  });
+
   it("bookSlot rejects a slot outside the 1-day..2-month bookable window", async () => {
     const { bookSlot, ValidationError } = await importService(true);
     const soon = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(); // 2h out — under the 1-day minimum

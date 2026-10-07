@@ -56,6 +56,28 @@ describe("frameTimestampSec", () => {
 });
 
 describe("getPoster", () => {
+  // CORE-185 / CodeQL #30 #16: the id comes from the URL — a non-partner id must
+  // never reach the partner, the failure cache or the log.
+  it("returns null for a non-numeric id without resolving or logging it", async () => {
+    const deps = fakeDeps();
+    __setPosterDepsForTests(deps);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    expect(await getPoster("26\n[fake] ERROR %s", "mx")).toBeNull();
+    expect(deps.resolveSource).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("logs a failure with a fixed format string, never the id as the format", async () => {
+    __setPosterDepsForTests(fakeDeps({ resolveSource: vi.fn(async () => Promise.reject(new Error("partner down"))) }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    await getPoster("9131", "mx");
+    expect(warn).toHaveBeenCalledWith("[posters] no poster for video %s: %s", "9131", "partner down");
+    warn.mockRestore();
+  });
+
   it("makes a poster once, stores it, and serves the second request from memory", async () => {
     const deps = fakeDeps();
     __setPosterDepsForTests(deps);

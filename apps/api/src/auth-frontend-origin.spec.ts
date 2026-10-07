@@ -74,7 +74,7 @@ describe("Reset-password link with a multi-origin FRONTEND_URL", () => {
       .send({ email });
 
     expect(res.status).toBe(200);
-    expect(res.body.devResetLink as string).toMatch(new RegExp(`^${DEV_ORIGIN}/reset-password\\?`));
+    expect((res.body.devResetLink as string).startsWith(`${DEV_ORIGIN}/reset-password?`)).toBe(true);
   });
 
   it("falls back to the first configured origin when Origin doesn't match either", async () => {
@@ -88,6 +88,6 @@ describe("Reset-password link with a multi-origin FRONTEND_URL", () => {
       .send({ email }); // no Origin header — same as a server-to-server or non-browser call
 
     expect(res.status).toBe(200);
-    expect(res.body.devResetLink as string).toMatch(new RegExp(`^${PROD_ORIGIN}/reset-password\\?`));
+    expect((res.body.devResetLink as string).startsWith(`${PROD_ORIGIN}/reset-password?`)).toBe(true);
   });
 });

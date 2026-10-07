@@ -233,7 +233,7 @@ async function loadOrMake(resourceId: string, locale: string): Promise<Poster | 
       "application/json"
     );
   } catch (err) {
-    console.warn(`[posters] storage upload failed for video '${resourceId}':`, err);
+    console.warn("[posters] storage upload failed for video %s:", resourceId, err);
   }
   return poster;
 }
@@ -245,7 +245,8 @@ function remember(resourceId: string, key: string, poster: Poster): void {
 
 /** The poster for one video, or null when it can't be made (no ffmpeg on this host, partner down) — the tile then shows its fallback cover. */
 export function getPoster(resourceId: string, locale: string): Promise<Poster | null> {
-  if (!deps.ffmpegPath) return Promise.resolve(null);
+  // Partner ids are numeric; anything else came from a hand-made URL (CORE-185).
+  if (!deps.ffmpegPath || !/^\d{1,10}$/.test(resourceId)) return Promise.resolve(null);
   const last = failedAt.get(resourceId);
   if (last && Date.now() - last < FAILURE_COOLDOWN_MS) return Promise.resolve(null);
 
@@ -256,7 +257,7 @@ export function getPoster(resourceId: string, locale: string): Promise<Poster | 
   const p = loadOrMake(resourceId, locale)
     .catch((err) => {
       failedAt.set(resourceId, Date.now());
-      console.warn(`[posters] no poster for video '${resourceId}':`, err instanceof Error ? err.message : err);
+      console.warn("[posters] no poster for video %s: %s", resourceId, err instanceof Error ? err.message : err);
       return null;
     })
     .finally(() => inFlight.delete(flightKey));

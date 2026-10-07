@@ -170,7 +170,9 @@ export async function bookSlot(input: BookSlotInput): Promise<{ start: string; e
     throw new ValidationError("Invalid start/end time");
   }
   if (!input.name?.trim()) throw new ValidationError("name is required");
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.email ?? "")) throw new ValidationError("Invalid email format");
+  // Length cap first: the regex is quadratic on long dot runs and this is a public endpoint (CORE-185).
+  const email = input.email ?? "";
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new ValidationError("Invalid email format");
 
   // Defense in depth — never trust the client to only submit a slot that was
   // actually in the list it was shown (min 1 day out, max 2 months out).

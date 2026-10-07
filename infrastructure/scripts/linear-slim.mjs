@@ -44,7 +44,8 @@ const NOISE = [
 ];
 
 /** Decisions are always kept, whatever their length. */
-const DECISION = /^(\*\*)?(\[decision-form\]|decisions?\b|decided\b)|\(Łukasz[,)]/i;
+// Two alternatives: a decision opener at the start, or a "(Łukasz, …)" attribution anywhere.
+const DECISION = /(?:^(?:\*\*)?(?:\[decision-form\]|decisions?\b|decided\b))|(?:\(Łukasz[,)])/i;
 
 const POLISH_WORDS = new Set([
   "nie", "jest", "sie", "się", "zeby", "żeby", "chce", "chcę", "chcialbym", "chciałbym", "potrzebuje", "potrzebuję",
@@ -102,9 +103,9 @@ export function splitSections(description) {
 }
 
 function linkKind(url, title) {
-  if (/github\.com\/[^/]+\/[^/]+\/pull\/\d+/.test(url)) return "pr";
-  if (/github\.com\/[^/]+\/[^/]+\/actions\/runs\//.test(url)) return "ci";
-  if (/claude\.ai\/(code\/)?artifact\//.test(url)) return /spec|story|decision|form/i.test(title ?? "") ? "spec" : "artifact";
+  if (/^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/.test(url)) return "pr";
+  if (/^https:\/\/github\.com\/[^/]+\/[^/]+\/actions\/runs\//.test(url)) return "ci";
+  if (/^https:\/\/claude\.ai\/(code\/)?artifact\//.test(url)) return /spec|story|decision|form/i.test(title ?? "") ? "spec" : "artifact";
   return "other";
 }
 

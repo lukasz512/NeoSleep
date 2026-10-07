@@ -91,6 +91,29 @@ test("keeps decisions, Łukasz's own Polish comments and pwa-dev verification; d
   );
 });
 
+// CORE-185 / CodeQL #48 #49: the link kind comes from the host, not from text anywhere in the URL.
+test("a link is a PR/artifact only on github.com / claude.ai itself", () => {
+  const { item } = slimIssue(
+    issue({
+      attachments: {
+        nodes: [
+          { url: "https://evil.test/?u=github.com/a/b/pull/1" },
+          { url: "https://evil.test/claude.ai/artifact/x" },
+          { url: "https://github.com/a/b/pull/2" },
+        ],
+      },
+    }),
+  );
+  assert.deepEqual(item.links.map((l) => l.kind), ["other", "other", "pr"]);
+});
+
+test("an attribution '(Łukasz, …)' mid-comment still marks a decision", () => {
+  const { comments } = slimIssue(
+    issue({ comments: { nodes: [{ body: "Quiet hours use the recipient's zone (Łukasz, 2026-09-28).", createdAt: "2026-10-02T00:00:00Z" }] } }),
+  );
+  assert.equal(comments.length, 1);
+});
+
 test("a kept comment is at most 5 lines", () => {
   const body = ["Decisions:", "- a", "- b", "- c", "- d", "- e", "- f"].join("\n");
   const short = shortComment(body);

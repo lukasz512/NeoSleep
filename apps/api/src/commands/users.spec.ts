@@ -55,7 +55,7 @@ describe("ResetUserPasswordCommand", () => {
       expect(sendPasswordResetEmailMock).toHaveBeenCalledTimes(1);
       const [to, resetLink] = sendPasswordResetEmailMock.mock.calls[0]!;
       expect(to).toBe(targetEmail);
-      expect(resetLink).toMatch(new RegExp(`^${frontendOrigin}/reset-password\\?token=`));
+      expect(String(resetLink).startsWith(`${frontendOrigin}/reset-password?token=`)).toBe(true);
       expect(resetLink).not.toContain(",");
     });
   });
