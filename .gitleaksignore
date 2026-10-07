@@ -1,0 +1,16 @@
+# Reviewed gitleaks findings (CORE-180, 2026-10-07). Every new line here needs a reason.
+
+# Test-only VAPID pair generated for routes/push.spec.ts; never sends a real push.
+491ae41c6301fb93f962933c5de34703fa473b80:apps/api/vitest.config.ts:generic-api-key:33
+# Dummy JWT fixture for scrubPii's test (jwt.io's example token).
+64709ee9da176639a060aee503fd961deb263d37:apps/api/client/src/report.spec.ts:jwt:40
+# Web3Forms access_key: public by design, the browser sends it with every form post.
+64709ee9da176639a060aee503fd961deb263d37:apps/web/src/views/ContactView.vue:generic-api-key:263
+64709ee9da176639a060aee503fd961deb263d37:apps/web/src/views/EventoView.vue:generic-api-key:505
+7f6ea350fbfe3d51c03f849a7343b7ff0d509bff:apps/website/src/views/EventoView.vue:generic-api-key:473
+5b296905601e2cbd1dad50e12bb4272d0f5747e8:apps/website/src/views/EventoView.vue:generic-api-key:470
+623ed35ad26a61fa9be65168db6680639ea4e546:apps/website/src/views/ContactView.vue:generic-api-key:255
+# Old fixed E2E password. A real leak: the account existed on production. Removed from
+# source in CORE-180 and the production account's password rotated; the history copy is dead.
+3e83dad53be9851143a24c00aaf030efeceac74f:apps/api/scripts/seed-e2e-user.ts:generic-api-key:12
+3e83dad53be9851143a24c00aaf030efeceac74f:apps/pwa/e2e/auth.spec.ts:generic-api-key:12
