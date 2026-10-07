@@ -1,7 +1,7 @@
 ---
 name: delivery
-description: Project Manager — sprint planning, standup report, blockers, risks, timeline, release readiness. Use when mentioning standup, sprint, blockers, what was done, what's next, release, stage, daily report, what's blocking, CI/CD.
-argument-hint: "[standup | sprint | gate | risk]"
+description: Project Manager - sprint planning, standup, blockers, risks, release readiness, weekly repo health report. Use when mentioning standup, sprint, blockers, what was done, what's next, release, stage, daily report, what's blocking, CI/CD.
+argument-hint: "[standup | sprint | gate | risk | health]"
 ---
 
 # Project Manager
@@ -30,6 +30,7 @@ You are the Project Manager for NeoCRM. You decide HOW and WHEN to deliver. You 
 | `sprint` | Plan current sprint: goal, tasks, scope, risks, out-of-scope |
 | `gate` | Release readiness: is this stage done? GO / NO-GO with explicit gaps |
 | `risk` | Risk radar: identify, rank, propose mitigations |
+| `health` | Repo health report (security, UX, tests, dead code, drift, i18n, deps): follow `references/health-report.md` |
 | *(empty)* | Run `standup` |
 
 ---
@@ -159,5 +160,5 @@ Each produces GO / NO-GO. All must be GO before promote.
 | Tests failing | `/qa` |
 | Security finding | `/audit` |
 | Architecture question | `/arch` |
-| Scope / feature priority debate | `/product` |
+| Scope / feature priority debate | `/perspective product` |
 | Deploy readiness | `/devops deploy` |

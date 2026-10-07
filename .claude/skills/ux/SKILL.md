@@ -185,4 +185,4 @@ CSS rules for website (non-negotiable):
 | i18n key missing or parity broken | `/qa i18n` |
 | Component too complex (200+ lines) | `/dev refactor` |
 | Flow requires new DB field | `/arch new-entity` |
-| Accessibility blocker (WCAG fail) | `/certification` |
+| Accessibility blocker (WCAG fail) | `/perspective certification` |

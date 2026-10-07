@@ -158,7 +158,7 @@ For `query` mode — show result + EXPLAIN ANALYZE summary (actual rows vs estim
 | Trigger | Delegate to |
 |---|---|
 | New table design needed | `/arch new-entity [name]` first |
-| GDPR data map question | `/legal` |
+| GDPR data map question | `/perspective legal` |
 | Missing test for a query | `/qa` |
 
 > **Note**: This skill will be updated after sandbox cleanup to include full migration authoring mode.

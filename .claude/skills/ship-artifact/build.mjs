@@ -432,12 +432,41 @@ function renderIndex(argv) {
   console.log(`3. node .claude/skills/ship-artifact/build.mjs index --published ${url}`);
 }
 
+// A non-UI change (lib/change-shape.sh says "light", CORE-175 D2) is handed over with one
+// Linear comment carrying the PR link — no page, no Change Index row.
+function light(argv) {
+  const arg = (name) => {
+    const i = argv.indexOf(name);
+    return i === -1 ? undefined : argv[i + 1];
+  };
+  if (!TICKET_FROM_BRANCH) throw new Error(`branch ${BRANCH} has no ticket id`);
+  const pr = arg("--pr") ?? prUrl(TICKET_FROM_BRANCH, arg("--title"), "");
+  if (!pr) throw new Error("--pr <compare or pull url> is required (no GitHub remote found)");
+  const path = markerPath(TICKET_FROM_BRANCH);
+  const previous = existsSync(path) ? JSON.parse(readFileSync(path, "utf-8")) : {};
+  const marker = {
+    ...previous,
+    light: true,
+    ticket: TICKET_FROM_BRANCH,
+    linearUrl: linearUrlOf(TICKET_FROM_BRANCH),
+    prUrl: pr,
+    ...(argv.includes("--linear-commented") ? { linearCommented: true } : {}),
+    ...(arg("--linear-status") ? { linearStatus: arg("--linear-status") } : {}),
+  };
+  mkdirSync(MARKER_DIR, { recursive: true });
+  writeFileSync(path, JSON.stringify(marker, null, 2) + "\n");
+  console.log(`light marker written: ${path}`);
+  console.log(`Linear comment for ${TICKET_FROM_BRANCH}: <2 sentences: what changed and why>\nPR: ${pr}\nBranch: \`${BRANCH}\``);
+  if (!marker.linearCommented) console.log("still missing for the quality gate: linearCommented");
+}
+
 const [cmd, ...rest] = process.argv.slice(2);
 try {
   if (cmd === "render") render(rest[0] ?? "");
   else if (cmd === "finalize") finalize(rest);
   else if (cmd === "index") renderIndex(rest);
-  else throw new Error("usage: build.mjs render <content.json> | finalize --url <artifact-url> [--linear-attached] [--linear-commented] [--linear-status <name>] | index [--page | --all | --published <url>]");
+  else if (cmd === "light") light(rest);
+  else throw new Error("usage: build.mjs render <content.json> | finalize --url <artifact-url> [--linear-attached] [--linear-commented] [--linear-status <name>] | index [--page | --all | --published <url>] | light [--pr <url>] [--linear-commented] [--linear-status <name>]");
 } catch (err) {
   console.error(`ship-artifact: ${err.message}`);
   process.exit(1);

@@ -212,5 +212,5 @@ If a breach is suspected:
 |---|---|
 | Missing test for a vulnerability | `/qa` |
 | Schema design is the root cause | `/arch` |
-| GDPR data map needs updating | `/legal` |
+| GDPR data map needs updating | `/perspective legal` |
 | All gates pass → document release sign-off | `/delivery` |
