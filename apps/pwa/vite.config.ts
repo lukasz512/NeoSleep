@@ -12,12 +12,22 @@ import type { Plugin } from "vite";
 import { sharedViteConfig } from "../../vite.shared.ts";
 import { injectBootSplash } from "./src/boot/splash.ts";
 import { NAVIGATE_FALLBACK_DENYLIST } from "./src/config/pwaFiles.ts";
+import { pwaBranding, type PwaBranding } from "./src/config/pwaBranding.ts";
 
 /** Paints the auth backdrop from static HTML before any JS runs — see src/boot/splash.ts. */
 function bootSplashPlugin(): Plugin {
   // "post": after Vite has injected the built CSS/JS links, which the splash
   // transform rewrites to be non-render-blocking.
   return { name: "neo-boot-splash", transformIndexHtml: { order: "post", handler: (html) => injectBootSplash(html) } };
+}
+
+/** iOS ignores the manifest icons and takes apple-touch-icon from index.html,
+ *  so the dev build swaps that link too (CORE-178). */
+function appleTouchIconPlugin(href: string): Plugin {
+  return {
+    name: "neo-apple-touch-icon",
+    transformIndexHtml: (html) => html.replace('href="/apple-touch-icon.png"', `href="${href}"`),
+  };
 }
 
 interface NeoPwaOptions {
@@ -43,7 +53,7 @@ function neoPwaPlugin(opts: NeoPwaOptions): ReturnType<typeof VitePWA> {
     // scripts/generate-pwa-icons.mjs (NEO-87). Before they existed every icon
     // URL fell through to the SPA's index.html, so Chrome never offered
     // "Install app" and iOS used a screenshot as the home-screen icon.
-    includeAssets: ["favicon.ico", "apple-touch-icon.png"],
+    includeAssets: ["favicon.ico", "apple-touch-icon.png", "apple-touch-icon-dev.png"],
     manifest: {
       id:               opts.startUrl ?? "/",
       name:             opts.name,
@@ -99,6 +109,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Build number + channel are set by CI (see deploy-pwa.yml).
 const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf8")) as { version: string };
 process.env.VITE_APP_VERSION = pkg.version;
+// Installed-app name + icons: the dev deploy looks different from prod (CORE-178).
+const branding: PwaBranding = pwaBranding({
+  channel: process.env.VITE_APP_CHANNEL,
+  version: pkg.version,
+  build: process.env.VITE_APP_BUILD,
+});
 // Every public Vuetify component entry (vuetify/components/VBtn, …), read
 // from the package's own components/index.js re-export list rather than a
 // glob — the lib/components folder also ships unfinished internals (e.g.
@@ -124,9 +140,13 @@ export default defineConfig(mergeConfig(sharedViteConfig(__dirname), {
     ...(devApiIsHttps ? [basicSsl()] : []),
     vue(),
     bootSplashPlugin(),
+    appleTouchIconPlugin(branding.appleTouchIcon),
     neoPwaPlugin({
-      name:        "NeoSleep",
-      shortName:   "NeoSleep",
+      name:            branding.name,
+      shortName:       branding.shortName,
+      icon192:         branding.icon192,
+      icon512:         branding.icon512,
+      iconMaskable512: branding.iconMaskable512,
       description: "Sales rep CRM for NeoSleep — manage HCPs, leads, and post-call forms.",
       startUrl:    "/",
     }),
