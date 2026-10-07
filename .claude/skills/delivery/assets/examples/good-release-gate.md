@@ -23,7 +23,7 @@
 
 ## Gate Results
 
-### Security `/audit`
+### Security `/qa security`
 | Check | Result | Notes |
 |---|---|---|
 | All new routes behind `requireAuth` | ✅ | 3/3 verified |
@@ -32,7 +32,7 @@
 | No secrets in frontend bundle | ✅ | `pnpm audit:bundle` clean |
 | Auth middleware regression test | ⚠️ | **Gap #1** |
 
-### Database `/dba`
+### Database `/arch db`
 | Check | Result | Notes |
 |---|---|---|
 | Migration has rollback SQL | ✅ | Tested on clean DB |

@@ -1,16 +1,12 @@
----
-name: worktree-clean
-description: Cleans up git worktrees and branches — merged ones go automatically (pnpm worktree:clean --auto, also run at every session start); this skill reports what's left (unmerged, dirty, locked) so Łukasz can decide on it. Use when asking to clean up worktrees, free disk space from .claude/worktrees, delete merged/stale branches, or to see what cleanup kept and why.
-argument-hint: "[--keep-remote]"
----
+<!-- Merged from the former /worktree-clean skill (CORE-175); invoked as /devops worktrees. -->
 
 # Worktree Clean
 
-> **Focus**: $ARGUMENTS — `--keep-remote` skips deleting branches on origin; empty means the normal flow.
+> **Focus**: the argument after the mode — `--keep-remote` skips deleting branches on origin; empty means the normal flow.
 
 Removes worktrees and branches that are really finished — nothing else. Rules and reasoning: [docs/stories/worktree-cleanup.md](../../../docs/stories/worktree-cleanup.md) (NEO-50) and [docs/stories/ship-rules-ticket-links-index-cleanup.md](../../../docs/stories/ship-rules-ticket-links-index-cleanup.md) (NEO-84).
 
-**Since NEO-84 (2026-09-26) merged work is removed without asking** — Łukasz's decision: a branch whose commits are all on `origin/dev` loses nothing when it goes. The SessionStart hook runs `worktree-clean.sh --auto` in the background (log: `.claude/local/worktree-clean.log`). The Linear "Done" check is gone: a ticket in Needs Review still has its code on dev, and a follow-up starts from a fresh worktree. What this skill is for now is the **KEEP** list.
+**Since NEO-84 (2026-09-26) merged work is removed without asking** — Łukasz's decision: a branch whose commits are all on `origin/dev` loses nothing when it goes. The SessionStart hook runs `worktree-clean.sh --auto` in the background (log: `.claude/local/worktree-clean.log`). The Linear "Done" check is gone: a ticket in Needs Review still has its code on dev, and a follow-up starts from a fresh worktree. What this mode is for now is the **KEEP** list.
 
 ## Step 1 — List
 

@@ -1,7 +1,7 @@
 ---
 name: devops
-description: DevOps Engineer — GitHub Actions CI/CD (FTP deploy for pwa/web), Render deploy for the API, secrets management, dev/prod environment management, future VPS/SSL planning, monitoring, rollback strategy. Use when setting up or fixing deployments, GitHub Actions workflows, Render config, environment variables, or planning how to serve the app across environments.
-argument-hint: "[deploy | rollback | logs | env | health | review]"
+description: DevOps Engineer — GitHub Actions CI/CD (FTP deploy for pwa/web), Render deploy for the API, secrets management, dev/prod environment management, future VPS/SSL planning, monitoring, rollback strategy. Use when setting up or fixing deployments, GitHub Actions workflows, Render config, environment variables, or planning how to serve the app across environments, or cleaning up worktrees/branches (what auto-cleanup kept and why).
+argument-hint: "[deploy | rollback | logs | env | health | review | worktrees]"
 ---
 
 # DevOps Engineer
@@ -31,6 +31,7 @@ You are the DevOps Engineer for NeoCRM. The developer is not a DevOps expert —
 | `env` | Audit `.env.example` vs secrets, check for missing or leaked vars |
 | `health` | Check health endpoints across environments (dev/prod) |
 | `review` | Full infra audit: workflows, secrets, nginx, SSL, rollback strategy |
+| `worktrees [--keep-remote]` | Worktree/branch cleanup report (KEEP list): follow `references/worktree-clean.md` |
 | *(empty)* | Run `review` |
 
 ---
@@ -159,6 +160,6 @@ Tracked in the project backlog as a deferred improvement, not urgent. Do not pre
 | Trigger | Delegate to |
 |---|---|
 | Build fails due to TypeScript or test errors | `/dev` or `/qa` |
-| Schema migration needed before deploy | `/dba` |
-| Pre-push gate not run | `/qa gate` then `/audit gate` |
+| Schema migration needed before deploy | `/arch db` |
+| Pre-push gate not run | `/qa gate` then `/qa security gate` |
 | Infrastructure architecture decision | `/arch` |

@@ -146,7 +146,7 @@ Separate lens from dedup above — this is about single-source-of-truth, not cop
 
 | Trigger | Delegate to |
 |---|---|
-| New table or DB schema change needed | `/arch` first, then `/dba` |
+| New table or DB schema change needed | `/arch` first, then `/arch db` |
 | New entity needs full pipeline (DB→view) | `/arch new-entity [name]` |
 | Test coverage needed for new code | `/qa` |
 | GDPR / personal data question | `/perspective legal` |
@@ -177,7 +177,7 @@ No BFF route, no DB table — that's `/arch new-entity`. Dev builds the frontend
 |---|---|
 | Error handling | [good-error-handling.md](assets/examples/good-error-handling.md) — middleware, platform.errors, frontend error surface |
 | App state | [good-app-state.md](assets/examples/good-app-state.md) — composable vs Pinia, decision tree, anti-patterns |
-| Entity pipeline | [good-entity-spec.md](../dba/assets/examples/good-entity-spec.md) — DB → Person/TPT → API → composable → view |
+| Entity pipeline | [good-entity-spec.md](../arch/assets/examples/good-entity-spec.md) — DB → Person/TPT → API → composable → view |
 | Lookup + i18n | [good-lookup-i18n.md](../arch/assets/examples/good-lookup-i18n.md) — see the caveat at the top of that file before trusting its column names |
 | Multi-tenant | [good-multi-tenant.md](../arch/assets/examples/good-multi-tenant.md) — `withTenant`, `SET LOCAL`, `requireAuth`, `RequestContext` |
 
