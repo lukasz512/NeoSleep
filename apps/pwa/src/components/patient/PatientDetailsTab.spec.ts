@@ -13,7 +13,7 @@ import { useAuthStore } from "../../stores/auth";
 import { CHECKLIST_UPDATED } from "../../composables/usePatientChecklist";
 import { useQueryCache } from "@pinia/colada";
 /** CORE-181: a write anywhere invalidates the patient's queries — what the card's parts listen to. */
-const invalidatePatient = (id: string) => useQueryCache().invalidateQueries({ key: ["patient", id] });
+const invalidatePatient = (id: string) => useQueryCache().invalidateQueries({ key: ["patient", id] }).catch(() => undefined);
 import { routes } from "../../router/routes";
 
 const apiFetch = vi.fn();

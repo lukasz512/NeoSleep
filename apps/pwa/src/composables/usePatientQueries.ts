@@ -58,10 +58,22 @@ export function usePatientPartQuery<T>(key: (id: string) => EntryKey, path: (id:
   });
 }
 
+/**
+ * Refetch every query of one patient. A refetch that fails is not thrown: the
+ * query keeps its last data and holds the error (the part shows its own state),
+ * so callers can fire and forget without an unhandled rejection.
+ */
+function invalidatePatientQueries(cache: ReturnType<typeof useQueryCache>, id: string): Promise<void> {
+  return cache.invalidateQueries({ key: [...patientKeys.root(id)] }).then(
+    () => undefined,
+    () => undefined,
+  );
+}
+
 /** After any write about this patient: every active part of the card refetches, inactive ones on next use. */
-export function useInvalidatePatient(): (id: string) => Promise<unknown> {
+export function useInvalidatePatient(): (id: string) => Promise<void> {
   const cache = useQueryCache();
-  return (id) => cache.invalidateQueries({ key: [...patientKeys.root(id)] });
+  return (id) => invalidatePatientQueries(cache, id);
 }
 
 export interface PatientUpdateVars {
@@ -107,6 +119,6 @@ export function useUpdatePatient<T extends Record<string, unknown>>() {
     onError: (_err, { id }, { previous }) => {
       if (previous) cache.setQueryData([...patientKeys.detail(id)], previous);
     },
-    onSettled: (_data, _err, { id }) => cache.invalidateQueries({ key: [...patientKeys.root(id)] }),
+    onSettled: (_data, _err, { id }) => invalidatePatientQueries(cache, id),
   });
 }

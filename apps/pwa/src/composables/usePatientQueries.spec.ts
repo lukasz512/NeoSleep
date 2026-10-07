@@ -104,6 +104,19 @@ describe("usePatientQueries (CORE-181)", () => {
     expect(when(patientKeys.summary("p2"))).toBeGreaterThan(0);
   });
 
+  it("a refetch that fails after an invalidation leaves the last data and throws nothing", async () => {
+    const { mountCard } = setup();
+    apiFetch.mockResolvedValueOnce(json({ id: "p1", name: "Pablo Old", first_name: "Pablo", last_name: "Old" }));
+    let invalidate!: ReturnType<typeof useInvalidatePatient>;
+    const card = mountCard();
+    mount(defineComponent({ setup() { invalidate = useInvalidatePatient(); return () => h("div"); } }), { global: { plugins: [card.vm.$pinia] } });
+    await flushPromises();
+    apiFetch.mockResolvedValueOnce(json({ error: "down" }, 503));
+    await expect(invalidate("p1")).resolves.toBeUndefined();
+    await flushPromises();
+    expect(card.text()).toBe("Pablo Old");
+  });
+
   it("the optimistic record recomputes the display name only when a name part changed", () => {
     const prev = { id: "p1", name: "Dr. Pablo Old", first_name: "Pablo", last_name: "Old", phone: "1" };
     expect(optimisticPatient(prev, { phone: "2" }).name).toBe("Dr. Pablo Old");
