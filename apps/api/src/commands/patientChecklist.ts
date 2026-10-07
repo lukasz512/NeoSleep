@@ -127,13 +127,19 @@ export interface PrintOptions {
    * Historia clínica only. Used for this one PDF, never stored; the signing is audit-logged.
    */
   doctorSignature?: unknown;
+  /**
+   * NEO-260: what the print dialog picked for the Historia clínica. The Consentimiento informado
+   * exists once: its page is in the HC PDF only when picked, and a consent already signed prints
+   * marked as a copy (the signed original stays in the patient's documents).
+   */
+  include?: { consent?: boolean };
 }
 
 export async function PrintChecklistItemCommand(
   ctx: TenantContext,
   patientId: string,
   key: string,
-  { recordId, doctorSignature }: PrintOptions = {}
+  { recordId, doctorSignature, include }: PrintOptions = {}
 ): Promise<PrintResult> {
   if (doctorSignature != null) {
     if (key !== "historiaEndo") throw new ValidationError(`"${key}" has no doctor signature`);
@@ -214,6 +220,7 @@ export async function PrintChecklistItemCommand(
     fields.consent_stamp = signedConsent
       ? documentT(locale, "documents.historiaEndo.consentSignedStamp", { date: formatFormDate(signedConsent.created_at, locale) })
       : "";
+    if (include?.consent === true) states.consent_page = signedConsent ? "copy" : "on";
     // NEO-252: and the patient's drawn signature above it, when it was stored on its own (signed after NEO-252).
     if (signedConsent) {
       const signature = await consentSignatureDataUrl(ctx, patientId, signedConsent.id);
@@ -283,7 +290,12 @@ export async function PrintChecklistItemCommand(
     action: "read",
     entity_type: "ChecklistItemPrint",
     entity_id: patientId,
-    entity_after: { item: key, record_id: recordId ?? null, ...(images.firma_doctor ? { doctor_signed: true } : {}) },
+    entity_after: {
+      item: key,
+      record_id: recordId ?? null,
+      ...(images.firma_doctor ? { doctor_signed: true } : {}),
+      ...(key === "historiaEndo" ? { include: { consent: include?.consent === true } } : {}),
+    },
     request_id: ctx.requestId,
   });
 
