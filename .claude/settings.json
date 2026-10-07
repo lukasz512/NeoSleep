@@ -72,7 +72,7 @@
             "type": "command",
             "command": "bash .claude/hooks/quality-gate.sh",
             "timeout": 300,
-            "statusMessage": "Running mandatory quality gate (lint, typecheck, test, depcruise, docs check)..."
+            "statusMessage": "Running quality gate (lint + typecheck of changed workspaces, handover check)..."
           }
         ]
       }
@@ -103,6 +103,16 @@
     ],
     "PostToolUse": [
       {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/post-push.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
         "matcher": "mcp__claude_ai_Linear__save_issue",
         "hooks": [
           {
@@ -116,7 +126,8 @@
     ]
   },
   "env": {
-    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet"
+    "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "200000"
   },
   "cleanupPeriodDays": 30,
   "enabledPlugins": {

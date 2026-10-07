@@ -79,10 +79,33 @@ WARNS=()
 #     "visualComparison": "<required when any .vue/.css changed: real before/after
 #       screenshots, or a labeled mockup when no live render was possible>" }
 # The artifact must also be shown to Łukasz in the reply (link), not just recorded.
+# CORE-175 (slim-r1 D2/D5): the handover is checked once the branch is pushed — before
+# that a missing marker is only a warning, so mid-work turns don't loop on the gate. A
+# non-UI branch (lib/change-shape.sh "light") is handed over with a light marker.
+PUSHED=0
+git rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1 && PUSHED=1
+# shellcheck source=lib/change-shape.sh
+source "$REPO_ROOT/.claude/hooks/lib/change-shape.sh"
+
 branch_artifact_check() {
   [ -z "$BRANCH_CHANGED" ] && return 0
   local ticket marker visual
   ticket="$(ticket_of "$BRANCH" || true)"
+  if [ "$PUSHED" -eq 0 ]; then
+    [ -n "$ticket" ] || WARNS+=("Branch '${BRANCH}' has no ticket ID in its name — rename it before pushing (NEO-84).")
+    [ -n "$ticket" ] && [ ! -f ".claude/local/artifacts/${ticket}.json" ] \
+      && WARNS+=("Not pushed yet: after the push, hand over $( [ "$(change_shape "$BRANCH_CHANGED")" = full ] && echo 'the full Artifact (/ship-artifact)' || echo 'with build.mjs light (one Linear comment + PR link)').")
+    return 0
+  fi
+  if [ -n "$ticket" ] && [ "$(change_shape "$BRANCH_CHANGED")" = light ] \
+    && jq -e '.light == true' ".claude/local/artifacts/${ticket}.json" >/dev/null 2>&1; then
+    marker=".claude/local/artifacts/${ticket}.json"
+    jq -e '.linearCommented == true and ((.prUrl // "") | test("^https://github.com/"))' "$marker" >/dev/null 2>&1 \
+      || FAILS+=("$marker (light): post the Linear comment with the PR link, then build.mjs light --linear-commented.")
+    dev_mergeable_check
+    ci_green_check "$marker"
+    return 0
+  fi
   # 2026-09-26 (Łukasz, NEO-84): every change has a NEO ticket — trivial ones too. The
   # ticket ID in the branch name is what links branch, PR, Artifact and ticket.
   if [ -z "$ticket" ]; then
@@ -284,56 +307,18 @@ run_check() {
   fi
 }
 
-run_check "lint" pnpm lint
-run_check "typecheck" pnpm typecheck
-
-# apps/api integration tests hit a real Postgres (CLAUDE.md: "No mock PostgreSQL in BFF
-# integration tests") — give a clear, actionable failure instead of a wall of ECONNREFUSED
-# stack traces when the DB isn't reachable.
-#
-# DB is remote Supabase (see infrastructure/scripts/start.sh), not local — apps/api's own
-# "dev" script loads it via `tsx --env-file=../../.env`, but "test" is plain `vitest run`
-# and does not, so without loading .env here too, pg falls back to its default
-# localhost:5432 and this check misreports a reachable remote DB as "Postgres down".
-if [ -f .env ]; then
-  set -a
-  # shellcheck source=/dev/null
-  . .env
-  set +a
+# CORE-175 (slim-r1 D3): the Stop gate runs only the fast checks — lint + typecheck of the
+# workspaces this diff touched. Tests (real DB) and depcruise run in .husky/pre-push, so they
+# still block before anything leaves the machine, but not after every single reply.
+AFFECTED_DIRS="$(printf '%s\n' "$SRC_CHANGED" | "$REPO_ROOT/infrastructure/scripts/affected-workspaces.sh")"
+FILTER_ARGS=()
+while IFS= read -r dir; do
+  [ -n "$dir" ] && FILTER_ARGS+=(--filter "./$dir")
+done <<< "$AFFECTED_DIRS"
+if [ "${#FILTER_ARGS[@]}" -gt 0 ]; then
+  run_check "lint" pnpm "${FILTER_ARGS[@]}" --if-present lint
+  run_check "typecheck" pnpm "${FILTER_ARGS[@]}" --if-present typecheck
 fi
-
-DB_HOST="$(printf '%s' "${DATABASE_URL:-}" | sed -n 's#.*://[^@]*@\([^:/]*\).*#\1#p')"
-DB_PORT="$(printf '%s' "${DATABASE_URL:-}" | sed -n 's#.*://[^@]*@[^:/]*:\([0-9]*\).*#\1#p')"
-DB_PORT="${DB_PORT:-5432}"
-
-# Node's net.connect, not bash's /dev/tcp redirection — the sandbox this hook can run
-# under kills the /dev/tcp file-descriptor trick outright (SIGKILL) even when the target
-# is genuinely reachable (confirmed: psql and `pnpm test` both connect fine to this same
-# Supabase host when /dev/tcp reports it "unreachable"), so /dev/tcp produced false
-# negatives here. Node is already a hard requirement for this repo, so this has no new
-# dependency.
-if [ -n "$DB_HOST" ] && node -e "
-    const s = require('net').createConnection({ host: process.argv[1], port: Number(process.argv[2]), timeout: 5000 });
-    s.on('connect', () => { s.destroy(); process.exit(0); });
-    s.on('timeout', () => process.exit(1));
-    s.on('error', () => process.exit(1));
-  " "$DB_HOST" "$DB_PORT" 2>/dev/null; then
-  # Only the workspaces this diff actually touched — not blanket `pnpm -r test`. A
-  # pre-existing, unrelated failure in some other untouched workspace (e.g. apps/web's
-  # vitest config choking on a Vuetify CSS import) would otherwise permanently block
-  # every future turn regardless of what's being worked on, which defeats the point of
-  # a per-change gate.
-  AFFECTED_DIRS="$(printf '%s\n' "$SRC_CHANGED" | "$REPO_ROOT/infrastructure/scripts/affected-workspaces.sh")"
-  FILTER_ARGS=()
-  while IFS= read -r dir; do
-    [ -n "$dir" ] && FILTER_ARGS+=(--filter "./$dir")
-  done <<< "$AFFECTED_DIRS"
-  run_check "test" pnpm "${FILTER_ARGS[@]}" test
-else
-  FAILS+=("Database at ${DB_HOST:-<DATABASE_URL not set in .env>}:${DB_PORT} is not reachable — check .env's DATABASE_URL (Supabase connection string) and network connectivity before tests can run.")
-fi
-
-run_check "depcruise" pnpm depcruise
 
 # Maintenance-only carve-out (2026-09-15): pure test-harness plumbing (vitest setup/global-
 # setup files) or added/changed spec files alone don't represent an architecture decision —
@@ -374,7 +359,7 @@ fi
 # NOT require a docs/stories entry the way FEATURE_SHAPE does.
 VISUAL_SHAPE="$(printf '%s\n' "$SRC_CHANGED" | grep -E '\.(vue|css)$' || true)"
 
-if [ -n "$FEATURE_SHAPE" ] || [ -n "$VISUAL_SHAPE" ]; then
+if [ "$PUSHED" -eq 1 ] && { [ -n "$FEATURE_SHAPE" ] || [ -n "$VISUAL_SHAPE" ]; }; then
   # --- ARTIFACT MARKER -----------------------------------------------------------------
   # A feature- or visual-shaped diff almost always maps to a Linear ticket (referenced in
   # the story doc and/or recent commit messages). If any such ticket is found, require

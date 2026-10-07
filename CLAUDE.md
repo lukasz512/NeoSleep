@@ -121,7 +121,7 @@ Hooks enforce all of these (`.claude/hooks/`, `quality-gate.sh`), so a block nam
 - **Artifact for every change** via `/ship-artifact`: What changed / Run it locally / Verify it. A UI change also needs a real before/after. It carries 3 links (Artifact, Linear, VS Code session), plus the PR button once pushed, and gets one line in the Change Index. Attach it to the ticket and move the ticket to **Needs Review**, never Done.
 - **The PR link must be mergeable and CI-green.** Max 2 CI fix attempts, per `.claude/ci-autofix.json`, then escalate. After the merge, verify on pwa-dev (`devVerified` in the marker, `smoke-dev-bundle.mjs` + `smoke-dev-ui.mjs`, QA creds only in `.claude/local/qa-dev.json`).
 - **Questions** come as a 3-button `/decision-form` (TDD first: what a test settles isn't asked). **Final replies** are ≤2 sentences + anything he must act on. The per-prompt hook injects both rules once per session.
-- **Session cost (CORE-103)**: subagents default to Sonnet, so pass `model: "haiku"` for Explore/search. When the context guard fires, write `.claude/local/handoff/<topic>.md` and suggest /compact or /clear.
+- **Session cost (CORE-103)**: subagents default to Sonnet, so pass `model: "haiku"` for Explore/search. When the context guard fires, write `.claude/local/handoff/<topic>.md`. Compaction is automatic near ~180k (`CLAUDE_CODE_AUTO_COMPACT_WINDOW` in settings.json, CORE-175). 1 ticket = 1 session: after the handover, suggest /clear.
 - Merged worktrees/branches are auto-removed at session start. To see what's left, run `pnpm worktree:clean`; never raw `git branch -D`.
 - Mark stable states with milestone tags (`git tag v<name>`); see the doc.
 
