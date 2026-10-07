@@ -235,7 +235,7 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
       const [html, options] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string> }];
       expect(options.dataFields.telefono).toBe("+52 55 1234 5678");
       expect(options.dataFields.email).toMatch(/^ana-.*@example\.mx$/);
-      expect(html.slice(html.indexOf('<div class="hc-p3">'))).toContain(consent);
+      expect(html.slice(html.indexOf('<div class="hc-p3" data-state-field="consent_page">'))).toContain(consent);
       expect(options.dataFields.consent_stamp).toBe(""); // not signed yet → the empty line to sign on paper
 
       // NEO-249 D2: signed electronically → a dated stamp instead of the line.
@@ -288,6 +288,35 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
     });
   }, 60000);
 
+  it("the consent page prints only when picked; a consent already signed prints marked as a copy (NEO-260)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await insertPatient(client, { first_name: "Ana", last_name: `Pick-${uniqueSuffix()}` });
+      type Call = [string, { stateFields: Record<string, string> }];
+      const consentState = async (include?: { consent?: boolean }) => {
+        renderSpy.mockClear();
+        await PrintChecklistItemCommand(ctx, patient.id, "historiaEndo", include ? { include } : {});
+        const [html, options] = renderSpy.mock.calls[0] as Call;
+        expect(html).toContain('<div class="hc-p3" data-state-field="consent_page">');
+        return options.stateFields.consent_page;
+      };
+
+      expect(await consentState()).toBeUndefined(); // one copy of the consent: not in the HC unless asked
+      expect(await consentState({ consent: false })).toBeUndefined();
+      expect(await consentState({ consent: true })).toBe("on"); // unsigned → the page to sign on paper
+
+      await insertConsent(client, { entity_type: "patient", entity_id: patient.id, legal_basis: "consent", jurisdiction: "MX", purpose: "informedConsent" });
+      expect(await consentState({ consent: true })).toBe("copy"); // signed → the original stays in storage, this is a COPIA
+      expect(await consentState()).toBeUndefined();
+
+      const { rows } = await client.query<{ entity_after: { include?: { consent: boolean } } }>(
+        `SELECT entity_after FROM audit_log WHERE entity_type = 'ChecklistItemPrint' AND entity_id = $1 ORDER BY created_at`,
+        [patient.id]
+      );
+      expect(rows.map((r) => r.entity_after.include?.consent)).toEqual([false, false, true, true, false]);
+    });
+  }, 60000);
+
   it("the patient signs the consent page, the doctor the Historia's page 2; a doctor's drawn signature signs that panel (NEO-255)", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const { ctx, patientId } = await doctorWithPatient(client);
@@ -297,7 +326,7 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
       renderSpy.mockClear();
       await PrintChecklistItemCommand(ctx, patientId, "historiaEndo");
       const [html, unsigned] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string>; dataImages: Record<string, string> }];
-      const consentPage = html.slice(html.indexOf('<div class="hc-p3">'));
+      const consentPage = html.slice(html.indexOf('<div class="hc-p3" data-state-field="consent_page">'));
       expect(consentPage).toContain('data-field="firma_paciente"');
       expect(consentPage).not.toContain('data-field="firma_doctor"'); // the consent is the patient's alone
       expect(html.match(/data-field="firma_doctor"/g)).toHaveLength(1); // page 2
