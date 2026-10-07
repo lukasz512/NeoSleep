@@ -2,8 +2,10 @@
 # UserPromptSubmit hook: context guard (CORE-103, 2026-10-03). 94% of Łukasz's usage ran
 # at >150k context — every turn re-sends the whole history, so a long session costs more
 # per prompt than a fresh one. When the last turn's context passes 120k (and once more
-# past 160k) this tells Claude to write a handoff file and suggest /compact (same task)
-# or /clear (new task). It never compacts by itself: only Łukasz can run those commands.
+# past 160k) this tells Claude to write a handoff file. Compaction itself is automatic
+# (CORE-175): settings.json sets CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000, so Claude Code
+# compacts on its own near ~180k instead of near the 1M model limit. Hooks cannot run
+# /compact; that env var is the supported switch.
 #
 # Context size = the last assistant turn's input + cache-read + cache-creation tokens,
 # which is exactly what that request sent.
@@ -34,6 +36,6 @@ LEVEL=0
 printf '%s' "$LEVEL" > "$FIRED_FILE"
 
 K=$(( TOKENS / 1000 ))
-MSG="Context guard: this session is at ~${K}k tokens of context, and every further prompt re-sends all of it. Before you start new work in this turn: (1) write a handoff to .claude/local/handoff/<branch-or-topic>.md (≤40 lines: goal, ticket, branch/worktree, what is done, what is left, open decisions, key file paths, artifact links); (2) at the end of your reply add ONE line for Łukasz: same task → run /compact; switching to another task → /clear, and the next session starts from that handoff file."
-jq -n --arg ctx "$MSG" --arg sys "Context ~${K}k — /compact (same task) or /clear (new task) saves tokens." \
+MSG="Context guard: this session is at ~${K}k tokens of context, and every further prompt re-sends all of it. Auto-compact fires by itself near ~180k (CLAUDE_CODE_AUTO_COMPACT_WINDOW), so before you start new work in this turn write a handoff to .claude/local/handoff/<branch-or-topic>.md (≤40 lines: goal, ticket, branch/worktree, what is done, what is left, open decisions, key file paths, artifact links); the compacted session resumes from it. 1 ticket = 1 session (CORE-175): if this ticket is already handed over (Artifact or light Linear comment), end the reply with one line for Łukasz: next ticket → /clear."
+jq -n --arg ctx "$MSG" --arg sys "Context ~${K}k — handoff written; auto-compact near 180k." \
   '{systemMessage: $sys, hookSpecificOutput: {hookEventName: "UserPromptSubmit", additionalContext: $ctx}}'

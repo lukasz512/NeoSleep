@@ -52,7 +52,7 @@ Run this before every git push. Output: GO / NO-GO.
 □ Audit log written on any new mutation endpoint (with resourceType set)?
 □ New lookup value → has `type`, `key`, `locale`, `value` set per the real `lookup` schema (no `fhir_code`/`fhir_system` columns exist)?
 □ New identity-type entity → uses identity_id FK (never person_id — `person` is not a real table, see CLAUDE.md)?
-□ Touches auth/audit/access-control? → cross-check against /certification's ISO 27001 control list, not just functional correctness
+□ Touches auth/audit/access-control? → cross-check against /perspective certification's ISO 27001 control list, not just functional correctness
 □ Docs updated for this change? (docs/, ADR, or API_CONTRACT.md — "no doc change needed" must be stated explicitly, never silently skipped)
 □ No assertion-free or tautological tests added (see "No Empty Tests" below)?
 ```
@@ -216,6 +216,6 @@ Every test must fail for a real reason if the code regresses. If you can delete 
 |---|---|
 | Test reveals architectural bug (missing withTenant) | `/arch` |
 | Test reveals missing index (slow query in test) | `/dba` |
-| GDPR question about what must be tested | `/legal` |
+| GDPR question about what must be tested | `/perspective legal` |
 | Pre-push gate complete → ready for compliance check | `/audit` |
-| FHIR conformance validation needed | `/certification` |
+| FHIR conformance validation needed | `/perspective certification` |

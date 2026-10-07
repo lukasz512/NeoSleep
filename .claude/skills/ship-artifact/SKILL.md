@@ -12,6 +12,8 @@ argument-hint: "[content.json path]"
 
 **Before anything: a Linear ticket and a branch named after it (NEO-84).** No ticket → create one in CORE (platform), NEO (NeoSleep-only) or AJM (`## Problem` / `## Change` / `## Done when`, ≤1500 chars — the PreToolUse hook rejects anything else) and rename the branch. `render` refuses a branch without `<key>-<n>` (keys in `.claude/ticket-teams`).
 
+**Full or light (CORE-175, decision slim-r1 D2).** The full page below is only for UI/feature changes: any `.vue/.css/.scss`, a view, an API route or a migration (`.claude/hooks/lib/change-shape.sh`). Anything else (service fix, hooks, docs, config) gets the **light** handover instead: push, post one Linear comment (2 sentences + PR link + branch), move the ticket to Needs Review, then `node .claude/skills/ship-artifact/build.mjs light --linear-commented --linear-status "Needs Review"` (`--pr <url>` once a PR exists). No page, no screenshots, no Change Index row.
+
 **TDD is the first rule of every Artifact (Łukasz, 2026-09-28, CORE-44).** The acceptance criteria become failing tests before the code, `verify` mirrors them, and `testCoverageMap` points at them. Anything a test settles is **not** a question for Łukasz: decide it, prove it with the test, and list it in `defaults`.
 
 ## Step 1 — Write the content JSON (the only judgment part)

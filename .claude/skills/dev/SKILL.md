@@ -149,7 +149,7 @@ Separate lens from dedup above — this is about single-source-of-truth, not cop
 | New table or DB schema change needed | `/arch` first, then `/dba` |
 | New entity needs full pipeline (DB→view) | `/arch new-entity [name]` |
 | Test coverage needed for new code | `/qa` |
-| GDPR / personal data question | `/legal` |
+| GDPR / personal data question | `/perspective legal` |
 | UX decision (layout, touch targets, states) | `/ux` |
 | Release readiness | `/delivery` then pre-push gate |
 

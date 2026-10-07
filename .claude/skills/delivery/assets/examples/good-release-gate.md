@@ -42,7 +42,7 @@
 | EXPLAIN ANALYZE on `getEncounters` | ✅ | Index scan confirmed at 1000 rows |
 | No SELECT * | ✅ | |
 
-### Compliance `/certification`
+### Compliance `/perspective certification`
 | Check | Result | Notes |
 |---|---|---|
 | `encounter` in GDPR data map | ✅ | `docs/data-map.md` updated |

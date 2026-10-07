@@ -1,8 +1,3 @@
----
-name: health-report
-description: Weekly (or on-demand) repo health report — security, UX/UI, test coverage, performance, dead code/unused tables, hoisting/centralization, architecture drift, i18n parity, dependency freshness. Produces one document handoff-ready for a follow-up Claude session to act on. Use when asking for a health report, weekly report, or "what needs attention across the repo".
-argument-hint: "[full | <category>]"
----
 
 # Health Report
 

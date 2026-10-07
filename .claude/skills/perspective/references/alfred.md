@@ -1,9 +1,3 @@
----
-name: alfred
-description: Alfred interview — extract business vision, priorities, and field feedback from Alfred (CEO NeoSleep, first client, MX market lead, pharma territory manager). Use when starting an Alfred interview, generating a business report, reviewing features from his perspective, or aligning roadmap with NeoSleep's needs.
-disable-model-invocation: true
-argument-hint: "[topic: sales / product / compliance / manager-view / social-media]"
----
 
 # Alfred — NeoSleep CEO & Field Perspective
 
