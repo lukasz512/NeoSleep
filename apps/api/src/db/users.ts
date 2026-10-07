@@ -10,6 +10,8 @@ export interface User {
   identity_id: string;
   // From identities JOIN
   email: string;
+  /** Sign-in address when it differs from the contact email above (CORE-173, migration 057). */
+  login_email: string | null;
   salutation: string | null;
   first_name: string | null;
   last_name: string | null;
@@ -71,7 +73,7 @@ const USER_COLS = `
   ${displayNameSql("i")} AS name,
   COALESCE(ur.role, 'rep') AS role,
   ur.territory_id AS scope_territory_id, st.name AS scope_territory_name, st.kind AS scope_territory_kind,
-  u.google_sub, i.region, COALESCE(i.country_code, it.country_code) AS country_code, i.language, i.territory_id, u.status, u.token_version,
+  u.login_email, u.google_sub, i.region, COALESCE(i.country_code, it.country_code) AS country_code, i.language, i.territory_id, u.status, u.token_version,
   (u.password_hash IS NOT NULL) AS has_password,
   u.created_at, u.updated_at`.trim();
 
@@ -123,7 +125,7 @@ export async function resolveGoogleSignInUser(
     if (!emailVerified || !normalizedEmail) return { kind: "no_account" };
 
     const byEmail = await client.query<User>(
-      `SELECT ${USER_COLS} ${USER_JOIN} WHERE lower(i.email) = $1 AND u.deleted_at IS NULL`,
+      `SELECT ${USER_COLS} ${USER_JOIN} WHERE (lower(i.email) = $1 OR lower(u.login_email) = $1) AND u.deleted_at IS NULL`,
       [normalizedEmail]
     );
     const candidate = byEmail.rows[0];
@@ -158,7 +160,7 @@ export async function getUserById(client: PoolClient, id: string): Promise<User 
 export async function getStaffUserByEmail(client: PoolClient, email: string): Promise<StaffUser | null> {
   try {
     const r = await client.query<StaffUser>(
-      `SELECT ${STAFF_AUTH_COLS} ${USER_JOIN} WHERE i.email = $1 AND u.deleted_at IS NULL`,
+      `SELECT ${STAFF_AUTH_COLS} ${USER_JOIN} WHERE (i.email = $1 OR lower(u.login_email) = $1) AND u.deleted_at IS NULL`,
       [email.trim().toLowerCase()]
     );
     return r.rows[0] ?? null;
@@ -333,7 +335,7 @@ export async function getUsersWithoutPassword(client: PoolClient): Promise<{ id:
 export async function getUserIdByEmail(client: PoolClient, email: string): Promise<string | null> {
   try {
     const r = await client.query<{ id: string }>(
-      `SELECT u.id FROM users u JOIN identities i ON u.identity_id = i.id WHERE i.email = $1 AND u.deleted_at IS NULL`,
+      `SELECT u.id FROM users u JOIN identities i ON u.identity_id = i.id WHERE (i.email = $1 OR lower(u.login_email) = $1) AND u.deleted_at IS NULL`,
       [email.trim().toLowerCase()]
     );
     return r.rows[0]?.id ?? null;

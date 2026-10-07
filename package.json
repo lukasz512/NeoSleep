@@ -35,7 +35,7 @@
     "worktree:clean:test": "./infrastructure/scripts/worktree-clean.test.sh",
     "test-db": "./infrastructure/scripts/test-db.sh",
     "test-db:test": "./infrastructure/scripts/test-db.test.sh",
-    "tooling:test": "node --test .claude/skills/ship-artifact/ticket.test.mjs && bash .claude/hooks/pre-tool-linear-ticket-format.test.sh && ./infrastructure/scripts/worktree-clean.test.sh && ./infrastructure/scripts/test-db.test.sh",
+    "tooling:test": "node --test .claude/skills/ship-artifact/ticket.test.mjs .claude/skills/ship-artifact/index-rows.test.mjs && bash .claude/hooks/pre-tool-linear-ticket-format.test.sh && ./infrastructure/scripts/worktree-clean.test.sh && ./infrastructure/scripts/test-db.test.sh",
     "dev": "pnpm exec concurrently --names api,pwa,web -c blue,green,magenta \"pnpm --filter @neo/api dev\" \"pnpm --filter @neo/pwa dev\" \"pnpm --filter @neo/web dev\"",
     "db:seed": "pnpm --filter @neo/api seed:demo",
     "guide:shots": "node docs/user-guide/shots.mjs",

@@ -15,6 +15,7 @@ export interface UserDto {
   first_name: string | null;
   last_name: string | null;
   email: string;
+  login_email: string | null;
   phone: string;
   role: string;
   territory_id: string | null;
@@ -35,6 +36,7 @@ function toDto(u: User): UserDto {
     first_name: u.first_name,
     last_name: u.last_name,
     email: u.email,
+    login_email: u.login_email,
     phone: u.phone ?? "",
     role: u.role,
     territory_id: u.scope_territory_id,

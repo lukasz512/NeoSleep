@@ -103,3 +103,21 @@ describe("field errors (NEO-109 / NEO-111)", () => {
     expect(isFieldErrorStatus(undefined)).toBe(false);
   });
 });
+
+describe("CORE-173 doctor login not linked to a practitioner", () => {
+  it("says the admins were told, instead of 'sign in again'", () => {
+    const err = new ApiError({ kind: "client", message: "x", status: 403, code: "DOCTOR_NOT_LINKED" });
+    const keys = errorMessageKeys(err);
+    expect(keys.cls).toBe("forbidden");
+    expect(keys.title).toBe("common.error.accountNotLinked.title");
+    expect(keys.body).toBe("common.error.accountNotLinked.body");
+    for (const dict of [en, pl, mx] as Record<string, string>[]) {
+      expect(dict[keys.title]).toBeTruthy();
+      expect(dict[keys.body]).toBeTruthy();
+    }
+  });
+
+  it("any other 403 keeps the generic message", () => {
+    expect(errorMessageKeys(new ApiError({ kind: "client", message: "x", status: 403, code: "FORBIDDEN" })).title).toBe("common.error.forbidden.title");
+  });
+});

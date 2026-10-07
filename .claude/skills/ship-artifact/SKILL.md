@@ -100,13 +100,13 @@ Only pass the flags for what you actually did.
 node .claude/skills/ship-artifact/build.mjs index
 ```
 
-It prints the page path and the index URL (from `.claude/local/artifact-index-url.txt`). Read that URL with the `Artifact` tool (`action: "read"`) first if this conversation hasn't, then publish the page with `url` set to it — same URL forever. No URL yet → publish it as a new Artifact (icon `list`). Finally:
+It writes this ticket's row JSON and prints three steps (CORE-105 — the index page is a static shell over its Artifact database, so **never read or republish the page** for a ship):
 
-```bash
-node .claude/skills/ship-artifact/build.mjs index --published <index url>
-```
+1. `ArtifactData` `get` on the index URL, collection `changes`, doc id = the ticket (a few hundred bytes).
+2. `ArtifactData` `set` with the printed `file_path`, plus `if_version` from step 1 when the row exists.
+3. `node .claude/skills/ship-artifact/build.mjs index --published <index url>` — marks the marker `indexed`, which the quality gate checks.
 
-That marks the marker `indexed`, which the quality gate checks. Re-run the three commands whenever the ticket's status changes (e.g. after moving it to Needs Review) so the index shows it.
+A status change later (e.g. moved to Needs Review) is just an `ArtifactData` `update` of `{status, updated}` on that row. Only when `index-template.html` changes: `build.mjs index --page` and republish the page to the same URL with the capabilities it prints. `build.mjs index --all` emits import batches for an empty collection.
 
 ## Step 6 — Reply
 
