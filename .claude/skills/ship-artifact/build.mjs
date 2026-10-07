@@ -9,8 +9,10 @@
 //   node .claude/skills/ship-artifact/build.mjs finalize --url <artifact-url>
 //        [--linear-attached] [--linear-commented] [--linear-status "<name>"]
 //     → writes .claude/local/artifacts/<TICKET>.json and upserts the artifact index
-//   node .claude/skills/ship-artifact/build.mjs index
-//     → renders the artifact index page (one line per change), prints its path + URL
+//   node .claude/skills/ship-artifact/build.mjs index [--page | --all]
+//     → writes this branch's index row JSON and prints the ArtifactData calls that store it
+//       (--page: the static index shell, republished only when its template changes;
+//        --all: every row as import batches) — CORE-105
 //   node .claude/skills/ship-artifact/build.mjs index --published <index-url>
 //     → records the index URL and marks this ticket's marker "indexed"
 //
@@ -25,6 +27,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ticketFromBranch, ticketTeams } from "./ticket.mjs";
+import { COLLECTION, docId, toRow, importBatches } from "./index-rows.mjs";
 import { validateQuestions, widget } from "../decision-form/decisions.mjs";
 import { cacheGet, cacheSet, defaultCachePath, isRateLimitError, noteRateLimit, rateLimitedUntil } from "../../../infrastructure/scripts/gh-cache.mjs";
 
@@ -50,6 +53,9 @@ const COMMON_LOCAL = join(dirname(git("rev-parse", "--path-format=absolute", "--
 const INDEX_JSON = join(COMMON_LOCAL, "artifact-index.json");
 const INDEX_HTML = join(COMMON_LOCAL, "artifact-index.html");
 const INDEX_URL_FILE = join(COMMON_LOCAL, "artifact-index-url.txt");
+const INDEX_ROWS_DIR = join(COMMON_LOCAL, "artifact-index-rows");
+// Everyone it is shared with reads; only the owner/editors write (via ArtifactData).
+const INDEX_CAPABILITIES = { db: { rules: [{ path: "", read: "view", write: "admin" }] } };
 const SESSION_ID = process.env.CLAUDE_CODE_SESSION_ID ?? "";
 const linearUrlOf = (ticket) => `https://linear.app/neosleep/issue/${ticket}`;
 const vscodeUrlOf = (id) => `vscode://anthropic.claude-code/open?session=${id}`;
@@ -369,7 +375,7 @@ function finalize(argv) {
   });
   mkdirSync(COMMON_LOCAL, { recursive: true });
   writeFileSync(INDEX_JSON, JSON.stringify(index, null, 2) + "\n");
-  console.log(`index updated: ${INDEX_JSON} — next: build.mjs index, publish it, build.mjs index --published <url>`);
+  console.log(`index updated: ${INDEX_JSON} — next: build.mjs index (writes one db row, no page republish)`);
 
   const missing = ["linearAttached", "linearCommented", "indexed"].filter((k) => !marker[k]);
   if (missing.length) console.log(`still missing for the quality gate: ${missing.join(", ")}`);
@@ -391,27 +397,39 @@ function renderIndex(argv) {
     }
     return;
   }
-  const entries = readJson(INDEX_JSON, []).sort((a, b) => String(b.updated).localeCompare(String(a.updated)));
-  const ext = `target="_blank" rel="noopener noreferrer"`;
-  const link = (href, label, ico) => (href ? `<a href="${esc(href)}" ${ext}>${icon(ico)}${label}</a>` : "");
-  const rows = entries
-    .map(
-      (e) => `<li class="row">
-  <div class="head"><span class="ticket">${esc(e.ticket)}</span><span class="status s-${esc(String(e.status).toLowerCase().replace(/\s+/g, "-"))}">${esc(e.status)}</span><time datetime="${esc(e.updated)}">${esc(String(e.updated).slice(0, 10))}</time></div>
-  <p class="title">${esc(e.title)}</p>
-  <p class="line">${esc(e.headline)}</p>
-  <p class="links">${[link(e.artifact, "Artifact", "artifact"), link(e.linear, "Linear", "linear"), link(e.vscode, "VS Code", "vscode"), link(e.pr, "PR", "github")].filter(Boolean).join("")}</p>
-</li>`
-    )
-    .join("\n");
-  const html = readFileSync(join(HERE, "index-template.html"), "utf-8")
-    .split("{{COUNT}}").join(String(entries.length))
-    .split("{{ROWS}}").join(rows || `<li class="row"><p class="line">No changes shipped yet.</p></li>`);
-  mkdirSync(COMMON_LOCAL, { recursive: true });
-  writeFileSync(INDEX_HTML, html);
-  const url = existsSync(INDEX_URL_FILE) ? readFileSync(INDEX_URL_FILE, "utf-8").trim() : "";
-  console.log(`index page: ${INDEX_HTML}`);
-  console.log(url ? `publish with url: ${url} (read it first with the Artifact tool if this conversation hasn't)` : "first publish: no url yet — publish as a new Artifact, then run index --published <url>");
+  const entries = readJson(INDEX_JSON, []);
+  const url = existsSync(INDEX_URL_FILE) ? readFileSync(INDEX_URL_FILE, "utf-8").trim() : "<index url>";
+  mkdirSync(INDEX_ROWS_DIR, { recursive: true });
+  const writeRow = (e) => {
+    const file = join(INDEX_ROWS_DIR, `${docId(e)}.json`);
+    writeFileSync(file, JSON.stringify(toRow(e)) + "\n");
+    return file;
+  };
+
+  // The page is a static shell over the `changes` collection: republish it only when
+  // index-template.html changes, never per ship (CORE-105).
+  if (argv.includes("--page")) {
+    writeFileSync(INDEX_HTML, readFileSync(join(HERE, "index-template.html"), "utf-8"));
+    console.log(`index page: ${INDEX_HTML} — publish with url ${url}, capabilities ${JSON.stringify(INDEX_CAPABILITIES)}`);
+    return;
+  }
+
+  // One-time import of every row into an empty collection.
+  if (argv.includes("--all")) {
+    const batches = importBatches(entries, writeRow);
+    batches.forEach((writes, n) => writeFileSync(join(INDEX_ROWS_DIR, `batch-${n + 1}.json`), JSON.stringify(writes) + "\n"));
+    console.log(`${entries.length} rows in ${batches.length} batch(es): ${INDEX_ROWS_DIR}/batch-<n>.json — pass each file's array as ArtifactData batch \`writes\` (url ${url})`);
+    return;
+  }
+
+  const entry = entries.find((e) => e.branch === BRANCH) ?? entries.find((e) => TICKET_FROM_BRANCH && e.ticket === TICKET_FROM_BRANCH);
+  if (!entry) throw new Error(`no index line for branch ${BRANCH} — run finalize first`);
+  const file = writeRow(entry);
+  const id = docId(entry);
+  console.log(`row: ${file}`);
+  console.log(`1. ArtifactData get  url=${url} collection=${COLLECTION} doc_id=${id}`);
+  console.log(`2. ArtifactData set  url=${url} collection=${COLLECTION} doc_id=${id} file_path=${file} (+ if_version from step 1 when it exists)`);
+  console.log(`3. node .claude/skills/ship-artifact/build.mjs index --published ${url}`);
 }
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -419,7 +437,7 @@ try {
   if (cmd === "render") render(rest[0] ?? "");
   else if (cmd === "finalize") finalize(rest);
   else if (cmd === "index") renderIndex(rest);
-  else throw new Error("usage: build.mjs render <content.json> | finalize --url <artifact-url> [--linear-attached] [--linear-commented] [--linear-status <name>] | index [--published <url>]");
+  else throw new Error("usage: build.mjs render <content.json> | finalize --url <artifact-url> [--linear-attached] [--linear-commented] [--linear-status <name>] | index [--page | --all | --published <url>]");
 } catch (err) {
   console.error(`ship-artifact: ${err.message}`);
   process.exit(1);
