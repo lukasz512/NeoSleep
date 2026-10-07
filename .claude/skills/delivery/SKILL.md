@@ -83,14 +83,14 @@ Generated from live state. Łukasz reviews and approves before it goes to Telegr
 
 ## Release Gate (`gate` mode)
 
-Run after `/qa gate` and `/audit gate` pass.
+Run after `/qa gate` and `/qa security gate` pass.
 
 ```
 ## Release Gate — Stage [X] — [date]
 
 ### Pre-push chain
 [PASS/FAIL] /qa gate
-[PASS/FAIL] /audit gate
+[PASS/FAIL] /qa security gate
 [PASS/FAIL] /arch drift
 
 ### Stage completion
@@ -146,7 +146,7 @@ Run after `/qa gate` and `/audit gate` pass.
 ## Pre-Push Gate Chain
 
 ```
-/qa gate → /audit gate → /arch drift → /delivery gate → promote
+/qa gate → /qa security gate → /arch drift → /delivery gate → promote
 ```
 
 Each produces GO / NO-GO. All must be GO before promote.
@@ -158,7 +158,7 @@ Each produces GO / NO-GO. All must be GO before promote.
 | Trigger | Delegate to |
 |---|---|
 | Tests failing | `/qa` |
-| Security finding | `/audit` |
+| Security finding | `/qa security` |
 | Architecture question | `/arch` |
 | Scope / feature priority debate | `/perspective product` |
 | Deploy readiness | `/devops deploy` |

@@ -23,7 +23,7 @@
 | `docs/` | ADRs and architecture docs |
 | `docs/API_CONTRACT.md` | Living API contract — all routes documented here |
 | `packages/i18n/en.json` | Source of truth for all i18n keys |
-| `.claude/skills/dba/SKILL.md` | DB-specific rules and migration checklist |
+| `.claude/skills/arch/references/db.md` | DB-specific rules and migration checklist |
 
 ### Skill Assets & Contracts
 
@@ -37,7 +37,7 @@
 | [assets/examples/good-fhir-api.md](../assets/examples/good-fhir-api.md) | FHIR R4 API — CapabilityStatement, OperationOutcome dual format, Identifier[] migration |
 | [assets/examples/good-lookup-i18n.md](../assets/examples/good-lookup-i18n.md) | Lookup → CodeableConcept + i18n labels + Bundle format + AuditEvent agent structure |
 | [../dev/assets/examples/good-error-handling.md](../../dev/assets/examples/good-error-handling.md) | → `/dev` — AppError, FHIR codes, useAsync, AppErrorAlert |
-| [../dba/assets/examples/good-entity-spec.md](../../dba/assets/examples/good-entity-spec.md) | → `/dba` — entity variants, DB schema, indexes, pipeline |
+| [../assets/examples/good-entity-spec.md](../assets/examples/good-entity-spec.md) | → `/arch db` — entity variants, DB schema, indexes, pipeline |
 | [../_contracts/arch→dba.md](../../_contracts/arch→dba.md) | Input/output contract for arch→dba delegation |
 | [../_contracts/arch→legal.md](../../_contracts/arch→legal.md) | Input/output contract for arch→legal delegation |
 | [../_contracts/arch→qa.md](../../_contracts/arch→qa.md) | Input/output contract for arch→qa delegation |

@@ -13,10 +13,10 @@ You compile a single, dated, handoff-ready health report by delegating each sect
 
 | # | Category | How to compile it |
 |---|---|---|
-| 1 | Security | `/audit full` — the complete 9-category threat model |
+| 1 | Security | `/qa security full` — the complete 9-category threat model |
 | 2 | UX/UI | `/ux` review pass — accessibility, touch targets, consistency, states (loading/empty/error) across recently-changed views |
 | 3 | Test coverage | `/qa coverage` — which files/routes have no test coverage, plus a scan for the "No Empty Tests" anti-pattern already defined in `/qa` |
-| 4 | Performance | `/dba cleanup` (slow queries, missing indexes, N+1) + frontend bundle size: `pnpm --filter @neo/pwa build` output, flag any chunk over the Vite default warning threshold |
+| 4 | Performance | `/arch db cleanup` (slow queries, missing indexes, N+1) + frontend bundle size: `pnpm --filter @neo/pwa build` output, flag any chunk over the Vite default warning threshold |
 | 5 | Dead code / unused tables | `pnpm depcruise` orphan warnings + a table-usage sweep: for every table in CLAUDE.md's Database section, `grep -rl "\btable_name\b" apps/api/src` — flag zero-hit tables (cross-reference against the known-provisioned-ahead-of-build list already established, don't re-alarm on those) |
 | 6 | Hoisting / centralization | `/dev refactor` using its own "Centralization & Hoisting" checklist — duplicate constants, cross-workspace package version drift, canonical type reuse |
 | 7 | Architecture drift | `/arch drift` |

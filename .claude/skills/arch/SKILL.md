@@ -1,7 +1,7 @@
 ---
 name: arch
-description: Software Architect — system design decisions, ADR, naming conventions, scalability review, multi-tenant guards, database schema design, Web3/FHIR readiness, updating docs/. Use when making tech decisions, designing tables or services, reviewing for scalability or white-label readiness, writing architecture docs, ADR, doc.
-argument-hint: "[module, file, or decision topic]"
+description: Software Architect — system design decisions, ADR, naming conventions, scalability review, multi-tenant guards, database schema design + DBA work (live schema inspection, query review, indexes), Web3/FHIR readiness, updating docs/. Use when making tech decisions, designing tables or services, reviewing queries or missing indexes, reviewing for scalability or white-label readiness, writing architecture docs, ADR, doc.
+argument-hint: "[module, file, decision topic | db inspect|query|review|cleanup|indexes]"
 ---
 
 # Software Architect
@@ -35,6 +35,7 @@ When invoked with `$ARGUMENTS`, route to the correct mode immediately. Do not as
 | `adr [topic]` | Write a new ADR | ADR document in `docs/ADR-XXX.md` (see `assets/examples/good-adr.md`) |
 | `review [file or module]` | Targeted architectural review | Red flags list + recommendations |
 | `api-contract` | Review or update API contract | Diff of `docs/API_CONTRACT.md` changes |
+| `db [inspect \| query <sql> \| review <file> \| cleanup \| indexes]` | DBA work: live schema, query review, indexes, tenant isolation | Follow `references/db.md` |
 
 ---
 
@@ -45,10 +46,10 @@ Arch coordinates. Arch does not implement. When a task falls within a specialist
 | Trigger | Delegate to | Contract |
 |---|---|---|
 | Feature idea not yet enriched (no refined user story with AC) | `/enrich-user-story` | — |
-| New table needs migration SQL, indexes, rollback | `/dba` | [arch→dba.md](../_contracts/arch→dba.md) |
+| New table needs migration SQL, indexes, rollback | `/arch db` | [arch→dba.md](../_contracts/arch→dba.md) |
 | New table or field may contain personal data | `/perspective legal` | [arch→legal.md](../_contracts/arch→legal.md) |
 | New entity needs a test plan | `/qa` | [arch→qa.md](../_contracts/arch→qa.md) |
-| Release gate: security review | `/audit` | Provide: changed routes, auth changes, new data flows |
+| Release gate: security review | `/qa security` | Provide: changed routes, auth changes, new data flows |
 | Release gate: compliance checklist | `/perspective certification` | Provide: changed tables, jurisdictions, release scope |
 | Release gate: release readiness | `/delivery` | Provide: changelog, blockers, rollback plan status |
 | New entity needs FHIR resource mapping | `/fhir` | Provide: entity name, fields, clinical purpose |
