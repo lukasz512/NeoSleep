@@ -116,6 +116,8 @@ grep -rn '"[A-Z][a-z]' apps/pwa/src --include="*.vue" |
 
 ## Test Writing Standards
 
+**Tag the criterion a test proves (CORE-182):** the title starts with `@<TICKET> ACn` (several: `@NEO-9 AC1 AC3`), AC numbers counted from the story's "Acceptance" list. `story-coverage.mjs --ticket <TICKET>` maps them; pre-push, CI and the handover block on an untested criterion. A UI story needs at least one real-backend e2e (`apps/pwa/e2e`, real API + Postgres, no `/e2e/harness/` page, no `page.route` stub of `/api`) that walks the user's path and checks the result after a reload and on the other screen showing the same data.
+
 ### Unit test (composable or utility)
 ```typescript
 // apps/pwa/src/composables/useX.spec.ts

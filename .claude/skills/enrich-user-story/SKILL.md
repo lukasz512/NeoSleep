@@ -83,7 +83,8 @@ List only what must be answered before `/perspective product` or `/arch` can pro
 ### Medical-Industry Trend Check
 - [finding — source] (or "n/a — internal/infra change")
 
-### Acceptance Criteria (testable — if QA can't verify it, it's too weak)
+### Acceptance Criteria (each one becomes a tagged test — CORE-182)
+- [ ] <who> <does what> → <what they see, also after a reload>
 - [ ] ...
 
 ### Open Questions
@@ -97,7 +98,9 @@ List only what must be answered before `/perspective product` or `/arch` can pro
 
 This block is what downstream skills consume. It is not a `_contracts/` file because it fans out to more than one specialist (`/perspective product`, `/arch`, occasionally `/dev` directly) rather than one fixed pair.
 
-**Save it**: for anything classified `feature` (not `trivial`), write this block to `docs/stories/[short-title-kebab-case].md` before handing off. This is not optional bookkeeping — the repo's Stop-hook quality gate (`.claude/hooks/quality-gate.sh`) checks for a file under `docs/stories/` whenever a diff adds a new view/route/migration, and blocks the turn if one isn't there. Trivial-classified input doesn't need a file.
+**Criteria are user paths, wired end to end (CORE-182).** Write each one as what a real user does and what must be true afterwards, including after a reload or on the other screens that show the same data ("the doctor saves a visit → it shows on the card, the list and the calendar without F5"), not as "the button exists". Every criterion is numbered AC1..n in order and needs a test tagged `@<TICKET> ACn` in its title; a UI story also needs at least one real-backend e2e (`apps/pwa/e2e`, real API + Postgres, no harness page). `node infrastructure/scripts/story-coverage.mjs --ticket <TICKET>` shows the gaps; pre-push, CI and the handover refuse while any are left.
+
+**Save it**: for anything classified `feature` (not `trivial`), write this block to `docs/stories/<ticket-lowercase>-<short-title-kebab-case>.md` (e.g. `neo-260-hc-guided-doctor-flow.md`, so the ticket finds its story) before handing off. This is not optional bookkeeping — the repo's Stop-hook quality gate (`.claude/hooks/quality-gate.sh`) checks for a file under `docs/stories/` whenever a diff adds a new view/route/migration, and blocks the turn if one isn't there. Trivial-classified input doesn't need a file.
 
 ---
 

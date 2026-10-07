@@ -101,6 +101,7 @@ Tenant schema (actual, per `apps/api/migrations/001_tenant_schema.sql` + `003_pr
 - CI blocks merge if tests fail or if no test files exist
 - Pre-commit (`.husky/pre-commit`): lint + typecheck, scoped to `apps/*/src` / `packages/*/src` changes
 - Pre-push (`.husky/pre-push`): test, scoped to the workspaces the push actually touched
+- **Every acceptance criterion has a test (CORE-182).** Story = `docs/stories/<ticket>-<slug>.md`; criteria are user paths (AC1..n); the proving test carries `@<TICKET> ACn` in its title; a UI change also needs a real-backend e2e (`apps/pwa/e2e`, no harness page). Wire the whole path (API, DB, every screen showing that data), not just the screen. `story-coverage.mjs` blocks pre-push, CI and the handover on gaps.
 
 ## Dev Workflow
 ```bash

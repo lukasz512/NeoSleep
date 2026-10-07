@@ -91,6 +91,12 @@ branch_artifact_check() {
   [ -z "$BRANCH_CHANGED" ] && return 0
   local ticket marker visual
   ticket="$(ticket_of "$BRANCH" || true)"
+  # CORE-182: acceptance criteria without a tagged test. A warning here (mid-work turns
+  # must not loop); pre-push and CI block on the same check.
+  local gaps
+  if [ -n "$ticket" ] && ! gaps="$(node "$REPO_ROOT/infrastructure/scripts/story-coverage.mjs" --ticket "$ticket" --changed-from origin/dev 2>&1)"; then
+    WARNS+=("$(printf '%s\n' "$gaps" | sed -n '2,4p' | tr '\n' ' ')")
+  fi
   if [ "$PUSHED" -eq 0 ]; then
     [ -n "$ticket" ] || WARNS+=("Branch '${BRANCH}' has no ticket ID in its name — rename it before pushing (NEO-84).")
     [ -n "$ticket" ] && [ ! -f ".claude/local/artifacts/${ticket}.json" ] \

@@ -159,15 +159,14 @@ Separate lens from dedup above — this is about single-source-of-truth, not cop
 
 Assumes a refined user story already exists (acceptance criteria, not just a name). If Łukasz hands you a bare feature name with no AC, delegate up to `/enrich-user-story` first — don't scaffold against a guess.
 
-When asked to scaffold a new feature, produce in this order:
+A feature is done when the user's path works end to end, not when the screen renders (CORE-182). Build the whole vertical slice, in this order:
 
-1. **Composable** `apps/pwa/src/composables/use[Entity].ts` — loading, error, data, fetch
-2. **View shell** `apps/pwa/src/views/[Entity]View.vue` — loading/empty/error states wired up, no business logic
-3. **Route entry** in `apps/pwa/src/router/routes.ts`
-4. **i18n keys** in `packages/i18n/en.json` under `user.[entity].*`
-5. **API stub** in `apps/pwa/src/utils/api.ts` or direct `useApi` call
-
-No BFF route, no DB table — that's `/arch new-entity`. Dev builds the frontend slice.
+1. **Failing tests first**, one per acceptance criterion, titled `@<TICKET> ACn …`: an API integration test (real Postgres) for every rule, and a real-backend e2e in `apps/pwa/e2e` (no harness page, no stubbed `/api`) that walks the main path and checks the result after a reload. `node infrastructure/scripts/story-coverage.mjs --ticket <TICKET>` must list no gaps before the push.
+2. **Migration + API route/command** (schema design via `/arch new-entity` when there's a new table) — never a frontend stub instead of the real endpoint.
+3. **Composable** `apps/pwa/src/composables/use[Entity].ts` — loading, error, data, fetch, save.
+4. **View** `apps/pwa/src/views/[Entity]View.vue` + route entry — loading/empty/error states, no business logic.
+5. **Every other screen that shows the same data** refreshes after a save (list, card, calendar, counters): find them with a grep for the entity's endpoint/composable and cover one in the e2e.
+6. **i18n keys** in `packages/i18n/en.json` under `user.[entity].*`, then pl/mx.
 
 ---
 

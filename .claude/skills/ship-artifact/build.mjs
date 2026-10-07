@@ -29,6 +29,7 @@ import { fileURLToPath } from "node:url";
 import { ticketFromBranch, ticketTeams } from "./ticket.mjs";
 import { COLLECTION, docId, toRow, importBatches } from "./index-rows.mjs";
 import { validateQuestions, widget } from "../decision-form/decisions.mjs";
+import { storyGate, coverageHtml, coverageMap } from "./coverage.mjs";
 import { cacheGet, cacheSet, defaultCachePath, isRateLimitError, noteRateLimit, rateLimitedUntil } from "../../../infrastructure/scripts/gh-cache.mjs";
 
 /** A PR appears or merges rarely; one lookup per branch per 10 minutes is plenty (CORE-128). */
@@ -210,6 +211,10 @@ function render(contentPath) {
   }
   if (!SESSION_ID) throw new Error("CLAUDE_CODE_SESSION_ID is not set — run this from the Claude Code session that made the change (needed for the VS Code link)");
   checkLimits(c);
+  // CORE-182: every acceptance criterion of the ticket's story has a tagged test, and a UI
+  // change has a real-backend e2e — otherwise there is nothing to hand over yet.
+  const gate = storyGate(ROOT, ticket, files);
+  if (gate.problems.length) throw new Error(`story coverage (CORE-182):\n- ${gate.problems.join("\n- ")}\nCheck: node infrastructure/scripts/story-coverage.mjs --ticket ${ticket}`);
 
   const sessionId = SESSION_ID;
   const pushed = isPushed();
@@ -278,7 +283,7 @@ function render(contentPath) {
     RUN: esc(run.join("\n")),
     RUN_NOTE: c.runNote ? `<p class="muted">${c.runNote}</p>` : "",
     VERIFY: c.verify.map((v) => `<li>${v}</li>`).join(""),
-    VERIFY_NOTE: c.verifyNote ? `<p class="muted">${c.verifyNote}</p>` : "",
+    VERIFY_NOTE: (c.verifyNote ? `<p class="muted">${c.verifyNote}</p>` : "") + coverageHtml(gate.c),
   };
   // split/join, not String.replace: replacement text may contain "$&"-style sequences.
   const html = Object.entries(slots).reduce(
@@ -293,7 +298,7 @@ function render(contentPath) {
   writeFileSync(
     DRAFT,
     JSON.stringify(
-      { ticket, title: c.title, headline: plainText(c.headline), sessionId, prUrl: pr, uiChanged, hoisting: c.hoisting, testCoverageMap: c.testCoverageMap, visualComparison: c.visualComparison },
+      { ticket, title: c.title, headline: plainText(c.headline), sessionId, prUrl: pr, uiChanged, hoisting: c.hoisting, testCoverageMap: gate.c.story ? coverageMap(gate.c) : c.testCoverageMap, visualComparison: c.visualComparison },
       null,
       2
     )
@@ -440,6 +445,8 @@ function light(argv) {
     return i === -1 ? undefined : argv[i + 1];
   };
   if (!TICKET_FROM_BRANCH) throw new Error(`branch ${BRANCH} has no ticket id`);
+  const gate = storyGate(ROOT, TICKET_FROM_BRANCH, changedFiles());
+  if (gate.problems.length) throw new Error(`story coverage (CORE-182):\n- ${gate.problems.join("\n- ")}`);
   const pr = arg("--pr") ?? prUrl(TICKET_FROM_BRANCH, arg("--title"), "");
   if (!pr) throw new Error("--pr <compare or pull url> is required (no GitHub remote found)");
   const path = markerPath(TICKET_FROM_BRANCH);

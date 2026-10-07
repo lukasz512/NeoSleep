@@ -32,6 +32,13 @@ done
 
 AFFECTED_DIRS="$(printf '%s\n' "$ALL_CHANGED" | "$REPO_ROOT/infrastructure/scripts/affected-workspaces.sh")"
 
+# CORE-182: the branch's ticket story has a tagged test for every acceptance criterion
+# (and a real-backend e2e for a UI change). Same check as CI; takes well under a second.
+if ! node "$REPO_ROOT/infrastructure/scripts/story-coverage.mjs" --branch "$(git rev-parse --abbrev-ref HEAD)" --changed-from origin/dev; then
+  echo "pre-push: acceptance criteria without a test (above) — write the tests, tag them \"@<TICKET> ACn\", then push." >&2
+  exit 1
+fi
+
 if [ -z "$AFFECTED_DIRS" ]; then
   exit 0
 fi
