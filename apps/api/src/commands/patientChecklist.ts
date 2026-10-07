@@ -19,6 +19,7 @@ import { uploadPartnerDocument, deletePartnerDocument, downloadPartnerDocument, 
 import { listConsentsForEntity } from "../db/consent.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
 import { isSignatureDataUrl } from "../utils/signatureDataUrl.js";
+import { signaturePngFromPdf } from "../utils/pdfSignatureImage.js";
 import { MEDICAL_HISTORY_QUESTIONS, ORAL_EXAM_QUESTIONS, STOP_QUESTIONS, BANG_QUESTIONS, TMJ_FINDINGS } from "./clinicalRecordFields.js";
 import { historiaClinicaPrintFields, formatMeasure } from "./historiaClinicaPrint.js";
 
@@ -98,17 +99,21 @@ export type PrintResult =
   | { kind: "stored"; url: string };
 
 /**
- * The drawn signature stored next to a consent signed through the patient link (consent.metadata.signature_path), as a PNG data URL.
- * Null when there is none (signed before NEO-252) or storage can't serve it: the print then keeps the stamp alone.
+ * The drawn signature of a consent signed through the patient link, as a PNG data URL: the one stored on its own
+ * (consent.metadata.signature_path, NEO-252), or else the one inside the signed PDF (signed before NEO-252, NEO-255 D2).
+ * Null when there is none or storage can't serve it: the print then keeps the stamp alone.
  */
 async function consentSignatureDataUrl(ctx: TenantContext, patientId: string, consentId: string): Promise<string | null> {
   const consent = (await listConsentsForEntity(ctx.client, "patient", patientId)).find((c) => c.id === consentId);
   const path = consent?.metadata?.signature_path;
-  if (typeof path !== "string") return null;
+  const attachmentId = consent?.metadata?.file_attachment_id;
   try {
-    return `data:image/png;base64,${Buffer.from(await downloadPartnerDocument(path)).toString("base64")}`;
+    if (typeof path === "string") return `data:image/png;base64,${Buffer.from(await downloadPartnerDocument(path)).toString("base64")}`;
+    if (typeof attachmentId !== "string") return null;
+    const file = await getFileAttachmentById(ctx.client, attachmentId);
+    return file?.path ? signaturePngFromPdf(await downloadPartnerDocument(file.path)) : null;
   } catch (err) {
-    console.error(`[patientChecklist] could not load the consent signature ${path}:`, err);
+    console.error(`[patientChecklist] could not load the signature of consent ${consentId}:`, err);
     return null;
   }
 }
@@ -214,7 +219,7 @@ export async function PrintChecklistItemCommand(
     fields.consent_stamp = signedConsent
       ? documentT(locale, "documents.historiaEndo.consentSignedStamp", { date: formatFormDate(signedConsent.created_at, locale) })
       : "";
-    // NEO-252: and the patient's drawn signature above it, when it was stored on its own (signed after NEO-252).
+    // NEO-252: and the patient's drawn signature above it (stored on its own, or recovered from the signed PDF: NEO-255 D2).
     if (signedConsent) {
       const signature = await consentSignatureDataUrl(ctx, patientId, signedConsent.id);
       if (signature) images.firma_paciente = signature;
