@@ -127,7 +127,7 @@
             <Transition name="view-fade-lift">
               <div v-if="docRead" class="patient-questionnaire__sign">
                 <p class="patient-questionnaire__sign-label">{{ t("app.questionnaire.consentStep.signLabel") }}</p>
-                <ConsentSignatureField ref="signaturePadRef" @change="signed = !$event" />
+                <ConsentSignatureField ref="signaturePadRef" :phone-start="phoneStart" @change="signed = !$event" />
                 <!-- Who signs and when — shown before the tap, the same data the PDF will carry. -->
                 <p class="patient-questionnaire__signer" data-testid="consent-signer">
                   <strong>{{ t("app.questionnaire.consentStep.signer", { name: signerName, date: formatStamp(signingAt) }) }}</strong>
@@ -288,6 +288,7 @@ import AppIcon from "../components/AppIcon.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
 import AppSegmentProgress, { type SegmentState } from "../components/AppSegmentProgress.vue";
 import ConsentSignatureField from "../components/questionnaire/ConsentSignatureField.vue";
+import { patientHandoffStart } from "../composables/signatureHandoffStart";
 import ConsentDocumentReader from "../components/questionnaire/ConsentDocumentReader.vue";
 import PatientTopBar from "../components/questionnaire/PatientTopBar.vue";
 import QuestionnaireCards from "../components/questionnaire/QuestionnaireCards.vue";
@@ -364,6 +365,8 @@ const { t, locale } = useI18n();
 // Computed + watched: a second link opened in the same tab changes only the
 // fragment, which doesn't reload the page.
 const token = computed(() => route.hash.replace(/^#/, ""));
+/** CORE-172: a QR next to the consent pad when this page is open on a computer — sign on a phone instead. */
+const phoneStart = computed(() => patientHandoffStart(token.value));
 
 /** invalid = the link is dead (410); unreachable = anything else (offline, 429, cold start) — retryable, never told "invalid". */
 const phase = ref<"loading" | "invalid" | "unreachable" | "steps" | "submitted">("loading");

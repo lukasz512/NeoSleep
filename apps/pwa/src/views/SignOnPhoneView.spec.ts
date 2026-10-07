@@ -36,7 +36,7 @@ vi.mock("../components/questionnaire/ConsentSignatureField.vue", () => ({
   }),
 }));
 
-import PartnerSignView from "./PartnerSignView.vue";
+import SignOnPhoneView from "./SignOnPhoneView.vue";
 
 function json(status: number, body: unknown): Response {
   return { ok: status < 400, status, json: async () => body } as Response;
@@ -53,7 +53,7 @@ async function mountView() {
   setActivePinia(createPinia());
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
-  const wrapper = mount(PartnerSignView, { global: { plugins: [i18n, vuetify] }, attachTo: document.body });
+  const wrapper = mount(SignOnPhoneView, { global: { plugins: [i18n, vuetify] }, attachTo: document.body });
   mounted.push(wrapper);
   await flushPromises();
   return wrapper;
@@ -63,51 +63,65 @@ function buttonByText(text: string): HTMLButtonElement | undefined {
   return Array.from(document.querySelectorAll("button")).find((b) => b.textContent?.trim() === text);
 }
 
-describe("PartnerSignView (CORE-166)", () => {
-  it("reads the token from the #fragment, names the signer, and sends the signature", async () => {
-    apiFetch.mockImplementation(async (url: string) =>
-      url.startsWith("/api/v1/invite/sign-handoff?")
-        ? json(200, { status: "pending", firstName: "Ana", lastName: "Ruiz", versionLabel: "2.1" })
-        : json(200, { success: true }),
-    );
+const PENDING = { status: "pending", purpose: "partner_agreement", signerName: "Ana Ruiz", versionLabel: "2.1" };
+
+/** Lookup answered with `view`, sign answered with `signStatus`. */
+function routeApi(view: unknown, signStatus = 200) {
+  apiFetch.mockImplementation(async (url: string) =>
+    url === "/api/v1/public/signature-handoff/lookup" ? json(view ? 200 : 404, view ?? {}) : json(signStatus, { success: signStatus < 400 }),
+  );
+}
+
+function bodyOf(call: unknown[] | undefined): unknown {
+  return JSON.parse((call![1] as RequestInit).body as string);
+}
+
+describe("SignOnPhoneView — the page the QR opens (CORE-166, CORE-172)", () => {
+  it("reads the token from the #fragment, sends it in a POST body, names the signer, and sends the signature", async () => {
+    routeApi(PENDING);
     await mountView();
 
-    expect(apiFetch.mock.calls[0]![0]).toBe("/api/v1/invite/sign-handoff?h=qr-token");
+    expect(apiFetch.mock.calls[0]![0]).toBe("/api/v1/public/signature-handoff/lookup");
+    expect(bodyOf(apiFetch.mock.calls[0])).toEqual({ h: "qr-token" });
     expect(document.body.textContent).toContain("Ana Ruiz");
     expect(document.body.textContent).toContain("2.1");
 
-    buttonByText(en["user.partnerSign.send"])!.click();
+    buttonByText(en["app.signOnPhone.send"])!.click();
     await flushPromises();
 
-    const [url, init] = apiFetch.mock.calls[1]!;
-    expect(url).toBe("/api/v1/invite/sign-handoff/sign");
-    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ h: "qr-token", signatureDataUrl: SIGNATURE });
-    expect(document.body.textContent).toContain(en["user.partnerSign.sentTitle"]);
+    expect(apiFetch.mock.calls[1]![0]).toBe("/api/v1/public/signature-handoff/sign");
+    expect(bodyOf(apiFetch.mock.calls[1])).toEqual({ h: "qr-token", signatureDataUrl: SIGNATURE });
+    expect(document.body.textContent).toContain(en["app.signOnPhone.sentTitle"]);
   });
 
-  it("shows the expired state for an unknown or used code, and when sending finds it expired", async () => {
-    apiFetch.mockResolvedValue(json(404, {}));
+  it.each([
+    ["patient_consent", "app.signOnPhone.intro.patientConsent"],
+    ["doctor_print", "app.signOnPhone.intro.doctorPrint"],
+  ] as const)("says what is being signed for %s", async (purpose, key) => {
+    routeApi({ ...PENDING, purpose, signerName: "Lucía S.", versionLabel: null });
     await mountView();
-    expect(document.body.textContent).toContain(en["user.partnerSign.expiredTitle"]);
-    expect(buttonByText(en["user.partnerSign.send"])).toBeUndefined();
+    expect(document.body.textContent).toContain(en[key].replace("{name}", "Lucía S."));
+  });
+
+  it("shows the expired state for an unknown or used code", async () => {
+    routeApi(null);
+    await mountView();
+    expect(document.body.textContent).toContain(en["app.signOnPhone.expiredTitle"]);
+    expect(buttonByText(en["app.signOnPhone.send"])).toBeUndefined();
   });
 
   it("a code expiring between scan and send shows the expired state", async () => {
-    apiFetch.mockImplementation(async (url: string) =>
-      url.startsWith("/api/v1/invite/sign-handoff?")
-        ? json(200, { status: "pending", firstName: "Ana", lastName: "Ruiz", versionLabel: "2.1" })
-        : json(404, {}),
-    );
+    routeApi(PENDING, 404);
     await mountView();
-    buttonByText(en["user.partnerSign.send"])!.click();
+    buttonByText(en["app.signOnPhone.send"])!.click();
     await flushPromises();
-    expect(document.body.textContent).toContain(en["user.partnerSign.expiredTitle"]);
+    expect(document.body.textContent).toContain(en["app.signOnPhone.expiredTitle"]);
   });
 
   it("no token in the link → expired, nothing requested", async () => {
     route.hash = "";
     await mountView();
     expect(apiFetch).not.toHaveBeenCalled();
-    expect(document.body.textContent).toContain(en["user.partnerSign.expiredTitle"]);
+    expect(document.body.textContent).toContain(en["app.signOnPhone.expiredTitle"]);
   });
 });

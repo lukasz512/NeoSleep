@@ -50,16 +50,28 @@
     </Teleport>
   </div>
 
-  <!-- Tablets / desktop: the inline pad is big enough; Clear sits inside it, far from the submit button. -->
-  <SignaturePad
-    v-else
-    ref="inlinePadRef"
-    class="consent-signature"
-    @change="emit('change', $event)"
-    clear-placement="overlay"
-    :clear-label="t('app.questionnaire.consentStep.clear')"
-    :placeholder="t('app.questionnaire.consentStep.signHere')"
-  />
+  <!-- Tablets / desktop: the inline pad is big enough; Clear sits inside it, far from the submit button.
+       With `phoneStart`, a QR sits next to it to sign on a phone instead (CORE-172). -->
+  <div v-else class="consent-signature consent-signature--desk">
+    <div class="consent-signature__desk-pad">
+      <div v-if="phoneSignature" class="consent-signature__from-phone" data-testid="signature-from-phone">
+        <img :src="phoneSignature" :alt="t('app.phoneSign.fromPhone')" class="consent-signature__preview" />
+        <AppButton variant="text" size="small" @click="clearPhoneSignature">{{ t('app.phoneSign.redo') }}</AppButton>
+      </div>
+      <SignaturePad
+        v-else
+        ref="inlinePadRef"
+        clear-placement="overlay"
+        :clear-label="t('app.questionnaire.consentStep.clear')"
+        :placeholder="t('app.questionnaire.consentStep.signHere')"
+        @change="emit('change', $event)"
+      />
+    </div>
+    <template v-if="phoneStart && !phoneSignature">
+      <span class="consent-signature__or">{{ t('app.phoneSign.or') }}</span>
+      <PhoneSignPanel :start="phoneStart" class="consent-signature__phone" @signed="onPhoneSigned" />
+    </template>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -68,6 +80,8 @@ import { useI18n } from "vue-i18n";
 import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import SignaturePad from "../SignaturePad.vue";
+import PhoneSignPanel from "../PhoneSignPanel.vue";
+import type { SignatureHandoffStart } from "../../composables/signatureHandoffStart";
 
 /**
  * Patient consent signature (QR questionnaire, NEO-100). Same imperative API
@@ -82,6 +96,11 @@ import SignaturePad from "../SignaturePad.vue";
  * Safari has neither API) the sheet stays portrait, suggests turning the
  * phone, and follows the rotation live.
  */
+
+defineProps<{
+  /** Shows a "sign on your phone" QR next to the pad on tablets/desktop (CORE-172); the caller starts it with its own credential. */
+  phoneStart?: SignatureHandoffStart;
+}>();
 
 const { t } = useI18n();
 
@@ -163,12 +182,28 @@ onBeforeUnmount(() => {
   if (sheetOpen.value) close();
 });
 
+/** A signature drawn on the phone through the QR (CORE-172) — stands in for the pad until cleared. */
+const phoneSignature = ref<string | null>(null);
+
+function onPhoneSigned(signature: string) {
+  phoneSignature.value = signature;
+  emit("change", false);
+}
+
+/** Back to the pad, and a fresh QR (the panel re-mounts and starts a new code). */
+function clearPhoneSignature() {
+  phoneSignature.value = null;
+  emit("change", true);
+}
+
 function isEmpty(): boolean {
-  return isPhone ? preview.value === null : (inlinePadRef.value?.isEmpty() ?? true);
+  if (isPhone) return preview.value === null;
+  return phoneSignature.value === null && (inlinePadRef.value?.isEmpty() ?? true);
 }
 
 function toDataURL(): string | null {
-  return isPhone ? preview.value : (inlinePadRef.value?.toDataURL({ trim: true }) ?? null);
+  if (isPhone) return preview.value;
+  return phoneSignature.value ?? inlinePadRef.value?.toDataURL({ trim: true }) ?? null;
 }
 
 defineExpose({ isEmpty, toDataURL });
@@ -177,6 +212,39 @@ defineExpose({ isEmpty, toDataURL });
 <style scoped>
 .consent-signature {
   margin-bottom: 16px;
+}
+
+/* Pad and phone QR side by side (CORE-172); the pad keeps its own width rules. */
+.consent-signature--desk {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.consent-signature__desk-pad {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.consent-signature__or {
+  flex: none;
+  font-size: 0.8125rem;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+}
+
+.consent-signature__phone {
+  flex: 0 0 220px;
+}
+
+.consent-signature__from-phone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-height: 112px;
+  justify-content: center;
+  border: 1px dashed rgba(var(--v-theme-on-surface), 0.2);
+  border-radius: var(--pwa-radius);
 }
 
 .consent-signature__tap {
