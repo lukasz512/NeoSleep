@@ -700,6 +700,7 @@
   "user.login.appVersionWithChannel": "{version} · {channel}",
   "user.login.appChannelDev": "DEV",
   "user.login.appChannelLocal": "LOKALNIE",
+  "user.login.appChannelBadge": "{channel} {number}",
   "user.login.rememberMe": "Zapamiętaj mnie",
   "user.login.signIn": "Zaloguj się",
   "user.login.forgotPassword": "Nie pamiętasz hasła?",

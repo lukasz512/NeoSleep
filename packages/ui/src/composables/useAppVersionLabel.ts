@@ -7,6 +7,8 @@ export interface AppVersionParts {
   version: string;
   /** "DEV" / "LOCAL" on non-prod builds, null on prod. */
   channel: string | null;
+  /** "DEV 1.1.0.12" for the app bar badge (CORE-178), null on prod. */
+  badge: string | null;
 }
 
 /** The version and the channel as separate pieces, for places that show the
@@ -16,15 +18,18 @@ export function useAppVersionParts(): ComputedRef<AppVersionParts> {
   const { t } = useI18n();
   const appVersion = inject(APP_VERSION_KEY, undefined);
   return computed(() => {
-    if (!appVersion) return { version: "", channel: null };
+    if (!appVersion) return { version: "", channel: null, badge: null };
     const { version, build, channel } = appVersion;
     const base = build === null
       ? t("user.login.appVersion", { version })
       : t("user.login.appVersionBuild", { version, build });
-    if (channel === "prod") return { version: base, channel: null };
+    if (channel === "prod") return { version: base, channel: null, badge: null };
+    const channelLabel = channel === "dev" ? t("user.login.appChannelDev") : t("user.login.appChannelLocal");
+    const number = build === null ? version : `${version}.${build}`;
     return {
       version: base,
-      channel: channel === "dev" ? t("user.login.appChannelDev") : t("user.login.appChannelLocal"),
+      channel: channelLabel,
+      badge: t("user.login.appChannelBadge", { channel: channelLabel, number }),
     };
   });
 }

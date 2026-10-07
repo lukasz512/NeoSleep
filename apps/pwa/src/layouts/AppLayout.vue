@@ -38,14 +38,14 @@
             :folded="logoFolded"
             :mark-size="AVATAR_SIZE"
           />
-          <!-- NEO-102: which environment this is, only on non-prod builds. The
-               version itself lives at the foot of the account menu. -->
+          <!-- NEO-102: which environment this is, only on non-prod builds.
+               CORE-178: with the version too ("DEV 1.1.0.142"). -->
           <span
-            v-if="appVersion.channel"
+            v-if="appVersion.badge"
             ref="envBadge"
             class="layout-env-badge"
             data-testid="env-badge"
-          >{{ appVersion.channel }}</span>
+          >{{ appVersion.badge }}</span>
         </div>
       </template>
 
@@ -820,7 +820,7 @@ const moduleIcon = computed(() => {
   gap: 10px;
 }
 
-/* NEO-102: non-prod builds only ("DEV" / "LOCAL"), so a tester always knows
+/* NEO-102: non-prod builds only ("DEV 1.1.0.142"), so a tester always knows
    which environment they are in without opening anything. */
 .layout-env-badge {
   flex-shrink: 0;
