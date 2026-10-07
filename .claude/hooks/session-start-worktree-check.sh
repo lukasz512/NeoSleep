@@ -17,6 +17,6 @@ fi
 jq -n '{
   hookSpecificOutput: {
     hookEventName: "SessionStart",
-    additionalContext: "This session is running in the MAIN working tree. Standing decision (Łukasz, 2026-09-24): every new thread runs in its own git worktree — do NOT ask. Before the first file edit of any task that changes files, call EnterWorktree with name \"<ticket-id>-<kebab-slug>\" when a Linear ticket exists (e.g. neo-123-territory-admin-crud), otherwise \"<kebab-slug>\" describing the task. Pure questions/research with no file edits need no worktree. Edit/Write on main-tree files is blocked by pre-tool-main-tree-guard.sh."
+    additionalContext: "This session is running in the MAIN working tree. Standing decision (Łukasz, 2026-09-24): every new thread runs in its own git worktree — do NOT ask. Before the first file edit of any task that changes files, call EnterWorktree with name \"<ticket-id>-<kebab-slug>\" when a board ticket exists (e.g. neo-123-territory-admin-crud), otherwise \"<kebab-slug>\" describing the task. Pure questions/research with no file edits need no worktree. Edit/Write on main-tree files is blocked by pre-tool-main-tree-guard.sh."
   }
 }'

@@ -90,13 +90,13 @@
         ]
       },
       {
-        "matcher": "mcp__claude_ai_Linear__save_issue",
+        "matcher": "mcp__claude_ai_Linear__.*",
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/pre-tool-linear-ticket-format.sh",
+            "command": "bash .claude/hooks/pre-tool-linear-readonly.sh",
             "timeout": 10,
-            "statusMessage": "Checking Linear ticket format..."
+            "statusMessage": "Linear is read-only (CORE-187)..."
           }
         ]
       }
@@ -109,17 +109,6 @@
             "type": "command",
             "command": "bash .claude/hooks/post-push.sh",
             "timeout": 10
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__claude_ai_Linear__save_issue",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/linear-ticket-created-title-reminder.sh",
-            "timeout": 10,
-            "statusMessage": "Checking for new Linear ticket..."
           }
         ]
       }

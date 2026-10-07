@@ -28,7 +28,7 @@ Removes every `CANDIDATE` (worktree, local branch, merged origin branch), re-che
 
 ## Step 3 — The KEEP list
 
-Show Łukasz the `KEEP` entries grouped by reason — unmerged commits (with ticket + Linear status), dirty files (list them: forgotten ADRs/docs are the easiest thing to lose), locked (an open session — leave it). For each unmerged one, recommend: open a PR, park it (keep), or drop it. Never "rescue" a `KEEP` entry yourself (no stashing, no `--force`); deleting unmerged work is his call, done with `--apply` on the branches he names — and still refused by the script if it isn't merged, so a real drop needs his explicit go-ahead for `git branch -D` / `git push origin --delete`.
+Show Łukasz the `KEEP` entries grouped by reason — unmerged commits (with ticket + board status, `pnpm board get <KEY>`), dirty files (list them: forgotten ADRs/docs are the easiest thing to lose), locked (an open session — leave it). For each unmerged one, recommend: open a PR, park it (keep), or drop it. Never "rescue" a `KEEP` entry yourself (no stashing, no `--force`); deleting unmerged work is his call, done with `--apply` on the branches he names — and still refused by the script if it isn't merged, so a real drop needs his explicit go-ahead for `git branch -D` / `git push origin --delete`.
 
 ## Step 5 — Report
 
