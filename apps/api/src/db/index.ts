@@ -35,3 +35,4 @@ export * from "./patientScope.js";
 export * from "./careTeam.js";
 export * from "./platformAdmin.js";
 export * from "./problemReport.js";
+export * from "./workBoard.js";

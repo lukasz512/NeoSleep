@@ -130,9 +130,13 @@ describe("AppLayout", () => {
     it("admin always sees every nav item, including leads, documents, and territories (isRoleAllowed bypasses role restrictions for admin)", () => {
       const expectedPaths = [
         "/dashboard", "/leads", "/hcp", "/hco", "/patients", "/calendar", "/sleep-studies",
-        "/treatment-plans", "/resources", "/users", "/documents", "/territories", "/issues",
+        "/treatment-plans", "/resources", "/users", "/documents", "/territories", "/issues", "/platform/board",
       ];
       expect(navRoutesForRole("admin").map((r) => r.path)).toEqual(expectedPaths);
+    });
+
+    it("only the work board is platformOnly — useVisibleNavRoutes hides it from tenant admins (CORE-177)", () => {
+      expect(navRoutesForRole("admin").filter((r) => r.platformOnly).map((r) => r.path)).toEqual(["/platform/board"]);
     });
 
     it("doctor sees the Panel, patients, the clinical aggregates, calendar, and resources — never leads, hcp, hco, or users", () => {
