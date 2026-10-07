@@ -1,6 +1,6 @@
 ---
 name: linear-worker
-description: Nightly autonomous ticket worker — reads one "Ready for Worker" ticket from Linear, runs it through /enrich-user-story and implementation, self-checks against quality-gate.sh's own criteria, and pushes a branch (never a PR, never dev/prod) with a comment back on the ticket. Use when running the nightly Linear worker routine, or when Łukasz wants to manually test/dry-run this flow against a specific ticket.
+description: Autonomous ticket worker — reads one "Ready for Worker" or `auto`-labelled (routine, non-UI) ticket from Linear, runs it through /enrich-user-story and implementation, self-checks against quality-gate.sh's own criteria, and pushes a branch (never a PR, never dev/prod) with a comment back on the ticket. Use when running the nightly Linear worker routine, or when Łukasz wants to manually test/dry-run this flow against a specific ticket.
 argument-hint: "[linear-ticket-id | dry-run]"
 ---
 
@@ -16,8 +16,8 @@ You process **exactly one** Linear ticket per run, unattended. Nobody is watchin
 
 ## Ticket Contract
 
-- **Trigger state**: Linear status `Ready for Worker`.
-- **Selection**: strict FIFO queue by `createdAt` — oldest `Ready for Worker` ticket first, regardless of Linear priority. Exactly one ticket per run — never process a second one even if the first finishes early.
+- **Trigger**: Linear status `Ready for Worker`, or label **`auto`** on a ticket still in `Backlog`/`Todo` (CORE-183): routine non-UI work (backend, hooks, scripts, docs) Łukasz hands off so it doesn't run in his interactive session.
+- **Selection**: `node infrastructure/scripts/worker-auto.mjs pick <issues.json>` (write the Linear list as `[{identifier, createdAt, state, labels}]`): `ci-failed` first, then strict FIFO by `createdAt` over both triggers, regardless of priority. It prints the ticket and its mode (`ci-fix`, `auto`, `ready`). Exactly one ticket per run — never process a second one even if the first finishes early.
 - **Fields read**: title + description (the raw input to `/enrich-user-story`), plus any attached screenshots/mockups if the Linear MCP tools available in this session expose attachment content — this is **unverified as of the first run of this skill**; if attachments can't be read, proceed on title + description alone and note in your Linear comment that attachments were not readable, rather than blocking on it.
 - **Claim step**: the moment you select a ticket, move it to `Worker: In Progress` before doing anything else. This exists so a second run (or a retry) can never double-process the same ticket, and so Łukasz sees "being worked on" state if he checks mid-run.
 - **Terminal states**: `Needs Review` (success) or `Blocked` (any stop condition below). Always leave a comment explaining what happened — a bare status change is not enough.
@@ -31,14 +31,15 @@ You process **exactly one** Linear ticket per run, unattended. Nobody is watchin
 Details for each step live in `references/`; read the matching file when you reach that step.
 
 1. **Orient** - read the repo root `CLAUDE.md` in full.
-2. **Select** - query Linear for `Ready for Worker`. If `$ARGUMENTS` names a ticket, use it (manual/dry-run). None found and no argument: end cleanly (no branch, push or comment). A `ci-failed` ticket goes first and runs in CI-fix mode instead of steps 3-9. CI-fix mode and the environment pre-flight (step 2.5, run before claiming; a failed pre-flight leaves the ticket in `Ready for Worker` with a comment): `references/ci-fix-and-preflight.md`.
+2. **Select** - query Linear for `Ready for Worker` and for label `auto`, then let `worker-auto.mjs pick` choose. If `$ARGUMENTS` names a ticket, use it (manual/dry-run). None found and no argument: end cleanly (no branch, push or comment). A `ci-failed` ticket goes first and runs in CI-fix mode instead of steps 3-9. CI-fix mode and the environment pre-flight (step 2.5, run before claiming; a failed pre-flight leaves the ticket in `Ready for Worker` with a comment): `references/ci-fix-and-preflight.md`.
 3. **Claim** - move the ticket to `Worker: In Progress`.
 4. **Compliance-sensitive scope check** before any implementation. Always blocked: migrations, `auth.ts`, `consent`/`audit_log` backend code, any new or modified backend code touching `identities`/`patient`/`practitioner`. If blocked: comment, move to `Blocked`, end with a clean tree. Full rules and override format: `references/compliance-scope-check.md`.
-5. **Enrich** - run `/enrich-user-story`; unanswerable open questions mean comment verbatim, `Blocked`, clean tree. Feature tickets get a story doc in `docs/stories/` with a platform-vs-client line; ambiguous designs go through `/arch assess`. Details: `references/enrich.md`.
+5. **Enrich** - mode `auto`: skip, the ticket's `## Done when` is the spec (its items become the tagged tests). Otherwise run `/enrich-user-story`; unanswerable open questions mean comment verbatim, `Blocked`, clean tree. Feature tickets get a story doc in `docs/stories/` with a platform-vs-client line; ambiguous designs go through `/arch assess`. Details: `references/enrich.md`.
 6. **Implement** - follow CLAUDE.md unconditionally, only what the ticket asks. If step 5 flagged `ambiguous`, run the double-implementation pass: `references/double-implementation.md`.
+6.5 **`auto` guard** (mode `auto` only) - `node infrastructure/scripts/worker-auto.mjs guard`. Exit 1 means the work turned out to touch UI, a view, an API route or a migration: `git reset --hard`, remove untracked files, delete the local branch, post the comment it printed, remove the `auto` label, move the ticket to `Todo`, end. Nothing is pushed.
 7. **Self-check** (run it yourself, do not rely on the Stop hook): DB reachability probe, build compiled packages, lint, typecheck, tests, depcruise, docs diff, spec for risk-touched files, then the backward consistency check (7.5). Full list: `references/self-check.md`.
 8. **On any self-check failure**: stop, no fix, no retry. `git reset --hard`, remove untracked files, delete the local branch, comment the exact failing checks, move to `Blocked`, end the turn.
-9. **On success**: commit (agent co-author trailer), branch `worker/<ticket-id>-<slug>` from `dev`, `git push -u origin`, never push dev/prod, never open a PR. Completion Artifact with the marker file, pre-filled compare URL in the Linear comment, wait for CI, move to `Needs Review`. Full details: `references/on-success.md`.
+9. **On success** — mode `auto`: commit, push `worker/<ticket-id>-<slug>`, wait for CI, then the **light handover** only: one Linear comment (2 sentences: what changed and why, the pre-filled compare URL, the branch), `node .claude/skills/ship-artifact/build.mjs light --linear-commented --linear-status "Needs Review"`, move to `Needs Review`. No Artifact page, no screenshots. `node infrastructure/scripts/worker-auto.mjs dry-run <issues.json> <paths…>` prints this sequence. Mode `ready`: commit (agent co-author trailer), branch `worker/<ticket-id>-<slug>` from `dev`, `git push -u origin`, never push dev/prod, never open a PR. Completion Artifact with the marker file, pre-filled compare URL in the Linear comment, wait for CI, move to `Needs Review`. Full details: `references/on-success.md`.
 
 ---
 
