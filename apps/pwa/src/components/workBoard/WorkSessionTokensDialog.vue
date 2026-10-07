@@ -151,7 +151,7 @@ watch(
 .work-tokens__used,
 .work-tokens__state {
   margin: 0;
-  color: rgb(var(--v-theme-on-surface-variant));
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   font-size: 0.875rem;
 }
 
@@ -167,7 +167,7 @@ watch(
   gap: 4px;
   padding: 12px;
   border-radius: 8px;
-  background: rgb(var(--v-theme-surface-variant));
+  background: rgba(var(--v-theme-primary), 0.08);
 }
 
 .work-tokens__once-hint {
