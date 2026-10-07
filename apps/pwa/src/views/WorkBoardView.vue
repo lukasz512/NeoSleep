@@ -11,6 +11,16 @@
     <template v-else>
       <div class="work-board__toolbar" :class="{ 'work-board__toolbar--compact': compact }">
         <AppChipTabs v-model="team" :options="teamOptions" class="work-board__teams" data-testid="work-board-teams" />
+        <AppButton
+          :variant="sessionsOnly ? 'tonal' : 'outlined'"
+          :color="sessionsOnly ? 'primary' : undefined"
+          :prepend-icon="sessionsOnly ? 'mdi-check' : 'mdi-robot-outline'"
+          :aria-pressed="sessionsOnly"
+          data-testid="work-board-session-filter"
+          @click="sessionsOnly = !sessionsOnly"
+        >
+          {{ t("workBoard.sessionFilter") }}
+        </AppButton>
         <VTextField
           ref="searchRef"
           v-model="query"
@@ -22,6 +32,9 @@
           class="work-board__search"
           data-testid="work-board-search"
         />
+        <AppButton variant="text" prepend-icon="mdi-key-outline" data-testid="work-board-tokens" @click="tokensOpen = true">
+          {{ t("workBoard.tokens.open") }}
+        </AppButton>
         <AppButton color="primary" variant="flat" data-testid="work-board-new" @click="creating = true">
           {{ t("workBoard.new") }}
         </AppButton>
@@ -74,6 +87,7 @@
       @close="closeDialog"
       @saved="onSaved"
     />
+    <WorkSessionTokensDialog :open="tokensOpen" @close="tokensOpen = false" />
   </div>
 </template>
 
@@ -89,7 +103,9 @@ import AppEmptyState from "../components/AppEmptyState.vue";
 import AppErrorState from "../components/AppErrorState.vue";
 import WorkItemCard from "../components/workBoard/WorkItemCard.vue";
 import WorkItemDialog from "../components/workBoard/WorkItemDialog.vue";
+import WorkSessionTokensDialog from "../components/workBoard/WorkSessionTokensDialog.vue";
 import {
+  SESSION_LABEL,
   WORK_BOARD_COLUMNS,
   fetchWorkItems,
   fetchWorkTeams,
@@ -118,6 +134,9 @@ const items = ref<WorkItem[]>([]);
 const team = ref<string>(ALL);
 const query = ref<string | null>("");
 const creating = ref(false);
+/** Only tickets a Claude Code session created (label `session`, CORE-187). */
+const sessionsOnly = ref(false);
+const tokensOpen = ref(false);
 const dropTarget = ref<WorkStatus | null>(null);
 const searchRef = ref<{ focus: () => void } | null>(null);
 const compact = computed(() => smAndDown.value);
@@ -128,7 +147,12 @@ const teamOptions = computed(() => [
 ]);
 
 const visible = computed(() =>
-  items.value.filter((item) => (team.value === ALL || item.team_key === team.value) && matchesQuery(item, query.value ?? "")),
+  items.value.filter(
+    (item) =>
+      (team.value === ALL || item.team_key === team.value) &&
+      (!sessionsOnly.value || item.labels.includes(SESSION_LABEL)) &&
+      matchesQuery(item, query.value ?? ""),
+  ),
 );
 const grouped = computed(() => groupByStatus(visible.value));
 
@@ -216,7 +240,7 @@ function isTyping(target: EventTarget | null): boolean {
 
 function onKeydown(event: KeyboardEvent): void {
   if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
-  if (openKey.value || creating.value) return;
+  if (openKey.value || creating.value || tokensOpen.value) return;
   if (event.key === "/") {
     event.preventDefault();
     searchRef.value?.focus();

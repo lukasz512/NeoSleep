@@ -5,7 +5,7 @@
  */
 import { isApiError, reportCaught, reportFailedResponse } from "@api";
 import { apiFetch } from "./useApi";
-import type { WorkItem, WorkItemDraft, WorkItemEvent, WorkItemPatch, WorkLinkKind, WorkStatus, WorkTeam } from "../types/workBoard";
+import type { WorkItem, WorkItemDraft, WorkItemEvent, WorkItemPatch, WorkLinkKind, WorkSessionToken, WorkStatus, WorkTeam } from "../types/workBoard";
 
 /** Board columns, left to right. `canceled` is closed and has no column. */
 export const WORK_BOARD_COLUMNS: readonly WorkStatus[] = [
@@ -100,6 +100,32 @@ export function neighbourStatus(status: WorkStatus, step: -1 | 1): WorkStatus | 
   const index = WORK_BOARD_COLUMNS.indexOf(status);
   if (index < 0) return null;
   return WORK_BOARD_COLUMNS[index + step] ?? null;
+}
+
+/** Label a Claude Code session puts on the tickets it creates (CORE-187). */
+export const SESSION_LABEL = "session";
+
+export async function fetchSessionTokens(): Promise<WorkSessionToken[]> {
+  return (await request<{ items: WorkSessionToken[] }>("useWorkBoard.tokens", `${BASE}/session-tokens`)).items;
+}
+
+/** The plaintext token is in this answer only; the board never shows it again. */
+export async function issueSessionToken(name: string): Promise<{ item: WorkSessionToken; token: string }> {
+  return request("useWorkBoard.issueToken", `${BASE}/session-tokens`, jsonInit("POST", { name }));
+}
+
+/** DELETE answers 204 with no body, so it skips request()'s JSON parse. */
+export async function revokeSessionToken(id: string): Promise<void> {
+  const where = "useWorkBoard.revokeToken";
+  const path = `${BASE}/session-tokens/${encodeURIComponent(id)}`;
+  let res: Response;
+  try {
+    res = await apiFetch(path, { method: "DELETE", handleErrors: false });
+  } catch (err) {
+    reportCaught(err, { where });
+    throw err;
+  }
+  if (!res.ok) throw await reportFailedResponse(res, { where, path, method: "DELETE" });
 }
 
 /** The first link of a kind, for the card's icons. */
