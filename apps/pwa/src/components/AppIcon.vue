@@ -345,6 +345,13 @@ const ICONS = {
     paths: `<path d="M4 21V4" />
             <path d="M4 4h12l-2 4 2 4H4" />`,
   },
+  // Three kanban columns of different heights — the platform work board (CORE-177).
+  "nav-work-board": {
+    strokeWidth: 2,
+    paths: `<rect x="3" y="3" width="5" height="14" rx="1" />
+            <rect x="10" y="3" width="5" height="9" rx="1" />
+            <rect x="17" y="3" width="4" height="18" rx="1" />`,
+  },
   // Speech bubble with an exclamation mark — "report a problem / feedback" in the account menu.
   // The bubble is a circle around the viewBox centre (12, 12) with its tail at the lower left,
   // so the "!" sits in its middle (CORE-158).

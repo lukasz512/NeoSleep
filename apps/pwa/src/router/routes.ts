@@ -95,6 +95,9 @@ export const routes: RouteRecordRaw[] = [
   // Every signed-in user: their own reports and what happened to them. Opened from the user menu, not the nav.
   { path: "/my-reports", name: "my-reports", component: () => import("../views/MyReportsView.vue"), meta: { layout: "app", requiresAuth: true, hidden: true } },
   { path: "/issues", name: "issues", component: () => import("../views/IssuesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin"] } },
+  // Platform work board (CORE-177): every team's tickets, platform admins only (`platformOnly` hides the nav
+  // entry from tenant admins; the API answers them 403 anyway).
+  { path: "/platform/board", name: "work-board", component: () => import("../views/WorkBoardView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin"], platformOnly: true } },
   { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
 ];
 
@@ -117,6 +120,7 @@ export const appNavRoutes = routes
     path: r.path,
     name: (r as { name: string }).name,
     roles: (r.meta as { roles?: UserRole[] } | undefined)?.roles,
+    platformOnly: (r.meta as { platformOnly?: boolean } | undefined)?.platformOnly === true,
   }));
 
 /** Undefined `roles` means "visible/allowed to all". admin always bypasses — sees every view. */
