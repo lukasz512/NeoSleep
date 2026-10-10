@@ -270,6 +270,7 @@ async function sendComment(): Promise<void> {
 function actorLabel(event: WorkItemEvent): string {
   if (event.actor_kind === "agent") return t("workBoard.actor.agent");
   if (event.actor_kind === "import") return t("workBoard.actor.import");
+  if (event.actor_kind === "session") return t("workBoard.actor.session", { name: (event.actor ?? "").replace(/^session:/, "") });
   return event.actor ?? "";
 }
 

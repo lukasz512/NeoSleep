@@ -1,6 +1,6 @@
 ---
 name: ship-artifact
-description: Builds, publishes and hands over the per-change Artifact (the one deliverable Łukasz reads after every session) from a fixed template — fills ticket/branch/PR/session links automatically, attaches it to the Linear ticket, comments there, moves the ticket to Needs Review and writes the quality-gate marker. Use at the end of any change, ticket or not, or when asked to show/refresh/redo the artifact for a branch.
+description: Builds, publishes and hands over the per-change Artifact (the one deliverable Łukasz reads after every session) from a fixed template — fills ticket/branch/PR/session links automatically, links it on the board ticket, comments there, moves the ticket to Needs Review and writes the quality-gate marker. Use at the end of any change, ticket or not, or when asked to show/refresh/redo the artifact for a branch.
 argument-hint: "[content.json path]"
 ---
 
@@ -8,11 +8,11 @@ argument-hint: "[content.json path]"
 
 > **Focus**: $ARGUMENTS — a content JSON to render; empty means write one first (Step 1).
 
-Łukasz's standing rule (2026-09-25): after every session the Artifact is **the** deliverable — on the Linear ticket and in the chat. He needs nothing else. This skill makes it the same shape every time, so he learns where to look. Rules behind it: docs/CLAUDE_WORKFLOW.md "Standing decisions"; `.claude/hooks/quality-gate.sh` enforces the marker.
+Łukasz's standing rule (2026-09-25): after every session the Artifact is **the** deliverable — on the board ticket (`/platform/board`, CORE-187) and in the chat. He needs nothing else. This skill makes it the same shape every time, so he learns where to look. Rules behind it: docs/CLAUDE_WORKFLOW.md "Standing decisions"; `.claude/hooks/quality-gate.sh` enforces the marker.
 
-**Before anything: a Linear ticket and a branch named after it (NEO-84).** No ticket → create one in CORE (platform), NEO (NeoSleep-only) or AJM (`## Problem` / `## Change` / `## Done when`, ≤1500 chars — the PreToolUse hook rejects anything else) and rename the branch. `render` refuses a branch without `<key>-<n>` (keys in `.claude/ticket-teams`).
+**Before anything: a board ticket and a branch named after it (NEO-84).** No ticket → `pnpm board create --team CORE|NEO|AJM --title … --body '## Problem … ## Change … ## Done when …'` (≤1500 chars; the CLI and the API reject anything else; it lands in Building with the `session` label) and rename the branch. Linear is read-only since CORE-187. `render` refuses a branch without `<key>-<n>` (keys in `.claude/ticket-teams`).
 
-**Full or light (CORE-175, decision slim-r1 D2).** The full page below is only for UI/feature changes: any `.vue/.css/.scss`, a view, an API route or a migration (`.claude/hooks/lib/change-shape.sh`). Anything else (service fix, hooks, docs, config) gets the **light** handover instead: push, post one Linear comment (2 sentences + PR link + branch), move the ticket to Needs Review, then `node .claude/skills/ship-artifact/build.mjs light --linear-commented --linear-status "Needs Review"` (`--pr <url>` once a PR exists). No page, no screenshots, no Change Index row.
+**Full or light (CORE-175, decision slim-r1 D2).** The full page below is only for UI/feature changes: any `.vue/.css/.scss`, a view, an API route or a migration (`.claude/hooks/lib/change-shape.sh`). Anything else (service fix, hooks, docs, config) gets the **light** handover instead: push, post one board comment (`pnpm board comment <KEY> "…"`: 2 sentences + PR link + branch), `pnpm board move <KEY> needs_review`, then `node .claude/skills/ship-artifact/build.mjs light --board-commented --board-status needs_review` (`--pr <url>` once a PR exists). No page, no screenshots, no Change Index row.
 
 **TDD is the first rule of every Artifact (Łukasz, 2026-09-28, CORE-44).** The acceptance criteria become failing tests before the code, `verify` mirrors them, and `testCoverageMap` points at them. Anything a test settles is **not** a question for Łukasz: decide it, prove it with the test, and list it in `defaults`.
 
@@ -66,7 +66,7 @@ Rules for the content:
 - **defaults**: `[{text, test}]`, the choices you made without asking because a test proves them.
 - **Before/after is mandatory.** Backend-only → `beforeAfter` behavior table (request → status per role/territory; `hole` = the bug, `deny`/`allow` = correct). UI (`.vue/.css/.scss` changed) → real screenshots in `images` (the script refuses to render without them), or `mockupHtml` clearly labeled as a mockup when no live render is possible. Real PWA screenshots without a DB: see memory `feedback-always-worktree-always-artifact` (vite + Playwright with `/api/v1/` stubbed).
 - **verify** mirrors the acceptance criteria 1:1.
-- Everything else (ticket, branch, changed files, Create PR URL, the links — Linear, VS Code session (and the Artifact URL in the Linear comment) — `claude --resume`, git checkout line) is filled in by the script — don't write it.
+- Everything else (ticket, branch, changed files, Create PR URL, the links — board card, VS Code session (and the Artifact URL in the board comment) — `claude --resume`, git checkout line) is filled in by the script — don't write it.
 
 ## Step 2 — Render
 
@@ -74,22 +74,22 @@ Rules for the content:
 node .claude/skills/ship-artifact/build.mjs render <scratchpad>/artifact-content.json
 ```
 
-Prints the page path and a ready Linear comment (summary + the 3 links + PR). The page itself has no Artifact button (it would link to itself, NEO-91); the Artifact URL goes into the Linear comment and the index. The page opens with the neoCRM brand band (NeoSleep palette + mark until neoCRM has its own kit). Render **after** `git push` so the Create PR button is live; before the push it shows a dashed "PR link after push" placeholder (fine for a mid-session preview, not for handover).
+Prints the page path and a ready board comment (summary + the 3 links + PR). The page itself has no Artifact button (it would link to itself, NEO-91); the Artifact URL goes into the board comment and the index. The page opens with the neoCRM brand band (NeoSleep palette + mark until neoCRM has its own kit). Render **after** `git push` so the Create PR button is live; before the push it shows a dashed "PR link after push" placeholder (fine for a mid-session preview, not for handover).
 
 ## Step 3 — Publish
 
 `Artifact` tool with the printed page path (`icon` on first publish only, one-sentence `description`). With `decisions`, also pass `capabilities: {"comments": {}}` so "Send to Claude" works, and check that the session watches it with auto-replies armed. Re-render + republish the same path to update — same URL.
 
-## Step 4 — Linear (ticket branches only)
+## Step 4 — Board (ticket branches only)
 
-1. `save_issue` → `links: [{url: <artifact url>, title: "Artifact: <title>"}]` (attachment; append-only, safe to repeat).
-2. `save_comment` → the comment text Step 2 printed, with `<ARTIFACT_URL>` replaced. On a refresh, update the earlier comment (`id`) instead of adding a new one.
-3. Once pushed: `save_issue` → `state: "Needs Review"`. **Never** Done/closed — closing is Łukasz's call ([[feedback-dont-ship-open-questions-as-done]]). If the ticket still has an unresolved item from the original ask, leave the status and put it in `decisions`.
+1. `pnpm board link <KEY> --kind artifact --url <artifact url> --title "Artifact: <title>"` (a repeated URL is ignored, safe to repeat); once pushed also `--kind pr --url <PR or compare url>`.
+2. `pnpm board comment <KEY> "<the text Step 2 printed, <ARTIFACT_URL> replaced>"`. A refresh adds a short new comment (the history is append-only).
+3. Once pushed: `pnpm board branch <KEY> <branch>` and `pnpm board move <KEY> needs_review`. **Never** Done/closed — the session token can't, and closing is Łukasz's call ([[feedback-dont-ship-open-questions-as-done]]). If the ticket still has an unresolved item from the original ask, leave the status and put it in `decisions`.
 
 ## Step 5 — Marker
 
 ```bash
-node .claude/skills/ship-artifact/build.mjs finalize --url <artifact url> --linear-attached --linear-commented --linear-status "Needs Review"
+node .claude/skills/ship-artifact/build.mjs finalize --url <artifact url> --board-linked --board-commented --board-status needs_review
 ```
 
 Only pass the flags for what you actually did.

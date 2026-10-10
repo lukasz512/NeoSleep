@@ -1,5 +1,5 @@
 import { Router, type Router as RouterType, type Request, type Response, type NextFunction } from "express";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import {
@@ -8,12 +8,16 @@ import {
   addWorkItemComment,
   createWorkItem,
   getWorkItem,
+  insertSessionToken,
   isPlatformAdmin,
   listWorkItemEvents,
+  listSessionTokens,
   listWorkItems,
   listWorkTeams,
   parseWorkItemKey,
+  revokeSessionToken,
   updateWorkItem,
+  touchSessionToken,
   workTeamExists,
   type WorkActor,
   type WorkItemPatch,
@@ -27,17 +31,23 @@ import { routeParam } from "./utils.js";
 
 /**
  * Platform work board (CORE-177, docs/stories/platform-work-board.md): the kanban that
- * replaces Linear. Two kinds of caller:
+ * replaces Linear. Three kinds of caller:
  *  - a platform admin (platform.users owner/admin), signed in as usual: may do anything;
  *  - the nightly agent, with `X-Agent-Token` (its SHA-256 is WORK_BOARD_AGENT_TOKEN_SHA256):
  *    never sees Triage, may comment, add links, set the branch and make only the moves in
- *    AGENT_MOVES. Approving a spec and closing work stay human (segregation of duties).
+ *    AGENT_MOVES. Approving a spec and closing work stay human (segregation of duties);
+ *  - a Claude Code session, with `X-Session-Token` (one per device, issued and revoked on the
+ *    board, CORE-187): creates its own ticket straight into Building with the `session` label,
+ *    comments, links, sets the branch and hands over to Needs Review. Never closes, never
+ *    edits the text, never sees Triage.
  * Tenant users get 403; the board holds no tenant or patient data.
  */
 
 export const workBoardRouter: RouterType = Router();
 
 export const AGENT_TOKEN_HEADER = "x-agent-token";
+export const SESSION_TOKEN_HEADER = "x-session-token";
+export const SESSION_LABEL = "session";
 
 /** The only status moves the agent may make: spec written, build started, build finished or given back. */
 export const AGENT_MOVES: Readonly<Partial<Record<WorkStatus, readonly WorkStatus[]>>> = {
@@ -47,6 +57,12 @@ export const AGENT_MOVES: Readonly<Partial<Record<WorkStatus, readonly WorkStatu
 };
 
 const AGENT_FIELDS = new Set(["status", "add_links", "branch"]);
+
+/** A session picks work up (Building) and hands it over (Needs Review); closed work stays closed. */
+const SESSION_TARGETS: readonly WorkStatus[] = ["building", "needs_review"];
+const SESSION_CLOSED: readonly WorkStatus[] = ["done", "canceled"];
+/** Same limit the old Linear ticket-format hook enforced (NEO-84). */
+const MAX_SESSION_TICKET = 1500;
 const MAX_TITLE = 200;
 const MAX_BODY = 5000;
 const MAX_COMMENT = 5000;
@@ -60,8 +76,26 @@ function agentTokenMatches(token: string): boolean {
   return timingSafeEqual(actual, Buffer.from(expected, "hex"));
 }
 
+function sha256Hex(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
 /** Sets res.locals.actor, or answers 401/403. */
 function requireBoardActor(req: Request, res: Response, next: NextFunction): void {
+  const sessionToken = req.header(SESSION_TOKEN_HEADER);
+  if (sessionToken !== undefined) {
+    touchSessionToken(sha256Hex(sessionToken))
+      .then((row) => {
+        if (!row) {
+          res.status(401).json({ error: "Authentication required" });
+          return;
+        }
+        res.locals.actor = { name: `session:${row.name}`, kind: "session" } satisfies WorkActor;
+        next();
+      })
+      .catch(next);
+    return;
+  }
   const agentToken = req.header(AGENT_TOKEN_HEADER);
   if (agentToken !== undefined) {
     if (!agentTokenMatches(agentToken)) {
@@ -155,10 +189,27 @@ function itemKey(req: Request): { team: string; number: number } {
   return parsed;
 }
 
-/** The agent never sees Triage: an untriaged item is answered as not found. */
-function hideTriageFromAgent(actor: WorkActor, item: WorkItemRow | null, key: string): WorkItemRow {
-  if (!item || (actor.kind === "agent" && item.status === "triage")) throw new NotFoundError("Work item", key);
+/** Only people see Triage: for the agent and sessions an untriaged item is answered as not found. */
+function hideTriageFromMachines(actor: WorkActor, item: WorkItemRow | null, key: string): WorkItemRow {
+  if (!item || (actor.kind !== "human" && item.status === "triage")) throw new NotFoundError("Work item", key);
   return item;
+}
+
+function requireHuman(res: Response): WorkActor {
+  const actor = actorOf(res);
+  if (actor.kind !== "human") throw new ForbiddenError("Only a platform admin can do this");
+  return actor;
+}
+
+/** A session ticket follows the NEO-84 template: all three sections, short. */
+function requireSessionTicket(problem: string | null, change: string | null, doneWhen: string | null): void {
+  for (const [name, value] of [["problem", problem], ["change", change], ["done_when", doneWhen]] as const) {
+    if (!value) throw new ValidationError(`${name} is required (Problem / Change / Done when)`, name);
+  }
+  const length = (problem ?? "").length + (change ?? "").length + (doneWhen ?? "").length;
+  if (length > MAX_SESSION_TICKET) {
+    throw new ValidationError(`the ticket is ${length} characters (max ${MAX_SESSION_TICKET}); keep it to this change only`, "problem");
+  }
 }
 
 // GET /api/v1/platform/work/teams
@@ -176,7 +227,7 @@ workBoardRouter.get(
     const team = typeof req.query.team === "string" && req.query.team ? req.query.team.toUpperCase() : null;
     let statuses: WorkStatus[] | null =
       typeof req.query.status === "string" && req.query.status ? req.query.status.split(",").map(statusValue) : null;
-    if (actorOf(res).kind === "agent") statuses = (statuses ?? [...WORK_STATUSES]).filter((s) => s !== "triage");
+    if (actorOf(res).kind !== "human") statuses = (statuses ?? [...WORK_STATUSES]).filter((s) => s !== "triage");
     res.json({ items: await listWorkItems({ team, statuses }) });
   })
 );
@@ -186,12 +237,12 @@ workBoardRouter.get(
   "/platform/work/items/:key",
   asyncHandler(async (req, res) => {
     const { team, number } = itemKey(req);
-    const item = hideTriageFromAgent(actorOf(res), await getWorkItem(team, number), `${team}-${number}`);
+    const item = hideTriageFromMachines(actorOf(res), await getWorkItem(team, number), `${team}-${number}`);
     res.json({ item, events: await listWorkItemEvents(item.id) });
   })
 );
 
-// POST /api/v1/platform/work/items — human only; the agent works on existing items.
+// POST /api/v1/platform/work/items — people and sessions; the agent works on existing items.
 workBoardRouter.post(
   "/platform/work/items",
   asyncHandler(async (req, res) => {
@@ -199,16 +250,28 @@ workBoardRouter.post(
     if (actor.kind === "agent") throw new ForbiddenError("The agent cannot create work items");
     const team = typeof field(req.body, "team") === "string" ? (field(req.body, "team") as string).toUpperCase() : "";
     if (!(await workTeamExists(team))) throw new ValidationError("unknown team", "team");
+    const title = requiredTitle(field(req.body, "title"));
+    const problem = hasField(req.body, "problem") ? optionalBody(field(req.body, "problem"), "problem") : null;
+    const change = hasField(req.body, "change") ? optionalBody(field(req.body, "change"), "change") : null;
+    const doneWhen = hasField(req.body, "done_when") ? optionalBody(field(req.body, "done_when"), "done_when") : null;
+    let status: WorkStatus = hasField(req.body, "status") ? statusValue(field(req.body, "status")) : "backlog";
+    let labels = hasField(req.body, "labels") ? labelsValue(field(req.body, "labels")) : [];
+    if (actor.kind === "session") {
+      // Decision core187-r1 Q2: the session is already working on it; the label makes it filterable.
+      requireSessionTicket(problem, change, doneWhen);
+      status = "building";
+      labels = [...new Set([...labels, SESSION_LABEL])];
+    }
     const item = await createWorkItem(
       {
         team,
-        title: requiredTitle(field(req.body, "title")),
-        problem: hasField(req.body, "problem") ? optionalBody(field(req.body, "problem"), "problem") : null,
-        change: hasField(req.body, "change") ? optionalBody(field(req.body, "change"), "change") : null,
-        done_when: hasField(req.body, "done_when") ? optionalBody(field(req.body, "done_when"), "done_when") : null,
-        status: hasField(req.body, "status") ? statusValue(field(req.body, "status")) : "backlog",
+        title,
+        problem,
+        change,
+        done_when: doneWhen,
+        status,
         priority: hasField(req.body, "priority") ? priorityValue(field(req.body, "priority")) : 0,
-        labels: hasField(req.body, "labels") ? labelsValue(field(req.body, "labels")) : [],
+        labels,
         links: hasField(req.body, "links") ? linksValue(field(req.body, "links")) : [],
       },
       actor
@@ -224,9 +287,9 @@ workBoardRouter.patch(
     const actor = actorOf(res);
     const { team, number } = itemKey(req);
     const body = req.body as Record<string, unknown>;
-    if (actor.kind === "agent") {
+    if (actor.kind !== "human") {
       const forbidden = Object.keys(body).filter((k) => !AGENT_FIELDS.has(k));
-      if (forbidden.length) throw new ForbiddenError(`The agent cannot change ${forbidden.join(", ")}`);
+      if (forbidden.length) throw new ForbiddenError(`The ${actor.kind} cannot change ${forbidden.join(", ")}`);
     }
 
     const patch: WorkItemPatch = {};
@@ -253,11 +316,14 @@ workBoardRouter.patch(
 
     const key = `${team}-${number}`;
     const item = await updateWorkItem(team, number, patch, actor, (current) => {
-      if (actor.kind !== "agent") return;
-      hideTriageFromAgent(actor, current, key);
-      if (patch.status !== undefined && patch.status !== current.status && !AGENT_MOVES[current.status]?.includes(patch.status)) {
-        throw new ForbiddenError(`The agent cannot move ${current.status} to ${patch.status}`);
-      }
+      if (actor.kind === "human") return;
+      hideTriageFromMachines(actor, current, key);
+      if (patch.status === undefined || patch.status === current.status) return;
+      const allowed =
+        actor.kind === "agent"
+          ? AGENT_MOVES[current.status]?.includes(patch.status)
+          : SESSION_TARGETS.includes(patch.status) && !SESSION_CLOSED.includes(current.status);
+      if (!allowed) throw new ForbiddenError(`The ${actor.kind} cannot move ${current.status} to ${patch.status}`);
     });
     if (!item) throw new NotFoundError("Work item", key);
     res.json({ item });
@@ -274,8 +340,41 @@ workBoardRouter.post(
     if (!text) throw new ValidationError("body is required", "body");
     if (text.length > MAX_COMMENT) throw new ValidationError(`body is longer than ${MAX_COMMENT} characters`, "body");
     const key = `${team}-${number}`;
-    const event = await addWorkItemComment(team, number, text, actor, (current) => hideTriageFromAgent(actor, current, key));
+    const event = await addWorkItemComment(team, number, text, actor, (current) => hideTriageFromMachines(actor, current, key));
     if (!event) throw new NotFoundError("Work item", key);
     res.status(201).json({ event });
+  })
+);
+
+// GET /api/v1/platform/work/session-tokens — never carries a token, only who and when.
+workBoardRouter.get(
+  "/platform/work/session-tokens",
+  asyncHandler(async (_req, res) => {
+    requireHuman(res);
+    res.json({ items: await listSessionTokens() });
+  })
+);
+
+// POST /api/v1/platform/work/session-tokens { name } — the plaintext is in this answer only.
+workBoardRouter.post(
+  "/platform/work/session-tokens",
+  asyncHandler(async (req, res) => {
+    const actor = requireHuman(res);
+    const name = typeof field(req.body, "name") === "string" ? (field(req.body, "name") as string).trim() : "";
+    if (!name || name.length > 60) throw new ValidationError("name is required (up to 60 characters)", "name");
+    const token = `nbs_${randomBytes(32).toString("base64url")}`;
+    const item = await insertSessionToken(name, sha256Hex(token), actor.name);
+    res.status(201).json({ item, token });
+  })
+);
+
+// DELETE /api/v1/platform/work/session-tokens/:id
+workBoardRouter.delete(
+  "/platform/work/session-tokens/:id",
+  asyncHandler(async (req, res) => {
+    requireHuman(res);
+    const id = routeParam(req, "id") ?? "";
+    if (!/^[0-9a-f-]{36}$/i.test(id) || !(await revokeSessionToken(id))) throw new NotFoundError("Session token", id);
+    res.status(204).end();
   })
 );
