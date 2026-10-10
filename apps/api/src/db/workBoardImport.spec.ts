@@ -46,6 +46,25 @@ describe("migration 060 · Linear history import", () => {
     for (const row of rows) expect(row.next_number, row.key).toBeGreaterThan(row.max_number);
   });
 
+  it("migration 062 (CORE-187) adds the tickets Linear got after 060, same keys, and is idempotent", async () => {
+    const tail = fileURLToPath(new URL("../../migrations/062_work_board_linear_tail.sql", import.meta.url));
+    const keys = [...readFileSync(tail, "utf8").matchAll(/'linear_import', '([A-Z]+-\d+)'/g)].map((m) => m[1]!);
+    expect(keys).toContain("CORE-187");
+    const { rows } = await getDb().query<{ key: string }>(
+      `SELECT team_key || '-' || number AS key FROM platform.work_item WHERE linear_identifier = ANY($1)`,
+      [keys]
+    );
+    expect(rows.map((r) => r.key).sort()).toEqual([...keys].sort());
+    const before = await snapshot();
+    const client = await getDb().connect();
+    try {
+      await client.query(readFileSync(tail, "utf8"));
+    } finally {
+      client.release();
+    }
+    expect(await snapshot()).toEqual(before);
+  });
+
   it("keeps decisions and drops the agent's progress chatter", async () => {
     const { rows } = await getDb().query<{ noise: number; decisions: number }>(
       `SELECT count(*) FILTER (WHERE body ~* '^(work started|pushed|implemented)')::int AS noise,

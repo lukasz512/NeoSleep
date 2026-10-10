@@ -113,6 +113,41 @@ describe("WorkBoardView", () => {
     expect(wrapper.find("[data-testid='work-card-NEO-2']").exists()).toBe(true);
   });
 
+  it("shows only Claude-session tickets with the Session filter (CORE-187)", async () => {
+    serve([item({ key: "CORE-1" }), item({ key: "CORE-2", status: "building", labels: ["session"] })]);
+    const { wrapper } = await render();
+    await wrapper.get("[data-testid='work-board-session-filter']").trigger("click");
+    expect(wrapper.find("[data-testid='work-card-CORE-1']").exists()).toBe(false);
+    expect(wrapper.find("[data-testid='work-card-CORE-2']").exists()).toBe(true);
+  });
+
+  it("issues a session token and shows the plaintext once (CORE-187)", async () => {
+    serve([]);
+    const base = apiFetch.getMockImplementation()!;
+    const tokens: Array<{ id: string; name: string; created_by: string; created_at: string; last_used_at: null; revoked_at: null }> = [];
+    apiFetch.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (!path.includes("/session-tokens")) return base(path, init);
+      if (init?.method === "POST") {
+        const row = { id: "t1", name: "Laptop", created_by: "me", created_at: "2026-10-07T10:00:00Z", last_used_at: null, revoked_at: null };
+        tokens.push(row);
+        return { ok: true, status: 201, json: async () => ({ item: row, token: "nbs_secret-plaintext" }) } as Response;
+      }
+      return ok({ items: tokens });
+    });
+    const { wrapper } = await render();
+    await wrapper.get("[data-testid='work-board-tokens']").trigger("click");
+    await flushPromises();
+    const dialog = () => document.querySelector("[data-testid='work-tokens-dialog']")!;
+    const name = dialog().querySelector("[data-testid='work-token-name'] input") as HTMLInputElement;
+    name.value = "Laptop";
+    name.dispatchEvent(new Event("input"));
+    await flushPromises();
+    (dialog().querySelector("[data-testid='work-token-create']") as HTMLButtonElement).click();
+    await flushPromises();
+    expect(dialog().querySelector("[data-testid='work-token-plaintext']")?.textContent).toContain("nbs_secret-plaintext");
+    expect(dialog().textContent).toContain("Laptop");
+  });
+
   it("shows a card's spec, PR and CI links", async () => {
     serve([
       item({

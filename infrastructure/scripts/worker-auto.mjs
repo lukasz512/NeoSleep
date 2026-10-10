@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 // worker-auto — the deterministic parts of linear-worker's queue (CORE-183).
 //
-//   node infrastructure/scripts/worker-auto.mjs pick <issues.json>
-//     → prints {"identifier","mode"} of the ticket to take, or nothing when the queue is empty
-//       (issues.json: [{identifier, createdAt, state, labels: [name…]}] from Linear)
+//   node infrastructure/scripts/worker-auto.mjs pick <items.json>
+//     → prints {"key","mode"} of the card to take, or nothing when the queue is empty
+//       (items.json: [{key, created_at, status, labels: [name…]}] from the work board, CORE-187)
 //   node infrastructure/scripts/worker-auto.mjs guard [--base origin/dev]
 //     → exit 0 when the branch's diff is "light"; exit 1 and print the Linear comment when it
 //       touches UI, a view, an API route or a migration (an `auto` ticket must not)
-//   node infrastructure/scripts/worker-auto.mjs dry-run <issues.json> [changed paths…]
+//   node infrastructure/scripts/worker-auto.mjs dry-run <items.json> [changed paths…]
 //     → the steps the worker would take, as JSON (nothing is touched)
 //
-// Queue: `ci-failed` first (CI-fix mode), then FIFO by createdAt over "Ready for Worker"
-// tickets and `auto`-labelled tickets still in Backlog/Todo. An `auto` ticket is routine,
-// non-UI work Łukasz hands off so it doesn't run in his interactive session; it ends with
-// the light handover (one Linear comment with the PR link), never an Artifact page.
+// Queue: `ci-failed` first (CI-fix mode), then FIFO by created_at over `approved` cards.
+// Label `auto` = routine non-UI work Łukasz hands off so it doesn't run in his interactive
+// session: it ends with the light handover (one board comment with the PR link), never an
+// Artifact page, and stops with a `Blocked:` comment when the work turns out to need UI.
 // The shape rule is read from .claude/hooks/lib/change-shape.sh, so hooks and worker agree.
 // English only (CLAUDE.md). No dependencies beyond Node.
 
@@ -23,8 +23,7 @@ import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const AUTO_STATES = ["backlog", "todo"];
-const READY_STATE = "ready for worker";
+const QUEUE_STATUS = "approved";
 
 function fullShape() {
   const sh = readFileSync(join(ROOT, ".claude/hooks/lib/change-shape.sh"), "utf8");
@@ -33,21 +32,16 @@ function fullShape() {
   return new RegExp(m[1]);
 }
 
-const has = (issue, label) => (issue.labels ?? []).some((l) => String(l).toLowerCase() === label);
-const byAge = (a, b) => String(a.createdAt).localeCompare(String(b.createdAt));
+const has = (item, label) => (item.labels ?? []).some((l) => String(l).toLowerCase() === label);
+const byAge = (a, b) => String(a.created_at).localeCompare(String(b.created_at));
 
-export function pick(issues) {
-  const open = issues.filter((i) => !["done", "canceled", "cancelled", "duplicate"].includes(String(i.state).toLowerCase()));
+export function pick(items) {
+  const open = items.filter((i) => !["done", "canceled", "cancelled"].includes(String(i.status).toLowerCase()));
   const ciFailed = open.filter((i) => has(i, "ci-failed")).sort(byAge)[0];
-  if (ciFailed) return { identifier: ciFailed.identifier, mode: "ci-fix" };
-  const next = open
-    .filter((i) => {
-      const state = String(i.state).toLowerCase();
-      return state === READY_STATE || (has(i, "auto") && AUTO_STATES.includes(state));
-    })
-    .sort(byAge)[0];
+  if (ciFailed) return { key: ciFailed.key, mode: "ci-fix" };
+  const next = open.filter((i) => i.status === QUEUE_STATUS).sort(byAge)[0];
   if (!next) return null;
-  return { identifier: next.identifier, mode: String(next.state).toLowerCase() === READY_STATE && !has(next, "auto") ? "ready" : "auto" };
+  return { key: next.key, mode: has(next, "auto") ? "auto" : "ready" };
 }
 
 export function guard(changedPaths) {
@@ -59,39 +53,40 @@ export function guard(changedPaths) {
     shape: "full",
     offending,
     comment: [
-      "Worker stopped: this `auto` ticket needs a UI/feature change, which the worker doesn't ship (CORE-183).",
+      "Blocked: this `auto` ticket needs a UI/feature change, which the worker doesn't ship (CORE-183).",
       `The implementation touched: ${offending.map((p) => `\`${p}\``).join(", ")}.`,
-      "Nothing was pushed. I removed the `auto` label and moved the ticket back to Todo, so it runs in an interactive session, where the full Artifact (before/after) is built.",
+      "Nothing was pushed. Drop the `auto` label and take it to an interactive session, where the full Artifact (before/after) is built.",
     ].join("\n"),
   };
 }
 
 const slug = (s) => String(s || "auto").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "auto";
 
-export function dryRun(issues, changedPaths) {
-  const picked = pick(issues);
+export function dryRun(items, changedPaths) {
+  const picked = pick(items);
   if (!picked) return { ticket: null, steps: [] };
-  const issue = issues.find((i) => i.identifier === picked.identifier);
-  const branch = `worker/${picked.identifier.toLowerCase()}-${slug(issue.title)}`;
+  const item = items.find((i) => i.key === picked.key);
+  const branch = `worker/${picked.key.toLowerCase()}-${slug(item.title)}`;
   if (picked.mode === "ci-fix") {
-    return { ticket: picked.identifier, mode: picked.mode, steps: [{ do: "claim" }, { do: "ci-fix", rules: ".claude/ci-autofix.json" }] };
+    return { ticket: picked.key, mode: picked.mode, steps: [{ do: "claim" }, { do: "ci-fix", rules: ".claude/ci-autofix.json" }] };
   }
-  const steps = [{ do: "claim", to: "Worker: In Progress" }, { do: "scope-check" }];
+  const steps = [{ do: "claim", to: "building" }, { do: "scope-check" }];
   if (picked.mode === "ready") steps.push({ do: "enrich" });
   steps.push({ do: "implement" }, { do: "self-check" });
   if (picked.mode === "auto") {
     const g = guard(changedPaths);
     steps.push({ do: "guard", shape: g.shape });
     if (!g.ok) {
-      steps.push({ do: "reset" }, { do: "comment", text: g.comment }, { do: "remove-label", label: "auto" }, { do: "state", to: "Todo" });
-      return { ticket: picked.identifier, mode: picked.mode, steps };
+      // The card stays in `building`: the agent can't change labels, Łukasz takes it from here.
+      steps.push({ do: "reset" }, { do: "comment", text: g.comment });
+      return { ticket: picked.key, mode: picked.mode, steps };
     }
-    steps.push({ do: "push", branch }, { do: "ci-wait" }, { do: "light-handover", cmd: "node .claude/skills/ship-artifact/build.mjs light --linear-commented --linear-status \"Needs Review\"" });
+    steps.push({ do: "push", branch }, { do: "ci-wait" }, { do: "light-handover", cmd: "node .claude/skills/ship-artifact/build.mjs light" });
   } else {
     steps.push({ do: "push", branch }, { do: "ci-wait" }, { do: "artifact" });
   }
-  steps.push({ do: "comment", text: "2 sentences + compare URL + branch" }, { do: "state", to: "Needs Review" });
-  return { ticket: picked.identifier, mode: picked.mode, steps };
+  steps.push({ do: "comment", text: "2 sentences + compare URL + branch" }, { do: "state", to: "needs_review" });
+  return { ticket: picked.key, mode: picked.mode, steps };
 }
 
 function changedSince(base) {
@@ -119,7 +114,7 @@ function main([cmd, ...rest]) {
     console.log(JSON.stringify(dryRun(JSON.parse(readFileSync(rest[0], "utf8")), rest.slice(1)), null, 2));
     return 0;
   }
-  console.error("usage: worker-auto.mjs pick <issues.json> | guard [--base origin/dev] | dry-run <issues.json> [paths…]");
+  console.error("usage: worker-auto.mjs pick <items.json> | guard [--base origin/dev] | dry-run <items.json> [paths…]");
   return 2;
 }
 
