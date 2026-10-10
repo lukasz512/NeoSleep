@@ -53,7 +53,7 @@ export interface WorkItemEvent {
   to_status: WorkStatus | null;
   body: string | null;
   actor: string | null;
-  actor_kind: "human" | "agent" | "import";
+  actor_kind: "human" | "agent" | "session" | "import";
   created_at: string;
 }
 
@@ -74,4 +74,14 @@ export interface WorkItemPatch {
   done_when?: string | null;
   priority?: number;
   status?: WorkStatus;
+}
+
+/** A device's token for Claude Code sessions (CORE-187); the plaintext only comes back once, on issue. */
+export interface WorkSessionToken {
+  id: string;
+  name: string;
+  created_by: string;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
 }

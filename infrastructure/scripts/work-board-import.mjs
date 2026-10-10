@@ -4,6 +4,11 @@
 //   node infrastructure/scripts/work-board-import.mjs                 # dry run: counts only
 //   node infrastructure/scripts/work-board-import.mjs --fetch         # refresh the export from Linear first
 //   DATABASE_URL=... node infrastructure/scripts/work-board-import.mjs --apply
+//   node infrastructure/scripts/work-board-import.mjs --sql apps/api/migrations/0NN_x.sql  # reviewed migration
+//   … --sql <new.sql> --skip-in <earlier.sql>   # only issues the earlier import didn't carry (CORE-187)
+//
+// The shared Supabase DB holds production data: land the history there with --sql (a PR),
+// keep --apply for a local or test database.
 //
 // --fetch reads LINEAR_API_KEY (or .claude/local/linear-api-key.txt) and rewrites
 // .claude/local/linear-export/export.json; the raw export never leaves the machine.
@@ -16,6 +21,7 @@ import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { slimIssue } from "./linear-slim.mjs";
+import { buildImportSql } from "./work-board-sql.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, "../..");
@@ -56,9 +62,8 @@ async function fetchExport() {
   console.log(`[import] fetched ${issues.length} issues from Linear → ${exportPath}`);
 }
 
-function loadSlim() {
-  const { issues } = JSON.parse(readFileSync(exportPath, "utf8"));
-  return issues.map(slimIssue).filter(Boolean);
+function loadExport() {
+  return JSON.parse(readFileSync(exportPath, "utf8"));
 }
 
 function summarize(slim) {
@@ -138,10 +143,23 @@ async function apply(slim) {
 
 try {
   if (args.has("--fetch")) await fetchExport();
-  const slim = loadSlim();
+  const { exportedAt, issues } = loadExport();
+  const argv = process.argv.slice(2);
+  let slim = issues.map(slimIssue).filter(Boolean);
+  // --skip-in <earlier migration.sql>: only the issues that migration doesn't already carry
+  // (CORE-187: the final import after 060 is a short tail, not a second 900 KB copy).
+  const skipIn = argv.includes("--skip-in") ? argv[argv.indexOf("--skip-in") + 1] : null;
+  if (skipIn) {
+    const done = new Set([...readFileSync(resolve(skipIn), "utf8").matchAll(/'linear_import', '([A-Z][A-Z0-9]*-\d+)'/g)].map((m) => m[1]));
+    slim = slim.filter((s) => !done.has(s.item.linear_identifier));
+  }
   summarize(slim);
-  if (args.has("--apply")) await apply(slim);
-  else console.log("[import] dry run — pass --apply to write");
+  const sqlOut = argv.includes("--sql") ? argv[argv.indexOf("--sql") + 1] : null;
+  if (sqlOut) {
+    writeFileSync(resolve(sqlOut), buildImportSql(slim, { exportedAt }));
+    console.log(`[import] wrote ${sqlOut}`);
+  } else if (args.has("--apply")) await apply(slim);
+  else console.log("[import] dry run — pass --apply or --sql <file> to write");
 } catch (err) {
   console.error(`[import] ${err instanceof Error ? err.message : err}`);
   process.exit(1);

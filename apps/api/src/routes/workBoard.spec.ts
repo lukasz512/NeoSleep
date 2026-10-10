@@ -157,6 +157,91 @@ describe("platform work board", () => {
     });
   });
 
+  describe("session tokens (CORE-187)", () => {
+    const TICKET = { problem: "The board is stale.", change: "- Sessions write here", done_when: "- A test proves it" };
+    let token: string;
+    let tokenId: string;
+
+    function asSession(req: request.Test, value = token): request.Test {
+      return req.set("X-Session-Token", value);
+    }
+
+    beforeAll(async () => {
+      const issued = await request(app).post(`${BASE}/session-tokens`).set("Authorization", platformAdmin.auth).send({ name: `QA laptop ${SUFFIX}` });
+      expect(issued.status).toBe(201);
+      token = issued.body.token;
+      tokenId = issued.body.item.id;
+    });
+
+    afterAll(async () => {
+      await getDb().query("DELETE FROM platform.work_session_token WHERE name LIKE $1", [`%${SUFFIX}`]);
+    });
+
+    it("shows the plaintext once: the list never carries it", async () => {
+      expect(token).toMatch(/^nbs_[\w-]{40,}$/);
+      const list = await request(app).get(`${BASE}/session-tokens`).set("Authorization", platformAdmin.auth);
+      expect(list.status).toBe(200);
+      const mine = list.body.items.find((t: { id: string }) => t.id === tokenId);
+      expect(mine).toMatchObject({ name: `QA laptop ${SUFFIX}`, revoked_at: null });
+      expect(JSON.stringify(list.body)).not.toContain(token);
+    });
+
+    it("creates in Building with the session label, logged as the session", async () => {
+      const res = await asSession(request(app).post(`${BASE}/items`)).send({ team: TEAM, title: "Session work", status: "done", ...TICKET });
+      expect(res.status).toBe(201);
+      expect(res.body.item).toMatchObject({ status: "building", source: "session" });
+      expect(res.body.item.labels).toContain("session");
+      const detail = await request(app).get(`${BASE}/items/${res.body.item.key}`).set("Authorization", platformAdmin.auth);
+      expect(detail.body.events[0]).toMatchObject({ kind: "created", actor_kind: "session", actor: `session:QA laptop ${SUFFIX}` });
+    });
+
+    it("rejects a ticket without Problem / Change / Done when or over 1500 characters", async () => {
+      const missing = await asSession(request(app).post(`${BASE}/items`)).send({ team: TEAM, title: "No body", problem: "x" });
+      expect(missing.status).toBe(400);
+      expect(missing.body.field).toBe("change");
+      const long = await asSession(request(app).post(`${BASE}/items`)).send({ team: TEAM, title: "Long", ...TICKET, change: "x".repeat(1500) });
+      expect(long.status).toBe(400);
+    });
+
+    it("may comment, link, set the branch and hand over to Needs Review, never close", async () => {
+      const { key } = (await asSession(request(app).post(`${BASE}/items`)).send({ team: TEAM, title: "Hand over", ...TICKET })).body.item;
+      expect((await asSession(request(app).post(`${BASE}/items/${key}/comments`)).send({ body: "Branch: worktree-x" })).status).toBe(201);
+      const review = await asSession(request(app).patch(`${BASE}/items/${key}`)).send({
+        status: "needs_review",
+        branch: "worktree-core-1-x",
+        add_links: [{ kind: "artifact", url: "https://claude.ai/artifact/x" }],
+      });
+      expect(review.status).toBe(200);
+      expect(review.body.item.status).toBe("needs_review");
+      expect((await asSession(request(app).patch(`${BASE}/items/${key}`)).send({ status: "done" })).status).toBe(403);
+      expect((await asSession(request(app).patch(`${BASE}/items/${key}`)).send({ status: "canceled" })).status).toBe(403);
+      expect((await asSession(request(app).patch(`${BASE}/items/${key}`)).send({ title: "Renamed" })).status).toBe(403);
+    });
+
+    it("picks up a backlog item but never sees Triage or reopens closed work", async () => {
+      const backlog = (await create({ title: "Waiting" })).body.item.key;
+      expect((await asSession(request(app).patch(`${BASE}/items/${backlog}`)).send({ status: "building" })).status).toBe(200);
+      const triage = (await create({ title: "Report", status: "triage" })).body.item.key;
+      expect((await asSession(request(app).get(`${BASE}/items/${triage}`))).status).toBe(404);
+      const done = (await create({ title: "Shipped", status: "done" })).body.item.key;
+      expect((await asSession(request(app).patch(`${BASE}/items/${done}`)).send({ status: "building" })).status).toBe(403);
+    });
+
+    it("cannot manage tokens", async () => {
+      expect((await asSession(request(app).get(`${BASE}/session-tokens`))).status).toBe(403);
+      expect((await asSession(request(app).post(`${BASE}/session-tokens`)).send({ name: "more" })).status).toBe(403);
+    });
+
+    it("answers 401 for a wrong or revoked token", async () => {
+      expect((await asSession(request(app).get(`${BASE}/items`), "nbs_wrong")).status).toBe(401);
+      const spare = await request(app).post(`${BASE}/session-tokens`).set("Authorization", platformAdmin.auth).send({ name: `Spare ${SUFFIX}` });
+      expect((await asSession(request(app).get(`${BASE}/teams`), spare.body.token)).status).toBe(200);
+      const revoked = await request(app).delete(`${BASE}/session-tokens/${spare.body.item.id}`).set("Authorization", platformAdmin.auth);
+      expect(revoked.status).toBe(204);
+      expect((await asSession(request(app).get(`${BASE}/teams`), spare.body.token)).status).toBe(401);
+    });
+  });
+
   describe("validation", () => {
     it("answers 400 with the field for bad input", async () => {
       expect((await create({ title: "" })).body.field).toBe("title");

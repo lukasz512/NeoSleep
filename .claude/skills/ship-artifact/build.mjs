@@ -5,9 +5,9 @@
 // script gathers everything mechanical from git + env.
 //
 //   node .claude/skills/ship-artifact/build.mjs render <content.json>
-//     → writes the HTML page, prints its path + the Linear comment text
+//     → writes the HTML page, prints its path + the board comment text
 //   node .claude/skills/ship-artifact/build.mjs finalize --url <artifact-url>
-//        [--linear-attached] [--linear-commented] [--linear-status "<name>"]
+//        [--board-linked] [--board-commented] [--board-status "<status>"]
 //     → writes .claude/local/artifacts/<TICKET>.json and upserts the artifact index
 //   node .claude/skills/ship-artifact/build.mjs index [--page | --all]
 //     → writes this branch's index row JSON and prints the ArtifactData calls that store it
@@ -17,8 +17,12 @@
 //     → records the index URL and marks this ticket's marker "indexed"
 //
 // NEO-84 (Łukasz, 2026-09-26): every change has a NEO ticket; every Artifact and ticket
-// carries the same 3 links (Artifact, Linear, VS Code session); texts are short — the
+// carries the same 3 links (Artifact, board ticket, VS Code session); texts are short — the
 // limits below reject padded content instead of rendering it.
+//
+// CORE-187: tickets live on the work board, not Linear. Linking and commenting go through
+// `pnpm board` (infrastructure/scripts/board.mjs); markers written before the switch keep
+// their linear* fields and still pass the quality gate.
 //
 // No dependencies beyond Node. English only (CLAUDE.md).
 
@@ -28,6 +32,7 @@ import { dirname, join, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ticketFromBranch, ticketTeams } from "./ticket.mjs";
 import { COLLECTION, docId, toRow, importBatches } from "./index-rows.mjs";
+import { cardUrl } from "../../../infrastructure/scripts/board.mjs";
 import { validateQuestions, widget } from "../decision-form/decisions.mjs";
 import { storyGate, coverageHtml, coverageMap } from "./coverage.mjs";
 import { cacheGet, cacheSet, defaultCachePath, isRateLimitError, noteRateLimit, rateLimitedUntil } from "../../../infrastructure/scripts/gh-cache.mjs";
@@ -58,7 +63,7 @@ const INDEX_ROWS_DIR = join(COMMON_LOCAL, "artifact-index-rows");
 // Everyone it is shared with reads; only the owner/editors write (via ArtifactData).
 const INDEX_CAPABILITIES = { db: { rules: [{ path: "", read: "view", write: "admin" }] } };
 const SESSION_ID = process.env.CLAUDE_CODE_SESSION_ID ?? "";
-const linearUrlOf = (ticket) => `https://linear.app/neosleep/issue/${ticket}`;
+const boardUrlOf = (ticket) => cardUrl(ticket);
 const vscodeUrlOf = (id) => `vscode://anthropic.claude-code/open?session=${id}`;
 
 // Short on purpose: Łukasz reads these after every session (NEO-84, "no AI slop").
@@ -170,7 +175,7 @@ function prUrl(ticket, prTitle, summary) {
 // Service marks (simple-icons paths, 24x24) so each button shows what it connects to (NEO-91).
 const ICON_PATHS = {
   github: "M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12",
-  linear: "M2.886 4.18A11.982 11.982 0 0 1 11.99 0C18.624 0 24 5.376 24 12.009c0 3.64-1.62 6.903-4.18 9.105L2.887 4.18ZM1.817 5.626l16.556 16.556c-.524.33-1.075.62-1.65.866L.951 7.277c.247-.575.537-1.126.866-1.65ZM.322 9.163l14.515 14.515c-.71.172-1.443.282-2.195.322L0 11.358a12 12 0 0 1 .322-2.195Zm-.17 4.862 9.823 9.824a12.02 12.02 0 0 1-9.824-9.824Z",
+  board: "M3 3h5a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Zm6.5 0h5a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1ZM16 3h5a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z",
   vscode: "M23.15 2.587L18.21.21a1.494 1.494 0 0 0-1.705.29l-9.46 8.63-4.12-3.128a.999.999 0 0 0-1.276.057L.327 7.261A1 1 0 0 0 .326 8.74L3.899 12 .326 15.26a1 1 0 0 0 .001 1.479L1.65 17.94a.999.999 0 0 0 1.276.057l4.12-3.128 9.46 8.63a1.492 1.492 0 0 0 1.704.29l4.942-2.377A1.5 1.5 0 0 0 24 20.06V3.939a1.5 1.5 0 0 0-.85-1.352zm-5.146 14.861L10.826 12l7.178-5.448v10.896z",
   artifact: "M4 2h11l5 5v15H4V2Zm10 1.5V8h4.5L14 3.5ZM7 12h10v1.6H7V12Zm0 4h10v1.6H7V16Z",
 };
@@ -207,7 +212,7 @@ function render(contentPath) {
     if (!c[key] || (Array.isArray(c[key]) && !c[key].length)) throw new Error(`content.${key} is required`);
   }
   if (!ticket) {
-    throw new Error(`every change needs a Linear ticket (NEO-84): create it in Linear first and work on a branch named after it (worktree-<key>-<n>-<slug>, key one of ${ticketTeams().join("/")})`);
+    throw new Error(`every change needs a board ticket (NEO-84): create it first (pnpm board create …) and work on a branch named after it (worktree-<key>-<n>-<slug>, key one of ${ticketTeams().join("/")})`);
   }
   if (!SESSION_ID) throw new Error("CLAUDE_CODE_SESSION_ID is not set — run this from the Claude Code session that made the change (needed for the VS Code link)");
   checkLimits(c);
@@ -220,7 +225,7 @@ function render(contentPath) {
   const pushed = isPushed();
   const existing = existingPr();
   const pr = existing?.url ?? (pushed ? prUrl(ticket, c.prTitle ?? c.headline, c.summary) : null);
-  const linearUrl = linearUrlOf(ticket);
+  const boardUrl = boardUrlOf(ticket);
   // The Artifact's own URL is known from the second render on (finalize stores it).
   const selfUrl = readJson(markerPath(ticket), {}).url ?? null;
   const prLabel = !existing
@@ -231,14 +236,14 @@ function render(contentPath) {
         ? `PR #${existing.number} · closed`
         : `Open PR #${existing.number}`;
 
-  // The Artifact renders in a sandboxed iframe; GitHub/Linear refuse to be framed,
+  // The Artifact renders in a sandboxed iframe; GitHub and the board refuse to be framed,
   // so every link must open a new tab or the click shows a broken-page icon.
   const ext = `target="_blank" rel="noopener noreferrer"`;
-  // Always the same order: PR, Linear, VS Code. No "Artifact" button — on the page
-  // itself it would only link to itself (NEO-91); the Linear comment and index keep it.
+  // Always the same order: PR, Board, VS Code. No "Artifact" button — on the page
+  // itself it would only link to itself (NEO-91); the board comment and index keep it.
   const links = [
     pr ? `<a class="btn primary" href="${esc(pr)}" ${ext}>${icon("github")}${esc(prLabel)}</a>` :`<span class="btn ghost" title="Branch not pushed yet">${icon("github")}PR link after push</span>`,
-    `<a class="btn" href="${esc(linearUrl)}" ${ext}>${icon("linear")}Linear</a>`,
+    `<a class="btn" href="${esc(boardUrl)}" ${ext}>${icon("board")}Board</a>`,
     `<a class="btn" href="${esc(vscodeUrlOf(sessionId))}" ${ext}>${icon("vscode")}VS Code</a>`,
   ].join("");
 
@@ -314,14 +319,14 @@ function render(contentPath) {
         ? "pushed: yes — Create PR button is live"
         : "pushed: no — re-run render after push to get the Create PR button"
   );
-  if (!selfUrl) console.log("first render: after publish + finalize, the Linear comment below gets the Artifact URL filled in");
-  console.log("\n--- Linear comment (post after publishing, replace <ARTIFACT_URL>) ---");
+  if (!selfUrl) console.log("first render: after publish + finalize, the board comment below gets the Artifact URL filled in");
+  console.log(`\n--- board comment (after publishing: pnpm board comment ${ticket} "<text>", replace <ARTIFACT_URL>) ---`);
   console.log(
     [
       plainText(c.summary),
       "",
       `Artifact: ${selfUrl ?? "<ARTIFACT_URL>"}`,
-      `Linear: ${linearUrl}`,
+      `Board: ${boardUrl}`,
       `VS Code: ${vscodeUrlOf(sessionId)}`,
       ...(pr ? [`${prLabel}: ${pr}`] : []),
       `Branch: \`${BRANCH}\``,
@@ -351,15 +356,15 @@ function finalize(argv) {
     ...(draft.prUrl ? { prUrl: draft.prUrl } : {}),
     ticket: draft.ticket,
     sessionId: draft.sessionId,
-    linearUrl: linearUrlOf(draft.ticket),
+    boardUrl: boardUrlOf(draft.ticket),
     vscodeUrl: vscodeUrlOf(draft.sessionId),
     // Set again by `index --published` once the index page shows this version.
     indexed: false,
   };
   if (draft.ticket) {
-    if (argv.includes("--linear-attached")) marker.linearAttached = true;
-    if (argv.includes("--linear-commented")) marker.linearCommented = true;
-    if (arg("--linear-status")) marker.linearStatus = arg("--linear-status");
+    if (argv.includes("--board-linked")) marker.boardLinked = true;
+    if (argv.includes("--board-commented")) marker.boardCommented = true;
+    if (arg("--board-status")) marker.boardStatus = arg("--board-status");
   }
   writeFileSync(path, JSON.stringify(marker, null, 2) + "\n");
   console.log(`marker written: ${path}`);
@@ -370,11 +375,12 @@ function finalize(argv) {
     ticket: draft.ticket,
     title: draft.title,
     headline: draft.headline,
-    status: marker.linearStatus ?? previous.linearStatus ?? "In Progress",
+    status: marker.boardStatus ?? previous.boardStatus ?? "building",
     updated: new Date().toISOString(),
     branch: BRANCH,
     artifact: url,
-    linear: marker.linearUrl,
+    // The row field keeps its old name (stored rows use it); it now holds the board card link.
+    linear: marker.boardUrl,
     vscode: marker.vscodeUrl,
     pr: marker.prUrl ?? null,
   });
@@ -382,7 +388,7 @@ function finalize(argv) {
   writeFileSync(INDEX_JSON, JSON.stringify(index, null, 2) + "\n");
   console.log(`index updated: ${INDEX_JSON} — next: build.mjs index (writes one db row, no page republish)`);
 
-  const missing = ["linearAttached", "linearCommented", "indexed"].filter((k) => !marker[k]);
+  const missing = ["boardLinked", "boardCommented", "indexed"].filter((k) => !marker[k]);
   if (missing.length) console.log(`still missing for the quality gate: ${missing.join(", ")}`);
 }
 
@@ -438,7 +444,7 @@ function renderIndex(argv) {
 }
 
 // A non-UI change (lib/change-shape.sh says "light", CORE-175 D2) is handed over with one
-// Linear comment carrying the PR link — no page, no Change Index row.
+// board comment carrying the PR link — no page, no Change Index row.
 function light(argv) {
   const arg = (name) => {
     const i = argv.indexOf(name);
@@ -455,16 +461,16 @@ function light(argv) {
     ...previous,
     light: true,
     ticket: TICKET_FROM_BRANCH,
-    linearUrl: linearUrlOf(TICKET_FROM_BRANCH),
+    boardUrl: boardUrlOf(TICKET_FROM_BRANCH),
     prUrl: pr,
-    ...(argv.includes("--linear-commented") ? { linearCommented: true } : {}),
-    ...(arg("--linear-status") ? { linearStatus: arg("--linear-status") } : {}),
+    ...(argv.includes("--board-commented") ? { boardCommented: true } : {}),
+    ...(arg("--board-status") ? { boardStatus: arg("--board-status") } : {}),
   };
   mkdirSync(MARKER_DIR, { recursive: true });
   writeFileSync(path, JSON.stringify(marker, null, 2) + "\n");
   console.log(`light marker written: ${path}`);
-  console.log(`Linear comment for ${TICKET_FROM_BRANCH}: <2 sentences: what changed and why>\nPR: ${pr}\nBranch: \`${BRANCH}\``);
-  if (!marker.linearCommented) console.log("still missing for the quality gate: linearCommented");
+  console.log(`board comment for ${TICKET_FROM_BRANCH} (pnpm board comment ${TICKET_FROM_BRANCH} "…"): <2 sentences: what changed and why>\nPR: ${pr}\nBranch: \`${BRANCH}\``);
+  if (!marker.boardCommented) console.log("still missing for the quality gate: boardCommented");
 }
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -473,7 +479,7 @@ try {
   else if (cmd === "finalize") finalize(rest);
   else if (cmd === "index") renderIndex(rest);
   else if (cmd === "light") light(rest);
-  else throw new Error("usage: build.mjs render <content.json> | finalize --url <artifact-url> [--linear-attached] [--linear-commented] [--linear-status <name>] | index [--page | --all | --published <url>] | light [--pr <url>] [--linear-commented] [--linear-status <name>]");
+  else throw new Error("usage: build.mjs render <content.json> | finalize --url <artifact-url> [--board-linked] [--board-commented] [--board-status <status>] | index [--page | --all | --published <url>] | light [--pr <url>] [--board-commented] [--board-status <status>]");
 } catch (err) {
   console.error(`ship-artifact: ${err.message}`);
   process.exit(1);

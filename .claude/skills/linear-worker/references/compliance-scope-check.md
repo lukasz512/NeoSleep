@@ -29,7 +29,7 @@ existing read path is unambiguous.
 **Per-ticket pre-approved backend override.** A human can explicitly unblock
 *new* backend code touching `identities`/`patient`/`practitioner` for one
 specific ticket — but only through both of these together, not either alone:
-1. The Linear label `worker:backend-approved` on the ticket.
+1. The label `worker:backend-approved` on the board card.
 2. A comment on the ticket, from Łukasz, describing **exactly** what backend
    change is approved (e.g. "Approved: add an `organization_id` query param to
    the existing `GET /api/v1/practitioner` route + query + DB layer, read-only,
