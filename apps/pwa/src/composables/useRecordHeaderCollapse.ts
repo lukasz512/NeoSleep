@@ -1,4 +1,5 @@
 import { onBeforeUnmount, watch, type Ref } from "vue";
+import { onWidthResize, largeViewportHeight } from "../utils/stableViewport";
 
 /**
  * NEO-181: the phone record header collapses into the toolbar with the
@@ -233,7 +234,7 @@ export function useRecordHeaderCollapse(opts: {
       height: root.offsetHeight - reserved,
       below: spaceBelow(root),
     };
-    root.style.setProperty("--rh-room", px(dockRoom(start, height, view, window.innerHeight)));
+    root.style.setProperty("--rh-room", px(dockRoom(start, height, view, largeViewportHeight())));
     for (const [name, value] of Object.entries(collapseVars(g))) root.style.setProperty(name, value);
     if (!supportsTimeline) applyFallback();
   }
@@ -290,11 +291,12 @@ export function useRecordHeaderCollapse(opts: {
     measure();
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("scrollend", settle);
-    window.addEventListener("resize", measure);
+    // Width only: a phone's URL bar hiding mid-scroll must not resize the room (stableViewport.ts).
+    const stopResize = onWidthResize(measure);
     cleanups.push(() => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("scrollend", settle);
-      window.removeEventListener("resize", measure);
+      stopResize();
     });
     if (typeof ResizeObserver !== "undefined") {
       observer = new ResizeObserver(() => measure());

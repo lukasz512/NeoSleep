@@ -791,8 +791,10 @@ const moduleIcon = computed(() => {
    its own space (AppShell .app-shell__main--bottom-nav-space). */
 .layout-root:not(.layout-root--desktop) .layout-main__inner {
   margin-inline: var(--layout-sheet-margin);
+  /* svh, not dvh: dvh grows when the URL bar hides mid-scroll, and the page
+     height changing under the finger makes the scroll jump (stableViewport.ts). */
   min-height: calc(
-    100dvh - var(--v-layout-top, 56px) - var(--mobile-bottom-nav-height, 56px) - 2 * var(--mobile-bottom-nav-float, 10px)
+    100svh - var(--v-layout-top, 56px) - var(--mobile-bottom-nav-height, 56px) - 2 * var(--mobile-bottom-nav-float, 10px)
       - env(safe-area-inset-bottom)
       - var(--layout-sheet-foot)
   );
