@@ -34,7 +34,7 @@
         anchorPhaseClass(phases[index], orb.key),
       ]"
     >
-      <div :ref="(el) => orb.key === 'small' && setElement(orbitRef, el)" class="auth-orbs__orbit">
+      <div :ref="(el) => orb.key === 'small' && setOrbit(el)" class="auth-orbs__orbit">
       <div class="auth-orbs__drift-x">
         <div class="auth-orbs__drift-y">
           <div :ref="(el) => setElement(breathRefs[index], el)" class="auth-orbs__breath">
@@ -224,6 +224,11 @@ const breathState = ORBS.map((orb) => ({ phase: orb.phaseOffset, jitter: nextJit
 const MOON_SWAY = (4 * Math.PI) / 180;
 const MOON_SWAY_PERIOD = 33000;
 const orbitRef = ref<HTMLElement | null>(null);
+// Not `setElement(orbitRef, el)` in the template: there Vue unwraps a top-level
+// ref to its value (null), so the setter would get null instead of the ref.
+function setOrbit(el: Element | ComponentPublicInstance | null): void {
+  setElement(orbitRef, el);
+}
 let mix = busy ? 1 : 0;
 let lastFrame = 0;
 let rafId = 0;
