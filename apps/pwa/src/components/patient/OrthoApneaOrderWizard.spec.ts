@@ -14,6 +14,8 @@ vi.mock("../../composables/useApi", async (importOriginal) => ({
 }));
 
 const notify = vi.fn();
+// The storage PUT (XHR) succeeds at once; the API call that issues its URL goes through apiFetch (NEO-262).
+vi.mock("../../utils/scanUpload", () => ({ putScanFile: vi.fn(async () => undefined) }));
 vi.mock("../../composables/useNotifications", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   useNotifications: () => ({ show: notify }),
@@ -58,6 +60,7 @@ function stubBackend({
     if (url.startsWith("/api/v1/patient/")) return response(200, { practitioner_id: doctors[0]?.id ?? null, region: "MX" });
     if (url.endsWith("/orthoapnea/products")) return response(200, { items: [{ id: 3, code: "002", nameEs: "NOA", category: "x" }, { id: 4, code: "003", nameEs: "NOA TMJ", category: "x" }] });
     if (url.startsWith("/api/v1/device-orders/context")) return context(url);
+    if (url === "/api/v1/device-orders/scan-uploads") return response(201, { path: "test/device-orders/patients/p/scans/u-upper.stl", uploadUrl: "https://storage.test/sign" });
     if (url === "/api/v1/device-orders") return deviceOrder();
     if (url.startsWith("/api/v1/treatment-plan")) return response(201, { id: "plan-1" });
     throw new Error(`Unmocked apiFetch call in test: ${url}`);
@@ -574,6 +577,31 @@ describe("OrthoApneaOrderWizard — step 3: registration (Łukasz D2)", () => {
     await confirm();
     const order = JSON.parse(String((apiFetch.mock.calls.find((c) => c[0] === "/api/v1/device-orders")![1] as RequestInit).body)).order;
     expect(order.registration).toEqual({ method: "platform", scannerPlatform: "MEDIT_LINK" });
+  });
+
+  it("files (NEO-262): Next without a scan is 'required'; a picked scan uploads, is listed, and the order carries its path", async () => {
+    await toStep3();
+    await click(radio("app.deviceOrder.registration.files"));
+    await next();
+    expect(summaryLines()).toEqual([`${messages["app.deviceOrder.registration.files"]} — ${messages["app.deviceOrder.errors.required"]}`]);
+
+    const input = document.querySelector<HTMLInputElement>("[data-testid=scan-file-input]")!;
+    expect(input.accept).toBe(".stl,.ply,.obj");
+    Object.defineProperty(input, "files", { value: [new File([new Uint8Array(10)], "upper.stl")], configurable: true });
+    input.dispatchEvent(new Event("change"));
+    await flushPromises();
+    expect(Array.from(document.querySelectorAll("[data-testid=scan-file]")).map((li) => li.textContent)).toEqual([expect.stringContaining("upper.stl")]);
+
+    await next();
+    await confirm();
+    const order = JSON.parse(String((apiFetch.mock.calls.find((c) => c[0] === "/api/v1/device-orders")![1] as RequestInit).body)).order;
+    expect(order.registration).toEqual({ method: "files", files: [{ path: "test/device-orders/patients/p/scans/u-upper.stl", name: "upper.stl", size: 10 }] });
+  });
+
+  it("the deferred 'file upload is coming' notice is gone from step 3", async () => {
+    await toStep3();
+    await click(radio("app.orthoApneaOrder.form.scannerIntraoral"));
+    expect(document.body.textContent).not.toMatch(/follow-up update/);
   });
 
   it("no promotion-code field on any step, and none in the order sent", async () => {

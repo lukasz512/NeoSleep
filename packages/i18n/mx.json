@@ -2042,7 +2042,6 @@
   "app.orthoApneaOrder.form.additionalSplintsHint": "Conlleva coste adicional",
   "app.orthoApneaOrder.form.additionalSplintsRemove": "Eliminar",
   "app.orthoApneaOrder.photoUploadDeferredNotice": "La subida de fotografías/radiografías/CBCT llegará en una actualización posterior. Aún puedes enviar esta solicitud y subir los archivos directamente en el sistema del dispositivo después.",
-  "app.orthoApneaOrder.fileUploadDeferredNotice": "La subida de archivos digitales llegará en una actualización posterior. Aún puedes enviar esta solicitud y subir los archivos directamente en el sistema del dispositivo después.",
   "app.orthoApneaOrder.actions.back": "Anterior",
   "app.orthoApneaOrder.actions.next": "Siguiente",
   "app.orthoApneaOrder.actions.confirm": "Confirmar solicitud",
@@ -3316,5 +3315,15 @@
   "issues.detail.tenant": "Tenant",
   "issues.errorLoad": "No se pudieron cargar los reportes",
   "issues.reporterUnknown": "Usuario desconocido",
-  "issues.errors.sourceLabel": "Origen"
+  "issues.errors.sourceLabel": "Origen",
+  "app.deviceOrder.registration.files": "Subir archivos de escaneo",
+  "app.deviceOrder.registration.addFiles": "Agregar archivos de escaneo",
+  "app.deviceOrder.registration.filesHint": "Archivos {types}, hasta {maxMb} MB cada uno — normalmente uno del maxilar superior y otro del inferior.",
+  "app.deviceOrder.registration.removeFile": "Quitar {name}",
+  "app.deviceOrder.registration.uploading": "Subiendo {name}",
+  "app.deviceOrder.registration.waitForUploads": "Los archivos de escaneo aún se están subiendo. Podrá confirmar el pedido cuando terminen.",
+  "app.deviceOrder.errors.scanFileEmpty": "Este archivo está vacío.",
+  "app.deviceOrder.errors.scanFileType": "Solo se pueden subir archivos {types}.",
+  "app.deviceOrder.errors.scanFileTooLarge": "Este archivo pesa más de {maxMb} MB.",
+  "app.deviceOrder.errors.scanUploadFailed": "No se pudo subir. Quite el archivo e inténtelo de nuevo."
 }
