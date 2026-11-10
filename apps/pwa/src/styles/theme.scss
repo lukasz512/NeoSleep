@@ -801,6 +801,16 @@ body {
   box-shadow: 0 0 0 1px var(--pwa-sheet-ring), 0 -12px 40px -12px rgb(0 0 0 / 0.28) !important;
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+/* `fill` (CORE-192): a work surface rather than a quick form takes the whole phone screen. */
+.pwa-form-dialog--sheet.pwa-form-dialog--fill > .v-overlay__content,
+.pwa-form-dialog--sheet.pwa-form-dialog--fill .pwa-form-dialog__card {
+  height: 100%;
+  max-height: 100%;
+  border-radius: 0 !important;
+}
+.pwa-form-dialog--sheet.pwa-form-dialog--fill .pwa-form-dialog__card {
+  padding-top: env(safe-area-inset-top, 0px);
+}
 
 /*
  * Content scrolled behind the header / actions fades out over

@@ -15,7 +15,8 @@ import type { AddressInfo } from "node:net";
  * - GET /api/user/me, /api/clinics, /api/countries, /api/products, /api/products/manufacturingDate
  *   (400 Spring Boot body without productId — fixtures/error-missing-param.response.json).
  * - POST /api/patient (JSON) → stored with an id; GET /api/patient/:id reads it back.
- * - POST /api/treatments: multipart with a `treatmentDTO` text field only. A JSON
+ * - POST /api/treatments: multipart with a `treatmentDTO` text field, plus any `file`
+ *   parts (scan models, NEO-262; recorded on the request). A JSON
  *   body gets 415 — our judgement of what OA's Spring @RequestPart endpoint does
  *   (never tried live, rules §9.1). Requires the patientId of a stored patient.
  *   Answers like fixtures/treatment-create-full.response.json: statusId 1, server
@@ -42,6 +43,10 @@ export interface ReplicaRequest {
   contentType: string | null;
   /** Parsed JSON body, or for a multipart treatment the parsed `treatmentDTO`. */
   body: unknown;
+  /** Multipart `file` parts (scan models, NEO-262), in order; [] otherwise. */
+  files: { name: string; size: number; text: string }[];
+  /** Multipart field names in order, so a spec can check `treatmentDTO` comes after the files. */
+  fields: string[];
 }
 
 export interface OaReplica {
@@ -186,15 +191,21 @@ export async function startOaReplica(): Promise<OaReplica> {
 
     let body: unknown = null;
     let multipartDto: string | null = null;
+    const files: ReplicaRequest["files"] = [];
+    const fields: string[] = [];
     if (contentType?.startsWith("multipart/form-data")) {
       const form = await new Response(new Uint8Array(raw), { headers: { "content-type": contentType } }).formData();
+      for (const [key, value] of form.entries()) {
+        fields.push(key);
+        if (key === "file" && typeof value !== "string") files.push({ name: value.name, size: value.size, text: await value.text() });
+      }
       const field = form.get("treatmentDTO");
       multipartDto = typeof field === "string" ? field : null;
       body = multipartDto !== null ? (JSON.parse(multipartDto) as unknown) : null;
     } else if (raw.length > 0 && contentType?.includes("application/json")) {
       body = JSON.parse(raw.toString("utf-8")) as unknown;
     }
-    replica.requests.push({ method, path, contentType, body });
+    replica.requests.push({ method, path, contentType, body, files, fields });
 
     if (pendingDelayMs > 0) {
       const ms = pendingDelayMs;

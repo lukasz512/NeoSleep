@@ -1,16 +1,23 @@
 import { Router, type Router as RouterType, type Request, type Response, type NextFunction } from "express";
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import multer from "multer";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import {
+  WORK_ATTACHMENT_MAX_BYTES,
   WORK_LINK_KINDS,
   WORK_STATUSES,
   addWorkItemComment,
   createWorkItem,
+  deleteWorkAttachment,
+  getWorkAttachment,
   getWorkItem,
   insertSessionToken,
+  insertWorkAttachment,
   isPlatformAdmin,
+  listWorkAttachments,
   listWorkItemEvents,
+  listWorkPeople,
   listSessionTokens,
   listWorkItems,
   listWorkTeams,
@@ -20,6 +27,7 @@ import {
   touchSessionToken,
   workTeamExists,
   type WorkActor,
+  type WorkAttachmentRow,
   type WorkItemPatch,
   type WorkItemRow,
   type WorkLink,
@@ -27,6 +35,7 @@ import {
   type WorkStatus,
 } from "../db.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
+import { deletePartnerDocument, getPartnerDocumentSignedUrl, uploadPartnerDocument } from "../services/partnerDocuments.js";
 import { routeParam } from "./utils.js";
 
 /**
@@ -68,6 +77,23 @@ const MAX_BODY = 5000;
 const MAX_COMMENT = 5000;
 const MAX_LINKS = 20;
 const MAX_LABELS = 10;
+/** Long enough to look at a screenshot, short enough that a leaked link soon dies (CORE-192). */
+const ATTACHMENT_URL_SECONDS = 600;
+const ATTACHMENT_MIME_RE = /^image\/[a-z0-9.+-]+$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: WORK_ATTACHMENT_MAX_BYTES, files: 1 } });
+
+/** Runs multer and reports its failures as a 400 instead of a 500. */
+function parseFile(req: Request, res: Response, next: NextFunction): void {
+  upload.single("file")(req, res, (err: unknown) => {
+    if (err instanceof multer.MulterError) {
+      next(new ValidationError(err.code === "LIMIT_FILE_SIZE" ? "file is larger than 10 MB" : `invalid upload: ${err.message}`, "file"));
+      return;
+    }
+    next(err);
+  });
+}
 
 function agentTokenMatches(token: string): boolean {
   const expected = process.env.WORK_BOARD_AGENT_TOKEN_SHA256?.trim().toLowerCase();
@@ -182,6 +208,31 @@ function linksValue(value: unknown): WorkLink[] {
   });
 }
 
+/** A platform admin's email, or null to unassign. */
+async function assigneeValue(value: unknown): Promise<string | null> {
+  if (value === null) return null;
+  if (typeof value !== "string" || !(await isPlatformAdmin(value))) throw new ValidationError("assignee must be a platform admin", "assignee");
+  return value.trim().toLowerCase();
+}
+
+function dueDateValue(value: unknown): string | null {
+  if (value === null) return null;
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) {
+    throw new ValidationError("due_date must be YYYY-MM-DD", "due_date");
+  }
+  return value;
+}
+
+function sanitiseFilename(name: string): string {
+  const cleaned = name.replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^\.+/, "").slice(-100);
+  return cleaned || "attachment";
+}
+
+/** The storage path stays on the server; the client asks for a signed URL per attachment. */
+function publicAttachment({ path: _path, ...rest }: WorkAttachmentRow): Omit<WorkAttachmentRow, "path"> {
+  return rest;
+}
+
 function itemKey(req: Request): { team: string; number: number } {
   const raw = routeParam(req, "key") ?? "";
   const parsed = parseWorkItemKey(raw);
@@ -238,7 +289,8 @@ workBoardRouter.get(
   asyncHandler(async (req, res) => {
     const { team, number } = itemKey(req);
     const item = hideTriageFromMachines(actorOf(res), await getWorkItem(team, number), `${team}-${number}`);
-    res.json({ item, events: await listWorkItemEvents(item.id) });
+    const [events, attachments] = await Promise.all([listWorkItemEvents(item.id), listWorkAttachments(item.id)]);
+    res.json({ item, events, attachments: attachments.map(publicAttachment) });
   })
 );
 
@@ -273,6 +325,8 @@ workBoardRouter.post(
         priority: hasField(req.body, "priority") ? priorityValue(field(req.body, "priority")) : 0,
         labels,
         links: hasField(req.body, "links") ? linksValue(field(req.body, "links")) : [],
+        assignee: hasField(req.body, "assignee") ? await assigneeValue(field(req.body, "assignee")) : null,
+        due_date: hasField(req.body, "due_date") ? dueDateValue(field(req.body, "due_date")) : null,
       },
       actor
     );
@@ -299,6 +353,8 @@ workBoardRouter.patch(
     if (hasField(body, "done_when")) patch.done_when = optionalBody(body.done_when, "done_when");
     if (hasField(body, "priority")) patch.priority = priorityValue(body.priority);
     if (hasField(body, "labels")) patch.labels = labelsValue(body.labels);
+    if (hasField(body, "assignee")) patch.assignee = await assigneeValue(body.assignee);
+    if (hasField(body, "due_date")) patch.due_date = dueDateValue(body.due_date);
     if (hasField(body, "branch")) {
       if (body.branch !== null && (typeof body.branch !== "string" || !/^[\w./-]{1,200}$/.test(body.branch))) {
         throw new ValidationError("branch must be a git branch name", "branch");
@@ -343,6 +399,83 @@ workBoardRouter.post(
     const event = await addWorkItemComment(team, number, text, actor, (current) => hideTriageFromMachines(actor, current, key));
     if (!event) throw new NotFoundError("Work item", key);
     res.status(201).json({ event });
+  })
+);
+
+// GET /api/v1/platform/work/people — who an item can be assigned to
+workBoardRouter.get(
+  "/platform/work/people",
+  asyncHandler(async (_req, res) => {
+    res.json({ items: await listWorkPeople() });
+  })
+);
+
+// POST /api/v1/platform/work/items/CORE-12/attachments (multipart: file, optional comment = its event id)
+workBoardRouter.post(
+  "/platform/work/items/:key/attachments",
+  parseFile,
+  asyncHandler(async (req, res) => {
+    const actor = actorOf(res);
+    const { team, number } = itemKey(req);
+    const item = hideTriageFromMachines(actor, await getWorkItem(team, number), `${team}-${number}`);
+    const file = req.file;
+    if (!file) throw new ValidationError("file is required", "file");
+    if (!ATTACHMENT_MIME_RE.test(file.mimetype) && file.mimetype !== "application/pdf") {
+      throw new ValidationError("only images and PDF files can be attached", "file");
+    }
+    const comment = field(req.body, "comment");
+    if (comment !== undefined && comment !== "" && (typeof comment !== "string" || !/^\d{1,18}$/.test(comment))) {
+      throw new ValidationError("comment must be a comment id", "comment");
+    }
+    const eventId = typeof comment === "string" && comment ? comment : null;
+    const filename = sanitiseFilename(file.originalname);
+    const path = `work-board/${item.id}/${randomUUID()}-${filename}`;
+    await uploadPartnerDocument(path, new Uint8Array(file.buffer), file.mimetype);
+    let row: WorkAttachmentRow | null;
+    try {
+      row = await insertWorkAttachment(
+        { item_id: item.id, event_id: eventId, path, filename, mime_type: file.mimetype, size_bytes: file.size },
+        actor
+      );
+    } catch (err) {
+      await deletePartnerDocument(path).catch((cleanup: unknown) => console.error(`work attachment ${path}: cleanup failed:`, cleanup));
+      throw err;
+    }
+    if (!row) {
+      await deletePartnerDocument(path).catch((cleanup: unknown) => console.error(`work attachment ${path}: cleanup failed:`, cleanup));
+      throw new ValidationError("comment not found on this item", "comment");
+    }
+    res.status(201).json({ attachment: publicAttachment(row) });
+  })
+);
+
+// GET /api/v1/platform/work/items/CORE-12/attachments/:id — a short-lived signed URL
+workBoardRouter.get(
+  "/platform/work/items/:key/attachments/:id",
+  asyncHandler(async (req, res) => {
+    const { team, number } = itemKey(req);
+    const item = hideTriageFromMachines(actorOf(res), await getWorkItem(team, number), `${team}-${number}`);
+    const id = routeParam(req, "id") ?? "";
+    const row = UUID_RE.test(id) ? await getWorkAttachment(item.id, id) : null;
+    if (!row) throw new NotFoundError("Attachment", id);
+    res.json({ url: await getPartnerDocumentSignedUrl(row.path, ATTACHMENT_URL_SECONDS), expires_in: ATTACHMENT_URL_SECONDS });
+  })
+);
+
+// DELETE /api/v1/platform/work/items/CORE-12/attachments/:id — people only
+workBoardRouter.delete(
+  "/platform/work/items/:key/attachments/:id",
+  asyncHandler(async (req, res) => {
+    const actor = requireHuman(res);
+    const { team, number } = itemKey(req);
+    const item = await getWorkItem(team, number);
+    if (!item) throw new NotFoundError("Work item", `${team}-${number}`);
+    const id = routeParam(req, "id") ?? "";
+    const row = UUID_RE.test(id) ? await deleteWorkAttachment(item.id, id, actor) : null;
+    if (!row) throw new NotFoundError("Attachment", id);
+    // The row is gone either way; an object left behind in storage is logged for us, not shown.
+    await deletePartnerDocument(row.path).catch((err: unknown) => console.error(`work attachment ${row.path}: delete failed:`, err));
+    res.status(204).end();
   })
 );
 

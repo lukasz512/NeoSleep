@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 063: app errors become board tickets (CORE-190, decision core190-r1)
+-- Migration 064: app errors become board tickets (CORE-190, decision core190-r1)
 --
 -- docs/stories/errors-to-board-tickets.md. Every real error kind in
 -- platform.diagnostics opens one work-board ticket; the nightly worker fixes it.
