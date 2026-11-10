@@ -4,7 +4,7 @@
     :max-width="maxWidth"
     :persistent="persistent"
     scrollable
-    :class="['pwa-form-dialog', { 'pwa-form-dialog--sheet': asSheet }]"
+    :class="['pwa-form-dialog', { 'pwa-form-dialog--sheet': asSheet, 'pwa-form-dialog--fill': asSheet && fill }]"
     content-class="pwa-form-dialog__content"
     :transition="asSheet ? sheetDialogTransition : originDialogTransition"
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
@@ -103,6 +103,8 @@ const props = withDefaults(
      * `header-extra` instead.
      */
     folder?: boolean;
+    /** On phones, the whole screen instead of a bottom sheet (CORE-192 work items). */
+    fill?: boolean;
   }>(),
   {
     title: undefined,
@@ -114,6 +116,7 @@ const props = withDefaults(
     persistent: false,
     maxWidth: 680,
     folder: false,
+    fill: false,
   },
 );
 

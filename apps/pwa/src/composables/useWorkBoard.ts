@@ -5,7 +5,18 @@
  */
 import { isApiError, reportCaught, reportFailedResponse } from "@api";
 import { apiFetch } from "./useApi";
-import type { WorkItem, WorkItemDraft, WorkItemEvent, WorkItemPatch, WorkLinkKind, WorkSessionToken, WorkStatus, WorkTeam } from "../types/workBoard";
+import type {
+  WorkAttachment,
+  WorkItem,
+  WorkItemDraft,
+  WorkItemEvent,
+  WorkItemPatch,
+  WorkLinkKind,
+  WorkPerson,
+  WorkSessionToken,
+  WorkStatus,
+  WorkTeam,
+} from "../types/workBoard";
 
 /** Board columns, left to right. `canceled` is closed and has no column. */
 export const WORK_BOARD_COLUMNS: readonly WorkStatus[] = [
@@ -60,8 +71,38 @@ export async function fetchWorkItems(): Promise<WorkItem[]> {
   return (await request<{ items: WorkItem[] }>("useWorkBoard.items", `${BASE}/items`)).items;
 }
 
-export async function fetchWorkItem(key: string): Promise<{ item: WorkItem; events: WorkItemEvent[] }> {
+export interface WorkItemDetail {
+  item: WorkItem;
+  events: WorkItemEvent[];
+  attachments: WorkAttachment[];
+}
+
+export async function fetchWorkItem(key: string): Promise<WorkItemDetail> {
   return request("useWorkBoard.item", `${BASE}/items/${encodeURIComponent(key)}`);
+}
+
+/** Platform admins, the only people an item can be assigned to. */
+export async function fetchWorkPeople(): Promise<WorkPerson[]> {
+  return (await request<{ items: WorkPerson[] }>("useWorkBoard.people", `${BASE}/people`)).items;
+}
+
+/** Uploads one image or PDF; with `commentId` it belongs to that comment. */
+export async function uploadWorkAttachment(key: string, file: File, commentId: string | null = null): Promise<WorkAttachment> {
+  const data = new FormData();
+  if (commentId) data.append("comment", commentId);
+  data.append("file", file);
+  const path = `${BASE}/items/${encodeURIComponent(key)}/attachments`;
+  return (await request<{ attachment: WorkAttachment }>("useWorkBoard.upload", path, { method: "POST", body: data })).attachment;
+}
+
+/** A signed URL valid for a few minutes; ask again rather than keeping it. */
+export async function fetchAttachmentUrl(key: string, id: string): Promise<string> {
+  const path = `${BASE}/items/${encodeURIComponent(key)}/attachments/${encodeURIComponent(id)}`;
+  return (await request<{ url: string }>("useWorkBoard.attachmentUrl", path)).url;
+}
+
+export async function deleteWorkAttachment(key: string, id: string): Promise<void> {
+  await requestNoContent("useWorkBoard.deleteAttachment", `${BASE}/items/${encodeURIComponent(key)}/attachments/${encodeURIComponent(id)}`);
 }
 
 export async function createWorkItem(draft: WorkItemDraft): Promise<WorkItem> {
@@ -114,10 +155,12 @@ export async function issueSessionToken(name: string): Promise<{ item: WorkSessi
   return request("useWorkBoard.issueToken", `${BASE}/session-tokens`, jsonInit("POST", { name }));
 }
 
-/** DELETE answers 204 with no body, so it skips request()'s JSON parse. */
 export async function revokeSessionToken(id: string): Promise<void> {
-  const where = "useWorkBoard.revokeToken";
-  const path = `${BASE}/session-tokens/${encodeURIComponent(id)}`;
+  await requestNoContent("useWorkBoard.revokeToken", `${BASE}/session-tokens/${encodeURIComponent(id)}`);
+}
+
+/** DELETE answers 204 with no body, so it skips request()'s JSON parse. */
+async function requestNoContent(where: string, path: string): Promise<void> {
   let res: Response;
   try {
     res = await apiFetch(path, { method: "DELETE", handleErrors: false });
