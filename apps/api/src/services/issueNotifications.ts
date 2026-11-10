@@ -36,17 +36,41 @@ export function notifyNewErrorKind(row: DiagnosticInsert, result: DiagnosticWrit
   if (row.level !== "error" && row.level !== "fatal") return;
   if (!takeErrorEmailSlot(Date.now())) return;
 
-  const where = typeof row.metadata?.where === "string" ? row.metadata.where : typeof row.metadata?.path === "string" ? row.metadata.path : "-";
+  const { subject, rows } = buildNewErrorEmail(row, DEPLOY_ENV, new Date());
+  sendContactEmail(subject, rows).catch((e) => console.error("notifyNewErrorKind failed:", e));
+}
+
+const STACK_LINES_IN_EMAIL = 5;
+
+function metaString(row: DiagnosticInsert, key: string): string | null {
+  const value = row.metadata?.[key];
+  return typeof value === "string" && value !== "" ? value : null;
+}
+
+/**
+ * Subject and rows of the new-error email. Labelled with the deploy
+ * environment (dev/prod), not NODE_ENV, which is "production" on both.
+ * Carries what locates the error: component, page, app version, top of the stack.
+ */
+export function buildNewErrorEmail(
+  row: DiagnosticInsert,
+  deployEnv: string,
+  now: Date
+): { subject: string; rows: [string, string][] } {
+  const where = metaString(row, "where") ?? metaString(row, "path") ?? "-";
+  const stack = (row.stack ?? "").split("\n").filter(Boolean).slice(0, STACK_LINES_IN_EMAIL).join("\n");
   const rows: [string, string][] = [
     ["Message", row.message.slice(0, 300)],
     ["Source", row.source ?? "api"],
     ["Where", where],
+    ["Component", metaString(row, "x_component") ?? "-"],
+    ["Page", metaString(row, "url") ?? metaString(row, "path") ?? "-"],
+    ["App version", metaString(row, "app_version") ?? "-"],
+    ["Stack", stack || "-"],
     ["Tenant", row.tenant_slug ?? "-"],
     ["Request ID", row.request_id ?? "-"],
-    ["First seen", new Date().toISOString()],
+    ["First seen", now.toISOString()],
     ["Open", `${pwaBaseUrl()}/issues?tab=errors`],
   ];
-  sendContactEmail(`[NeoSleep ${env}] New error: ${row.message.slice(0, 80)}`, rows).catch((e) =>
-    console.error("notifyNewErrorKind failed:", e)
-  );
+  return { subject: `[NeoSleep ${deployEnv}] New error: ${row.message.slice(0, 80)}`, rows };
 }

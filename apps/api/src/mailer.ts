@@ -133,7 +133,7 @@ export async function sendContactEmail(subject: string, rows: [string, string][]
   }
 
   const tableRows = rows
-    .map(([label, value]) => `<tr><td style="padding:4px 12px 4px 0;font-weight:600;white-space:nowrap;vertical-align:top">${escapeHtml(label)}</td><td style="padding:4px 0">${escapeHtml(value)}</td></tr>`)
+    .map(([label, value]) => `<tr><td style="padding:4px 12px 4px 0;font-weight:600;white-space:nowrap;vertical-align:top">${escapeHtml(label)}</td><td style="padding:4px 0;white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(value)}</td></tr>`)
     .join("");
 
   // Internal notification (always to the fixed RESEND_NOTIFY_TO admin inbox), so this stays
@@ -956,7 +956,7 @@ export async function sendDeviceOrderReconciliationAlert(to: string, alert: Reco
     ["Listed by the lab", String(alert.labTotal)],
   ];
   const tableRows = rows
-    .map(([label, value]) => `<tr><td style="padding:4px 12px 4px 0;font-weight:600;white-space:nowrap;vertical-align:top">${escapeHtml(label)}</td><td style="padding:4px 0">${escapeHtml(value)}</td></tr>`)
+    .map(([label, value]) => `<tr><td style="padding:4px 12px 4px 0;font-weight:600;white-space:nowrap;vertical-align:top">${escapeHtml(label)}</td><td style="padding:4px 0;white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(value)}</td></tr>`)
     .join("");
   const list =
     alert.lines.length > 0
