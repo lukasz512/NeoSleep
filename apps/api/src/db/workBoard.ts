@@ -60,6 +60,8 @@ export interface WorkItemRow {
   branch: string | null;
   source: string;
   linear_identifier: string | null;
+  /** Set when the item mirrors something outside the board, e.g. an error kind (CORE-190). */
+  external_ref: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -79,7 +81,7 @@ export interface WorkItemEventRow {
 }
 
 const ITEM_COLUMNS = `id, team_key || '-' || number AS key, team_key, number, title, problem, change,
-  done_when, status, priority, labels, links, branch, source, linear_identifier, created_by,
+  done_when, status, priority, labels, links, branch, source, linear_identifier, external_ref, created_by,
   created_at, updated_at, status_changed_at, completed_at`;
 
 /** CORE-12 → { team: "CORE", number: 12 }; null when the key is not shaped like one. */
@@ -122,6 +124,13 @@ export async function getWorkItem(team: string, number: number): Promise<WorkIte
     `SELECT ${ITEM_COLUMNS} FROM platform.work_item WHERE team_key = $1 AND number = $2`,
     [team, number]
   );
+  return rows[0] ?? null;
+}
+
+export async function getWorkItemByExternalRef(ref: string): Promise<WorkItemRow | null> {
+  const { rows } = await getDb().query<WorkItemRow>(`SELECT ${ITEM_COLUMNS} FROM platform.work_item WHERE external_ref = $1`, [
+    ref,
+  ]);
   return rows[0] ?? null;
 }
 
@@ -172,7 +181,8 @@ export interface WorkItemInsert {
   priority?: number;
   labels?: string[];
   links?: WorkLink[];
-  source?: "manual" | "agent" | "session" | "problem_report";
+  source?: "manual" | "agent" | "session" | "problem_report" | "error";
+  external_ref?: string | null;
 }
 
 /** Takes the team's next number under a row lock, so KEY-n never repeats. */
@@ -188,8 +198,8 @@ export async function createWorkItem(input: WorkItemInsert, actor: WorkActor): P
     const status = input.status ?? "backlog";
     const { rows } = await client.query<WorkItemRow>(
       `INSERT INTO platform.work_item
-         (team_key, number, title, problem, change, done_when, status, priority, labels, links, source, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12)
+         (team_key, number, title, problem, change, done_when, status, priority, labels, links, source, created_by, external_ref)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13)
        RETURNING ${ITEM_COLUMNS}`,
       [
         input.team,
@@ -204,6 +214,7 @@ export async function createWorkItem(input: WorkItemInsert, actor: WorkActor): P
         JSON.stringify(input.links ?? []),
         input.source ?? (actor.kind === "agent" || actor.kind === "session" ? actor.kind : "manual"),
         actor.name,
+        input.external_ref ?? null,
       ]
     );
     const item = rows[0]!;

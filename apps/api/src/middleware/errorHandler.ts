@@ -3,25 +3,31 @@ import type { RequestWithId } from "./requestId.js";
 import { AppError, EmailInUseError, PartnerOrderAlreadySubmittedError, ValidationError } from "../errors.js";
 import { insertDiagnostic, tenantSlugFromHost, type DiagnosticInsert } from "../db.js";
 import { notifyNewErrorKind } from "../services/issueNotifications.js";
+import { queueErrorTicket } from "../services/errorTickets.js";
+import { DEPLOY_ENV } from "../env.js";
 
 function isDiagnosticsEnabled(): boolean {
   return process.env.ENABLE_DIAGNOSTICS_DB === "1" || process.env.NODE_ENV === "production";
 }
 
-/** Records an API error with tenant and user, and emails the platform inbox when it is a new kind on prod. */
+/** Records an API error with tenant and user, opens its board ticket, and emails the platform inbox when it is a new kind on prod. */
 function recordApiError(req: Request, requestId: string | undefined, row: Pick<DiagnosticInsert, "message" | "stack" | "metadata">): void {
   const entry: DiagnosticInsert = {
     level: "error",
     message: row.message,
     stack: row.stack ?? null,
     source: "api",
+    env: DEPLOY_ENV,
     tenant_slug: tenantSlugFromHost(req.hostname),
     user_id: req.user?.sub ?? null,
     request_id: requestId ?? null,
     metadata: row.metadata ?? null,
   };
   insertDiagnostic(entry)
-    .then((result) => notifyNewErrorKind(entry, result))
+    .then((result) => {
+      notifyNewErrorKind(entry, result);
+      queueErrorTicket(entry, result);
+    })
     .catch((e) => console.error("insertDiagnostic failed:", e));
 }
 
