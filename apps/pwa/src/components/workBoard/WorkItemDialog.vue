@@ -699,6 +699,8 @@ function eventText(event: WorkItemEvent): string {
   font-weight: 600;
   line-height: 1.3;
   padding-top: 0;
+  /* Vuetify fades a textarea's top edge for scrolled text; with no top padding that fade hid the title. */
+  mask-image: none;
 }
 
 .work-dialog__chips {
