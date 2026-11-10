@@ -143,9 +143,16 @@ pg_restore --no-owner --no-privileges --dbname="$TARGET_URL" db.dump
 ```
 
 Restoring into a fresh Supabase project: create the project, then run step 3 with its
-connection string. Supabase-internal schemas (`auth`, `storage`, ...) already exist there
-and will report "already exists" errors. Those are expected; application schemas
-(`platform`, tenant schemas, `public`) are what matters.
+connection string, restricted to the application schemas. Learned in the 2026-11-10 drill:
+
+- Restore only `platform`, the tenant schemas and `public`
+  (`-n platform -n neosleep -n fourseasons -n test -n public`). Supabase-internal schemas
+  (`auth`, `storage`, ...) already exist there and only produce noise.
+- `pg_restore -n` does **not** create the schema: `CREATE SCHEMA <name>` for each one first.
+- Create the extensions our tables use first:
+  `CREATE EXTENSION IF NOT EXISTS btree_gist SCHEMA extensions;` and the same for `ltree`.
+- To run the API locally against it: `pnpm install`, then build `@neo/device-order`,
+  `@neo/documents` and `@neo/email` before `pnpm --filter @neo/api dev`.
 
 Storage files:
 
@@ -164,4 +171,58 @@ Delete the decrypted files once done. They are medical data.
 Download the latest backup, decrypt it, restore into a local Docker Postgres, open a few
 known patients and one attachment. Write the date and result in NEO-62 (or its successor).
 The nightly restore check proves the dump is valid; the drill proves **we** can still
-decrypt and use it.
+decrypt and use it. Refreshing the dev copy (below) counts as a drill.
+
+| Date | Backup | Target | Duration (RTO) | Result |
+|---|---|---|---|---|
+| 2026-11-10 | 2026-11-09T1943Z | new Supabase project `xlblsuntdaoqhkayufrn` (CORE-189) | 16 min, incl. two avoidable hiccups | 0 restore errors, row counts identical, 60/60 Storage files. Login, patient list, patient record + 5 tabs, 3/3 PDFs worked on the local API. Fixes now in the Restore section. |
+
+## Dev database: anonymized copy of production (CORE-189)
+
+pwa-dev must never read or write production. Its database is a separate Supabase project
+(`xlblsuntdaoqhkayufrn`, account neosleepcare@gmail.com, us-east-1), filled from a
+nightly backup with all personal data replaced. Scripts: [infrastructure/scripts/dev-db/](../infrastructure/scripts/dev-db/).
+
+What the copy keeps and replaces ([anonymize.sql](../infrastructure/scripts/dev-db/anonymize.sql)):
+
+| | |
+|---|---|
+| **Kept as is** | Accounts whose email is `@neosleepcare.com` (staff, QA, test doctors), so pwa-dev logins keep working. Clinical answers, exam results and study numbers: without a name they identify no one. Patient city and country. |
+| **Replaced** | Every other identity: name, email (`anon-…@anon.invalid`, which can never be delivered), phone (`+52000…`, which can never ring), birth date (1 January of the same year). Clinic name, address, contact details and tax IDs. Medical record numbers, shipping addresses, practitioner licence numbers (cédula, PWZ). File names. |
+| **Blanked or deleted** | Free-text notes, notification texts, audit-log snapshots and IPs, partner order payloads, error logs. All login tokens, sessions, passkeys and push subscriptions. |
+| **Storage** | Every file becomes a placeholder of the same type (a one-page "Anonymized document" PDF, or a 1×1 image). |
+
+The replacement is deterministic: a re-run gives every person the same fake name.
+[pii-check.sql](../infrastructure/scripts/dev-db/pii-check.sql) is the test query: it fails,
+naming each rule and row count, if any real name, email, phone, birth date, address, ID,
+note, snapshot or token is left. Both run against the real migrated schema in
+`pnpm dev-db:test` (needs Docker and `pnpm test-db up --migrate`).
+
+### Refresh the dev copy
+
+Personal data is replaced in a local throwaway Postgres and a local temp folder.
+Real data never reaches the dev project.
+
+```bash
+# 1. Download and decrypt the latest backup (see Restore above)
+age --decrypt -i neosleep-backup-key.txt -o db.dump neosleep-db-<stamp>.dump.age
+age --decrypt -i neosleep-backup-key.txt -o storage.tar.gz neosleep-storage-<stamp>.tar.gz.age
+
+# 2. Refresh. Reads the dev credentials from .claude/local/supabase-dev.env
+#    (DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_KEY of the DEV project).
+pnpm dev-db:refresh "$PWD/db.dump" "$PWD/storage.tar.gz"   # pass - instead of storage to skip files
+
+# 3. Delete the decrypted files
+rm db.dump storage.tar.gz
+```
+
+The script refuses any `DATABASE_URL` or `SUPABASE_URL` that is not the dev project.
+It replaces every application schema on dev, so anything written on pwa-dev since the
+last refresh is gone. It prints its duration: write it in the drill table above.
+
+If real data ever lands in the dev project (as it did after the 2026-11-10 drill),
+clean it in place:
+
+```bash
+pnpm dev-db:refresh --in-place   # anonymize.sql + pii-check.sql on dev, every Storage file replaced
+```
