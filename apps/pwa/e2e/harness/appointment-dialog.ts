@@ -42,6 +42,11 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   return realFetch(input, init);
 };
 
+// Tomorrow 15:00 UTC, never a fixed date: the dialog refuses a past date, so a
+// hardcoded one turned the CORE-138 submit test red once that day had passed.
+const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+const startAt = `${tomorrow.toISOString().slice(0, 10)}T15:00:00Z`;
+
 const Harness = defineComponent({
   setup() {
     return () =>
@@ -49,8 +54,7 @@ const Harness = defineComponent({
         modelValue: true,
         patient: { id: "p-1", name: "María Fernanda López Ruiz", practitioner_id: "h-1" },
         practitioner: { id: "h-2", name: "Dra. Lucía Fernández Ortega" },
-        // Far future on purpose: the form refuses a past date, so a near date turns this suite red once it passes.
-        startAt: "2036-10-09T15:00:00Z",
+        startAt,
       });
   },
 });
