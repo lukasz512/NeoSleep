@@ -60,7 +60,7 @@ docs/             → Architecture docs, ADRs, docs/foundation/ (backlog, presen
 
 ### Multi-tenancy model: schema-per-tenant on Supabase
 - Each pharma company (tenant) gets its own PostgreSQL schema: `tenant_<slug>` (e.g. `tenant_acmepharma_pl`)
-- Shared `public` schema for system-level tables (`tbl_tenants`, `tbl_app_config`)
+- Shared `platform` schema for system-level tables (`platform.companies`, `platform.tenants`, `platform.users`, `platform.feature_flags`, `platform.lookups`, the work board)
 - Supabase project: single instance for MVP. Connection string in `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` env vars (API server only — never frontend)
 - Migrations: `apps/api/migrations/` — numbered `.sql` files, run on API server startup via `db/migrations.ts`
 - New tables → always add a new numbered migration, never mutate old ones
@@ -85,14 +85,14 @@ Tenant schema (actual, per `apps/api/migrations/001_tenant_schema.sql` + `003_pr
 
 ## Auth
 - Session cookie (httpOnly), remember-me tokens
-- Roles: `admin`, `ffm` (field force manager), `kam`, `msl`, `rep` — region-scoped
+- Roles (`user_roles` CHECK, migration 013): `admin`, `manager` (the FFM), `kam`, `msl`, `rep`, `doctor` — region-scoped. Check the migration, not this line, before an RBAC decision
 - RBAC middleware: `apps/api/src/auth.ts`
 - `practitioner` auth: magic link planned — NOT YET IMPLEMENTED (needs architecture decision first)
 
 ## i18n
 - Active languages: EN, PL, MX (Mexican Spanish)
 - Internal locale IDs: `en`, `pl`, `mx` — `mx` is the app's internal key for `es-MX` (Mexican Spanish). The browser locale `es-MX` maps to `mx` internally via `i18n.ts`. Do NOT rename to `es-MX` — it is used consistently as a short key throughout the codebase.
-- Add keys to `packages/i18n/en.json` first, then run `npm run i18n:extract`
+- Add keys to `packages/i18n/en.json` first, then run `pnpm i18n:extract`
 - Never leave a key only in one language file — CI enforces parity
 - RTL: not needed now. Thai (TH) uses LTR — but test font rendering
 
@@ -115,7 +115,7 @@ pnpm worktree:clean    # Dry-run: which worktrees/branches look closed (--auto r
 
 ## Workflow rules (full text + rationale: `docs/CLAUDE_WORKFLOW.md`, read it when shipping)
 Hooks enforce all of these (`.claude/hooks/`, `quality-gate.sh`), so a block names what's missing.
-- **Ticket first**: every change, trivial too, gets a ticket on the work board (`pnpm board create --team … --title … --body '## Problem / ## Change / ## Done when'`, ≤1500 chars; it lands in Building with the `session` label). Linear is read-only since CORE-187 (export + close ≈ 2026-11-07); the token lives in `.claude/local/board.json`. The team is **CORE** (platform, every tenant) or **NEO** (NeoSleep client work); when unsure, CORE. Keys are listed in `.claude/ticket-teams`.
+- **Ticket first**: every change, trivial too, gets a ticket on the work board (`pnpm board create --team … --title … --body '## Problem / ## Change / ## Done when'`, ≤1500 chars; it lands in Building with the `session` label). Linear is a read-only archive since CORE-187; the board's session token lives in `.claude/local/board.json`. The team is **CORE** (platform, every tenant) or **NEO** (NeoSleep client work); when unsure, CORE. Keys are listed in `.claude/ticket-teams`.
 - **Worktree per thread, never ask**: `EnterWorktree("<ticket-id>-<slug>")` before the first edit, then `pnpm board branch <KEY> <branch>` and comment it (`pnpm board comment`).
 - **PRs are created only by Łukasz.** Push the branch (`git push -u origin <branch>`) and hand him the pre-filled compare URL (`…/compare/dev...<branch>?quick_pull=1&title=…&body=…`). Never push to dev/prod, never force-push. Cite tickets as a plain `NEO-<n>`, never `Fixes/Closes/Resolves`. Renovate is the only bot that opens PRs.
 - **Artifact for every change** via `/ship-artifact`: What changed / Run it locally / Verify it. A UI change also needs a real before/after. It carries 3 links (Artifact, board card, VS Code session), plus the PR button once pushed, and gets one line in the Change Index. Link it on the ticket (`pnpm board link`) and move the ticket to **Needs Review** (`pnpm board move <KEY> needs_review`), never Done.
@@ -123,16 +123,15 @@ Hooks enforce all of these (`.claude/hooks/`, `quality-gate.sh`), so a block nam
 - **Questions** come as a 3-button `/decision-form` (TDD first: what a test settles isn't asked). **Final replies** are ≤2 sentences + anything he must act on. The per-prompt hook injects both rules once per session.
 - **Session cost (CORE-103)**: subagents default to Sonnet, so pass `model: "haiku"` for Explore/search. When the context guard fires, write `.claude/local/handoff/<topic>.md`. Compaction is automatic near ~180k (`CLAUDE_CODE_AUTO_COMPACT_WINDOW` in settings.json, CORE-175). 1 ticket = 1 session: after the handover, suggest /clear.
 - Merged worktrees/branches are auto-removed at session start. To see what's left, run `pnpm worktree:clean`; never raw `git branch -D`.
-- Mark stable states with milestone tags (`git tag v<name>`); see the doc.
 
 ## Deployment
 - `apps/pwa` / `apps/web`: FTP to GoDaddy (current, to be migrated to VPS)
-- `apps/api`: Render, auto-deploys on push to its tracked branch — see `render.yaml`. No GitHub Actions workflow for this; a git push is the whole deploy pipeline.
+- `apps/api`: Google Cloud Run (project `neosleep-api`, us-west2), services `neosleep-api-dev` / `neosleep-api-prod`, deployed by `.github/workflows/deploy-api.yml` on push to `dev` / `prod`. Runbook: `docs/RUNBOOK_API_CLOUD_RUN.md` (ADR-025).
 - Environments (branch → URL): only `dev` and `prod` exist for now — UAT is removed from the project until reintroduced
   - DEV:  `dev` → pwa-dev.neosleepcare.com (rep app) / dev.neosleepcare.com (website)
   - PROD: `prod` → pwa.neosleepcare.com (rep app) / neosleepcare.com (website)
 - CI/CD: `.github/workflows/deploy-pwa.yml`, `deploy-web.yml`
-- Promote DEV → PROD via `promote-pwa-dev-to-prod.yml` / `promote-web-dev-to-prod.yml`
+- Promote DEV → PROD via `promote-dev-to-prod.yml` (opens the dev → prod PR; a human merges it)
 
 ## What NOT to do
 - Do not write non-English text anywhere in source: code, comments, console/log output, script echoes, hardcoded strings. English only, everywhere except `packages/i18n/pl.json` and `packages/i18n/mx.json` and seed/demo data that intentionally represents PL/MX market content
@@ -142,9 +141,6 @@ Hooks enforce all of these (`.claude/hooks/`, `quality-gate.sh`), so a block nam
 - Do not add translation keys directly in PL/ES files — always start from `en.json`
 - Do not bypass Husky hooks (`--no-verify`)
 - Do not mock PostgreSQL in API server integration tests
-- Do not start portal or admin apps until rep app Stage 1-3 is done
 
-## Current Focus (March 2026)
-Stage 1 done (OIDC auth, app shell, layout). Cleaning up before Stage 2 (real DB reads).
-Next: Stage 2 (direct DB) → Stage 3 (CRM views complete).
-Portal and admin: do not start until rep app Stage 1–3 is done.
+## Current Focus
+Live on prod: rep app CRM views, doctor panel, platform admin (work board). Current priorities are the work board's Approved and Building columns, not this file.

@@ -24,9 +24,6 @@ The job fails if `/health` does not return 200 after the deploy.
 - **Bad code**: Cloud Run keeps old revisions. Console → service → **Revisions** → pick
   the previous one → **Manage traffic** → 100%. Or:
   `gcloud run services update-traffic neosleep-api-prod --region us-west2 --to-revisions <REVISION>=100`
-- **Back to Render entirely** (transition period only): set `API_URL_PROD` / `API_URL_DEV`
-  to the onrender.com URL (or delete them; the workflow falls back to
-  `RENDER_API_URL_*`), then re-run **Deploy PWA** (and **Deploy Website** for prod).
 
 ## Logs
 
@@ -75,8 +72,9 @@ Actions → the workflow → **Run workflow**.
    creates the project, the registry, the service accounts and WIF, and prints 4 values.
 3. Set these 4 values as GitHub secrets: `GCP_API_PROJECT`, `GCP_API_WIF_PROVIDER`,
    `GCP_API_DEPLOY_SA`, `GCP_API_RUNTIME_SA`.
-4. `RENDER_API_KEY=<key> bash infrastructure/cloud-run/sync-secrets-from-render.sh`
-   copies secrets from Render into Secret Manager without printing them.
+4. Create each secret named in `infrastructure/cloud-run/secrets.list` in Secret Manager
+   (`printf %s "$VALUE" | gcloud secrets create <NAME> --data-file=- --project neosleep-api`).
+   The original values were copied from Render, which CORE-188 retired.
 5. Google login: in the OAuth client (GCP project `neosleep` → APIs & Services →
    Credentials), add both
    `https://neosleep-api-{dev,prod}-692668694184.us-west2.run.app/api/v1/auth/google/callback`
