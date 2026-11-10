@@ -72,25 +72,24 @@ function corsOrigin(origin: string | undefined, cb: (err: Error | null, allow?: 
 
 export const app: Express = express();
 
-// Registered before any other middleware (rate limiter, CORS, auth) so Render's
+// Registered before any other middleware (rate limiter, CORS, auth) so the host's
 // health checker never gets rate-limited or blocked by an unrelated dependency —
-// a 429/5xx here makes Render think the whole instance is down.
+// a 429/5xx here makes it think the whole instance is down.
 // `commit` is the git SHA this instance was built from — GIT_COMMIT on Cloud Run
-// (baked into the image by deploy-api.yml), RENDER_GIT_COMMIT on Render (set by
-// Render itself), null locally. The post-deploy smoke test
+// (baked into the image by deploy-api.yml), null locally. The post-deploy smoke test
 // (.github/workflows/post-deploy-smoke.yml) polls it to know when the pushed
 // commit is actually live.
 app.get("/health", (_req, res) =>
-  res.json({ ok: true, commit: process.env.GIT_COMMIT || process.env.RENDER_GIT_COMMIT || null })
+  res.json({ ok: true, commit: process.env.GIT_COMMIT || null })
 );
 
-// Render (and any reverse-proxy host) sits in front of this process and sets
+// Cloud Run's front end (like any reverse-proxy host) sits in front of this process and sets
 // X-Forwarded-For / X-Forwarded-Proto. Without this, express-rate-limit
 // refuses to trust X-Forwarded-For (ERR_ERL_UNEXPECTED_X_FORWARDED_FOR).
 app.set("trust proxy", 1);
 
 // Renders one fixed, data-free PDF through the same Chromium path as real
-// documents — the most fragile piece on Render (bundled Chromium + system
+// documents — the most fragile piece on the host (bundled Chromium + system
 // libraries), which /health alone can't vouch for. Used by the post-deploy
 // smoke test; tightly rate-limited because every call launches a render.
 // Loads Poppins from Google Fonts exactly like packages/documents/templates do:

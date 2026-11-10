@@ -12,7 +12,9 @@ argument-hint: "[content.json path]"
 
 **Before anything: a board ticket and a branch named after it (NEO-84).** No ticket → `pnpm board create --team CORE|NEO|AJM --title … --body '## Problem … ## Change … ## Done when …'` (≤1500 chars; the CLI and the API reject anything else; it lands in Building with the `session` label) and rename the branch. Linear is read-only since CORE-187. `render` refuses a branch without `<key>-<n>` (keys in `.claude/ticket-teams`).
 
-**Full or light (CORE-175, decision slim-r1 D2).** The full page below is only for UI/feature changes: any `.vue/.css/.scss`, a view, an API route or a migration (`.claude/hooks/lib/change-shape.sh`). Anything else (service fix, hooks, docs, config) gets the **light** handover instead: push, post one board comment (`pnpm board comment <KEY> "…"`: 2 sentences + PR link + branch), `pnpm board move <KEY> needs_review`, then `node .claude/skills/ship-artifact/build.mjs light --board-commented --board-status needs_review` (`--pr <url>` once a PR exists). No page, no screenshots, no Change Index row.
+**The Create PR link carries the full PR template (CORE-188).** `pr-body.mjs` fills Summary, Type of change, Changes, Testing (`verify`), Compliance, Rollback and Related; GitHub skips the template whenever a `body=` is passed, so never hand over a bare compare URL. CI's `pr-description` job fails a PR whose Summary is empty.
+
+**Full or light (CORE-175, decision slim-r1 D2).** The full page below is only for UI/feature changes: any `.vue/.css/.scss`, a view, an API route or a migration (`.claude/hooks/lib/change-shape.sh`). Anything else (service fix, hooks, docs, config) gets the **light** handover instead: push, post one board comment (`pnpm board comment <KEY> "…"`: 2 sentences + PR link + branch), `pnpm board move <KEY> needs_review`, then `node .claude/skills/ship-artifact/build.mjs light --title "<pr title>" --summary "<2 sentences>" --kind <fix|feature|refactor|docs|infra> --board-commented --board-status needs_review` (`--pr <url>` once a PR exists). No page, no screenshots, no Change Index row.
 
 **TDD is the first rule of every Artifact (Łukasz, 2026-09-28, CORE-44).** The acceptance criteria become failing tests before the code, `verify` mirrors them, and `testCoverageMap` points at them. Anything a test settles is **not** a question for Łukasz: decide it, prove it with the test, and list it in `defaults`.
 
@@ -53,6 +55,7 @@ Save it to the session scratchpad (not the repo), for example `<scratchpad>/arti
   "runNote": "How to see it in the running app.",
   "verify": ["One line per acceptance criterion — mirrors the ticket 1:1."],
   "verifyNote": "Where the evidence is (e.g. 'the deny tests fail on the old code').",
+  "rollback": "Only when a plain revert isn't enough (migration, partner state, secrets) — else derived.",
   "hoisting": "platform",
   "testCoverageMap": [{"ac": "…", "tests": ["file › test name"]}],
   "visualComparison": "Only when UI changed: what before/after evidence exists."
