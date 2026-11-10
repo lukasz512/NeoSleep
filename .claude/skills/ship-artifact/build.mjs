@@ -9,6 +9,8 @@
 //   node .claude/skills/ship-artifact/build.mjs finalize --url <artifact-url>
 //        [--board-linked] [--board-commented] [--board-status "<status>"]
 //     → writes .claude/local/artifacts/<TICKET>.json and upserts the artifact index
+//   node .claude/skills/ship-artifact/build.mjs pr-url --title <t> --summary <s> [--kind <k>] [--rollback <text>]
+//     → prints the "Create PR" compare URL whose body fills the PR template (CORE-188)
 //   node .claude/skills/ship-artifact/build.mjs index [--page | --all]
 //     → writes this branch's index row JSON and prints the ArtifactData calls that store it
 //       (--page: the static index shell, republished only when its template changes;
@@ -31,6 +33,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ticketFromBranch, ticketTeams } from "./ticket.mjs";
+import { prBody } from "./pr-body.mjs";
 import { COLLECTION, docId, toRow, importBatches } from "./index-rows.mjs";
 import { cardUrl } from "../../../infrastructure/scripts/board.mjs";
 import { validateQuestions, widget } from "../decision-form/decisions.mjs";
@@ -162,12 +165,12 @@ function markerPath(ticket) {
   return join(MARKER_DIR, ticket ? `${ticket}.json` : `branch-${BRANCH.replaceAll("/", "-")}.json`);
 }
 
-function prUrl(ticket, prTitle, summary) {
+function prUrl(ticket, prTitle, content = {}) {
   const slug = repoSlug();
   if (!slug || !BRANCH) return null;
   const title = [ticket, prTitle].filter(Boolean).join(" ");
-  const plain = summary?.replace(/<[^>]+>/g, "");
-  const body = [ticket, plain, "🤖 Generated with [Claude Code](https://claude.com/claude-code)"].filter(Boolean).join("\n\n");
+  const selfUrl = ticket ? readJson(markerPath(ticket), {}).url : undefined;
+  const body = prBody({ ...content, ticket, files: changedFiles(), boardUrl: ticket ? boardUrlOf(ticket) : undefined, artifactUrl: selfUrl });
   return `https://github.com/${slug}/compare/dev...${BRANCH}?quick_pull=1&title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
 }
 
@@ -219,7 +222,7 @@ function render(contentPath) {
   const sessionId = SESSION_ID;
   const pushed = isPushed();
   const existing = existingPr();
-  const pr = existing?.url ?? (pushed ? prUrl(ticket, c.prTitle ?? c.headline, c.summary) : null);
+  const pr = existing?.url ?? (pushed ? prUrl(ticket, c.prTitle ?? c.headline, c) : null);
   const boardUrl = boardUrlOf(ticket);
   // The Artifact's own URL is known from the second render on (finalize stores it).
   const selfUrl = readJson(markerPath(ticket), {}).url ?? null;
@@ -446,7 +449,8 @@ function light(argv) {
     return i === -1 ? undefined : argv[i + 1];
   };
   if (!TICKET_FROM_BRANCH) throw new Error(`branch ${BRANCH} has no ticket id`);
-  const pr = arg("--pr") ?? prUrl(TICKET_FROM_BRANCH, arg("--title"), "");
+  if (!arg("--pr") && !arg("--summary")) throw new Error("--summary <2 sentences> is required: it becomes the PR description's Summary (CORE-188)");
+  const pr = arg("--pr") ?? prUrl(TICKET_FROM_BRANCH, arg("--title"), { summary: arg("--summary"), kind: arg("--kind"), rollback: arg("--rollback") });
   if (!pr) throw new Error("--pr <compare or pull url> is required (no GitHub remote found)");
   const path = markerPath(TICKET_FROM_BRANCH);
   const previous = existsSync(path) ? JSON.parse(readFileSync(path, "utf-8")) : {};
@@ -466,13 +470,26 @@ function light(argv) {
   if (!marker.boardCommented) console.log("still missing for the quality gate: boardCommented");
 }
 
+// The pre-filled "Create PR" link alone, e.g. for the nightly worker's completion comment (CORE-188).
+function prUrlCommand(argv) {
+  const arg = (name) => {
+    const i = argv.indexOf(name);
+    return i === -1 ? undefined : argv[i + 1];
+  };
+  if (!arg("--summary")) throw new Error("--summary <2 sentences> is required");
+  const url = prUrl(TICKET_FROM_BRANCH, arg("--title"), { summary: arg("--summary"), kind: arg("--kind"), rollback: arg("--rollback") });
+  if (!url) throw new Error("no GitHub remote or branch found");
+  console.log(url);
+}
+
 const [cmd, ...rest] = process.argv.slice(2);
 try {
   if (cmd === "render") render(rest[0] ?? "");
   else if (cmd === "finalize") finalize(rest);
   else if (cmd === "index") renderIndex(rest);
   else if (cmd === "light") light(rest);
-  else throw new Error("usage: build.mjs render <content.json> | finalize --url <artifact-url> [--board-linked] [--board-commented] [--board-status <status>] | index [--page | --all | --published <url>] | light [--pr <url>] [--board-commented] [--board-status <status>]");
+  else if (cmd === "pr-url") prUrlCommand(rest);
+  else throw new Error("usage: build.mjs render <content.json> | finalize --url <artifact-url> [--board-linked] [--board-commented] [--board-status <status>] | index [--page | --all | --published <url>] | pr-url --title <t> --summary <s> [--kind <k>] [--rollback <text>] | light [--pr <url> | --title <t> --summary <s> [--kind <k>] [--rollback <text>]] [--board-commented] [--board-status <status>]");
 } catch (err) {
   console.error(`ship-artifact: ${err.message}`);
   process.exit(1);

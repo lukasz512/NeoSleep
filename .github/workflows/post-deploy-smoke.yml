@@ -3,7 +3,7 @@
 # to click through pwa-dev. A red run here means the merge is live but broken
 # (or never went live); GitHub notifies whoever merged.
 #
-# - api:      the API the PWA uses (Cloud Run via deploy-api.yml, or Render).
+# - api:      the API the PWA uses (Cloud Run via deploy-api.yml).
 #             Waits until /health reports the newest commit that triggers
 #             deploy-api.yml (not every push does), then renders one
 #             real PDF via /health/pdf (bundled Chromium is the most fragile
@@ -36,9 +36,8 @@ jobs:
       group: smoke-api-dev
       cancel-in-progress: true
     env:
-      # The same API the PWA talks to (deploy-pwa.yml): Cloud Run once API_URL_DEV
-      # is set (NEO-45), Render before that.
-      API_URL: ${{ secrets.API_URL_DEV || secrets.RENDER_API_URL_DEV }}
+      # The same API the PWA talks to (deploy-pwa.yml): Cloud Run (NEO-45).
+      API_URL: ${{ secrets.API_URL_DEV }}
     steps:
       # Full history: the expected commit can be many merges back.
       - uses: actions/checkout@v4
@@ -63,7 +62,7 @@ jobs:
             echo "[$i] live commit: ${live:-unknown} — waiting for $EXPECTED_COMMIT"
             sleep 15
           done
-          echo "::error::The API did not serve $EXPECTED_COMMIT within 20 minutes — check the 'Deploy API (Cloud Run)' run (or the Render dashboard) for a failed build."
+          echo "::error::The API did not serve $EXPECTED_COMMIT within 20 minutes — check the 'Deploy API (Cloud Run)' run for a failed build."
           exit 1
 
       - name: API health

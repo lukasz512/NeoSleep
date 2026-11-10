@@ -1,17 +1,17 @@
-### CI-fix mode — ticket labelled `ci-failed` (NEO-182)
+### CI-fix mode — `approved` ticket whose latest comment starts with `<!-- ci-autofix -->` (NEO-182, CORE-188)
 
-Łukasz, 2026-09-28: a red CI is fixed by the same rules everywhere — this worker, an interactive session (quality-gate.sh) and the GitHub handoff all read **`.claude/ci-autofix.json`** (attempt limit, allowed fix scope, labels, states). Read it first; never restate its numbers from memory. This mode is the one sanctioned exception to Step 8's "no retry" — it fixes an already-reviewed-shape change, bounded by `maxFixAttempts`.
+Łukasz, 2026-09-28: a red CI is fixed by the same rules everywhere — this worker, an interactive session (quality-gate.sh) and the GitHub handoff all read **`.claude/ci-autofix.json`** (attempt limit, allowed fix scope, board statuses). Read it first; never restate its numbers from memory. This mode is the one sanctioned exception to Step 8's "no retry" — it fixes an already-reviewed-shape change, bounded by `maxFixAttempts`.
 
-1. Step 2.5 pre-flight still applies (push access). Claim the ticket (`Worker: In Progress`).
+1. Step 2.5 pre-flight still applies (push access). Claim the ticket (`approved` → `building`).
 2. Find the branch: the ticket's latest comment starting with `<!-- ci-autofix -->` names it (`CI failed on \`<branch>\``). `git fetch origin <branch>` and check it out — the existing branch, never a new one.
 3. `node infrastructure/scripts/ci-status.mjs --branch <branch> --sha $(git rev-parse HEAD)`:
-   - `success` or `pending` → someone already fixed it or CI is re-running: remove the label, move to `Needs Review`, comment one line, end.
-   - `exhausted: true` → don't touch the code: remove the label, move to `linear.exhaustedState`, comment that the limit is used up and what still fails, end.
+   - `success` or `pending` → someone already fixed it or CI is re-running: move to `needs_review`, comment one line, end.
+   - `exhausted: true` → don't touch the code: move to `board.exhaustedStatus`, comment that the limit is used up and what still fails, end.
    - `failure` → go on.
 4. Reproduce each failing test locally (`gh run view <runId> --log-failed` for the full error; Vitest file or Playwright spec — harness specs run with `pnpm --filter @neo/pwa exec playwright test -c playwright.harness.config.ts <spec>`). Fix strictly within `allowedFixScope`. If the right fix is outside it (a behaviour decision, a failing test unrelated to this branch), don't fix — go to 7 with that explanation.
 5. Run Step 7's self-checks that apply to the touched files, commit (co-author trailer), `git push origin <branch>` — allowed even when a PR is open (`workerMayPushToOpenPr`). Never force-push, never open a PR.
-6. Wait for CI on the new HEAD (`node infrastructure/scripts/ci-wait.mjs --max-minutes 30` — one call a minute; never `gh run watch`, CORE-128). Green → remove the label, comment on the ticket and the PR ("CI green after fix: <what was wrong>"), move to `Needs Review`. Red again → comment what you changed and end: the GitHub handoff has already re-queued it (or escalated it once the limit is reached).
-7. Could not fix within scope → comment the diagnosis on the ticket and the PR, remove the label, move to `Needs Review`, end.
+6. Wait for CI on the new HEAD (`node infrastructure/scripts/ci-wait.mjs --max-minutes 30` — one call a minute; never `gh run watch`, CORE-128). Green → comment on the ticket and the PR ("CI green after fix: <what was wrong>"), move to `needs_review`. Red again → comment what you changed and end: the GitHub handoff has already re-queued it (or escalated it once the limit is reached).
+7. Could not fix within scope → comment the diagnosis on the ticket and the PR, move to `needs_review`, end.
 
 ### 2.5. Environment Pre-flight — before claiming, before any per-ticket work
 
@@ -28,7 +28,7 @@ otherwise only discovered after Enrich+Implement — in seconds, before Claim.
 
 Run these against the ticket **Select** already picked, but **do not Claim it
 yet** — if pre-flight fails, this ticket was never actually worked on, so it
-must stay in `Ready for Worker` (not `Worker: In Progress`) for the next run
+must stay in `approved` (not `building`) for the next run
 to pick up in the same FIFO order:
 
 1. **`DATABASE_URL` presence.** Must already be set in this session's process
