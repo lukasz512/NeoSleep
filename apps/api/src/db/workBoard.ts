@@ -58,6 +58,9 @@ export interface WorkItemRow {
   labels: string[];
   links: WorkLink[];
   branch: string | null;
+  assignee: string | null;
+  /** YYYY-MM-DD */
+  due_date: string | null;
   source: string;
   linear_identifier: string | null;
   created_by: string | null;
@@ -69,7 +72,7 @@ export interface WorkItemRow {
 
 export interface WorkItemEventRow {
   id: string;
-  kind: "created" | "status" | "comment" | "edit" | "link";
+  kind: "created" | "status" | "comment" | "edit" | "link" | "attachment";
   from_status: WorkStatus | null;
   to_status: WorkStatus | null;
   body: string | null;
@@ -79,7 +82,8 @@ export interface WorkItemEventRow {
 }
 
 const ITEM_COLUMNS = `id, team_key || '-' || number AS key, team_key, number, title, problem, change,
-  done_when, status, priority, labels, links, branch, source, linear_identifier, created_by,
+  done_when, status, priority, labels, links, branch, assignee, to_char(due_date, 'YYYY-MM-DD') AS due_date,
+  source, linear_identifier, created_by,
   created_at, updated_at, status_changed_at, completed_at`;
 
 /** CORE-12 → { team: "CORE", number: 12 }; null when the key is not shaped like one. */
@@ -172,6 +176,8 @@ export interface WorkItemInsert {
   priority?: number;
   labels?: string[];
   links?: WorkLink[];
+  assignee?: string | null;
+  due_date?: string | null;
   source?: "manual" | "agent" | "session" | "problem_report";
 }
 
@@ -188,8 +194,9 @@ export async function createWorkItem(input: WorkItemInsert, actor: WorkActor): P
     const status = input.status ?? "backlog";
     const { rows } = await client.query<WorkItemRow>(
       `INSERT INTO platform.work_item
-         (team_key, number, title, problem, change, done_when, status, priority, labels, links, source, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12)
+         (team_key, number, title, problem, change, done_when, status, priority, labels, links, source, created_by,
+          assignee, due_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14)
        RETURNING ${ITEM_COLUMNS}`,
       [
         input.team,
@@ -204,6 +211,8 @@ export async function createWorkItem(input: WorkItemInsert, actor: WorkActor): P
         JSON.stringify(input.links ?? []),
         input.source ?? (actor.kind === "agent" || actor.kind === "session" ? actor.kind : "manual"),
         actor.name,
+        input.assignee ?? null,
+        input.due_date ?? null,
       ]
     );
     const item = rows[0]!;
@@ -220,12 +229,14 @@ export interface WorkItemPatch {
   priority?: number;
   labels?: string[];
   branch?: string | null;
+  assignee?: string | null;
+  due_date?: string | null;
   status?: WorkStatus;
   add_links?: WorkLink[];
   remove_links?: string[];
 }
 
-const EDITABLE_FIELDS = ["title", "problem", "change", "done_when", "priority", "labels", "branch"] as const;
+const EDITABLE_FIELDS = ["title", "problem", "change", "done_when", "priority", "labels", "branch", "assignee", "due_date"] as const;
 
 /**
  * Applies a patch and logs it: one `status` event for a move, one `edit` event naming the
@@ -272,7 +283,7 @@ export async function updateWorkItem(
     const { rows } = await client.query<WorkItemRow>(
       `UPDATE platform.work_item SET
          title = $3, problem = $4, change = $5, done_when = $6, priority = $7, labels = $8, branch = $9,
-         links = $10::jsonb, status = $11, updated_at = now(),
+         links = $10::jsonb, status = $11, assignee = $13, due_date = $14, updated_at = now(),
          status_changed_at = CASE WHEN $12 THEN now() ELSE status_changed_at END,
          completed_at = CASE WHEN $12 THEN (CASE WHEN $11 IN ('done', 'canceled') THEN now() END) ELSE completed_at END
        WHERE team_key = $1 AND number = $2
@@ -290,6 +301,8 @@ export async function updateWorkItem(
         JSON.stringify(links),
         status,
         moved,
+        next.assignee,
+        next.due_date,
       ]
     );
     if (moved) await insertEvent(client, current.id, actor, { kind: "status", from_status: current.status, to_status: status });
@@ -324,6 +337,83 @@ export async function addWorkItemComment(
     await client.query(`UPDATE platform.work_item SET updated_at = now() WHERE id = $1`, [current.id]);
     return rows[0]!;
   });
+}
+
+export const WORK_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+
+export interface WorkAttachmentRow {
+  id: string;
+  item_id: string;
+  /** The comment it was posted with; null when it belongs to the item itself. */
+  event_id: string | null;
+  path: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  uploaded_by: string | null;
+  created_at: string;
+}
+
+const ATTACHMENT_COLUMNS = "id, item_id, event_id, path, filename, mime_type, size_bytes, uploaded_by, created_at";
+
+export async function listWorkAttachments(itemId: string): Promise<WorkAttachmentRow[]> {
+  const { rows } = await getDb().query<WorkAttachmentRow>(
+    `SELECT ${ATTACHMENT_COLUMNS} FROM platform.work_item_attachment WHERE item_id = $1 ORDER BY created_at, id`,
+    [itemId]
+  );
+  return rows;
+}
+
+export async function getWorkAttachment(itemId: string, id: string): Promise<WorkAttachmentRow | null> {
+  const { rows } = await getDb().query<WorkAttachmentRow>(
+    `SELECT ${ATTACHMENT_COLUMNS} FROM platform.work_item_attachment WHERE item_id = $1 AND id = $2`,
+    [itemId, id]
+  );
+  return rows[0] ?? null;
+}
+
+/** Records an already-uploaded object and logs it on the item. Null when `event_id` is not a comment on this item. */
+export async function insertWorkAttachment(
+  input: { item_id: string; event_id: string | null; path: string; filename: string; mime_type: string; size_bytes: number },
+  actor: WorkActor
+): Promise<WorkAttachmentRow | null> {
+  return inTransaction(async (client) => {
+    const { rows } = await client.query<WorkAttachmentRow>(
+      `INSERT INTO platform.work_item_attachment (item_id, event_id, path, filename, mime_type, size_bytes, uploaded_by)
+       SELECT $1, $2, $3, $4, $5, $6, $7
+        WHERE $2::bigint IS NULL
+           OR EXISTS (SELECT 1 FROM platform.work_item_event WHERE id = $2 AND item_id = $1 AND kind = 'comment')
+       RETURNING ${ATTACHMENT_COLUMNS}`,
+      [input.item_id, input.event_id, input.path, input.filename, input.mime_type, input.size_bytes, actor.name]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    await insertEvent(client, input.item_id, actor, { kind: "attachment", body: `+ ${input.filename}` });
+    await client.query(`UPDATE platform.work_item SET updated_at = now() WHERE id = $1`, [input.item_id]);
+    return row;
+  });
+}
+
+/** Deletes the row and logs it; the caller removes the stored object. Null when it was not there. */
+export async function deleteWorkAttachment(itemId: string, id: string, actor: WorkActor): Promise<WorkAttachmentRow | null> {
+  return inTransaction(async (client) => {
+    const { rows } = await client.query<WorkAttachmentRow>(
+      `DELETE FROM platform.work_item_attachment WHERE item_id = $1 AND id = $2 RETURNING ${ATTACHMENT_COLUMNS}`,
+      [itemId, id]
+    );
+    const row = rows[0];
+    if (!row) return null;
+    await insertEvent(client, itemId, actor, { kind: "attachment", body: `- ${row.filename}` });
+    return row;
+  });
+}
+
+/** Platform staff who can be assigned work: active platform.users with a board role. */
+export async function listWorkPeople(): Promise<{ email: string; name: string }[]> {
+  const { rows } = await getDb().query<{ email: string; name: string }>(
+    `SELECT email, name FROM platform.users WHERE is_active AND role IN ('owner', 'admin') ORDER BY name, email`
+  );
+  return rows;
 }
 
 export interface WorkSessionTokenRow {

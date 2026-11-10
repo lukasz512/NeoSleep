@@ -39,6 +39,8 @@ function item(overrides: Partial<WorkItem>): WorkItem {
     labels: [],
     links: [],
     branch: null,
+    assignee: null,
+    due_date: null,
     source: "manual",
     created_at: "2026-10-01T10:00:00Z",
     updated_at: "2026-10-01T10:00:00Z",
@@ -64,7 +66,8 @@ function serve(items: WorkItem[], teams: WorkTeam[] | "forbidden" = TEAMS): void
       const patch = JSON.parse(String(init.body)) as Partial<WorkItem>;
       return ok({ item: { ...items.find((i) => i.key === key)!, ...patch } });
     }
-    return ok({ item: items[0], events: [] });
+    if (path.endsWith("/platform/work/people")) return ok({ items: [] });
+    return ok({ item: items[0], events: [], attachments: [] });
   });
 }
 
