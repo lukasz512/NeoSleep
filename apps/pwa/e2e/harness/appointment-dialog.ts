@@ -49,7 +49,8 @@ const Harness = defineComponent({
         modelValue: true,
         patient: { id: "p-1", name: "María Fernanda López Ruiz", practitioner_id: "h-1" },
         practitioner: { id: "h-2", name: "Dra. Lucía Fernández Ortega" },
-        startAt: "2026-10-09T15:00:00Z",
+        // Far future on purpose: the form refuses a past date, so a near date turns this suite red once it passes.
+        startAt: "2036-10-09T15:00:00Z",
       });
   },
 });
