@@ -49,7 +49,8 @@ const Harness = defineComponent({
         modelValue: true,
         patient: { id: "p-1", name: "María Fernanda López Ruiz", practitioner_id: "h-1" },
         practitioner: { id: "h-2", name: "Dra. Lucía Fernández Ortega" },
-        startAt: "2026-10-09T15:00:00Z",
+        // Always in the future: a fixed date rots into "can't be in the past" and blocks the submit.
+        startAt: `${new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10)}T15:00:00Z`,
       });
   },
 });
