@@ -431,6 +431,9 @@ workBoardRouter.post(
     const filename = sanitiseFilename(file.originalname);
     const path = `work-board/${item.id}/${randomUUID()}-${filename}`;
     await uploadPartnerDocument(path, new Uint8Array(file.buffer), file.mimetype);
+    // The path holds the uploader's file name, so it stays out of the log line (CodeQL log-injection).
+    const cleanup = () =>
+      deletePartnerDocument(path).catch((err: unknown) => console.error("work attachment cleanup failed, item:", item.id, err));
     let row: WorkAttachmentRow | null;
     try {
       row = await insertWorkAttachment(
@@ -438,11 +441,11 @@ workBoardRouter.post(
         actor
       );
     } catch (err) {
-      await deletePartnerDocument(path).catch((cleanup: unknown) => console.error(`work attachment ${path}: cleanup failed:`, cleanup));
+      await cleanup();
       throw err;
     }
     if (!row) {
-      await deletePartnerDocument(path).catch((cleanup: unknown) => console.error(`work attachment ${path}: cleanup failed:`, cleanup));
+      await cleanup();
       throw new ValidationError("comment not found on this item", "comment");
     }
     res.status(201).json({ attachment: publicAttachment(row) });
