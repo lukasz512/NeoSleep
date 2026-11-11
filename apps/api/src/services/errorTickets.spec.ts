@@ -157,6 +157,13 @@ describe("scrubForTicket / priorityForUsers", () => {
     expect(out).toBe("<email> Bearer <token> <jwt> <uuid> <number> https://x.y/p?<query> <number>");
   });
 
+  it("stays fast on a client-sent message built to backtrack (CodeQL js/polynomial-redos)", () => {
+    const hostile = ["+".repeat(50_000), "1 ".repeat(50_000), "a.".repeat(50_000), "a@" + "b.".repeat(50_000)];
+    const started = performance.now();
+    for (const text of hostile) scrubForTicket(text);
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+
   it("ranks by distinct users; dev-only stays lowest", () => {
     expect([priorityForUsers(12, false), priorityForUsers(3, false), priorityForUsers(1, false), priorityForUsers(50, true)]).toEqual([1, 2, 3, 4]);
   });

@@ -42,18 +42,24 @@ export interface ErrorTicketResult {
   key?: string;
 }
 
+/** A ticket body is ≤1500 chars, so nothing past this can reach the board anyway. */
+const SCRUB_MAX_CHARS = 8000;
+
 /**
  * Removes what could identify a person or a session before text reaches the board:
  * emails, JWTs and bearer tokens, UUIDs, phone numbers, long digit runs and URL query strings.
+ * The text comes from the client, so every pattern is bounded and starts only at the edge of a
+ * run (lookbehind): a crafted message can't make it backtrack (CodeQL js/polynomial-redos).
  */
 export function scrubForTicket(text: string): string {
   return text
-    .replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, "<email>")
+    .slice(0, SCRUB_MAX_CHARS)
+    .replace(/(?<![\w.+-])[\w.+-]{1,64}@[\w-]{1,63}(?:\.[\w-]{1,63}){1,8}/g, "<email>")
     .replace(/\beyJ[\w-]+\.[\w-]+\.[\w-]+/g, "<jwt>")
     .replace(/\bBearer\s+[\w.~+/=-]+/gi, "Bearer <token>")
     .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, "<uuid>")
-    .replace(/(https?:\/\/[^\s?#"')]+)\?[^\s#"')]*/g, "$1?<query>")
-    .replace(/\+?\d[\d\s().-]{7,}\d/g, "<number>")
+    .replace(/(https?:\/\/[^\s?#"')]{1,2048})\?[^\s#"')]*/g, "$1?<query>")
+    .replace(/(?<![\d+])\+?\d[\d\s().-]{7,20}\d/g, "<number>")
     .replace(/\d{6,}/g, "<number>");
 }
 
