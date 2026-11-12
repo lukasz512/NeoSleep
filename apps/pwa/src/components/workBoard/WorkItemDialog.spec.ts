@@ -251,3 +251,69 @@ describe("WorkItemDialog (CORE-192)", () => {
     expect(JSON.parse(String(patch.body))).toEqual({ assignee: ME.email });
   });
 });
+
+describe("WorkItemDialog open/close (CORE-195)", () => {
+  /** The item fetch never answers: what shows is only what the board row gave. */
+  function serveSlow(): void {
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path.endsWith("/people")) return ok({ items: [ME] });
+      return new Promise<Response>(() => {});
+    });
+  }
+
+  const titleValue = () => (q("work-item-title")?.querySelector("textarea") as HTMLTextAreaElement | null)?.value;
+
+  async function renderWith(props: Record<string, unknown>) {
+    setActivePinia(createPinia());
+    const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
+    const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
+    const wrapper = mount(WorkItemDialog, {
+      props: { itemKey: null, creating: false, teams: TEAMS, defaultTeam: "CORE", ...props },
+      global: { plugins: [i18n, vuetify] },
+      attachTo: document.body,
+    });
+    wrappers.push(wrapper);
+    await flushPromises();
+    return wrapper;
+  }
+
+  it("opens with the board row, no loader; only the history waits", async () => {
+    serveSlow();
+    await renderWith({ itemKey: "CORE-9", initialItem: item() });
+    expect(document.querySelector(".app-loading-state")).toBeNull();
+    expect(titleValue()).toBe("Paste does not work");
+    expect(q("work-item-history-skeleton")).not.toBeNull();
+  });
+
+  it("keeps its content while it closes and resets only after the leave", async () => {
+    serve(item());
+    const wrapper = await renderWith({ itemKey: "CORE-9", initialItem: item() });
+    expect(titleValue()).toBe("Paste does not work");
+    await wrapper.setProps({ itemKey: null });
+    await flushPromises();
+    expect(titleValue()).toBe("Paste does not work");
+    expect(document.querySelector(".pwa-form-dialog__card")?.textContent).toContain("CORE-9");
+
+    wrapper.findComponent({ name: "AppFormDialog" }).vm.$emit("after-leave");
+    await wrapper.setProps({ creating: true });
+    await flushPromises();
+    expect(titleValue()).toBe("");
+  });
+
+  it("keeps what was typed before the full item arrived", async () => {
+    let answer: (r: Response) => void = () => {};
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path.endsWith("/people")) return ok({ items: [ME] });
+      return new Promise<Response>((resolve) => (answer = resolve));
+    });
+    await renderWith({ itemKey: "CORE-9", initialItem: item() });
+    const title = q("work-item-title")!.querySelector("textarea")!;
+    title.value = "Typed while loading";
+    title.dispatchEvent(new Event("input"));
+    await flushPromises();
+    answer(ok({ item: item(), events: [], attachments: [] }));
+    await flushPromises();
+    expect(titleValue()).toBe("Typed while loading");
+    expect(q("work-item-history-skeleton")).toBeNull();
+  });
+});

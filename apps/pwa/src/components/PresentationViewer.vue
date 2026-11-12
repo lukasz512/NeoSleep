@@ -99,8 +99,10 @@ function toggleRotate() {
 watch(
   () => props.modelValue,
   (open) => {
-    if (!open) manualRotate.value = false;
-    if (open) updatePortrait();
+    // Reset on open, not on close: a closing viewer keeps its rotation while it slides away (CORE-195).
+    if (!open) return;
+    manualRotate.value = false;
+    updatePortrait();
   }
 );
 

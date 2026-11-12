@@ -6,7 +6,7 @@
     @update:model-value="(v) => emit('update:modelValue', v)"
     @close="emit('update:modelValue', false)"
   >
-    <AppLoadingState v-if="loading && !loaded" />
+    <AppSkeletonLines v-if="loading && !loaded" :lines="6" />
     <AppErrorState
       v-else-if="loadError"
       :error="loadFailure"
@@ -68,7 +68,7 @@ import { reportCaught, reportFailedResponse } from "@api";
 import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AppFormDialog from "../AppFormDialog.vue";
-import AppLoadingState from "../AppLoadingState.vue";
+import AppSkeletonLines from "../AppSkeletonLines.vue";
 import AppErrorState from "../AppErrorState.vue";
 import AppEmptyState from "../AppEmptyState.vue";
 import { apiFetch } from "../../composables/useApi";

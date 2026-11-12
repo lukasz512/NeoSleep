@@ -16,9 +16,8 @@
       </div>
 
       <VCardText ref="bodyRef" class="partner-doc-dialog__body">
-        <div v-if="state === 'loading'" class="partner-doc-dialog__state">
-          <AppLoadingState />
-        </div>
+        <!-- CORE-195: the page's lines while it renders, not a spinner the document then replaces. -->
+        <AppSkeletonLines v-if="state === 'loading'" :lines="8" class="partner-doc-dialog__skeleton" />
         <div v-else-if="state === 'error'" class="partner-doc-dialog__state">
           <p>{{ t('user.partnerRegistration.dialog.loadError') }}</p>
           <AppButton variant="outlined" color="primary" @click="load">{{ t('user.partnerRegistration.dialog.retry') }}</AppButton>
@@ -123,7 +122,7 @@ import { originDialogTransition } from "@ui";
 import { applyDocumentFields } from "@documents-browser";
 import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
-import AppLoadingState from "../AppLoadingState.vue";
+import AppSkeletonLines from "../AppSkeletonLines.vue";
 import SignaturePad from "../SignaturePad.vue";
 import PhoneSignPanel from "../PhoneSignPanel.vue";
 import { partnerHandoffStart } from "../../composables/signatureHandoffStart";
@@ -388,6 +387,10 @@ function onAcknowledge(): void {
 .partner-doc-dialog__body {
   padding: 0 !important;
   background: rgba(var(--v-theme-on-surface), 0.04);
+}
+
+.partner-doc-dialog__skeleton {
+  padding: 24px 16px;
 }
 
 .partner-doc-dialog__state {

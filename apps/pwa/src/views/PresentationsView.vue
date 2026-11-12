@@ -240,8 +240,9 @@
       </div>
     </template>
 
+    <!-- Mounted from the first open on, so closing plays the leave transition (CORE-195). -->
     <PresentationViewer
-      v-if="viewerOpen"
+      v-if="selectedPresentation"
       v-model="viewerOpen"
       :presentation="selectedPresentation"
     />

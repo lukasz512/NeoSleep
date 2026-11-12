@@ -75,12 +75,12 @@
 
     <AppFormDialog
       :model-value="info !== null"
-      :title="info === 'help' ? t('app.questionnaire.menu.help') : t('app.questionnaire.menu.security')"
+      :title="infoShown === 'help' ? t('app.questionnaire.menu.help') : t('app.questionnaire.menu.security')"
       :max-width="460"
       @update:model-value="(open: boolean) => { if (!open) info = null; }"
       @close="info = null"
     >
-      <ol v-if="info === 'help'" class="patient-bar__info patient-bar__info--steps">
+      <ol v-if="infoShown === 'help'" class="patient-bar__info patient-bar__info--steps">
         <li>{{ t("app.questionnaire.info.help.read") }}</li>
         <li>{{ t("app.questionnaire.info.help.sign") }}</li>
         <li>{{ t("app.questionnaire.info.help.done") }}</li>
@@ -90,7 +90,7 @@
         <li><AppIcon name="shield-check" class="patient-bar__info-icon" />{{ t("app.questionnaire.info.security.encrypted") }}</li>
         <li><AppIcon name="file" class="patient-bar__info-icon" />{{ t("app.questionnaire.info.security.signed") }}</li>
       </ul>
-      <p v-if="info === 'help'" class="patient-bar__info-foot">{{ t("app.questionnaire.info.help.doubts") }}</p>
+      <p v-if="infoShown === 'help'" class="patient-bar__info-foot">{{ t("app.questionnaire.info.help.doubts") }}</p>
       <p v-else class="patient-bar__info-foot">
         <a :href="privacyUrl" target="_blank" rel="noopener noreferrer">{{ t("app.questionnaire.consentNotice.fullNotice") }}</a>
       </p>
@@ -141,6 +141,8 @@ watch(() => themeStore.mode, (mode) => vuetifyTheme.change(mode), { immediate: t
 const { xs: isPhone } = useDisplay();
 const menuOpen = ref(false);
 const info = ref<"security" | "help" | null>(null);
+/** What the dialog shows; kept after close so the text doesn't switch while it fades (CORE-195). */
+const infoShown = ref<"security" | "help">("security");
 
 const initial = computed(() => (props.firstName ?? "").trim().charAt(0).toUpperCase());
 const websiteHost = computed(() => {
@@ -160,6 +162,7 @@ async function setLocale(lang: string) {
 function openInfo(kind: "security" | "help") {
   menuOpen.value = false;
   info.value = kind;
+  infoShown.value = kind;
 }
 </script>
 

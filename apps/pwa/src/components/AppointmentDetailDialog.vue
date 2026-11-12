@@ -7,6 +7,7 @@
     :avatar-name="appointment?.patient_name ?? ''"
     @update:model-value="close"
     @close="close"
+    @after-leave="error = null"
   >
     <div v-if="appointment" class="appointment-detail__body">
         <div class="appointment-detail__when">
@@ -247,7 +248,7 @@ const answeredAgo = computed(() => (props.appointment?.patient_responded_at ? fo
 const canBookNext = computed(() => !isFieldForce.value || changeable.value);
 
 function close() {
-  error.value = null;
+  // The error clears after the leave (CORE-195), so the closing dialog doesn't redraw.
   emit("update:modelValue", false);
 }
 

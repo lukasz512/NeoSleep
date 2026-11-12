@@ -205,7 +205,7 @@
         </dl>
         <AppConfirmDialog
           :model-value="!!removing"
-          :text="removing ? t('app.patients.detail.careTeam.removeConfirm', { name: removing.name }) : ''"
+          :text="t('app.patients.detail.careTeam.removeConfirm', { name: removingName })"
           :secondary-label="t('app.common.cancel')"
           :secondary-color="null"
           :primary-label="t('app.patients.detail.careTeam.removeAction')"
@@ -396,6 +396,11 @@ function accessLine(member: CareTeamMember): string {
   return `${how} · ${since}`;
 }
 const removing = ref<CareTeamMember | null>(null);
+/** The name in the confirm text; kept after it closes so the text doesn't blank while it fades (CORE-195). */
+const removingName = ref("");
+watch(removing, (member) => {
+  if (member) removingName.value = member.name;
+});
 const adding = ref(false);
 const addPractitionerId = ref<string | null>(null);
 const allPractitioners = ref<{ id: string; name: string }[]>([]);

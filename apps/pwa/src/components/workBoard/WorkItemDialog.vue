@@ -1,15 +1,16 @@
 <template>
   <AppFormDialog
     :model-value="open"
-    :title="creating ? t('workBoard.dialog.newTitle') : (loaded?.item.key ?? itemKey ?? '')"
+    :title="session.creating ? t('workBoard.dialog.newTitle') : (session.key ?? '')"
     max-width="760"
     fill
     @update:model-value="(v: boolean) => !v && emit('close')"
     @close="emit('close')"
+    @after-leave="onAfterLeave"
   >
-    <AppLoadingState v-if="loading" />
+    <AppSkeletonLines v-if="!session.creating && !current && !loadFailure" :lines="5" />
     <AppErrorState
-      v-else-if="loadFailure"
+      v-else-if="!session.creating && !current"
       :error="loadFailure"
       :refresh-label="t('app.errorState.refresh')"
       @refresh="load"
@@ -86,7 +87,7 @@
           </template>
           <VList density="compact">
             <VListItem
-              v-for="link in loaded?.item.links ?? []"
+              v-for="link in current?.links ?? []"
               :key="link.url"
               :href="link.url"
               target="_blank"
@@ -94,7 +95,7 @@
               :title="link.title || t(`workBoard.link.${link.kind}`)"
               :subtitle="t(`workBoard.link.${link.kind}`)"
             />
-            <VListItem v-if="loaded?.item.branch" :title="loaded.item.branch" class="work-dialog__branch" />
+            <VListItem v-if="current?.branch" :title="current.branch" class="work-dialog__branch" />
           </VList>
         </VMenu>
       </div>
@@ -188,9 +189,10 @@
       <p v-if="rejectionText" class="work-dialog__rejected" role="alert" data-testid="work-item-rejected">{{ rejectionText }}</p>
       <p v-else class="work-dialog__hint">{{ t(dragging ? "workBoard.dialog.dropHere" : "workBoard.dialog.attachHint") }}</p>
 
-      <template v-if="loaded">
-        <div class="work-dialog__section">
-          <span class="work-dialog__label">{{ t("workBoard.dialog.history") }}</span>
+      <div v-if="!session.creating" class="work-dialog__section">
+        <span class="work-dialog__label">{{ t("workBoard.dialog.history") }}</span>
+        <AppSkeletonLines v-if="!loaded" :lines="2" data-testid="work-item-history-skeleton" />
+        <template v-else>
           <ol class="work-dialog__events" data-testid="work-item-events">
             <li v-for="event in loaded.events" :key="event.id" class="work-dialog__event">
               <span class="work-dialog__event-meta">
@@ -259,14 +261,14 @@
               </button>
             </li>
           </ul>
-        </div>
-      </template>
+        </template>
+      </div>
     </div>
     <template #actions>
       <VSpacer />
       <AppButton variant="text" @click="emit('close')">{{ t("app.common.close") }}</AppButton>
       <AppButton color="primary" variant="flat" :loading="saving" :disabled="!canSave" data-testid="work-item-save" @click="save">
-        {{ creating ? t("workBoard.dialog.create") : t("workBoard.dialog.save") }}
+        {{ session.creating ? t("workBoard.dialog.create") : t("workBoard.dialog.save") }}
       </AppButton>
     </template>
   </AppFormDialog>
@@ -278,7 +280,7 @@ import { useI18n } from "vue-i18n";
 import AppFormDialog from "../AppFormDialog.vue";
 import AppButton from "../AppButton.vue";
 import AppSpinner from "../AppSpinner.vue";
-import AppLoadingState from "../AppLoadingState.vue";
+import AppSkeletonLines from "../AppSkeletonLines.vue";
 import AppErrorState from "../AppErrorState.vue";
 import {
   WORK_PRIORITIES,
@@ -303,13 +305,22 @@ import type { WorkAttachment, WorkItem, WorkItemEvent, WorkItemPatch, WorkPerson
  * properties, the description (the `problem` field), and Change / Done when as sections added
  * on demand. Screenshots go in by paste, drop or the picker (camera on phones); on a new item
  * they wait and upload right after Create. The history is the API's append-only event trail.
+ *
+ * Open/close (CORE-195): the board passes the row it already has (`initialItem`), so the form
+ * shows at once and only the history waits under a skeleton. Closing changes nothing on screen;
+ * the form resets after the dialog has faded out (`after-leave`).
  */
-const props = defineProps<{
-  itemKey: string | null;
-  creating: boolean;
-  teams: readonly WorkTeam[];
-  defaultTeam: string | null;
-}>();
+const props = withDefaults(
+  defineProps<{
+    itemKey: string | null;
+    creating: boolean;
+    teams: readonly WorkTeam[];
+    defaultTeam: string | null;
+    /** The board row for `itemKey`, shown until the full item arrives. */
+    initialItem?: WorkItem | null;
+  }>(),
+  { initialItem: null },
+);
 const emit = defineEmits<{ close: []; saved: [item: WorkItem] }>();
 const { t, locale } = useI18n();
 
@@ -320,9 +331,13 @@ const SECTION_FIELDS = ["change", "done_when"] as const;
 type SectionField = (typeof SECTION_FIELDS)[number];
 
 const open = computed(() => props.creating || props.itemKey !== null);
-const loading = ref(false);
+/** What the dialog is showing; kept through the leave so nothing redraws while it fades. */
+const session = reactive<{ key: string | null; creating: boolean }>({ key: null, creating: false });
 const loadFailure = ref<unknown>(null);
+const seed = ref<WorkItem | null>(null);
 const loaded = ref<WorkItemDetail | null>(null);
+/** The item as far as it is known: the full fetch, else the board row. */
+const current = computed(() => loaded.value?.item ?? seed.value);
 const saving = ref(false);
 const comment = ref("");
 const commenting = ref(false);
@@ -394,7 +409,7 @@ function personLabel(email: string): string {
 
 const listChips = computed<ListChip[]>(() => {
   const chips: ListChip[] = [];
-  if (props.creating) {
+  if (session.creating) {
     chips.push({
       name: "team",
       icon: "mdi-account-group-outline",
@@ -434,7 +449,7 @@ const listChips = computed<ListChip[]>(() => {
 });
 
 const hiddenSections = computed(() => SECTION_FIELDS.filter((name) => !shown[name]));
-const developmentCount = computed(() => (loaded.value ? loaded.value.item.links.length + (loaded.value.item.branch ? 1 : 0) : 0));
+const developmentCount = computed(() => (current.value ? current.value.links.length + (current.value.branch ? 1 : 0) : 0));
 const itemAttachments = computed(() => loaded.value?.attachments.filter((a) => a.event_id === null) ?? []);
 
 function attachmentsOf(eventId: string): WorkAttachment[] {
@@ -447,8 +462,8 @@ const rejectionText = computed(() => {
 });
 
 const patch = computed<WorkItemPatch>(() => {
-  if (!loaded.value) return {};
-  const before = formFrom(loaded.value.item);
+  if (!current.value) return {};
+  const before = formFrom(current.value);
   const out: WorkItemPatch = {};
   if (form.title.trim() !== before.title) out.title = form.title.trim();
   for (const name of BODY_FIELDS) if (form[name].trim() !== before[name]) out[name] = form[name].trim() || null;
@@ -461,7 +476,7 @@ const patch = computed<WorkItemPatch>(() => {
 
 const canSave = computed(() => {
   if (!form.title.trim()) return false;
-  return props.creating ? !!form.team : Object.keys(patch.value).length > 0;
+  return session.creating ? !!form.team : Object.keys(patch.value).length > 0;
 });
 const canComment = computed(() => !!comment.value.trim() || commentQueue.pending.value.length > 0);
 
@@ -469,19 +484,30 @@ function formatDueDate(value: string): string {
   return new Date(`${value}T00:00:00`).toLocaleDateString(locale.value === "mx" ? "es-MX" : locale.value, { day: "numeric", month: "short" });
 }
 
+function showItem(item: WorkItem): void {
+  Object.assign(form, formFrom(item));
+  for (const name of SECTION_FIELDS) shown[name] = !!form[name];
+}
+
+/** True while the form still says what the known item says, i.e. nothing was typed yet. */
+function untouched(): boolean {
+  const base = current.value ? formFrom(current.value) : blankForm();
+  return (Object.keys(base) as (keyof Form)[]).every((name) => form[name] === base[name]);
+}
+
 async function load(): Promise<void> {
-  if (!props.itemKey) return;
-  loading.value = true;
+  const key = session.key;
+  if (!key) return;
   loadFailure.value = null;
   try {
-    loaded.value = await fetchWorkItem(props.itemKey);
-    Object.assign(form, formFrom(loaded.value.item));
-    for (const name of SECTION_FIELDS) shown[name] = !!form[name];
-    void signImages(loaded.value.item.key, loaded.value.attachments);
+    const detail = await fetchWorkItem(key);
+    if (session.key !== key) return;
+    const keepEdits = !untouched();
+    loaded.value = detail;
+    if (!keepEdits) showItem(detail.item);
+    void signImages(detail.item.key, detail.attachments);
   } catch (err) {
-    loadFailure.value = err;
-  } finally {
-    loading.value = false;
+    if (session.key === key) loadFailure.value = err;
   }
 }
 
@@ -508,21 +534,42 @@ async function signImages(key: string, files: readonly WorkAttachment[]): Promis
   );
 }
 
+function reset(): void {
+  seed.value = null;
+  loaded.value = null;
+  loadFailure.value = null;
+  comment.value = "";
+  Object.assign(form, blankForm());
+  shown.change = false;
+  shown.done_when = false;
+  itemQueue.clear();
+  commentQueue.clear();
+}
+
+// Opening (or switching to another item) starts fresh; closing touches nothing until after-leave.
 watch(
   () => [props.itemKey, props.creating] as const,
-  () => {
-    loaded.value = null;
-    comment.value = "";
-    Object.assign(form, blankForm());
-    shown.change = false;
-    shown.done_when = false;
-    itemQueue.clear();
-    commentQueue.clear();
-    if (open.value && !people.value.length) void loadPeople();
+  ([key, creating]) => {
+    if (!key && !creating) return;
+    reset();
+    session.key = creating ? null : key;
+    session.creating = creating;
+    if (!creating && props.initialItem?.key === key) {
+      seed.value = props.initialItem;
+      showItem(props.initialItem);
+    }
+    if (!people.value.length) void loadPeople();
     void load();
   },
   { immediate: true },
 );
+
+function onAfterLeave(): void {
+  if (open.value) return;
+  reset();
+  session.key = null;
+  session.creating = false;
+}
 
 function route(files: File[], target: "item" | "comment"): void {
   if (!files.length) return;
@@ -606,7 +653,7 @@ async function removeAttachment(file: WorkAttachment): Promise<void> {
 async function save(): Promise<void> {
   saving.value = true;
   try {
-    if (props.creating) {
+    if (session.creating) {
       const item = await createWorkItem({
         team: form.team,
         title: form.title.trim(),
@@ -622,8 +669,11 @@ async function save(): Promise<void> {
       emit("saved", item);
       return;
     }
-    if (!loaded.value) return;
-    const item = await patchWorkItem(loaded.value.item.key, patch.value);
+    if (!current.value) return;
+    const item = await patchWorkItem(current.value.key, patch.value);
+    if (loaded.value) loaded.value.item = item;
+    else seed.value = item;
+    showItem(item);
     emit("saved", item);
     await load();
   } catch {
@@ -738,8 +788,16 @@ function eventText(event: WorkItemEvent): string {
   gap: 4px;
 }
 
+/* Visually hidden, not display:none: some browsers ignore .click() on an undisplayed file input. */
 .work-dialog__picker {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .work-dialog__files {

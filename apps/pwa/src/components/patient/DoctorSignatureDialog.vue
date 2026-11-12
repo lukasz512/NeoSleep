@@ -8,7 +8,7 @@
   >
     <p class="doctor-signature__hint text-body-medium text-medium-emphasis">{{ t(purpose === "email" ? "app.clinical.doctorSignature.hintEmail" : "app.clinical.doctorSignature.hint") }}</p>
     <ConsentSignatureField
-      v-if="modelValue"
+      :key="opening"
       ref="fieldRef"
       data-testid="doctor-signature-field"
       :phone-start="phoneStart"
@@ -54,10 +54,16 @@ const empty = ref(true);
 /** CORE-172: a QR next to the pad on a computer — the phone signature comes back here, and the doctor still clicks Sign and print. */
 const phoneStart = doctorHandoffStart();
 
-// Every opening starts from an empty pad (the field is re-created by v-if).
+// Every opening starts from an empty pad: a new key re-creates the field. Only on open, so
+// a closing dialog keeps the signature on screen while it fades (CORE-195).
+const opening = ref(0);
 watch(
   () => props.modelValue,
-  () => (empty.value = true)
+  (open) => {
+    if (!open) return;
+    opening.value += 1;
+    empty.value = true;
+  }
 );
 
 function sign() {
