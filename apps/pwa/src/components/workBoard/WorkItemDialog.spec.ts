@@ -122,14 +122,14 @@ function png(name = "image.png"): File {
 
 async function paste(target: Element, files: File[]): Promise<void> {
   const event = new Event("paste", { bubbles: true, cancelable: true });
-  Object.defineProperty(event, "clipboardData", { value: { files, items: [] } });
+  Object.defineProperty(event, "clipboardData", { value: { files, items: [], types: [], getData: () => "" } });
   target.dispatchEvent(event);
   await flushPromises();
 }
 
 async function drop(target: Element, files: File[]): Promise<void> {
   const event = new Event("drop", { bubbles: true, cancelable: true });
-  Object.defineProperty(event, "dataTransfer", { value: { files, items: [] } });
+  Object.defineProperty(event, "dataTransfer", { value: { files, items: [], types: [], getData: () => "" } });
   target.dispatchEvent(event);
   await flushPromises();
 }
@@ -154,7 +154,7 @@ describe("WorkItemDialog (CORE-192)", () => {
   it("queues a pasted screenshot on a new item and uploads it right after Create", async () => {
     serve(null);
     const wrapper = await render({ itemKey: null, creating: true });
-    await paste(q("work-item-problem")!.querySelector("textarea")!, [png()]);
+    await paste(q("work-item-title")!.querySelector("textarea")!, [png()]); // outside the description: to the strip
     expect(document.querySelectorAll("[data-testid='work-item-pending']")).toHaveLength(1);
     expect(uploads()).toHaveLength(0);
 
@@ -347,5 +347,48 @@ describe("WorkItemDialog Done-when checklist (CORE-195)", () => {
     await flushPromises();
     expect(q("work-item-done_when")).toBeNull();
     expect(boxes().map((b) => b.checked)).toEqual([true, false]);
+  });
+});
+
+describe("WorkItemDialog inline images (CORE-195)", () => {
+  const editor = () => q("work-item-problem")!.querySelector(".ProseMirror")!;
+  const problemOf = (body: unknown) => JSON.parse(String(body)).problem as string;
+
+  it("shows the description's images inline and keeps them out of the attachment strip", async () => {
+    serve(item({ problem: "Before\n![bug.png](attachment:att-1)\nAfter" }), [attachment(), attachment({ id: "att-2", filename: "log.pdf", mime_type: "application/pdf" })]);
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(editor().querySelector("img")?.getAttribute("src")).toBe("https://signed.test/att-1");
+    expect(editor().textContent).toContain("Before");
+    const tiles = Array.from(document.querySelectorAll("[data-testid='work-item-attachment']"));
+    expect(tiles.map((tile) => tile.textContent)).toEqual([expect.stringContaining("log.pdf")]);
+  });
+
+  it("puts a screenshot pasted into the description inline and saves it as markdown", async () => {
+    serve(item({ problem: "Nothing happens" }));
+    await render({ itemKey: "CORE-9", creating: false });
+    await paste(editor(), [png("bug.png")]);
+    expect(uploads()).toHaveLength(1);
+    expect(editor().querySelector("img")?.getAttribute("src")).toBe("https://signed.test/new-1");
+    expect(document.querySelectorAll("[data-testid='work-item-attachment']")).toHaveLength(0);
+    (q("work-item-save") as HTMLButtonElement).click();
+    await flushPromises();
+    expect(problemOf(calls.find((c) => c.method === "PATCH")!.body)).toContain("![bug.png](attachment:new-1)");
+  });
+
+  it("on a new item, shows the pasted screenshot at once and links it after Create", async () => {
+    serve(null);
+    await render({ itemKey: null, creating: true });
+    const title = q("work-item-title")!.querySelector("textarea")!;
+    title.value = "Inline";
+    title.dispatchEvent(new Event("input"));
+    await paste(editor(), [png("bug.png")]);
+    expect(editor().querySelector("img")?.getAttribute("src")).toBe("blob:preview");
+    expect(uploads()).toHaveLength(0);
+    (q("work-item-save") as HTMLButtonElement).click();
+    await flushPromises();
+    const create = calls.find((c) => c.method === "POST" && c.path.endsWith("/items"))!;
+    expect(problemOf(create.body)).toMatch(/attachment:pending-\d+/);
+    expect(uploads()).toHaveLength(1);
+    expect(problemOf(calls.find((c) => c.method === "PATCH")!.body)).toBe("![bug.png](attachment:new-1)");
   });
 });

@@ -23,7 +23,7 @@
       @paste="onPaste"
       @dragover.prevent="dragging = true"
       @dragleave="onDragLeave"
-      @drop.prevent="onDrop"
+      @drop="onDrop"
     >
       <VTextarea
         v-model="form.title"
@@ -100,16 +100,15 @@
         </VMenu>
       </div>
 
-      <VTextarea
+      <!-- CORE-195: screenshots pasted or dropped here show inline, where they were put. -->
+      <WorkMarkdownEditor
+        ref="problemEditor"
         v-model="form.problem"
+        :images="inlineImages"
         :placeholder="t('workBoard.dialog.descriptionPlaceholder')"
         :aria-label="t('workBoard.field.problem')"
-        :maxlength="BODY_MAX"
-        variant="outlined"
-        rows="4"
-        auto-grow
-        hide-details
         data-testid="work-item-problem"
+        @files="onEditorFiles"
       />
 
       <div v-for="name in SECTION_FIELDS" v-show="shown[name]" :key="name" class="work-dialog__section">
@@ -174,7 +173,7 @@
         />
       </div>
 
-      <ul v-if="itemAttachments.length || itemQueue.pending.value.length" class="work-dialog__files" data-testid="work-item-attachments">
+      <ul v-if="itemAttachments.length || stripQueue.length" class="work-dialog__files" data-testid="work-item-attachments">
         <li v-for="file in itemAttachments" :key="file.id" class="work-dialog__file" data-testid="work-item-attachment">
           <button type="button" class="work-dialog__thumb" :aria-label="file.filename" @click="openAttachment(file)">
             <img v-if="isImage(file.mime_type) && urls[file.id]" :src="urls[file.id]" :alt="file.filename" />
@@ -190,7 +189,7 @@
             <VIcon icon="mdi-close" size="16" />
           </button>
         </li>
-        <li v-for="file in itemQueue.pending.value" :key="`p${file.id}`" class="work-dialog__file work-dialog__file--pending" data-testid="work-item-pending">
+        <li v-for="file in stripQueue" :key="`p${file.id}`" class="work-dialog__file work-dialog__file--pending" data-testid="work-item-pending">
           <span class="work-dialog__thumb">
             <img v-if="file.preview" :src="file.preview" :alt="file.file.name" />
             <VIcon v-else icon="mdi-file-pdf-box" size="28" />
@@ -320,6 +319,8 @@ import {
   type WorkItemDetail,
 } from "../../composables/useWorkBoard";
 import { WORK_ATTACHMENT_ACCEPT, filesFromTransfer, isImage, usePendingAttachments, type PendingAttachment } from "../../composables/useWorkAttachments";
+import WorkMarkdownEditor from "./WorkMarkdownEditor.vue";
+import { attachmentRefs, rewriteAttachmentRefs } from "./workMarkdown";
 import { formatRelativeTime } from "../../utils/relativeTime";
 import type { WorkAttachment, WorkItem, WorkItemEvent, WorkItemPatch, WorkPerson, WorkStatus, WorkTeam } from "../../types/workBoard";
 
@@ -359,6 +360,7 @@ const open = computed(() => props.creating || props.itemKey !== null);
 const session = reactive<{ key: string | null; creating: boolean }>({ key: null, creating: false });
 const loadFailure = ref<unknown>(null);
 const seed = ref<WorkItem | null>(null);
+const problemEditor = ref<InstanceType<typeof WorkMarkdownEditor> | null>(null);
 const loaded = ref<WorkItemDetail | null>(null);
 /** The item as far as it is known: the full fetch, else the board row. */
 const current = computed(() => loaded.value?.item ?? seed.value);
@@ -485,7 +487,19 @@ const listChips = computed<ListChip[]>(() => {
 
 const hiddenSections = computed(() => SECTION_FIELDS.filter((name) => !shown[name]));
 const developmentCount = computed(() => (current.value ? current.value.links.length + (current.value.branch ? 1 : 0) : 0));
-const itemAttachments = computed(() => loaded.value?.attachments.filter((a) => a.event_id === null) ?? []);
+/** What the description shows inline stays out of the attachment strip (CORE-195). */
+const inlineRefs = computed(() => attachmentRefs(form.problem));
+const itemAttachments = computed(() => loaded.value?.attachments.filter((a) => a.event_id === null && !inlineRefs.value.has(a.id)) ?? []);
+const stripQueue = computed(() => itemQueue.pending.value.filter((entry) => !inlineRefs.value.has(pendingRef(entry))));
+const inlineImages = computed<Record<string, string>>(() => {
+  const images: Record<string, string> = { ...urls };
+  for (const entry of itemQueue.pending.value) if (entry.preview) images[pendingRef(entry)] = entry.preview;
+  return images;
+});
+
+function pendingRef(entry: PendingAttachment): string {
+  return `pending-${entry.id}`;
+}
 
 function attachmentsOf(eventId: string): WorkAttachment[] {
   return loaded.value?.attachments.filter((a) => a.event_id !== null && String(a.event_id) === String(eventId)) ?? [];
@@ -617,14 +631,27 @@ function route(files: File[], target: "item" | "comment"): void {
   if (loaded.value) void uploadQueued(loaded.value.item.key, added);
 }
 
-/** Uploads queued item files one by one; each leaves the queue once it is stored. */
-async function uploadQueued(key: string, entries: readonly PendingAttachment[]): Promise<void> {
+/** Files pasted or dropped into the description: images go inline at the caret, the rest to the strip. */
+function onEditorFiles(files: File[]): void {
+  const added = itemQueue.add(files);
+  problemEditor.value?.insertImages(added.filter((entry) => entry.preview).map((entry) => ({ ref: pendingRef(entry), alt: entry.file.name })));
+  if (loaded.value) void uploadQueued(loaded.value.item.key, added);
+}
+
+/**
+ * Uploads queued item files one by one; each leaves the queue once it is stored. Returns the
+ * `pending-<n>` → attachment id map, so a new item's description can be re-pointed after Create.
+ */
+async function uploadQueued(key: string, entries: readonly PendingAttachment[]): Promise<Record<string, string>> {
+  const ids: Record<string, string> = {};
   for (const entry of entries) {
     uploading.add(entry.id);
     try {
       const attachment = await uploadWorkAttachment(key, entry.file);
+      ids[pendingRef(entry)] = attachment.id;
       if (loaded.value?.item.key === key) {
         loaded.value.attachments.push(attachment);
+        form.problem = rewriteAttachmentRefs(form.problem, { [pendingRef(entry)]: attachment.id });
         void signImages(key, [attachment]);
       }
       itemQueue.remove(entry.id);
@@ -634,9 +661,12 @@ async function uploadQueued(key: string, entries: readonly PendingAttachment[]):
       uploading.delete(entry.id);
     }
   }
+  return ids;
 }
 
+// The description editor handles its own paste and drop (and prevents the default).
 function onPaste(event: ClipboardEvent): void {
+  if (event.defaultPrevented) return;
   const files = filesFromTransfer(event.clipboardData);
   if (!files.length) return;
   event.preventDefault();
@@ -646,6 +676,8 @@ function onPaste(event: ClipboardEvent): void {
 
 function onDrop(event: DragEvent): void {
   dragging.value = false;
+  if (event.defaultPrevented) return;
+  event.preventDefault();
   const inComment = event.target instanceof Element && event.target.closest("[data-comment-box]") !== null;
   route(filesFromTransfer(event.dataTransfer), inComment ? "comment" : "item");
 }
@@ -701,8 +733,9 @@ async function save(): Promise<void> {
         assignee: form.assignee,
         due_date: form.due_date || null,
       });
-      await uploadQueued(item.key, [...itemQueue.pending.value]);
-      emit("saved", item);
+      const ids = await uploadQueued(item.key, [...itemQueue.pending.value]);
+      const problem = rewriteAttachmentRefs(form.problem, ids).trim() || null;
+      emit("saved", problem === item.problem ? item : await patchWorkItem(item.key, { problem }));
       return;
     }
     if (!current.value) return;
