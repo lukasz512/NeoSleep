@@ -2042,7 +2042,6 @@
   "app.orthoApneaOrder.form.additionalSplintsHint": "Wiąże się z dodatkowym kosztem",
   "app.orthoApneaOrder.form.additionalSplintsRemove": "Usuń",
   "app.orthoApneaOrder.photoUploadDeferredNotice": "Przesyłanie zdjęć/RTG/CBCT pojawi się w kolejnej aktualizacji. Zamówienie można mimo to wysłać, a pliki dodać bezpośrednio w systemie urządzenia.",
-  "app.orthoApneaOrder.fileUploadDeferredNotice": "Przesyłanie plików cyfrowych pojawi się w kolejnej aktualizacji. Zamówienie można mimo to wysłać, a pliki dodać bezpośrednio w systemie urządzenia.",
   "app.orthoApneaOrder.actions.back": "Wstecz",
   "app.orthoApneaOrder.actions.next": "Dalej",
   "app.orthoApneaOrder.actions.confirm": "Potwierdź zamówienie",
@@ -3329,5 +3328,15 @@
   "issues.detail.tenant": "Tenant",
   "issues.errorLoad": "Nie udało się wczytać zgłoszeń",
   "issues.reporterUnknown": "Nieznany użytkownik",
-  "issues.errors.sourceLabel": "Źródło"
+  "issues.errors.sourceLabel": "Źródło",
+  "app.deviceOrder.registration.files": "Prześlij pliki skanów",
+  "app.deviceOrder.registration.addFiles": "Dodaj pliki skanów",
+  "app.deviceOrder.registration.filesHint": "Pliki {types}, do {maxMb} MB każdy — zwykle jeden dla szczęki i jeden dla żuchwy.",
+  "app.deviceOrder.registration.removeFile": "Usuń {name}",
+  "app.deviceOrder.registration.uploading": "Przesyłanie {name}",
+  "app.deviceOrder.registration.waitForUploads": "Pliki skanów wciąż się przesyłają. Zamówienie potwierdzisz, gdy się skończą.",
+  "app.deviceOrder.errors.scanFileEmpty": "Ten plik jest pusty.",
+  "app.deviceOrder.errors.scanFileType": "Można przesłać tylko pliki {types}.",
+  "app.deviceOrder.errors.scanFileTooLarge": "Ten plik jest większy niż {maxMb} MB.",
+  "app.deviceOrder.errors.scanUploadFailed": "Przesyłanie nie powiodło się. Usuń plik i spróbuj ponownie."
 }

@@ -2124,7 +2124,6 @@
   "app.orthoApneaOrder.form.additionalSplintsHint": "Additional cost applies",
   "app.orthoApneaOrder.form.additionalSplintsRemove": "Remove",
   "app.orthoApneaOrder.photoUploadDeferredNotice": "Photo/X-ray/CBCT upload is coming in a follow-up update. You can still submit this order and upload files directly with the device afterward.",
-  "app.orthoApneaOrder.fileUploadDeferredNotice": "Digital scan file upload is coming in a follow-up update. You can still submit this order and upload files directly with the device afterward.",
   "app.orthoApneaOrder.actions.back": "Back",
   "app.orthoApneaOrder.actions.next": "Next",
   "app.orthoApneaOrder.actions.confirm": "Confirm order",
@@ -3329,5 +3328,15 @@
   "issues.detail.tenant": "Tenant",
   "issues.errorLoad": "Failed to load issues",
   "issues.reporterUnknown": "Unknown user",
-  "issues.errors.sourceLabel": "Source"
+  "issues.errors.sourceLabel": "Source",
+  "app.deviceOrder.registration.files": "Upload scan files",
+  "app.deviceOrder.registration.addFiles": "Add scan files",
+  "app.deviceOrder.registration.filesHint": "{types} files, up to {maxMb} MB each — usually one for the upper and one for the lower jaw.",
+  "app.deviceOrder.registration.removeFile": "Remove {name}",
+  "app.deviceOrder.registration.uploading": "Uploading {name}",
+  "app.deviceOrder.registration.waitForUploads": "Scan files are still uploading. You can confirm the order once they finish.",
+  "app.deviceOrder.errors.scanFileEmpty": "This file is empty.",
+  "app.deviceOrder.errors.scanFileType": "Only {types} files can be uploaded.",
+  "app.deviceOrder.errors.scanFileTooLarge": "This file is larger than {maxMb} MB.",
+  "app.deviceOrder.errors.scanUploadFailed": "Upload failed. Remove the file and try again."
 }

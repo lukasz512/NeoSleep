@@ -1,5 +1,11 @@
-import { describe, it, expect } from "vitest";
-import { buildNewErrorEmail } from "./issueNotifications.js";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { sendContactEmail } from "../mailer.js";
+import { buildNewErrorEmail, notifyNewErrorKind, resetErrorEmailBudget } from "./issueNotifications.js";
+
+vi.mock("../mailer.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../mailer.js")>()),
+  sendContactEmail: vi.fn().mockResolvedValue(undefined),
+}));
 
 // The 2026-10-20 email: a frontend Vue error on pwa-dev, labelled "production"
 // and with nothing that pointed at the component or page.
@@ -43,5 +49,27 @@ describe("buildNewErrorEmail", () => {
     expect(rows.get("Page")).toBe("/api/v1/patients");
     expect(rows.get("Component")).toBe("-");
     expect(rows.get("Stack")).toBe("-");
+  });
+});
+
+describe("notifyNewErrorKind (CORE-190 D4: only new prod API errors email right away)", () => {
+  const isNew = { id: "d-1", isNew: true, hash: "h" };
+
+  beforeEach(() => {
+    resetErrorEmailBudget();
+    vi.mocked(sendContactEmail).mockClear();
+  });
+
+  it("emails a new prod API error at once", () => {
+    notifyNewErrorKind({ level: "error", message: "boom", source: "api", env: "prod" }, isNew);
+    expect(sendContactEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves everything else to the morning digest", () => {
+    notifyNewErrorKind({ level: "error", message: "boom", source: "frontend", env: "prod" }, isNew);
+    notifyNewErrorKind({ level: "error", message: "boom", source: "api", env: "dev" }, isNew);
+    notifyNewErrorKind({ level: "warn", message: "boom", source: "api", env: "prod" }, isNew);
+    notifyNewErrorKind({ level: "error", message: "boom", source: "api", env: "prod" }, { ...isNew, isNew: false });
+    expect(sendContactEmail).not.toHaveBeenCalled();
   });
 });

@@ -57,6 +57,11 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   if (url.includes("/api/v1/partners/orthoapnea/products")) {
     return json({ items: [{ id: 3, code: "002", nameEs: "NOA", category: "APNEA_SNORE" }, { id: 4, code: "003", nameEs: "NOA TMJ", category: "APNEA_SNORE" }] });
   }
+  // NEO-262: the scan PUT goes to this URL — a Playwright route answers it.
+  if (url.includes("/api/v1/device-orders/scan-uploads")) {
+    const name = String(JSON.parse(String(init?.body ?? "{}")).file_name ?? "scan.stl");
+    return json({ path: `demo/device-orders/patients/p-1/scans/${crypto.randomUUID()}-${name}`, uploadUrl: `https://storage.invalid/upload/${name}` });
+  }
   if (url.includes("/api/v1/practitioner")) return json({ items: [{ id: "hcp-1", name: "Dr. Andrzej Testerski" }] });
   if (url.includes("/api/v1/patient/")) return json({ id: "p-1", practitioner_id: "hcp-1", region: "MX" });
   if (url.includes("/api/v1/device-orders/context")) {

@@ -307,10 +307,10 @@ function networkErrorCode(err: unknown): string {
   return cause instanceof Error && cause.message === "bad port" ? "BAD_PORT" : "";
 }
 
-async function authedFetch(path: string, init: RequestInit = {}, isRetry = false): Promise<Response> {
+async function authedFetch(path: string, init: RequestInit = {}, isRetry = false, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
   const { token } = await ensureSession();
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;
   try {
     res = await fetch(`${oaBaseUrl()}${path}`, {
@@ -320,7 +320,7 @@ async function authedFetch(path: string, init: RequestInit = {}, isRetry = false
     });
   } catch (cause) {
     if (controller.signal.aborted) {
-      throw new OrthoApneaTimeoutError("orthoapnea", `request to ${path} timed out after ${FETCH_TIMEOUT_MS}ms`, cause);
+      throw new OrthoApneaTimeoutError("orthoapnea", `request to ${path} timed out after ${timeoutMs}ms`, cause);
     }
     // NEO-210: a raw network failure used to escape as a generic 500. When the
     // connection never opened, the lab never saw the request → a plain 502.
@@ -339,7 +339,7 @@ async function authedFetch(path: string, init: RequestInit = {}, isRetry = false
   if ((res.status === 401 || res.status === 403) && !isRetry) {
     console.warn(`[orthoapnea] ${res.status} on ${path} — session likely stale, re-logging in and retrying once`);
     session = null; // force a fresh login and retry exactly once
-    return authedFetch(path, init, true);
+    return authedFetch(path, init, true, timeoutMs);
   }
   return res;
 }
@@ -1144,13 +1144,57 @@ export interface CreateOrthoApneaTreatmentResult {
 export type OrthoApneaTreatmentPayload = Record<string, unknown> | (() => Promise<Record<string, unknown>>);
 
 /**
+ * A scan makes the order request big: on top of the usual budget, one second
+ * per MB (a conservative 1 MB/s to Spain), so a slow upload isn't cut off and
+ * left as an ambiguous "pending" order.
+ */
+export function orderUploadTimeoutMs(files: readonly OrthoApneaModelFile[]): number {
+  const bytes = files.reduce((sum, f) => sum + f.bytes.byteLength, 0);
+  return FETCH_TIMEOUT_MS + Math.ceil(bytes / 1_000_000) * 1000;
+}
+
+/** A scan file to send with an order as OA's multimedia type MODEL (NEO-262). */
+export interface OrthoApneaModelFile {
+  name: string;
+  bytes: Uint8Array<ArrayBuffer>;
+}
+
+/** OA's `lo.MODEL` multimedia type (rules §3.2 `ro`). */
+const OA_MULTIMEDIA_MODEL = 4;
+
+/**
+ * The prefix OA's portal puts on a model file's name: moment's
+ * "DD-MM-YY h:mm " (12-hour clock, no AM/PM, trailing space), in OA's
+ * server zone since the portal runs in Spain.
+ */
+export function oaModelStamp(now: Date, timeZone = OA_SERVER_TIME_ZONE): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", { timeZone, day: "2-digit", month: "2-digit", year: "2-digit", hour: "numeric", minute: "2-digit", hour12: true })
+      .formatToParts(now)
+      .map((p) => [p.type, p.value])
+  );
+  return `${parts.day}-${parts.month}-${parts.year} ${Number(parts.hour)}:${parts.minute} `;
+}
+
+/**
  * POST /api/treatments body exactly as OA's portal sends it (rules §3.2):
  * multipart/form-data with one text field `treatmentDTO` holding the JSON
- * string, plus `file` parts (none from us yet). Shot S3 (order 454012,
- * 2026-10-03) was sent this way and stored field for field.
+ * string, plus one `file` part per scan. Shot S3 (order 454012, 2026-10-03)
+ * was sent this way and stored field for field. A scan's part name is the
+ * portal's (`add()` in bundle main.ee94d3f18b000128.js, 2026-11-10):
+ * `S + "/model" + S + "/4"` with S = stamp + file name.
  */
-export function orthoApneaTreatmentForm(dto: Record<string, unknown>): FormData {
+export function orthoApneaTreatmentForm(
+  dto: Record<string, unknown>,
+  modelFiles: readonly OrthoApneaModelFile[] = [],
+  now: Date = new Date()
+): FormData {
   const form = new FormData();
+  const stamp = oaModelStamp(now);
+  for (const file of modelFiles) {
+    const s = stamp + file.name;
+    form.append("file", new Blob([file.bytes]), `${s}/model${s}/${OA_MULTIMEDIA_MODEL}`);
+  }
   form.append("treatmentDTO", JSON.stringify(dto));
   return form;
 }
@@ -1440,12 +1484,17 @@ async function reconcilePendingTreatment(
  * `reconcile` (the device-order path passes it): a link left 'pending' past
  * RECONCILE_AFTER_MS is looked up in OA first (reconcilePendingTreatment).
  * Without it, a pending link is always 409 SUBMISSION_PENDING.
+ *
+ * `modelFiles` (NEO-262): loads the scan files after the claim, like a
+ * builder payload; a failed load means nothing reached OA, so the link is
+ * marked failed and a retry is allowed.
  */
 export async function createOrthoApneaTreatment(
   tenantSlug: string,
   treatmentPlanId: string,
   payload: OrthoApneaTreatmentPayload,
-  reconcile?: ReconcileOptions
+  reconcile?: ReconcileOptions,
+  modelFiles?: () => Promise<OrthoApneaModelFile[]>
 ): Promise<CreateOrthoApneaTreatmentResult> {
   const claim = await claimTreatmentSubmission(tenantSlug, treatmentPlanId);
   let link: PartnerLink;
@@ -1454,8 +1503,10 @@ export async function createOrthoApneaTreatment(
   else throw submissionPending(treatmentPlanId);
 
   let requestPayload: Record<string, unknown>;
+  let files: OrthoApneaModelFile[];
   try {
     requestPayload = typeof payload === "function" ? await payload() : payload;
+    files = modelFiles ? await modelFiles() : [];
   } catch (cause) {
     // Nothing reached OA's order endpoint — safe to allow a retry.
     const message = cause instanceof Error ? cause.message : String(cause);
@@ -1466,7 +1517,7 @@ export async function createOrthoApneaTreatment(
   let response: Response;
   try {
     response = await enqueueOrthoApneaMutation(() =>
-      authedFetch(TREATMENT_CREATE_PATH, { method: "POST", body: orthoApneaTreatmentForm(requestPayload) })
+      authedFetch(TREATMENT_CREATE_PATH, { method: "POST", body: orthoApneaTreatmentForm(requestPayload, files) }, false, orderUploadTimeoutMs(files))
     );
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);

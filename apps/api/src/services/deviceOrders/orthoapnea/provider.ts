@@ -13,6 +13,7 @@ import {
   listOrthoApneaTreatments,
 } from "../../partners/orthoapnea.js";
 import { DEPLOY_ENV } from "../../../env.js";
+import { downloadPartnerDocument } from "../../partnerDocuments.js";
 import type { DeviceOrderProvider, DeviceOrderReceipt, DeviceOrderSubmission } from "../provider.js";
 import type { RemoteOrder } from "../reconcile.js";
 import { toOaTreatmentDto } from "./toOaTreatmentDto.js";
@@ -146,8 +147,15 @@ export const orthoApneaDeviceOrderProvider: DeviceOrderProvider = {
       });
     };
 
+    // NEO-262: the uploaded scans, read from private storage only once the claim is held.
+    const registration = order.registration;
+    const loadModelFiles = async () =>
+      registration.method === "files"
+        ? Promise.all(registration.files.map(async (f) => ({ name: f.name, bytes: await downloadPartnerDocument(f.path) })))
+        : [];
+
     // A submit interrupted more than RECONCILE_AFTER_MS ago is first looked up in OA by product (Łukasz D3).
-    const result = await createOrthoApneaTreatment(tenantSlug, treatmentPlanId, buildDto, { productCode: order.productCode });
+    const result = await createOrthoApneaTreatment(tenantSlug, treatmentPlanId, buildDto, { productCode: order.productCode }, loadModelFiles);
     return { externalId: result.externalId, externalStatus: result.externalStatus, sentPayload: result.requestPayload };
   },
 };

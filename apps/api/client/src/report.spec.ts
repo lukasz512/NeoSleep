@@ -143,6 +143,15 @@ describe("reportCaught", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("logs a 4xx (validation, auth, not found) but never reports it — it is not a bug (CORE-190)", () => {
+    for (const status of [400, 401, 404, 422]) {
+      reportCaught(new ApiError({ kind: "client", message: `email is required ${status}`, status }), { where: "apiFetch" });
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+    reportCaught(new ApiError({ kind: "server", message: "boom", status: 503 }), { where: "apiFetch" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("never throws, even if sending blows up synchronously", () => {
     fetchMock.mockImplementation(() => {
       throw new Error("fetch exploded");

@@ -247,7 +247,7 @@ describe("problem reports and admin issues", () => {
         .set("Authorization", reporter.auth)
         .send({ description: DESCRIPTION, request_ids: [requestId] });
 
-      const list = await request(app).get("/api/v1/admin/diagnostics?env=test").set("Authorization", platformAdmin.auth);
+      const list = await request(app).get("/api/v1/admin/diagnostics?env=local").set("Authorization", platformAdmin.auth);
       expect(list.status).toBe(200);
       const item = list.body.items.find((d: { id: string }) => d.id === row!.id);
       expect(item).toBeTruthy();
@@ -257,9 +257,9 @@ describe("problem reports and admin issues", () => {
       expect(resolved.status).toBe(200);
       expect(resolved.body.status).toBe("resolved");
 
-      const openOnly = await request(app).get("/api/v1/admin/diagnostics?env=test").set("Authorization", platformAdmin.auth);
+      const openOnly = await request(app).get("/api/v1/admin/diagnostics?env=local").set("Authorization", platformAdmin.auth);
       expect(openOnly.body.items.some((d: { id: string }) => d.id === row!.id)).toBe(false);
-      const all = await request(app).get("/api/v1/admin/diagnostics?status=all&env=test").set("Authorization", platformAdmin.auth);
+      const all = await request(app).get("/api/v1/admin/diagnostics?status=all&env=local").set("Authorization", platformAdmin.auth);
       expect(all.body.items.some((d: { id: string }) => d.id === row!.id)).toBe(true);
 
       expect((await request(app).patch(`/api/v1/admin/diagnostics/${row!.id}`).set("Authorization", platformAdmin.auth).send({ status: "nope" })).status).toBe(400);

@@ -9,6 +9,13 @@ vi.mock("vue-i18n", () => ({
   useI18n: () => ({ t: (k: string) => k }),
 }));
 
+// Storage PUT (XHR) stubbed: each call waits until the test settles it (NEO-262).
+const scanPuts = vi.hoisted(() => [] as { url: string; progress: (f: number) => void; resolve: () => void; reject: (e: Error) => void }[]);
+vi.mock("../utils/scanUpload", () => ({
+  putScanFile: (url: string, _file: Blob, progress: (f: number) => void) =>
+    new Promise<void>((resolve, reject) => scanPuts.push({ url, progress, resolve, reject })),
+}));
+
 import { useOrthoApneaOrderWizard, stepOfPath, fallbackDesiredDate } from "./useOrthoApneaOrderWizard";
 import { useNotifications } from "./useNotifications";
 
@@ -150,6 +157,78 @@ describe("useOrthoApneaOrderWizard", () => {
       expect(wizard.order.registration).toEqual({ method: "impression" });
     });
 
+    describe("scan files (NEO-262)", () => {
+      beforeEach(() => {
+        scanPuts.length = 0;
+      });
+
+      const flush = () => new Promise((r) => setTimeout(r, 0));
+      const scan = (name: string, bytes = 10) => new File([new Uint8Array(bytes)], name);
+
+      it("uploads through a signed URL, shows progress, and adds the finished file to the order", async () => {
+        const { calls } = stubFetchRoutes([
+          ["/api/v1/device-orders/scan-uploads", () => ({ status: 201, body: { path: "t/device-orders/patients/p1/scans/u-upper.stl", uploadUrl: "https://storage/sign?token=x" } })],
+        ]);
+        const wizard = useOrthoApneaOrderWizard();
+        fillValidOrder(wizard.order);
+        wizard.setRegistrationMethod("files");
+        expect(wizard.validation.value.errors).toEqual([{ path: "registration.files", code: "required" }]);
+
+        const done = wizard.addScanFiles("p1", [scan("upper.stl")]);
+        await flush();
+        expect(bodyOf(calls[0])).toEqual({ patient_id: "p1", file_name: "upper.stl", size: 10 });
+        expect(scanPuts[0]!.url).toBe("https://storage/sign?token=x");
+        expect(wizard.scanUploading.value).toBe(true);
+        scanPuts[0]!.progress(0.5);
+        expect(wizard.scanUploads.value[0]!.progress).toBe(0.5);
+
+        scanPuts[0]!.resolve();
+        await done;
+        expect(wizard.scanUploading.value).toBe(false);
+        expect(wizard.scanUploads.value).toEqual([]);
+        expect(wizard.order.registration).toEqual({ method: "files", files: [{ path: "t/device-orders/patients/p1/scans/u-upper.stl", name: "upper.stl", size: 10 }] });
+        expect(wizard.validation.value.errors).toEqual([]);
+
+        wizard.removeScanFile("t/device-orders/patients/p1/scans/u-upper.stl");
+        expect(wizard.order.registration).toEqual({ method: "files", files: [] });
+      });
+
+      it("a wrong type or empty file is refused locally: no API call, a failed row with why", async () => {
+        const { calls } = stubFetchRoutes([]);
+        const wizard = useOrthoApneaOrderWizard();
+        await wizard.addScanFiles("p1", [scan("photo.jpg"), scan("empty.stl", 0)]);
+        expect(calls).toHaveLength(0);
+        expect(wizard.scanUploads.value.map((u) => [u.state, u.problem])).toEqual([
+          ["failed", "scanFileType"],
+          ["failed", "scanFileEmpty"],
+        ]);
+        wizard.dismissScanUpload(wizard.scanUploads.value[0]!.key);
+        expect(wizard.scanUploads.value).toHaveLength(1);
+      });
+
+      it("a failed storage PUT leaves a failed row and nothing on the order", async () => {
+        stubFetchRoutes([["/api/v1/device-orders/scan-uploads", () => ({ status: 201, body: { path: "a/b", uploadUrl: "https://storage/x" } })]]);
+        const wizard = useOrthoApneaOrderWizard();
+        wizard.setRegistrationMethod("files");
+        const done = wizard.addScanFiles("p1", [scan("upper.stl")]);
+        await flush();
+        scanPuts[0]!.reject(new Error("network"));
+        await done;
+        expect(wizard.scanUploads.value.map((u) => [u.state, u.problem])).toEqual([["failed", "scanUploadFailed"]]);
+        expect(wizard.order.registration).toEqual({ method: "files", files: [] });
+      });
+
+      it("confirm does nothing while a scan is still uploading", async () => {
+        const { calls } = stubFetchRoutes([["/api/v1/device-orders/scan-uploads", () => ({ status: 201, body: { path: "a/b", uploadUrl: "https://storage/x" } })]]);
+        const wizard = useOrthoApneaOrderWizard();
+        fillValidOrder(wizard.order);
+        void wizard.addScanFiles("p1", [scan("upper.stl")]);
+        await flush();
+        expect(await wizard.confirmOrder("p1", "s1")).toBe(false);
+        expect(calls.filter((c) => !c.url.includes("scan-uploads"))).toHaveLength(0);
+      });
+    });
+
     it("maps issue paths to the step that shows them; delivery belongs to step 1", () => {
       expect(stepOfPath("dentistId")).toBe(1);
       expect(stepOfPath("delivery.phone")).toBe(1);
@@ -252,6 +331,16 @@ describe("useOrthoApneaOrderWizard", () => {
         registration: { method: "platform", scannerPlatform: "MEDIT_LINK" },
         acknowledgedWarnings: ["advanceUnder5"],
       });
+    });
+
+    it("resumes a draft's uploaded scans; a broken scan entry is dropped (NEO-262)", () => {
+      const wizard = useOrthoApneaOrderWizard();
+      const good = { path: "t/device-orders/patients/p1/scans/u-upper.stl", name: "upper.stl", size: 10 };
+      wizard.resetForOpen({
+        id: "plan-1",
+        metadata: { orthoapneaDraft: { schema: "deviceOrder", order: { ...defaultDeviceOrder("doc-7"), registration: { method: "files", files: [good, { name: "x.stl" }, "junk"] } } } },
+      });
+      expect(wizard.order.registration).toEqual({ method: "files", files: [good] });
     });
 
     it("a DeviceOrder draft saved before D1/D2 (no acknowledgedWarnings, scanner as a label in extras) still loads", () => {

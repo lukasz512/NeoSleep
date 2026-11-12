@@ -63,6 +63,8 @@ export interface WorkItemRow {
   due_date: string | null;
   source: string;
   linear_identifier: string | null;
+  /** Set when the item mirrors something outside the board, e.g. an error kind (CORE-190). */
+  external_ref: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -83,7 +85,7 @@ export interface WorkItemEventRow {
 
 const ITEM_COLUMNS = `id, team_key || '-' || number AS key, team_key, number, title, problem, change,
   done_when, status, priority, labels, links, branch, assignee, to_char(due_date, 'YYYY-MM-DD') AS due_date,
-  source, linear_identifier, created_by,
+  source, linear_identifier, external_ref, created_by,
   created_at, updated_at, status_changed_at, completed_at`;
 
 /** CORE-12 → { team: "CORE", number: 12 }; null when the key is not shaped like one. */
@@ -126,6 +128,13 @@ export async function getWorkItem(team: string, number: number): Promise<WorkIte
     `SELECT ${ITEM_COLUMNS} FROM platform.work_item WHERE team_key = $1 AND number = $2`,
     [team, number]
   );
+  return rows[0] ?? null;
+}
+
+export async function getWorkItemByExternalRef(ref: string): Promise<WorkItemRow | null> {
+  const { rows } = await getDb().query<WorkItemRow>(`SELECT ${ITEM_COLUMNS} FROM platform.work_item WHERE external_ref = $1`, [
+    ref,
+  ]);
   return rows[0] ?? null;
 }
 
@@ -178,7 +187,8 @@ export interface WorkItemInsert {
   links?: WorkLink[];
   assignee?: string | null;
   due_date?: string | null;
-  source?: "manual" | "agent" | "session" | "problem_report";
+  source?: "manual" | "agent" | "session" | "problem_report" | "error";
+  external_ref?: string | null;
 }
 
 /** Takes the team's next number under a row lock, so KEY-n never repeats. */
@@ -195,8 +205,8 @@ export async function createWorkItem(input: WorkItemInsert, actor: WorkActor): P
     const { rows } = await client.query<WorkItemRow>(
       `INSERT INTO platform.work_item
          (team_key, number, title, problem, change, done_when, status, priority, labels, links, source, created_by,
-          assignee, due_date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14)
+          assignee, due_date, external_ref)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15)
        RETURNING ${ITEM_COLUMNS}`,
       [
         input.team,
@@ -213,6 +223,7 @@ export async function createWorkItem(input: WorkItemInsert, actor: WorkActor): P
         actor.name,
         input.assignee ?? null,
         input.due_date ?? null,
+        input.external_ref ?? null,
       ]
     );
     const item = rows[0]!;
