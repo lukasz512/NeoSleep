@@ -14,3 +14,5 @@
 # source in CORE-180 and the production account's password rotated; the history copy is dead.
 3e83dad53be9851143a24c00aaf030efeceac74f:apps/api/scripts/seed-e2e-user.ts:generic-api-key:12
 3e83dad53be9851143a24c00aaf030efeceac74f:apps/pwa/e2e/auth.spec.ts:generic-api-key:12
+# SHA-256 of the work board agent token (CORE-188), not the token: the API compares hashes.
+7597cb76805553ad87e9f460b807c48ac53d9253:infrastructure/cloud-run/dev.env.yaml:generic-api-key:42
