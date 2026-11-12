@@ -26,12 +26,13 @@ function takeErrorEmailSlot(now: number): boolean {
 }
 
 /**
- * Emails the platform inbox the first time a new error kind appears on
- * production. Fire-and-forget: never throws, capped at 20 per hour per process.
+ * Emails the platform inbox the first time a new API error kind (a 5xx) appears on prod.
+ * Everything else reaches the inbox through the morning digest (CORE-190 D4).
+ * Fire-and-forget: never throws, capped at 20 per hour per process.
  */
 export function notifyNewErrorKind(row: DiagnosticInsert, result: DiagnosticWriteResult): void {
-  const env = row.env ?? process.env.NODE_ENV ?? "development";
-  if (!result.isNew || env !== "production") return;
+  const env = row.env ?? DEPLOY_ENV;
+  if (!result.isNew || env !== "prod" || (row.source ?? "api") !== "api") return;
   if (row.level !== "error" && row.level !== "fatal") return;
   if (!takeErrorEmailSlot(Date.now())) return;
 

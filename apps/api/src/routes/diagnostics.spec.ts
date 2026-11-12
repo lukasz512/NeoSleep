@@ -88,10 +88,24 @@ describe("POST /api/v1/diagnostics", () => {
     expect(res.status).toBe(400);
   });
 
+  it("drops a frontend 4xx report: validation is the app saying no, not a bug (CORE-190)", async () => {
+    const res = await request(app)
+      .post("/api/v1/diagnostics")
+      .send({
+        level: "error",
+        message: `[apiFetch] email is required ${marker}-4xx`,
+        source: "frontend",
+        metadata: { where: "apiFetch", kind: "client", status: 400 },
+      });
+    expect(res.status).toBe(204);
+    const { rows } = await getDb().query("SELECT 1 FROM platform.diagnostics WHERE message LIKE $1", [`%${marker}-4xx%`]);
+    expect(rows).toHaveLength(0);
+  });
+
   it("has its own per-IP rate limit (60 / 15 min), independent of the global limiter", async () => {
-    // Two requests already used above; exhaust the rest of the window cheaply (400s still count).
+    // Three requests already used above; exhaust the rest of the window cheaply (400s still count).
     let lastStatus = 0;
-    for (let i = 0; i < 58; i++) {
+    for (let i = 0; i < 57; i++) {
       const res = await request(app).post("/api/v1/diagnostics").send({});
       lastStatus = res.status;
     }
@@ -105,4 +119,13 @@ describe("POST /api/v1/diagnostics", () => {
     const other = await request(app).get("/api/v1/lead");
     expect(other.status).toBe(401);
   }, 60_000);
+});
+
+describe("POST /api/v1/diagnostics/jobs/digest", () => {
+  it("is machine-to-machine only: no job secret, no digest", async () => {
+    const res = await request(app).post("/api/v1/diagnostics/jobs/digest").send({});
+    expect([401, 503]).toContain(res.status);
+    const wrong = await request(app).post("/api/v1/diagnostics/jobs/digest").set("Authorization", "Bearer nope").send({});
+    expect([401, 503]).toContain(wrong.status);
+  });
 });
