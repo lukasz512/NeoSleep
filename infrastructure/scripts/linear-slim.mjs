@@ -44,7 +44,9 @@ const NOISE = [
 ];
 
 /** Decisions are always kept, whatever their length. */
-const DECISION = /^(\*\*)?(\[decision-form\]|decisions?\b|decided\b)|\(Łukasz[,)]/i;
+const DECISION_LEAD = /^(\*\*)?(\[decision-form\]|decisions?\b|decided\b)/i;
+const DECISION_BY = /\(Łukasz[,)]/i;
+const isDecision = (body) => DECISION_LEAD.test(body) || DECISION_BY.test(body);
 
 const POLISH_WORDS = new Set([
   "nie", "jest", "sie", "się", "zeby", "żeby", "chce", "chcę", "chcialbym", "chciałbym", "potrzebuje", "potrzebuję",
@@ -102,9 +104,9 @@ export function splitSections(description) {
 }
 
 function linkKind(url, title) {
-  if (/github\.com\/[^/]+\/[^/]+\/pull\/\d+/.test(url)) return "pr";
-  if (/github\.com\/[^/]+\/[^/]+\/actions\/runs\//.test(url)) return "ci";
-  if (/claude\.ai\/(code\/)?artifact\//.test(url)) return /spec|story|decision|form/i.test(title ?? "") ? "spec" : "artifact";
+  if (/^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/.test(url)) return "pr";
+  if (/^https:\/\/github\.com\/[^/]+\/[^/]+\/actions\/runs\//.test(url)) return "ci";
+  if (/^https:\/\/claude\.ai\/(code\/)?artifact\//.test(url)) return /spec|story|decision|form/i.test(title ?? "") ? "spec" : "artifact";
   return "other";
 }
 
@@ -124,7 +126,7 @@ export function slimLinks(attachments) {
 export function slimComments(comments) {
   return (comments ?? [])
     .filter((c) => c?.body?.trim() && !isNoise(c.body))
-    .filter((c) => DECISION.test(c.body.trim()) || isHumanComment(c.body) || /^✅?\s*verified on pwa-dev/i.test(c.body.trim()))
+    .filter((c) => isDecision(c.body.trim()) || isHumanComment(c.body) || /^✅?\s*verified on pwa-dev/i.test(c.body.trim()))
     .map((c) => ({ body: shortComment(c.body), created_at: c.createdAt }))
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
 }

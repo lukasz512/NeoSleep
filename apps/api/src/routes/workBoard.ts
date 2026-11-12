@@ -438,11 +438,11 @@ workBoardRouter.post(
         actor
       );
     } catch (err) {
-      await deletePartnerDocument(path).catch((cleanup: unknown) => console.error(`work attachment ${path}: cleanup failed:`, cleanup));
+      await deletePartnerDocument(path).catch((cleanup: unknown) => console.error("work attachment %s: cleanup failed:", path, cleanup));
       throw err;
     }
     if (!row) {
-      await deletePartnerDocument(path).catch((cleanup: unknown) => console.error(`work attachment ${path}: cleanup failed:`, cleanup));
+      await deletePartnerDocument(path).catch((cleanup: unknown) => console.error("work attachment %s: cleanup failed:", path, cleanup));
       throw new ValidationError("comment not found on this item", "comment");
     }
     res.status(201).json({ attachment: publicAttachment(row) });
