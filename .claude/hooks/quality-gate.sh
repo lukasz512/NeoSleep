@@ -79,14 +79,38 @@ WARNS=()
 #     "visualComparison": "<required when any .vue/.css changed: real before/after
 #       screenshots, or a labeled mockup when no live render was possible>" }
 # The artifact must also be shown to Łukasz in the reply (link), not just recorded.
+# CORE-175 (slim-r1 D2/D5): the handover is checked once the branch is pushed — before
+# that a missing marker is only a warning, so mid-work turns don't loop on the gate. A
+# non-UI branch (lib/change-shape.sh "light") is handed over with a light marker.
+PUSHED=0
+git rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1 && PUSHED=1
+# shellcheck source=lib/change-shape.sh
+source "$REPO_ROOT/.claude/hooks/lib/change-shape.sh"
+
 branch_artifact_check() {
   [ -z "$BRANCH_CHANGED" ] && return 0
   local ticket marker visual
   ticket="$(ticket_of "$BRANCH" || true)"
+  if [ "$PUSHED" -eq 0 ]; then
+    [ -n "$ticket" ] || WARNS+=("Branch '${BRANCH}' has no ticket ID in its name — rename it before pushing (NEO-84).")
+    [ -n "$ticket" ] && [ ! -f ".claude/local/artifacts/${ticket}.json" ] \
+      && WARNS+=("Not pushed yet: after the push, hand over $( [ "$(change_shape "$BRANCH_CHANGED")" = full ] && echo 'the full Artifact (/ship-artifact)' || echo 'with build.mjs light (one board comment + PR link)').")
+    return 0
+  fi
+  if [ -n "$ticket" ] && [ "$(change_shape "$BRANCH_CHANGED")" = light ] \
+    && jq -e '.light == true' ".claude/local/artifacts/${ticket}.json" >/dev/null 2>&1; then
+    marker=".claude/local/artifacts/${ticket}.json"
+    # CORE-187: the board replaced Linear; markers written before the switch keep their linear* fields.
+    jq -e '(.boardCommented == true or .linearCommented == true) and ((.prUrl // "") | test("^https://github.com/"))' "$marker" >/dev/null 2>&1 \
+      || FAILS+=("$marker (light): post the board comment with the PR link (pnpm board comment ${ticket} …), then build.mjs light --board-commented.")
+    dev_mergeable_check
+    ci_green_check "$marker"
+    return 0
+  fi
   # 2026-09-26 (Łukasz, NEO-84): every change has a NEO ticket — trivial ones too. The
   # ticket ID in the branch name is what links branch, PR, Artifact and ticket.
   if [ -z "$ticket" ]; then
-    FAILS+=("Branch '${BRANCH}' has changes but no ticket ID (<key>-<n>, keys in .claude/ticket-teams) in its name. Every change needs a ticket (NEO-84): create one in Linear (template: ## Problem / ## Change / ## Done when, short and only about this change), then move the work to a branch named after it (EnterWorktree name '<key>-<n>-<slug>', e.g. core-23-team-split, or git branch -m worktree-<key>-<n>-<slug>).")
+    FAILS+=("Branch '${BRANCH}' has changes but no ticket ID (<key>-<n>, keys in .claude/ticket-teams) in its name. Every change needs a ticket (NEO-84): create one on the work board (pnpm board create --team <KEY> --title … --body '## Problem / ## Change / ## Done when', short and only about this change), then move the work to a branch named after it (EnterWorktree name '<key>-<n>-<slug>', e.g. core-23-team-split, or git branch -m worktree-<key>-<n>-<slug>).")
     return 0
   fi
   if [ -f ".claude/local/artifacts/${ticket}.json" ]; then
@@ -104,7 +128,7 @@ branch_artifact_check() {
     || FAILS+=("$marker 'sections' must cover summary, run-locally and qa-checklist.")
   # Once the branch is pushed, the Artifact must carry a "Create PR" button at the top
   # (Łukasz, 2026-09-24: "niech pr przycisk będzie na górze artefaktu") — the pre-filled
-  # compare URL from docs/CLAUDE_WORKFLOW.md "Linear traceability". He still clicks Create himself.
+  # compare URL from docs/CLAUDE_WORKFLOW.md "Ticket traceability". He still clicks Create himself.
   # Once he has opened the PR, ship-artifact's build.mjs links the button to it instead
   # (…/pull/<n>) — accept that too, or every refresh after the PR exists would be blocked.
   if git rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
@@ -118,17 +142,18 @@ branch_artifact_check() {
   fi
   # 2026-09-25 (Łukasz, NEO-47/48): the Artifact is the one deliverable, and it has to be
   # ON the ticket, not only in chat — "zawsze ma byc po sesji w tasku albo tutaj". A ticket
-  # branch needs it attached (save_issue links) and commented (save_comment). The
-  # ship-artifact skill does both and records them via `build.mjs finalize`.
+  # branch needs it linked and commented on the work board (CORE-187; Linear before that,
+  # so older markers keep their linear* fields). The ship-artifact skill does both and
+  # records them via `build.mjs finalize`.
   if [ -n "$ticket" ] && [ "$marker" = ".claude/local/artifacts/${ticket}.json" ]; then
-    jq -e '.linearAttached == true and .linearCommented == true' "$marker" >/dev/null 2>&1 \
-      || FAILS+=("$marker: the Artifact isn't attached to and commented on ${ticket} yet. Attach it (save_issue links), post the summary comment (save_comment), then record both — see .claude/skills/ship-artifact/SKILL.md Steps 4-5.")
-    # NEO-84: the 3 fixed links (Artifact, Linear, VS Code session) on the Artifact and the
+    jq -e '(.boardLinked == true and .boardCommented == true) or (.linearAttached == true and .linearCommented == true)' "$marker" >/dev/null 2>&1 \
+      || FAILS+=("$marker: the Artifact isn't linked to and commented on ${ticket} on the board yet. Run pnpm board link ${ticket} --kind artifact --url <artifact> and pnpm board comment ${ticket} …, then record both — see .claude/skills/ship-artifact/SKILL.md Steps 4-5.")
+    # NEO-84: the 3 fixed links (Artifact, ticket, VS Code session) on the Artifact and the
     # ticket, and the change listed in the shared artifact index.
-    jq -e '(.url // "") != "" and (.linearUrl // "") != "" and ((.vscodeUrl // "") | startswith("vscode://"))' "$marker" >/dev/null 2>&1 \
-      || FAILS+=("$marker is missing one of the 3 links (url = Artifact, linearUrl, vscodeUrl). Re-run .claude/skills/ship-artifact/build.mjs render + finalize from this Claude session.")
+    jq -e '(.url // "") != "" and ((.boardUrl // .linearUrl // "") != "") and ((.vscodeUrl // "") | startswith("vscode://"))' "$marker" >/dev/null 2>&1 \
+      || FAILS+=("$marker is missing one of the 3 links (url = Artifact, boardUrl, vscodeUrl). Re-run .claude/skills/ship-artifact/build.mjs render + finalize from this Claude session.")
     jq -e '.indexed == true' "$marker" >/dev/null 2>&1 \
-      || FAILS+=("${ticket} isn't in the artifact index yet: node .claude/skills/ship-artifact/build.mjs index, publish the page (url from its output), then build.mjs index --published <url> — ship-artifact Step 5.")
+      || FAILS+=("${ticket} isn't in the artifact index yet: node .claude/skills/ship-artifact/build.mjs index, store the row it prints via ArtifactData (no page republish), then build.mjs index --published <url> — ship-artifact Step 5b.")
   fi
   dev_mergeable_check
   ci_green_check "$marker"
@@ -284,56 +309,18 @@ run_check() {
   fi
 }
 
-run_check "lint" pnpm lint
-run_check "typecheck" pnpm typecheck
-
-# apps/api integration tests hit a real Postgres (CLAUDE.md: "No mock PostgreSQL in BFF
-# integration tests") — give a clear, actionable failure instead of a wall of ECONNREFUSED
-# stack traces when the DB isn't reachable.
-#
-# DB is remote Supabase (see infrastructure/scripts/start.sh), not local — apps/api's own
-# "dev" script loads it via `tsx --env-file=../../.env`, but "test" is plain `vitest run`
-# and does not, so without loading .env here too, pg falls back to its default
-# localhost:5432 and this check misreports a reachable remote DB as "Postgres down".
-if [ -f .env ]; then
-  set -a
-  # shellcheck source=/dev/null
-  . .env
-  set +a
+# CORE-175 (slim-r1 D3): the Stop gate runs only the fast checks — lint + typecheck of the
+# workspaces this diff touched. Tests (real DB) and depcruise run in .husky/pre-push, so they
+# still block before anything leaves the machine, but not after every single reply.
+AFFECTED_DIRS="$(printf '%s\n' "$SRC_CHANGED" | "$REPO_ROOT/infrastructure/scripts/affected-workspaces.sh")"
+FILTER_ARGS=()
+while IFS= read -r dir; do
+  [ -n "$dir" ] && FILTER_ARGS+=(--filter "./$dir")
+done <<< "$AFFECTED_DIRS"
+if [ "${#FILTER_ARGS[@]}" -gt 0 ]; then
+  run_check "lint" pnpm "${FILTER_ARGS[@]}" --if-present lint
+  run_check "typecheck" pnpm "${FILTER_ARGS[@]}" --if-present typecheck
 fi
-
-DB_HOST="$(printf '%s' "${DATABASE_URL:-}" | sed -n 's#.*://[^@]*@\([^:/]*\).*#\1#p')"
-DB_PORT="$(printf '%s' "${DATABASE_URL:-}" | sed -n 's#.*://[^@]*@[^:/]*:\([0-9]*\).*#\1#p')"
-DB_PORT="${DB_PORT:-5432}"
-
-# Node's net.connect, not bash's /dev/tcp redirection — the sandbox this hook can run
-# under kills the /dev/tcp file-descriptor trick outright (SIGKILL) even when the target
-# is genuinely reachable (confirmed: psql and `pnpm test` both connect fine to this same
-# Supabase host when /dev/tcp reports it "unreachable"), so /dev/tcp produced false
-# negatives here. Node is already a hard requirement for this repo, so this has no new
-# dependency.
-if [ -n "$DB_HOST" ] && node -e "
-    const s = require('net').createConnection({ host: process.argv[1], port: Number(process.argv[2]), timeout: 5000 });
-    s.on('connect', () => { s.destroy(); process.exit(0); });
-    s.on('timeout', () => process.exit(1));
-    s.on('error', () => process.exit(1));
-  " "$DB_HOST" "$DB_PORT" 2>/dev/null; then
-  # Only the workspaces this diff actually touched — not blanket `pnpm -r test`. A
-  # pre-existing, unrelated failure in some other untouched workspace (e.g. apps/web's
-  # vitest config choking on a Vuetify CSS import) would otherwise permanently block
-  # every future turn regardless of what's being worked on, which defeats the point of
-  # a per-change gate.
-  AFFECTED_DIRS="$(printf '%s\n' "$SRC_CHANGED" | "$REPO_ROOT/infrastructure/scripts/affected-workspaces.sh")"
-  FILTER_ARGS=()
-  while IFS= read -r dir; do
-    [ -n "$dir" ] && FILTER_ARGS+=(--filter "./$dir")
-  done <<< "$AFFECTED_DIRS"
-  run_check "test" pnpm "${FILTER_ARGS[@]}" test
-else
-  FAILS+=("Database at ${DB_HOST:-<DATABASE_URL not set in .env>}:${DB_PORT} is not reachable — check .env's DATABASE_URL (Supabase connection string) and network connectivity before tests can run.")
-fi
-
-run_check "depcruise" pnpm depcruise
 
 # Maintenance-only carve-out (2026-09-15): pure test-harness plumbing (vitest setup/global-
 # setup files) or added/changed spec files alone don't represent an architecture decision —
@@ -374,9 +361,9 @@ fi
 # NOT require a docs/stories entry the way FEATURE_SHAPE does.
 VISUAL_SHAPE="$(printf '%s\n' "$SRC_CHANGED" | grep -E '\.(vue|css)$' || true)"
 
-if [ -n "$FEATURE_SHAPE" ] || [ -n "$VISUAL_SHAPE" ]; then
+if [ "$PUSHED" -eq 1 ] && { [ -n "$FEATURE_SHAPE" ] || [ -n "$VISUAL_SHAPE" ]; }; then
   # --- ARTIFACT MARKER -----------------------------------------------------------------
-  # A feature- or visual-shaped diff almost always maps to a Linear ticket (referenced in
+  # A feature- or visual-shaped diff almost always maps to a board ticket (referenced in
   # the story doc and/or recent commit messages). If any such ticket is found, require
   # proof that a visual Artifact was published and attached to it: a marker file at
   # .claude/local/artifacts/<TICKET-ID>.json (gitignored — .claude/local/ — so this is a
@@ -399,8 +386,8 @@ if [ -n "$FEATURE_SHAPE" ] || [ -n "$VISUAL_SHAPE" ]; then
   #      mockup reproducing the real component's colors/spacing/layout, clearly labeled as
   #      a mockup rather than a live screenshot. A wall of prose describing the change is
   #      not a substitute — this is the exact "AI slop" gap that prompted this check.
-  #   3. Publish it, then attach it to the ticket via save_issue's `links` param so it's
-  #      visible ON the Linear issue itself.
+  #   3. Publish it, then link it on the ticket (pnpm board link <KEY> --kind artifact) so
+  #      it's visible ON the board card itself.
   #   4. Write the marker: mkdir -p .claude/local/artifacts && write
   #      .claude/local/artifacts/<TICKET-ID>.json with:
   #      { "url": "<artifact url>",
@@ -423,7 +410,7 @@ if [ -n "$FEATURE_SHAPE" ] || [ -n "$VISUAL_SHAPE" ]; then
       [ -z "$ticket" ] && continue
       MARKER=".claude/local/artifacts/${ticket}.json"
       if [ ! -f "$MARKER" ]; then
-        FAILS+=("Diff references Linear ticket ${ticket} but no visual artifact has been attached to it yet (missing $MARKER). Publish an Artifact (What changed / Run it locally / Verify it), attach it to ${ticket} via save_issue's links param, and record the marker file before ending this turn.")
+        FAILS+=("Diff references ticket ${ticket} but no visual artifact has been linked to it yet (missing $MARKER). Publish an Artifact (What changed / Run it locally / Verify it), link it on the board (pnpm board link ${ticket} --kind artifact --url …), and record the marker file before ending this turn.")
       else
         jq -e '.hoisting != null and .hoisting != ""' "$MARKER" >/dev/null 2>&1 \
           || FAILS+=("$MARKER exists but is missing a non-empty 'hoisting' field — state explicitly whether ${ticket} is platform-generic or tenant-specific (and whether it could be hoisted) before ending this turn.")

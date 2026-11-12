@@ -33,6 +33,21 @@ vi.mock("../SignaturePad.vue", async () => {
   };
 });
 
+// The QR panel has its own spec (via PartnerDocumentDialog); here it only needs to hand a signature over.
+const PHONE_SIGNATURE = "data:image/png;base64,UGhvbmU=";
+vi.mock("../PhoneSignPanel.vue", async () => {
+  const { defineComponent, h } = await import("vue");
+  return {
+    default: defineComponent({
+      props: { start: Function },
+      emits: ["signed"],
+      setup(_props, { emit }) {
+        return () => h("button", { class: "phone-sign-stub", onClick: () => emit("signed", PHONE_SIGNATURE) }, "phone");
+      },
+    }),
+  };
+});
+
 import ConsentSignatureField from "./ConsentSignatureField.vue";
 
 const originalMatchMedia = window.matchMedia;
@@ -48,10 +63,10 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-function mountField() {
+function mountField(props: Record<string, unknown> = {}) {
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents });
-  const w = mount(ConsentSignatureField, { attachTo: document.body, global: { plugins: [i18n, vuetify] } });
+  const w = mount(ConsentSignatureField, { props, attachTo: document.body, global: { plugins: [i18n, vuetify] } });
   mounted.push(w);
   return w;
 }
@@ -124,5 +139,44 @@ describe("ConsentSignatureField", () => {
     buttonByText(sheet()!, "Cancel")?.click();
     await flushPromises();
     expect(unlock).toHaveBeenCalled();
+  });
+});
+
+describe("ConsentSignatureField — sign on your phone (CORE-172)", () => {
+  const start = async () => ({ handoffToken: "h", pickupToken: "p" });
+
+  it("on a computer shows the QR next to the pad; the phone's signature stands in for the pad until Sign again", async () => {
+    setPhone(false);
+    const w = mountField({ phoneStart: start });
+    expect(document.querySelector(".signature-pad-stub")).not.toBeNull();
+    expect(document.body.textContent).toContain(en["app.phoneSign.or"]);
+
+    document.querySelector<HTMLButtonElement>(".phone-sign-stub")!.click();
+    await flushPromises();
+
+    expect(w.emitted("change")?.at(-1)).toEqual([false]);
+    const field = w.vm as unknown as { isEmpty: () => boolean; toDataURL: () => string | null };
+    expect(field.isEmpty()).toBe(false);
+    expect(field.toDataURL()).toBe(PHONE_SIGNATURE);
+    expect(document.querySelector("[data-testid='signature-from-phone'] img")?.getAttribute("src")).toBe(PHONE_SIGNATURE);
+    expect(document.querySelector(".phone-sign-stub")).toBeNull();
+
+    buttonByText(document.body, en["app.phoneSign.redo"])!.click();
+    await flushPromises();
+    expect(w.emitted("change")?.at(-1)).toEqual([true]);
+    expect(field.isEmpty()).toBe(true);
+    expect(document.querySelector(".signature-pad-stub")).not.toBeNull();
+    expect(document.querySelector(".phone-sign-stub")).not.toBeNull();
+  });
+
+  it("no QR without phoneStart, and none on a phone (the phone is already the place to sign)", () => {
+    setPhone(false);
+    mountField();
+    expect(document.querySelector(".phone-sign-stub")).toBeNull();
+    for (const w of mounted.splice(0)) w.unmount();
+
+    setPhone(true);
+    mountField({ phoneStart: start });
+    expect(document.querySelector(".phone-sign-stub")).toBeNull();
   });
 });

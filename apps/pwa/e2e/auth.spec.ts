@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { E2E_EMAIL, e2ePassword } from "./credentials";
 
 /**
  * ADR-020 cross-browser auth coverage. See playwright.config.ts's doc comment
@@ -8,13 +9,12 @@ import { test, expect, type Page } from "@playwright/test";
  * seeded by apps/api/scripts/seed-e2e-user.ts.
  */
 
-const EMAIL = "e2e-auth@neosleepcare.com";
-const PASSWORD = "e2e-correct-horse-battery-staple";
+const EMAIL = E2E_EMAIL;
 
 async function login(page: Page): Promise<void> {
   await page.goto("/login");
   await page.getByLabel("Email", { exact: true }).fill(EMAIL);
-  await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+  await page.getByLabel("Password", { exact: true }).fill(e2ePassword());
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL("**/leads");
 }

@@ -23,7 +23,7 @@ import "../FormRenderer.vue";
 import { useAuthStore } from "../../stores/auth";
 import PatientChecklistPanel from "./PatientChecklistPanel.vue";
 import QuestionnaireQrDialog from "../questionnaire/QuestionnaireQrDialog.vue";
-import DoctorSignatureDialog from "./DoctorSignatureDialog.vue";
+import HistoriaPrintDialog from "./HistoriaPrintDialog.vue";
 
 function jsonResponse(ok: boolean, status: number, body: unknown, contentType = "application/json") {
   return {
@@ -348,9 +348,16 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
 
     await button(hcTile(wrapper), "Print clinical history")!.trigger("click");
     await flushPromises();
+    // NEO-260 D7: every role picks what to print first; only a doctor signs.
+    const dialog = wrapper.findComponent(HistoriaPrintDialog);
+    expect(dialog.props()).toMatchObject({ modelValue: true, canSign: false });
+    dialog.vm.$emit("print", { consent: false, signature: null });
+    await flushPromises();
 
-    expect(wrapper.findComponent(DoctorSignatureDialog).props("modelValue")).toBe(false); // only a doctor signs
-    expect(apiFetch).toHaveBeenCalledWith("/api/v1/patient/patient-1/checklist/historiaEndo/print", expect.objectContaining({ method: "POST", body: "{}" }));
+    expect(apiFetch).toHaveBeenCalledWith(
+      "/api/v1/patient/patient-1/checklist/historiaEndo/print",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ include: { consent: false } }) })
+    );
     expect(tab.location.href).toBe("blob:pdf-1");
     expect(tab.opener).toBeNull();
     open.mockRestore();
@@ -364,22 +371,22 @@ describe("PatientChecklistPanel — the Estudios checklist", () => {
     const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:pdf-1");
     const printCalls = () => apiFetch.mock.calls.filter(([path]) => String(path).endsWith("/historiaEndo/print"));
     const wrapper = await mountPanel();
-    const dialog = wrapper.findComponent(DoctorSignatureDialog);
+    const dialog = wrapper.findComponent(HistoriaPrintDialog);
 
     await button(hcTile(wrapper), "Print clinical history")!.trigger("click");
     await flushPromises();
-    expect(dialog.props("modelValue")).toBe(true);
+    expect(dialog.props()).toMatchObject({ modelValue: true, canSign: true });
     expect(printCalls()).toHaveLength(0);
 
-    dialog.vm.$emit("print", "data:image/png;base64,AAAA");
+    dialog.vm.$emit("print", { consent: true, signature: "data:image/png;base64,AAAA" });
     await flushPromises();
     expect(dialog.props("modelValue")).toBe(false);
-    expect(JSON.parse(String(printCalls()[0][1].body))).toEqual({ doctorSignature: "data:image/png;base64,AAAA" });
+    expect(JSON.parse(String(printCalls()[0][1].body))).toEqual({ doctorSignature: "data:image/png;base64,AAAA", include: { consent: true } });
 
     await button(hcTile(wrapper), "Print clinical history")!.trigger("click");
-    dialog.vm.$emit("print", null); // "Print unsigned"
+    dialog.vm.$emit("print", { consent: false, signature: null }); // "Print unsigned"
     await flushPromises();
-    expect(JSON.parse(String(printCalls()[1][1].body))).toEqual({});
+    expect(JSON.parse(String(printCalls()[1][1].body))).toEqual({ include: { consent: false } });
     open.mockRestore();
     createObjectURL.mockRestore();
   });

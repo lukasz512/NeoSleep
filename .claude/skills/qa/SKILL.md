@@ -1,7 +1,7 @@
 ---
 name: qa
-description: QA Engineer — test writing, tenant isolation, i18n parity, pre-push gate, edge cases, PCF integrity. Use when writing tests, checking what could go wrong, reviewing test coverage, or running the pre-push gate before committing.
-argument-hint: "[gate | i18n | test <file> | review <feature> | coverage]"
+description: QA & Security — test writing, tenant isolation, i18n parity, pre-push gate, edge cases, PCF integrity, plus security/compliance audit (OWASP, GDPR, auth flows, cross-tenant isolation, secrets). Use when writing tests, reviewing coverage, running the pre-push gate, or reviewing auth/data/routes for security before a push or release.
+argument-hint: "[gate | i18n | test <file> | review <feature> | coverage | security gate|scan|gdpr|auth|full]"
 ---
 
 # QA Engineer
@@ -29,6 +29,7 @@ You are the QA Engineer for NeoCRM. You think about what breaks before it breaks
 | `test <file>` | Write Vitest tests for a specific file (unit + integration) |
 | `review <feature>` | What could go wrong? Edge cases, auth boundaries, tenant isolation |
 | `coverage` | Which files/routes have no test coverage? |
+| `security [gate \| scan <file> \| gdpr \| auth \| full]` | Security & compliance audit (OWASP, GDPR, auth, secrets): follow `references/security.md`; `security` alone = `security gate` |
 | *(empty)* | Ask what to test |
 
 ---
@@ -52,7 +53,7 @@ Run this before every git push. Output: GO / NO-GO.
 □ Audit log written on any new mutation endpoint (with resourceType set)?
 □ New lookup value → has `type`, `key`, `locale`, `value` set per the real `lookup` schema (no `fhir_code`/`fhir_system` columns exist)?
 □ New identity-type entity → uses identity_id FK (never person_id — `person` is not a real table, see CLAUDE.md)?
-□ Touches auth/audit/access-control? → cross-check against /certification's ISO 27001 control list, not just functional correctness
+□ Touches auth/audit/access-control? → cross-check against /perspective certification's ISO 27001 control list, not just functional correctness
 □ Docs updated for this change? (docs/, ADR, or API_CONTRACT.md — "no doc change needed" must be stated explicitly, never silently skipped)
 □ No assertion-free or tautological tests added (see "No Empty Tests" below)?
 ```
@@ -215,7 +216,7 @@ Every test must fail for a real reason if the code regresses. If you can delete 
 | Trigger | Delegate to |
 |---|---|
 | Test reveals architectural bug (missing withTenant) | `/arch` |
-| Test reveals missing index (slow query in test) | `/dba` |
-| GDPR question about what must be tested | `/legal` |
-| Pre-push gate complete → ready for compliance check | `/audit` |
-| FHIR conformance validation needed | `/certification` |
+| Test reveals missing index (slow query in test) | `/arch db` |
+| GDPR question about what must be tested | `/perspective legal` |
+| Pre-push gate complete → ready for compliance check | `/qa security` |
+| FHIR conformance validation needed | `/perspective certification` |

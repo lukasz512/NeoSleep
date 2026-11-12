@@ -236,8 +236,13 @@
 
   .doc-content { font-size: 7.8pt; line-height: 1.42; color: var(--secondary); }
 
-  /* Page 3: the Consentimiento informado, read like its own document (informedConsent.html). */
+  /* Page 3: the Consentimiento informado, read like its own document (informedConsent.html).
+     NEO-260: printed only when picked in the print dialog (data-state "on"); a consent already
+     signed prints as a marked copy ("copy"), the signed original stays in the patient's documents. */
   .hc-p3 { break-before: page; }
+  .hc-p3:not([data-state]) { display: none; }
+  .hc-copy-mark { display: none; margin: 0 0 3mm; padding: 1.6mm 3mm; border: 1.2px solid var(--secondary); border-radius: 2mm; font-weight: 600; font-size: 8.5pt; letter-spacing: .04em; color: var(--secondary); text-align: center; }
+  .hc-p3[data-state="copy"] .hc-copy-mark { display: block; }
   .hc-p3 .doc-fields { margin-bottom: 3mm; }
   .hc-p3 .doc-content { font-size: 9pt; line-height: 1.42; color: var(--text); }
   .hc-p3 .doc-content p { margin: 0 0 6px; }
@@ -435,7 +440,8 @@
   </div>
 
   <!-- Page 3: the Consentimiento informado for every patient (NEO-249) — same blocks as informedConsent.html. -->
-  <div class="hc-p3">
+  <div class="hc-p3" data-state-field="consent_page">
+    <p class="hc-copy-mark">{{documents.historiaEndo.copyMark}}</p>
     <header class="doc-header">
       <span class="logo">{{brand:logo}}</span>
       <span class="doc-cat">{{documents.common.category.consent}}</span>

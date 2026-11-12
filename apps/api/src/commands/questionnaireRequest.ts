@@ -37,6 +37,7 @@ import { patientEmailLocale } from "../utils/patientEmailLocale.js";
 import { PRIVACY_NOTICE_URL } from "../env.js";
 import { validateMedicalHistory, validateStop } from "./clinicalRecordFields.js";
 import { isSignatureDataUrl } from "../utils/signatureDataUrl.js";
+import { StartSignatureHandoffCommand, type StartedSignatureHandoff } from "./signatureHandoff.js";
 
 /**
  * COMMANDS — patient QR link (migrations 030 + 031, ADR-023/024).
@@ -441,6 +442,24 @@ export async function MarkPublicQuestionnaireOpenedCommand(client: PoolClient, t
   if (!validTokenShape(token)) return;
   const request = await getUsableQuestionnaireRequestByHash(client, hashToken(token), { forUpdate: false });
   if (request) await markQuestionnaireRequestOpened(client, request.id);
+}
+
+/**
+ * The QR next to the consent signature pad when /q is open on a computer
+ * (CORE-172). The questionnaire token proves the caller; the phone sees only
+ * "First L.", the same as the page itself.
+ */
+export async function StartPatientSignHandoffCommand(client: PoolClient, token: string): Promise<StartedSignatureHandoff> {
+  if (!validTokenShape(token)) throw new QuestionnaireLinkInvalidError();
+  const request = await getUsableQuestionnaireRequestByHash(client, hashToken(token), { forUpdate: false });
+  if (!request) throw new QuestionnaireLinkInvalidError();
+  const context = await getPatientPdfContext(client, request.patient_id);
+  if (!context) throw new QuestionnaireLinkInvalidError();
+  return StartSignatureHandoffCommand(client, {
+    purpose: "patient_consent",
+    ownerRef: request.id,
+    label: { signerName: signerDisplayName(context.patient_first_name, context.patient_last_name) },
+  });
 }
 
 export interface PublicSubmissionMeta {

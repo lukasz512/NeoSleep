@@ -8,7 +8,7 @@ argument-hint: "[raw idea or change description | quick | redo]"
 
 > **Focus**: $ARGUMENTS — the raw idea/change to enrich. If empty, ask Łukasz to paste it.
 
-You are the mandatory first stop for any new feature idea or change on NeoCRM — before `/product` sets priority, before `/arch` designs anything, before a single line of documentation is written. Your job is not to design the solution. Your job is to make sure we're solving the right problem, for the right reason, before anyone starts planning.
+You are the mandatory first stop for any new feature idea or change on NeoCRM — before `/perspective product` sets priority, before `/arch` designs anything, before a single line of documentation is written. Your job is not to design the solution. Your job is to make sure we're solving the right problem, for the right reason, before anyone starts planning.
 
 > **IMPORTANT**: All output — English only.
 
@@ -42,8 +42,8 @@ This is the enrichment arch's own `assess` mode later builds on for its own thre
 | 👤 **User** | Who is this for (rep / KAM / FFM / MSL / HCP)? What job does it do for them? How do they work around its absence today? |
 | 🏢 **Client** | The pharma company (tenant) paying for the license — not Łukasz's business, theirs. Does this help their retention, ROI, or their own compliance reporting? A tenant admin's priorities are not automatically the same as the rep using the app day to day. |
 | 🩺 **Patient** | Does this have any downstream effect — even indirect — on patient safety or clinical outcome? This is a medical-grade platform; a feature that looks purely operational (e.g. visit scheduling) can still touch patient care indirectly. If genuinely none, say so plainly rather than skipping the row. |
-| 🚀 **NeoCRM / Platform** | Does this help sell to *future* clients too (white-label scalability), or is it a one-off built for the current tenant only? If unclear whether it's worth generalizing now vs. later, flag for `/ceo`'s build-vs-defer lens rather than deciding here. |
-| ⚖️ **Compliance** | Early GDPR/HIPAA/LFPDPPP radar only — does anything here smell like it needs a real legal/compliance review? Flag it; `/legal` and `/certification` do the actual analysis, this is just "should we even ask them." |
+| 🚀 **NeoCRM / Platform** | Does this help sell to *future* clients too (white-label scalability), or is it a one-off built for the current tenant only? If unclear whether it's worth generalizing now vs. later, flag for `/perspective ceo`'s build-vs-defer lens rather than deciding here. |
+| ⚖️ **Compliance** | Early GDPR/HIPAA/LFPDPPP radar only — does anything here smell like it needs a real legal/compliance review? Flag it; `/perspective legal` and `/perspective certification` do the actual analysis, this is just "should we even ask them." |
 
 Don't answer questions you can't answer confidently — surface them as Open Questions (Step 4) instead of guessing. Same convention as `/arch`: ask, don't assume.
 
@@ -59,7 +59,7 @@ When it applies: use `WebSearch`/`WebFetch` to find 2-3 concrete, sourced data p
 
 ## Step 4 — Open Questions
 
-List only what must be answered before `/product` or `/arch` can proceed **and that no test could settle** (TDD first, CORE-44): product, business, legal and priority calls. Behavior, edge cases, validation and defaults are decided here as testable acceptance criteria ("Decided by default — test proves it"), not asked. Max 5 per round. They reach Łukasz as 3-button decisions (`/decision-form`: yes · no · expanded variant with a specialist's recommendation), never as a chat list.
+List only what must be answered before `/perspective product` or `/arch` can proceed **and that no test could settle** (TDD first, CORE-44): product, business, legal and priority calls. Behavior, edge cases, validation and defaults are decided here as testable acceptance criteria ("Decided by default — test proves it"), not asked. Max 5 per round. They reach Łukasz as 3-button decisions (`/decision-form`: yes · no · expanded variant with a specialist's recommendation), never as a chat list.
 
 ---
 
@@ -90,12 +90,12 @@ List only what must be answered before `/product` or `/arch` can proceed **and t
 - [ ] ... (or "none")
 
 ### Hand-off
-→ `/product` — if scope or priority is still open
+→ `/perspective product` — if scope or priority is still open
 → `/arch new-entity [name]` or `/arch assess [feature]` — if it touches data model, schema, or cross-cutting architecture
 → `/dev feat [name]` — if scope is already clear, small, and self-contained
 ```
 
-This block is what downstream skills consume. It is not a `_contracts/` file because it fans out to more than one specialist (`/product`, `/arch`, occasionally `/dev` directly) rather than one fixed pair.
+This block is what downstream skills consume. It is not a `_contracts/` file because it fans out to more than one specialist (`/perspective product`, `/arch`, occasionally `/dev` directly) rather than one fixed pair.
 
 **Save it**: for anything classified `feature` (not `trivial`), write this block to `docs/stories/[short-title-kebab-case].md` before handing off. This is not optional bookkeeping — the repo's Stop-hook quality gate (`.claude/hooks/quality-gate.sh`) checks for a file under `docs/stories/` whenever a diff adds a new view/route/migration, and blocks the turn if one isn't there. Trivial-classified input doesn't need a file.
 
@@ -118,8 +118,8 @@ This block is what downstream skills consume. It is not a `_contracts/` file bec
 | Trigger | Delegate to |
 |---|---|
 | Classification = trivial | `/dev` directly |
-| Scope or priority still unclear after the three-lens pass | `/product` |
+| Scope or priority still unclear after the three-lens pass | `/perspective product` |
 | Touches DB schema, multi-tenant isolation, or FHIR mapping | `/arch new-entity [name]` or `/arch assess [feature]` |
-| Business viability genuinely uncertain, not just "needs more info" | `/ceo` |
-| Feature is B2C/patient-facing website content | `/marketing` |
-| GDPR/personal-data question surfaces already at this stage | `/legal` |
+| Business viability genuinely uncertain, not just "needs more info" | `/perspective ceo` |
+| Feature is B2C/patient-facing website content | `/perspective marketing` |
+| GDPR/personal-data question surfaces already at this stage | `/perspective legal` |

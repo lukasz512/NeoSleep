@@ -357,7 +357,8 @@ describe("the 2-hour 'today' reminder with the unsigned consent link (CORE-113 p
     sendMock.mockClear();
 
     await RunAppointmentRemindersForTenant(TENANT_SLUG, ORIGIN, dueAt);
-    expect(sendMock).not.toHaveBeenCalled();
+    // Only this appointment: the job scans the whole tenant, and other spec files share the test DB (CORE-174).
+    expect(emailsFor(id)).toEqual([]);
   });
 
   it("the flag off: the scheduled job (all tenants) does nothing", async () => {

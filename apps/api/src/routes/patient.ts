@@ -354,10 +354,12 @@ patientRouter.post(
     const key = routeParam(req, "key")?.trim() ?? "";
     const recordId = typeof req.body?.recordId === "string" && UUID_RE.test(req.body.recordId) ? req.body.recordId : undefined;
     const doctorSignature: unknown = req.body?.doctorSignature;
+    // NEO-260: the print dialog's picks; anything but a literal true leaves the consent page out.
+    const include = { consent: req.body?.include?.consent === true };
     const slug = tenantSlugFromHost(req.hostname);
     const result = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return PrintChecklistItemCommand(ctx, id, key, { recordId, doctorSignature });
+      return PrintChecklistItemCommand(ctx, id, key, { recordId, doctorSignature, include });
     });
     if (result.kind === "stored") {
       res.json({ url: result.url });

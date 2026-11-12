@@ -43,7 +43,7 @@ Tests run automatically on pre-commit (Husky).
 |-----|------|--------------------|
 | PWA | `apps/pwa` | pwa.neosleepcare.com |
 | WEB | `apps/web` | neosleepcare.com |
-| API | `apps/api` | api.neosleepcare.com (planned — currently Render-assigned URL, see `render.yaml`) |
+| API | `apps/api` | Cloud Run `neosleep-api-dev` / `neosleep-api-prod` (`*.run.app`, see `docs/RUNBOOK_API_CLOUD_RUN.md`) |
 | Telegram bot | `apps/telegram` | — |
 
 ## Local dev (manual)

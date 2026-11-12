@@ -1,11 +1,9 @@
 # Hetzner VPS provisioning — API server (apps/api)
 
-> **Status: not active.** The API server currently deploys to Render (`render.yaml`,
-> free tier — see `infrastructure/scripts/render-keepalive.gs` for the
-> keep-alive ping). This runbook is the scale-up path for when Render's free
-> tier stops being enough (real field pilot, need for always-on without a
-> keep-alive hack, need for background jobs, etc.) — come back to this when
-> that day arrives, don't run it in parallel with Render.
+> **Status: not active.** The API server deploys to Google Cloud Run
+> (`.github/workflows/deploy-api.yml`, `docs/RUNBOOK_API_CLOUD_RUN.md`). This
+> runbook is an alternative self-hosted path (always-on, background jobs) — come
+> back to it only if Cloud Run stops fitting, and don't run it in parallel.
 
 Runbook to stand up a Hetzner Cloud server with PM2 processes `api-prod` /
 `api-uat`, SSH deploy as user `deploy`.
@@ -156,7 +154,7 @@ Push to `dev` branch (or `workflow_dispatch` the `Deploy API` action) first, ver
 
 ## 11. Update frontend env
 
-`RENDER_API_URL_DEV` / `RENDER_API_URL_PROD` (used by `deploy-pwa.yml`) need to
+`API_URL_DEV` / `API_URL_PROD` (used by `deploy-pwa.yml` and `deploy-web.yml`) need to
 point at `https://api-dev.neosleepcare.com` / `https://api.neosleepcare.com`
 once this is live, and `FRONTEND_URL` in each `.env` above needs the matching
 PWA origin so CORS + session cookies keep working.

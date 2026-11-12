@@ -11,7 +11,7 @@
  */
 
 /** Bumped whenever a rule changes; stored with every submitted order for audit. */
-export const RULES_VERSION = "2026-10-03.2";
+export const RULES_VERSION = "2026-11-10.1";
 
 /** OA product codes (enum `an`, rules §4.4). Only these two are orderable from the wizard today. */
 export const PRODUCT_CODES = { NOA: "002", NOA_TMJ: "003" } as const;
@@ -79,15 +79,50 @@ export const SCANNER_PLATFORMS = [
 export type ScannerPlatform = (typeof SCANNER_PLATFORMS)[number];
 
 /**
+ * A scan file the doctor uploaded (NEO-262): the browser puts it straight into
+ * private storage (the API's Cloud Run caps a request at 32 MiB), so the order
+ * carries only where it lies. The API sends it to the lab on submit.
+ */
+export interface ScanFile {
+  /** Storage path, issued by the API for this tenant and patient. */
+  path: string;
+  /** The file name as the doctor picked it. */
+  name: string;
+  size: number;
+}
+
+/**
+ * The scan formats the wizard takes. OA itself only blacklists executables
+ * (`notAllowedExtensions` in app-drag-and-drop, bundle 2026-11-10); intraoral
+ * scanners export these three.
+ */
+export const SCAN_FILE_EXTENSIONS = ["stl", "ply", "obj"] as const;
+/** Per file: Supabase's default upload limit. OA's 500 MB total only turns its counter red. */
+export const MAX_SCAN_FILE_BYTES = 50 * 1024 * 1024;
+
+export type ScanFileProblem = "scanFileEmpty" | "scanFileType" | "scanFileTooLarge";
+
+/** Why a picked file can't be a scan, or null when it can. */
+export function scanFileProblem(name: string, size: number): ScanFileProblem | null {
+  const ext = name.includes(".") ? name.split(".").pop()!.toLowerCase() : "";
+  if (!(SCAN_FILE_EXTENSIONS as readonly string[]).includes(ext)) return "scanFileType";
+  if (size <= 0) return "scanFileEmpty";
+  if (size > MAX_SCAN_FILE_BYTES) return "scanFileTooLarge";
+  return null;
+}
+
+/**
  * How the bite reaches the lab (OA's "Registro dental", rules §1.5): a
- * physical impression, a scanner, or a scanner platform. OA keeps only one of
- * scanner/platform (choosing one nulls the other). The name is null while the
- * doctor hasn't picked one yet; the rules then answer "required".
+ * physical impression, a scanner, a scanner platform, or uploaded scan files.
+ * OA keeps only one of scanner/platform (choosing one nulls the other). The
+ * name is null while the doctor hasn't picked one yet; the rules then answer
+ * "required", as they do for "files" with no file.
  */
 export type Registration =
   | { method: "impression" }
   | { method: "scanner"; scannerTreatment: ScannerTreatment | null }
-  | { method: "platform"; scannerPlatform: ScannerPlatform | null };
+  | { method: "platform"; scannerPlatform: ScannerPlatform | null }
+  | { method: "files"; files: ScanFile[] };
 
 /** Warnings the doctor must confirm before the order can be sent (Łukasz D1, 2026-10-03). */
 export const CONFIRMABLE_WARNINGS = ["advanceUnder5"] as const;
@@ -125,7 +160,7 @@ export interface DeviceOrder {
   /** YYYY-MM-DD; must not be before OA's manufacturing date for the product. */
   desiredDate: string;
   noContactDoctorForRedesign: boolean;
-  /** How the bite reaches the lab; sent to OA as scannerTreatment / scannerPlatform. Missing → impression. */
+  /** How the bite reaches the lab; sent to OA as scannerTreatment / scannerPlatform, or as model files. Missing → impression. */
   registration: Registration;
   /**
    * Warning codes the doctor confirmed (e.g. "advanceUnder5"). A confirmable

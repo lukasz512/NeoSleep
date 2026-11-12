@@ -1,6 +1,6 @@
 ---
 name: skill-auditor
-description: Meta-skill that audits and refactors NeoCRM's own .claude/skills/* files — coverage gaps, staleness vs CLAUDE.md, delegation completeness, redundancy, comment/prose bloat. Use when the request is about improving the skills setup itself (not the application code) — "are our skills good", "refactor the skills", "do skills cover the main cases".
+description: Meta-skill that audits and refactors NeoCRM's own .claude/skills/* files — coverage gaps, staleness vs CLAUDE.md, delegation completeness, redundancy, prose bloat, description/length budget. Use when the request is about improving the skills setup itself (not the application code) — "are our skills good", "refactor the skills", "do skills cover the main cases".
 argument-hint: "[all | <skill-name> | report-only]"
 ---
 
@@ -46,6 +46,12 @@ Skills are instructions an agent re-reads on every invocation — token cost and
 
 ### 7. Actionability
 Every checklist line should be a yes/no a QA-minded reader could actually verify (a command, a grep pattern, a concrete condition) — not "make sure this is good" or "consider edge cases." If a line can't be verified, either sharpen it into something checkable or cut it.
+
+---
+
+## Packaging checks
+
+For description-budget, SKILL.md length and weak-description checks read `references/packaging.md`.
 
 ---
 

@@ -27,9 +27,14 @@ export function apiDeployPaths(yml = readFileSync(DEPLOY_API, "utf8")) {
   return paths;
 }
 
-/** The newest commit at or before `sha` that would have triggered deploy-api.yml. */
-export function apiDeployCommit(sha = "HEAD") {
-  return execFileSync("git", ["log", "-1", "--format=%H", sha, "--", ...apiDeployPaths()], { encoding: "utf8" }).trim();
+/**
+ * The newest commit at or before `sha` that would have triggered deploy-api.yml.
+ * --first-parent walks dev's own commits and diffs each against the previous dev state, like the
+ * push path filter does. Without it, history simplification drops a PR merge commit (it is TREESAME
+ * to its PR-side parent) and returns a commit inside the PR, which the API never serves (CORE-174).
+ */
+export function apiDeployCommit(sha = "HEAD", { cwd, paths = apiDeployPaths() } = {}) {
+  return execFileSync("git", ["log", "-1", "--first-parent", "--format=%H", sha, "--", ...paths], { encoding: "utf8", cwd }).trim();
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

@@ -60,4 +60,26 @@ describe("useAppVersionParts", () => {
     expect(partsFor({ version: "1.1.0", build: 105, channel: "prod" })).toBe("Version 1.1.0.105|-");
     expect(partsFor()).toBe("|-");
   });
+
+  // CORE-178: the app bar badge carries the version too, so a tester sees
+  // which dev build is open without opening the account menu.
+  const BadgeProbe = defineComponent({
+    setup() {
+      const parts = useAppVersionParts();
+      return () => h("span", parts.value.badge ?? "-");
+    },
+  });
+
+  function badgeFor(appVersion: AppVersionInfo): string {
+    const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
+    return mount(BadgeProbe, {
+      global: { plugins: [i18n], provide: { [APP_VERSION_KEY as symbol]: appVersion } },
+    }).text();
+  }
+
+  it("builds the app bar badge from channel and version, none on prod", () => {
+    expect(badgeFor({ version: "1.1.0", build: 142, channel: "dev" })).toBe("DEV 1.1.0.142");
+    expect(badgeFor({ version: "1.1.0", build: null, channel: "local" })).toBe("LOCAL 1.1.0");
+    expect(badgeFor({ version: "1.1.0", build: 142, channel: "prod" })).toBe("-");
+  });
 });

@@ -1,7 +1,7 @@
 import { describe, it, expect, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { getDb } from "../db.js";
-import { diagnosticMessageHash, insertDiagnostic, normaliseDiagnosticMessage } from "./diagnostic.js";
+import { diagnosticMessageHash, insertDiagnostic, normaliseDiagnosticMessage, topAppFrame } from "./diagnostic.js";
 
 describe("normaliseDiagnosticMessage", () => {
   it("replaces uuids, timestamps, hex ids and long digit runs with placeholders", () => {
@@ -23,6 +23,40 @@ describe("normaliseDiagnosticMessage", () => {
 
   it("gives two messages that differ only in ids the same hash", () => {
     expect(diagnosticMessageHash(`Row ${randomUUID()} missing`)).toBe(diagnosticMessageHash(`Row ${randomUUID()} missing`));
+  });
+});
+
+describe("one fingerprint per bug across browsers (CORE-190)", () => {
+  const firefox = {
+    message: `[window.error] TypeError: can't access property "value", e is null`,
+    stack: "setElement@https://pwa.neosleepcare.com/assets/AuthOrbs-BqX1a2b3.js:1:234\nI@https://pwa.neosleepcare.com/assets/index-Zz91kQ0p.js:5:100",
+  };
+  const safari = {
+    message: "[window.error] TypeError: null is not an object (evaluating 'e.value=n')",
+    stack: "setElement@https://pwa.neosleepcare.com/assets/AuthOrbs-Cc7Yt2Lm.js:1:240",
+  };
+  const chrome = {
+    message: "[window.error] Uncaught TypeError: Cannot set properties of null (setting 'value')",
+    stack: "TypeError: Cannot set properties of null\n    at setElement (https://pwa.neosleepcare.com/assets/AuthOrbs-BqX1a2b3.js:1:234)",
+  };
+
+  it("maps the Firefox, Safari and Chrome wording of a null access to one form", () => {
+    for (const e of [firefox, safari, chrome]) expect(normaliseDiagnosticMessage(e.message)).toBe("[window.error] null-deref value");
+    expect(normaliseDiagnosticMessage("null is not an object (evaluating '_.value.icon')")).toBe("null-deref icon");
+  });
+
+  it("takes the first app frame without line, column or build hash", () => {
+    expect(topAppFrame(firefox.stack)).toBe("AuthOrbs");
+    expect(topAppFrame(chrome.stack)).toBe("AuthOrbs");
+    expect(topAppFrame("Error: x\n    at q (/app/node_modules/pg/lib/client.js:1:1)\n    at f (/app/dist/routes/users.js:12:3)")).toBe("users");
+    expect(topAppFrame(null)).toBe("");
+  });
+
+  it("gives the three browser reports one hash, and a different component another", () => {
+    const hashes = new Set([firefox, safari, chrome].map((e) => diagnosticMessageHash(e.message, e.stack)));
+    expect(hashes.size).toBe(1);
+    const elsewhere = diagnosticMessageHash(firefox.message, "f@https://x/assets/RecordToolbar-Ab12Cd34.js:1:1");
+    expect(hashes.has(elsewhere)).toBe(false);
   });
 });
 
@@ -57,7 +91,7 @@ describe("insertDiagnostic dedup (real Postgres)", () => {
       user_id: "user-1",
       tenant_slug: "test",
     });
-    expect(second).toEqual({ id: first.id, isNew: false });
+    expect(second).toEqual({ id: first.id, isNew: false, hash: first.hash });
 
     const all = await rows();
     expect(all).toHaveLength(1);
@@ -96,6 +130,20 @@ describe("insertDiagnostic dedup (real Postgres)", () => {
     await insertDiagnostic({ level: "error", message: `${marker} order ${randomUUID()}`, source: "api", env: "test" });
     const { rows: after } = await getDb().query("SELECT status, count FROM platform.diagnostics WHERE id = $1", [row!.id]);
     expect(after[0]).toMatchObject({ status: "open", count: 3 });
+  });
+
+  it("counts distinct affected users by hashed id, never the raw id", async () => {
+    const own = `${marker} users ${uniqueWord()}`;
+    const first = await insertDiagnostic({ level: "error", message: own, source: "api", env: "test", user_id: "user-a" });
+    await insertDiagnostic({ level: "error", message: own, source: "api", env: "test", user_id: "user-a" });
+    await insertDiagnostic({ level: "error", message: own, source: "api", env: "test", user_id: "user-b" });
+    const { rows: users } = await getDb().query<{ user_hash: string }>(
+      "SELECT user_hash FROM platform.diagnostic_user WHERE env = 'test' AND message_hash = $1",
+      [first.hash]
+    );
+    expect(users).toHaveLength(2);
+    expect(users.every((u) => /^[0-9a-f]{64}$/.test(u.user_hash) && !u.user_hash.includes("user-a"))).toBe(true);
+    await getDb().query("DELETE FROM platform.diagnostic_user WHERE message_hash = $1", [first.hash]);
   });
 
   it("keeps a dismissed error dismissed but still counts it", async () => {

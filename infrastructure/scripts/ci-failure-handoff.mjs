@@ -2,72 +2,55 @@
 // ci-failure-handoff — runs in GitHub Actions when CI goes red on a work branch
 // (.github/workflows/ci-failure-handoff.yml, NEO-182). Tells whoever fixes it:
 //   1. a comment on the branch's open PR with the failing tests (same text as below);
-//   2. on the branch's Linear ticket (NEO-<n> in the branch name): the same comment, and
-//      the ticket goes to "Ready for Worker" with the `ci-failed` label so the nightly
-//      linear-worker picks it up — or, once .claude/ci-autofix.json's maxFixAttempts is
-//      used up, to "Needs Review" without the label (a human decides).
+//   2. the same comment on the branch's board ticket (any team key in the branch name).
+//      A nightly-worker branch (worker/*) still in `building` goes back to `approved`, and
+//      the worker sees the `<!-- ci-autofix -->` comment and runs CI-fix mode; once
+//      .claude/ci-autofix.json's maxFixAttempts is used up it goes to `needs_review` (a
+//      human decides). A session branch (worktree-*) only gets the comment: the live
+//      session's quality-gate.sh owns that fix loop. CORE-188: the board, not Linear.
 //
-// env: BRANCH, SHA, GITHUB_REPOSITORY, GH_TOKEN (gh CLI), LINEAR_API_KEY (optional —
-// without it only the PR is told, with a workflow warning).
+// env: BRANCH, SHA, GITHUB_REPOSITORY, GH_TOKEN (gh CLI), BOARD_API_URL + BOARD_AGENT_TOKEN
+// (optional — without them only the PR is told, with a workflow warning).
 // English only (CLAUDE.md).
 
 import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { ciStatus, commentBody, RULES } from "./ci-status.mjs";
+import { ticketFromBranch } from "../../.claude/skills/ship-artifact/ticket.mjs";
 
-const { BRANCH, SHA, GITHUB_REPOSITORY: REPO, LINEAR_API_KEY } = process.env;
 const warn = (msg) => console.log(`::warning::${msg}`);
 
 function gh(args) {
   return execFileSync("gh", args, { encoding: "utf-8", stdio: ["ignore", "pipe", "pipe"] });
 }
 
-async function linear(query, variables) {
-  const res = await fetch("https://api.linear.app/graphql", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: LINEAR_API_KEY },
-    body: JSON.stringify({ query, variables }),
-  });
-  const json = await res.json();
-  if (!res.ok || json.errors) throw new Error(`Linear API: ${res.status} ${JSON.stringify(json.errors ?? json)}`);
-  return json.data;
+/** What the handoff does to the ticket. The agent token may only move a `building` item. */
+export function handoffPlan({ branch, status, exhausted }) {
+  if (status !== "building") return { comment: true, move: null };
+  if (exhausted) return { comment: true, move: RULES.board.exhaustedStatus };
+  return { comment: true, move: branch.startsWith("worker/") ? RULES.board.workerStatus : null };
 }
 
-async function tellLinear(ticket, body, exhausted) {
-  const { issue } = await linear(
-    `query($id: String!, $label: String!) { issue(id: $id) {
-       id labels { nodes { id name } }
-       team { id states { nodes { id name } } labels(filter: { name: { eq: $label } }) { nodes { id } } }
-     } }`,
-    { id: ticket, label: RULES.linear.failedLabel },
-  );
-  if (!issue) return warn(`Linear ticket ${ticket} not found — only the PR was told.`);
-  await linear(`mutation($issueId: String!, $body: String!) { commentCreate(input: { issueId: $issueId, body: $body }) { success } }`, {
-    issueId: issue.id,
-    body,
-  });
-
-  const stateName = exhausted ? RULES.linear.exhaustedState : RULES.linear.workerState;
-  const state = issue.team.states.nodes.find((s) => s.name === stateName);
-  if (!state) warn(`Linear state '${stateName}' not found in ${ticket}'s team — status left as is.`);
-
-  let labelId = issue.team.labels.nodes[0]?.id;
-  if (!labelId && !exhausted) {
-    const created = await linear(
-      `mutation($name: String!, $teamId: String!) { issueLabelCreate(input: { name: $name, teamId: $teamId, color: "#e5484d" }) { issueLabel { id } } }`,
-      { name: RULES.linear.failedLabel, teamId: issue.team.id },
-    );
-    labelId = created.issueLabelCreate.issueLabel.id;
-  }
-  const others = issue.labels.nodes.map((l) => l.id).filter((id) => id !== labelId);
-  const labelIds = exhausted || !labelId ? others : [...others, labelId];
-  await linear(`mutation($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success } }`, {
-    id: issue.id,
-    input: { labelIds, ...(state ? { stateId: state.id } : {}) },
-  });
-  console.log(`${ticket}: commented, → ${state ? stateName : "(state unchanged)"}${exhausted ? "" : ` + label ${RULES.linear.failedLabel}`}`);
+export async function tellBoard({ ticket, branch, body, exhausted, config, fetchImpl = fetch }) {
+  const call = async (method, path, payload) => {
+    const res = await fetchImpl(`${config.apiUrl.replace(/\/+$/, "")}/api/v1/platform/work${path}`, {
+      method,
+      headers: { "X-Agent-Token": config.agentToken, ...(payload ? { "Content-Type": "application/json" } : {}) },
+      body: payload ? JSON.stringify(payload) : undefined,
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(`board ${method} ${path} → ${res.status}: ${json.error ?? "request failed"}`);
+    return json;
+  };
+  const { item } = await call("GET", `/items/${ticket}`);
+  const plan = handoffPlan({ branch, status: item.status, exhausted });
+  await call("POST", `/items/${ticket}/comments`, { body });
+  if (plan.move) await call("PATCH", `/items/${ticket}`, { status: plan.move });
+  return `${ticket}: commented, → ${plan.move ?? `${item.status} (unchanged)`}`;
 }
 
 async function main() {
+  const { BRANCH, SHA, GITHUB_REPOSITORY: REPO, BOARD_API_URL, BOARD_AGENT_TOKEN } = process.env;
   if (!BRANCH || !SHA || !REPO) throw new Error("BRANCH, SHA and GITHUB_REPOSITORY are required");
   const status = ciStatus({ branch: BRANCH, sha: SHA, repo: REPO });
   if (status.state !== "failure") {
@@ -78,19 +61,21 @@ async function main() {
   console.log(body);
 
   const prs = JSON.parse(gh(["pr", "list", "--repo", REPO, "--head", BRANCH, "--state", "open", "--json", "number"]));
-  const ticket = (BRANCH.match(/\bneo-\d+\b/i)?.[0] ?? "").toUpperCase();
+  const ticket = ticketFromBranch(BRANCH);
   if (process.env.DRY_RUN) {
-    console.log(`DRY_RUN: would comment on PR(s) ${prs.map((p) => `#${p.number}`).join(", ") || "(none)"} and ${ticket || "(no ticket)"} → ${status.exhausted ? RULES.linear.exhaustedState : RULES.linear.workerState}`);
+    console.log(`DRY_RUN: would comment on PR(s) ${prs.map((p) => `#${p.number}`).join(", ") || "(none)"} and ${ticket || "(no ticket)"}`);
     return;
   }
   for (const { number } of prs) gh(["pr", "comment", String(number), "--repo", REPO, "--body", body]);
 
-  if (!ticket) return warn(`No NEO ticket in branch '${BRANCH}' — only the PR was told.`);
-  if (!LINEAR_API_KEY) return warn("LINEAR_API_KEY secret is not set — the Linear ticket was not told, so the worker won't pick this up.");
-  await tellLinear(ticket, body, status.exhausted);
+  if (!ticket) return warn(`No ticket key in branch '${BRANCH}' — only the PR was told.`);
+  if (!BOARD_API_URL || !BOARD_AGENT_TOKEN) return warn("BOARD_API_URL / BOARD_AGENT_TOKEN secrets are not set — the board ticket was not told, so the worker won't pick this up.");
+  console.log(await tellBoard({ ticket, branch: BRANCH, body, exhausted: status.exhausted, config: { apiUrl: BOARD_API_URL, agentToken: BOARD_AGENT_TOKEN } }));
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
