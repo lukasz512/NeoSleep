@@ -317,3 +317,35 @@ describe("WorkItemDialog open/close (CORE-195)", () => {
     expect(q("work-item-history-skeleton")).toBeNull();
   });
 });
+
+describe("WorkItemDialog Done-when checklist (CORE-195)", () => {
+  const boxes = () => Array.from(document.querySelectorAll("[data-testid='work-item-check'] input[type='checkbox']")) as HTMLInputElement[];
+
+  it("shows Done when as checkboxes and saves a tick", async () => {
+    serve(item({ done_when: "- [ ] Report delivered\n- [x] Legal written" }));
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(boxes().map((b) => b.checked)).toEqual([false, true]);
+    expect(q("work-item-checklist")?.textContent).toContain("Report delivered");
+    boxes()[0]!.click();
+    await flushPromises();
+    (q("work-item-save") as HTMLButtonElement).click();
+    await flushPromises();
+    const patch = calls.find((c) => c.method === "PATCH")!;
+    expect(JSON.parse(String(patch.body))).toEqual({ done_when: "- [x] Report delivered\n- [x] Legal written" });
+  });
+
+  it("edits the list as text and turns typed lines into tasks", async () => {
+    serve(item({ done_when: "- [x] Legal written" }));
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(q("work-item-done_when")).toBeNull();
+    (q("work-item-checklist-edit") as HTMLButtonElement).click();
+    await flushPromises();
+    const text = q("work-item-done_when")!.querySelector("textarea")!;
+    text.value = "- [x] Legal written\nReport delivered";
+    text.dispatchEvent(new Event("input"));
+    text.dispatchEvent(new Event("blur"));
+    await flushPromises();
+    expect(q("work-item-done_when")).toBeNull();
+    expect(boxes().map((b) => b.checked)).toEqual([true, false]);
+  });
+});

@@ -15,6 +15,15 @@
         </span>
       </span>
       <span class="work-card__title">{{ item.title }}</span>
+      <span
+        v-if="progress"
+        class="work-card__progress"
+        :class="{ 'work-card__progress--complete': progress.done === progress.total }"
+        :aria-label="t('workBoard.card.progress', progress)"
+        data-testid="work-card-progress"
+      >
+        <VIcon icon="mdi-checkbox-marked-outline" size="14" aria-hidden="true" />{{ progress.done }}/{{ progress.total }}
+      </span>
     </button>
     <span v-if="links.length" class="work-card__links">
       <a
@@ -33,7 +42,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { CARD_LINK_KINDS, linkOf } from "../../composables/useWorkBoard";
+import { CARD_LINK_KINDS, checklistProgress, linkOf } from "../../composables/useWorkBoard";
 import type { WorkItem, WorkLinkKind } from "../../types/workBoard";
 
 /**
@@ -44,6 +53,8 @@ const props = withDefaults(defineProps<{ item: WorkItem; draggable?: boolean }>(
 const emit = defineEmits<{ open: [key: string]; move: [key: string, step: -1 | 1] }>();
 const { t } = useI18n();
 const dragging = ref(false);
+/** How much of "Done when" is ticked (CORE-195); null when it isn't a checklist. */
+const progress = computed(() => checklistProgress(props.item.done_when));
 
 const links = computed(() =>
   CARD_LINK_KINDS.map((kind) => ({ kind, url: linkOf(props.item, kind) })).filter(
@@ -133,6 +144,20 @@ function onKeydown(event: KeyboardEvent): void {
 .work-card__priority--p2 {
   color: rgb(var(--v-theme-warning));
   background: rgba(var(--v-theme-warning), 0.12);
+}
+
+.work-card__progress {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.work-card__progress--complete {
+  color: rgb(var(--v-theme-success));
 }
 
 .work-card__title {

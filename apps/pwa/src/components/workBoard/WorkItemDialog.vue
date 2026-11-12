@@ -114,15 +114,36 @@
 
       <div v-for="name in SECTION_FIELDS" v-show="shown[name]" :key="name" class="work-dialog__section">
         <span class="work-dialog__label">{{ t(`workBoard.field.${name}`) }}</span>
+        <!-- CORE-195: Done when is a task list, ticked here and counted on the card. -->
+        <div v-if="name === 'done_when' && showChecklist" class="work-dialog__checklist" data-testid="work-item-checklist">
+          <VCheckbox
+            v-for="task in checklist"
+            :key="task.line"
+            :model-value="task.done"
+            :label="task.text"
+            density="compact"
+            hide-details
+            data-testid="work-item-check"
+            @update:model-value="form.done_when = toggleChecklistLine(form.done_when, task.line)"
+          />
+          <AppButton variant="text" size="small" prepend-icon="mdi-pencil-outline" data-testid="work-item-checklist-edit" @click="editingChecklist = true">
+            {{ t("workBoard.dialog.editChecklist") }}
+          </AppButton>
+        </div>
         <VTextarea
+          v-else
           v-model="form[name]"
+          :placeholder="name === 'done_when' ? t('workBoard.dialog.checklistPlaceholder') : undefined"
           :aria-label="t(`workBoard.field.${name}`)"
+          :autofocus="name === 'done_when' && editingChecklist"
           :maxlength="BODY_MAX"
           variant="outlined"
           rows="2"
           auto-grow
           hide-details
           :data-testid="`work-item-${name}`"
+          @focus="name === 'done_when' && (checklistBefore = form.done_when)"
+          @blur="name === 'done_when' && finishChecklist()"
         />
       </div>
 
@@ -292,6 +313,9 @@ import {
   fetchWorkItem,
   fetchWorkPeople,
   patchWorkItem,
+  asChecklist,
+  checklistLines,
+  toggleChecklistLine,
   uploadWorkAttachment,
   type WorkItemDetail,
 } from "../../composables/useWorkBoard";
@@ -343,6 +367,17 @@ const comment = ref("");
 const commenting = ref(false);
 const people = ref<WorkPerson[]>([]);
 const shown = reactive<Record<SectionField, boolean>>({ change: false, done_when: false });
+/** Done when as checkboxes (CORE-195); the text box only while editing it, or while it has no task line yet. */
+const editingChecklist = ref(false);
+const checklistBefore = ref("");
+const checklist = computed(() => checklistLines(form.done_when));
+const showChecklist = computed(() => !editingChecklist.value && checklist.value.length > 0);
+
+/** Leaving the text box turns what was typed into tasks; untouched text (e.g. old prose) stays as it was. */
+function finishChecklist(): void {
+  if (form.done_when !== checklistBefore.value) form.done_when = asChecklist(form.done_when);
+  editingChecklist.value = false;
+}
 
 const itemQueue = usePendingAttachments();
 const commentQueue = usePendingAttachments();
@@ -542,6 +577,7 @@ function reset(): void {
   Object.assign(form, blankForm());
   shown.change = false;
   shown.done_when = false;
+  editingChecklist.value = false;
   itemQueue.clear();
   commentQueue.clear();
 }
@@ -786,6 +822,13 @@ function eventText(event: WorkItemEvent): string {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
+}
+
+.work-dialog__checklist {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
 }
 
 /* Visually hidden, not display:none: some browsers ignore .click() on an undisplayed file input. */
