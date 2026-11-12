@@ -61,9 +61,15 @@ Actions → the workflow → **Run workflow**.
 
 - `max-instances=1` is deliberate: the OrthoApnea queue and rate limiters are in-memory.
 - Both services share one Supabase DB, so migrations must be additive only.
-- The first request after idle waits for a cold start (a few seconds). `MIN_INSTANCES` in
-  `.github/workflows/deploy-api.yml` is `1` for the 2026-10-07 demo week (CORE-66), so one
-  instance stays warm; set it back to `0` afterwards and push to dev + promote to prod.
+- `MIN_INSTANCES` in `.github/workflows/deploy-api.yml` is `1` on prod (one instance always
+  warm) and `0` on dev (CORE-193): the first dev request after idle waits for a cold start
+  (a few seconds). `keep-api-warm.yml` pings both every 10 minutes, which costs nothing
+  (only request time is billed) and keeps dev mostly warm anyway.
+- Billing: account `NeoSleep - PL` (01086A-4C475D-ED9966) pays for `neosleep-api` and
+  `neosleep-backups`, with a 20 PLN/month budget alert (CORE-193). If both services return
+  the Google "Service not available yet" 503 with no logs, check
+  `gcloud billing projects describe neosleep-api` first: the 2026-11-12 outage was an
+  expired free-trial billing account.
 
 ## One-time setup (done once, kept for reference / a future EU stack)
 

@@ -43,9 +43,10 @@ permissions:
 env:
   REGION: us-west2
   IMAGE: us-west2-docker.pkg.dev/${{ secrets.GCP_API_PROJECT }}/api/neosleep-api
-  # 1 = one instance always warm (no 5 s cold start) for the 2026-10-07 live demo
-  # (CORE-66). Costs a few $/month per service; set back to 0 after the demo week.
-  MIN_INSTANCES: "1"
+  # prod keeps one instance always warm (no 5 s cold start for real users); dev scales
+  # to zero, so it stays inside the free tier (CORE-193). An always-on instance is
+  # billed even when idle: ~25 PLN/month per service.
+  MIN_INSTANCES: ${{ github.ref_name == 'prod' && '1' || '0' }}
 
 jobs:
   deploy:
