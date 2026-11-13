@@ -54,15 +54,21 @@ const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** Uploaded files by attachment id, so the signed-URL call can hand them back. */
+const uploaded = new Map<string, string>();
 const realFetch = window.fetch.bind(window);
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
   if (!url.includes("/api/v1/platform/work")) return realFetch(input, init);
   const method = init?.method ?? "GET";
   if (url.endsWith("/people")) return json({ items: [] });
+  const stored = /\/attachments\/([^/]+)$/.exec(url)?.[1];
+  if (stored && method === "GET") return json({ url: uploaded.get(stored) ?? "" });
   if (url.endsWith("/attachments") && method === "POST") {
     const file = (init?.body as FormData).get("file") as File;
-    return json({ attachment: { id: `a${Date.now()}`, item_id: ITEM.id, event_id: null, filename: file.name, mime_type: file.type, size_bytes: file.size, uploaded_by: "qa@example.com", created_at: new Date().toISOString() } }, 201);
+    const id = `a${Date.now()}`;
+    uploaded.set(id, URL.createObjectURL(file));
+    return json({ attachment: { id, item_id: ITEM.id, event_id: null, filename: file.name, mime_type: file.type, size_bytes: file.size, uploaded_by: "qa@example.com", created_at: new Date().toISOString() } }, 201);
   }
   if (/\/items\/[^/]+$/.test(url) && method === "GET") {
     await wait(delay);

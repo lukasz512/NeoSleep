@@ -8,6 +8,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch, watchEffect } from "vue";
 import { Node } from "@tiptap/core";
+import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { EditorContent, useEditor } from "@tiptap/vue-3";
 import { filesFromTransfer } from "../../composables/useWorkAttachments";
@@ -126,13 +127,23 @@ watch(
   },
 );
 
-/** Puts images at the caret (after the block it is in), each on its own line. */
+/**
+ * Puts images at the caret, each on its own line, and leaves the caret in the text after them
+ * (an empty line if none follows); a selected image would be replaced by the next key typed.
+ */
 function insertImages(images: readonly WorkImageAttrs[]): void {
   if (!editor.value || !images.length) return;
   editor.value
     .chain()
     .focus()
     .insertContent(images.map((attrs) => ({ type: "workImage", attrs })))
+    .command(({ tr }) => {
+      if (!(tr.selection instanceof NodeSelection)) return true;
+      const after = tr.selection.to;
+      if (!tr.doc.resolve(after).nodeAfter?.isTextblock) tr.insert(after, tr.doc.type.schema.nodes.paragraph!.create());
+      tr.setSelection(TextSelection.create(tr.doc, after + 1));
+      return true;
+    })
     .run();
 }
 
