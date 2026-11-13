@@ -98,6 +98,12 @@ afterEach(() => {
 beforeAll(() => {
   URL.createObjectURL = vi.fn(() => "blob:preview");
   URL.revokeObjectURL = vi.fn();
+  // jsdom has no layout; the description editor (ProseMirror) measures the caret to scroll to it.
+  const noRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList;
+  for (const proto of [Range.prototype, Text.prototype] as { getClientRects?: () => DOMRectList; getBoundingClientRect?: () => DOMRect }[]) {
+    proto.getClientRects ??= noRects;
+    proto.getBoundingClientRect ??= () => new DOMRect();
+  }
 });
 
 async function render(props: { itemKey: string | null; creating: boolean }) {
