@@ -82,7 +82,7 @@
     <WorkItemDialog
       :item-key="openKey"
       :creating="creating"
-      :initial-item="openItem"
+      :initial-item="openedItem"
       :teams="teams ?? []"
       :default-team="team === ALL ? null : team"
       @close="closeDialog"
@@ -174,7 +174,7 @@ const openKey = computed(() => {
   return typeof first === "string" && first ? first : null;
 });
 /** The card's row, so the dialog opens with it instead of a loader (CORE-195). */
-const openItem = computed(() => items.value.find((item) => item.key === openKey.value) ?? null);
+const openedItem = computed(() => items.value.find((item) => item.key === openKey.value) ?? null);
 
 async function load(): Promise<void> {
   loading.value = true;
