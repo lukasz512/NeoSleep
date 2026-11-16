@@ -30,18 +30,32 @@ async function open(page: Page, width: number) {
   await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"));
 }
 
-/** Clicks the toggle and returns the card's height before, on each of the next frames, and at rest. */
+/**
+ * Clicks the toggle and returns the card's height before, on each frame until the card
+ * has moved and its height animation has ended, and at rest. The window is time, not a
+ * frame count (CORE-220): on CI WebKit 40 frames went by before the card moved at all.
+ */
 async function toggleAndSample(page: Page): Promise<{ from: number; frames: number[]; to: number }> {
   const result = await page.evaluate(async () => {
     const card = document.querySelector<HTMLElement>(".v-dialog .v-card")!;
     const height = () => card.getBoundingClientRect().height;
-    const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    // A frame, or 32 ms when the engine isn't producing frames.
+    const frame = () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => resolve());
+        setTimeout(resolve, 32);
+      });
     const from = height();
     document.querySelector<HTMLElement>("[data-testid=work-tokens-revoked-toggle]")!.click();
     const frames: number[] = [];
-    for (let i = 0; i < 40; i++) {
+    const started = performance.now();
+    for (;;) {
       await frame();
       frames.push(height());
+      const elapsed = performance.now() - started;
+      const settled = Math.abs(frames[frames.length - 1]! - from) > 2 && card.getAnimations().length === 0;
+      // At least 600 ms (the ease is 240 ms), 3 s at most.
+      if (elapsed > 3000 || (elapsed > 600 && settled)) break;
     }
     return { from, frames };
   });
