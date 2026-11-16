@@ -137,8 +137,8 @@ export function useAppointments() {
   const isFieldForce = computed(() => role.value === "rep" || role.value === "kam" || role.value === "msl");
   const isDoctor = computed(() => role.value === "doctor");
   /** NeoCRM support reads the calendar and writes nothing (API: middleware/supportAllowlist.ts). */
-  const canBook = computed(() => !!role.value && role.value !== "support");
-  const canClose = computed(() => canBook.value && !isFieldForce.value);
+  const canBook = computed(() => role.value !== "support");
+  const canClose = computed(() => !!role.value && canBook.value && !isFieldForce.value);
 
   function canChange(appointment: Appointment): boolean {
     if (!canBook.value) return false;
