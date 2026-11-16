@@ -3,9 +3,9 @@ import { test, expect, type Page } from "@playwright/test";
 /**
  * CORE-204: when a dialog's content grows or shrinks (the session tokens
  * dialog's "Revoked (n)" toggle), the card used to jump to its new height in
- * one frame. AppFormDialog now eases the height for every dialog. This samples
- * the card's height on each frame after the toggle: an eased change passes
- * through values between the old and the new height, a jump doesn't.
+ * one frame. AppFormDialog now eases the height for every dialog. This reads
+ * the card's height halfway through its height animation: an eased change is
+ * between the old and the new height there, a jump has no animation at all.
  * Harness: e2e/harness/dialog-header.ts (?dialog=tokens).
  */
 
@@ -31,11 +31,14 @@ async function open(page: Page, width: number) {
 }
 
 /**
- * Clicks the toggle and returns the card's height before, on each frame until the card
- * has moved and its height animation has ended, and at rest. The window is time, not a
- * frame count (CORE-220): on CI WebKit 40 frames went by before the card moved at all.
+ * Clicks the toggle and returns the card's height before, halfway through its height
+ * animation (`mid`, null when nothing animates), on each frame until it is over, and at rest.
+ *
+ * `mid` is read by seeking the animation, not by catching a frame in flight (CORE-220):
+ * CI WebKit renders a 240 ms ease as its first and its last frame only, so no sampled
+ * frame was ever in between, on a card that does ease.
  */
-async function toggleAndSample(page: Page): Promise<{ from: number; frames: number[]; to: number }> {
+async function toggleAndSample(page: Page): Promise<{ from: number; mid: number | null; frames: number[]; to: number }> {
   const result = await page.evaluate(async () => {
     const card = document.querySelector<HTMLElement>(".v-dialog .v-card")!;
     const height = () => card.getBoundingClientRect().height;
@@ -48,16 +51,26 @@ async function toggleAndSample(page: Page): Promise<{ from: number; frames: numb
     const from = height();
     document.querySelector<HTMLElement>("[data-testid=work-tokens-revoked-toggle]")!.click();
     const frames: number[] = [];
+    let mid: number | null = null;
     const started = performance.now();
     for (;;) {
       await frame();
       frames.push(height());
+      const motion = card.getAnimations().find((a) => a.effect instanceof KeyframeEffect && a.effect.getKeyframes().some((k) => "height" in k));
+      if (motion && mid === null) {
+        const at = motion.currentTime;
+        motion.pause();
+        motion.currentTime = Number(motion.effect?.getComputedTiming().duration) / 2;
+        mid = height();
+        motion.currentTime = at;
+        motion.play();
+      }
       const elapsed = performance.now() - started;
       const settled = Math.abs(frames[frames.length - 1]! - from) > 2 && card.getAnimations().length === 0;
       // At least 600 ms (the ease is 240 ms), 3 s at most.
       if (elapsed > 3000 || (elapsed > 600 && settled)) break;
     }
-    return { from, frames };
+    return { from, mid, frames };
   });
   await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"));
   const to = await page.locator(".v-dialog .v-card").first().evaluate((el) => el.getBoundingClientRect().height);
@@ -72,12 +85,12 @@ for (const width of [1024, 390]) {
 
     const grow = await toggleAndSample(page);
     expect(grow.to, "the revoked list makes the card taller").toBeGreaterThan(grow.from + 40);
-    expect(grow.frames.some((h) => between(h, grow.from, grow.to)), `grow frames: ${grow.frames.join(", ")}`).toBe(true);
+    expect(grow.mid !== null && between(grow.mid, grow.from, grow.to), `grow: ${grow.from} → ${grow.mid} → ${grow.to}`).toBe(true);
     expect(grow.frames.every((h) => h <= grow.to + 1), "never overshoots").toBe(true);
 
     const shrink = await toggleAndSample(page);
     expect(shrink.to).toBeCloseTo(grow.from, 0);
-    expect(shrink.frames.some((h) => between(h, shrink.from, shrink.to)), `shrink frames: ${shrink.frames.join(", ")}`).toBe(true);
+    expect(shrink.mid !== null && between(shrink.mid, shrink.from, shrink.to), `shrink: ${shrink.from} → ${shrink.mid} → ${shrink.to}`).toBe(true);
 
     // At rest the content isn't clipped: the body doesn't scroll.
     const body = page.getByTestId("app-form-dialog-body");
@@ -89,5 +102,6 @@ test("reduced motion: the card takes its new height at once", async ({ page }) =
   await page.emulateMedia({ reducedMotion: "reduce" });
   await open(page, 1024);
   const grow = await toggleAndSample(page);
+  expect(grow.mid, "no height animation").toBeNull();
   expect(grow.frames.some((h) => between(h, grow.from, grow.to)), `frames: ${grow.frames.join(", ")}`).toBe(false);
 });
