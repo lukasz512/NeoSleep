@@ -14,7 +14,7 @@ import {
   getWorkItem,
   insertSessionToken,
   insertWorkAttachment,
-  isPlatformAdmin,
+  isPlatformStaff,
   listWorkAttachments,
   listWorkItemEvents,
   listWorkPeople,
@@ -133,9 +133,9 @@ function requireBoardActor(req: Request, res: Response, next: NextFunction): voi
     return;
   }
   requireAuth(req, res, () => {
-    isPlatformAdmin(req.user?.email)
+    isPlatformStaff(req.user?.email)
       .then((ok) => {
-        if (!ok) throw new ForbiddenError("Platform admin only");
+        if (!ok) throw new ForbiddenError("Platform staff only");
         res.locals.actor = { name: req.user!.email ?? req.user!.sub, kind: "human" } satisfies WorkActor;
         next();
       })
@@ -208,10 +208,10 @@ function linksValue(value: unknown): WorkLink[] {
   });
 }
 
-/** A platform admin's email, or null to unassign. */
+/** A platform staff member's email (admin or support), or null to unassign. */
 async function assigneeValue(value: unknown): Promise<string | null> {
   if (value === null) return null;
-  if (typeof value !== "string" || !(await isPlatformAdmin(value))) throw new ValidationError("assignee must be a platform admin", "assignee");
+  if (typeof value !== "string" || !(await isPlatformStaff(value))) throw new ValidationError("assignee must be platform staff", "assignee");
   return value.trim().toLowerCase();
 }
 

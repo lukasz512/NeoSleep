@@ -41,6 +41,7 @@ import { workBoardRouter } from "./routes/workBoard.js";
 import { runMigrations, getDb } from "./db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter, smokePdfLimiter } from "./middleware/rateLimiter.js";
+import { supportAllowlist } from "./middleware/supportAllowlist.js";
 import { renderHtmlToPdf } from "./services/documentRenderer.js";
 
 // Allow multiple origins (e.g. localhost + LAN IP for phone testing): set FRONTEND_URL="http://localhost:5173,http://192.168.1.x:5173"
@@ -173,6 +174,9 @@ app.use("/api/v1", (_req, res, next) => {
   res.set("Vary", "Authorization");
   next();
 });
+
+// CORE-197: NeoCRM support reaches only its allowlisted routes, whatever each router's own guard says.
+app.use("/api/v1", supportAllowlist);
 
 // All API routes are versioned under /api/v1 — auth router registers /auth/* paths separately
 app.use("/api/v1", authRouter);

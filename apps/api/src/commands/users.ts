@@ -33,7 +33,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // *new* value on CreateUserCommand/UpdateUserCommand (see below). An
 // existing doctor user's unchanged role is allowed to round-trip through
 // UpdateUserCommand — this list only gates role being newly assigned.
-const VALID_ROLES: StaffRole[] = ["admin", "manager", "kam", "msl", "rep"];
+const VALID_ROLES: StaffRole[] = ["admin", "manager", "kam", "msl", "rep", "support"];
 const BCRYPT_ROUNDS = 12;
 
 /** A user's own RBAC scope must be a country or the global root (migration

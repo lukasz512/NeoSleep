@@ -50,6 +50,7 @@ const ROLE_OPTIONS = [
   { title: "user.users.role.manager", value: "manager" },
   { title: "user.users.role.doctor", value: "doctor" },
   { title: "user.users.role.rep", value: "rep" },
+  { title: "user.users.role.support", value: "support" },
 ];
 
 const STATUS_OPTIONS = [

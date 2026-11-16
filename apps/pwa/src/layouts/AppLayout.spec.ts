@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import en from "@i18n/en.json";
-import { navRoutesForRole } from "../router/routes";
+import { navRoutesForRole, homePathForRole } from "../router/routes";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -133,6 +133,12 @@ describe("AppLayout", () => {
         "/treatment-plans", "/resources", "/users", "/documents", "/territories", "/issues", "/platform/board",
       ];
       expect(navRoutesForRole("admin").map((r) => r.path)).toEqual(expectedPaths);
+    });
+
+    it("NeoCRM support sees calendar, resources, documents, reports and the work board — nothing with patient or user records (CORE-197)", () => {
+      const expectedPaths = ["/calendar", "/resources", "/documents", "/issues", "/platform/board"];
+      expect(navRoutesForRole("support").map((r) => r.path)).toEqual(expectedPaths);
+      expect(homePathForRole("support")).toBe("/calendar");
     });
 
     it("only the work board is platformOnly — useVisibleNavRoutes hides it from tenant admins (CORE-177)", () => {
