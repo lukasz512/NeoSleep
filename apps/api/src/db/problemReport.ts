@@ -1,4 +1,5 @@
 import { getDb } from "./connection.js";
+import { inPlatformTransaction, insertPlatformAudit, type PlatformAuditActor } from "./platformAudit.js";
 
 /** Platform-schema SQL for user problem reports and the admin errors list. */
 
@@ -248,12 +249,28 @@ export async function listDiagnostics(filter: {
   return rows;
 }
 
-export async function setDiagnosticStatus(id: string, status: DiagnosticStatus): Promise<{ id: string; status: DiagnosticStatus } | null> {
-  const { rows } = await getDb().query<{ id: string; status: DiagnosticStatus }>(
-    `UPDATE platform.diagnostics SET status = $2 WHERE id = $1 RETURNING id, status`,
-    [id, status]
-  );
-  return rows[0] ?? null;
+/** Moves the error ticket and leaves a platform.audit row (before → after) in the same transaction (CORE-213). */
+export async function setDiagnosticStatus(
+  id: string,
+  status: DiagnosticStatus,
+  actor: PlatformAuditActor
+): Promise<{ id: string; status: DiagnosticStatus } | null> {
+  return inPlatformTransaction(async (client) => {
+    const before = await client.query<{ status: DiagnosticStatus }>(`SELECT status FROM platform.diagnostics WHERE id = $1 FOR UPDATE`, [id]);
+    if (!before.rows[0]) return null;
+    const { rows } = await client.query<{ id: string; status: DiagnosticStatus }>(
+      `UPDATE platform.diagnostics SET status = $2 WHERE id = $1 RETURNING id, status`,
+      [id, status]
+    );
+    await insertPlatformAudit(client, actor, {
+      action: "diagnostic.status",
+      targetType: "diagnostic",
+      targetId: id,
+      before: { status: before.rows[0].status },
+      after: { status },
+    });
+    return rows[0] ?? null;
+  });
 }
 
 /** Is there still an open (new / in progress) report from this user whose description starts with `prefix`? Dedups automatic reports (CORE-173). */

@@ -10,8 +10,9 @@ import { ApplyResendEventCommand } from "../commands/emailDelivery.js";
  * POST /webhooks/resend — Resend reports what happened to an email
  * (delivered, bounced, spam …). The signature covers the exact bytes Resend
  * sent, so server.ts mounts express.raw() for this path before the global
- * JSON parser. Any verified event gets 200 even when it matches no row, so
- * Resend doesn't retry emails that were never patient emails.
+ * JSON parser. Any verified event is stored in webhook_event first (CORE-213)
+ * and gets 200 even when it matches no row, so Resend doesn't retry emails
+ * that were never patient emails; only a failed apply answers 500 (retry).
  */
 export const webhooksRouter: import("express").Router = Router();
 
@@ -37,7 +38,8 @@ webhooksRouter.post(
       return;
     }
 
-    const outcome = await ApplyResendEventCommand(event);
-    res.status(200).json({ outcome });
+    // svix-id is the same on every retry of one delivery: webhook_event's dedupe key (CORE-213).
+    const outcome = await ApplyResendEventCommand(event, headers.id);
+    res.status(outcome === "failed" ? 500 : 200).json({ outcome });
   })
 );

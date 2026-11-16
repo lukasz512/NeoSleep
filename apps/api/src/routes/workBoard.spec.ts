@@ -3,7 +3,7 @@ import request from "supertest";
 import bcrypt from "bcrypt";
 import { createHash } from "node:crypto";
 import { app } from "../server.js";
-import { getDb, withTenant, insertStaffUser } from "../db.js";
+import { getDb, withTenant, insertStaffUser, listPlatformAudit } from "../db.js";
 import { signAuthToken } from "../utils/jwt.js";
 import type { StaffRole } from "../db/users.js";
 
@@ -239,6 +239,22 @@ describe("platform work board", () => {
       const revoked = await request(app).delete(`${BASE}/session-tokens/${spare.body.item.id}`).set("Authorization", platformAdmin.auth);
       expect(revoked.status).toBe(204);
       expect((await asSession(request(app).get(`${BASE}/teams`), spare.body.token)).status).toBe(401);
+    });
+
+    it("leaves a platform.audit row for issuing and revoking, never the token itself (CORE-213)", async () => {
+      const spare = await request(app).post(`${BASE}/session-tokens`).set("Authorization", platformAdmin.auth).send({ name: `Audited ${SUFFIX}` });
+      await request(app).delete(`${BASE}/session-tokens/${spare.body.item.id}`).set("Authorization", platformAdmin.auth);
+      const trail = await listPlatformAudit("work_session_token", spare.body.item.id);
+      expect(trail.map((r) => r.action)).toEqual(["board.session_token.revoke", "board.session_token.issue"]);
+      expect(trail[1]!.after).toEqual({ name: `Audited ${SUFFIX}` });
+      for (const row of trail) {
+        expect(row.actor_email).toBe(platformAdmin.email);
+        expect(row.actor_id).not.toBeNull();
+      }
+      expect(JSON.stringify(trail)).not.toContain(spare.body.token);
+      // A second revoke changes nothing and logs nothing.
+      expect((await request(app).delete(`${BASE}/session-tokens/${spare.body.item.id}`).set("Authorization", platformAdmin.auth)).status).toBe(404);
+      expect(await listPlatformAudit("work_session_token", spare.body.item.id)).toHaveLength(2);
     });
   });
 

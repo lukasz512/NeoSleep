@@ -36,7 +36,7 @@ import {
 } from "../db.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
 import { deletePartnerDocument, getPartnerDocumentSignedUrl, uploadPartnerDocument } from "../services/partnerDocuments.js";
-import { routeParam } from "./utils.js";
+import { platformAuditActor, routeParam } from "./utils.js";
 
 /**
  * Platform work board (CORE-177, docs/stories/platform-work-board.md): the kanban that
@@ -499,7 +499,7 @@ workBoardRouter.post(
     const name = typeof field(req.body, "name") === "string" ? (field(req.body, "name") as string).trim() : "";
     if (!name || name.length > 60) throw new ValidationError("name is required (up to 60 characters)", "name");
     const token = `nbs_${randomBytes(32).toString("base64url")}`;
-    const item = await insertSessionToken(name, sha256Hex(token), actor.name);
+    const item = await insertSessionToken(name, sha256Hex(token), actor.name, platformAuditActor(req, actor.name));
     res.status(201).json({ item, token });
   })
 );
@@ -508,9 +508,11 @@ workBoardRouter.post(
 workBoardRouter.delete(
   "/platform/work/session-tokens/:id",
   asyncHandler(async (req, res) => {
-    requireHuman(res);
+    const actor = requireHuman(res);
     const id = routeParam(req, "id") ?? "";
-    if (!/^[0-9a-f-]{36}$/i.test(id) || !(await revokeSessionToken(id))) throw new NotFoundError("Session token", id);
+    if (!/^[0-9a-f-]{36}$/i.test(id) || !(await revokeSessionToken(id, platformAuditActor(req, actor.name)))) {
+      throw new NotFoundError("Session token", id);
+    }
     res.status(204).end();
   })
 );

@@ -28,7 +28,7 @@ import { getPartnerDocumentSignedUrl, uploadPartnerDocument } from "../services/
 import { pwaBaseUrl } from "../services/issueNotifications.js";
 import { notifyProblemReportCreated, notifyProblemReportStatusChanged } from "../services/problemReportNotifications.js";
 import { sendContactEmail } from "../mailer.js";
-import { routeParam } from "./utils.js";
+import { platformAuditActor, routeParam } from "./utils.js";
 
 /**
  * "Report a problem" (every signed-in user) and the admin Issues view.
@@ -360,7 +360,7 @@ problemReportRouter.patch(
     if (!(DIAGNOSTIC_STATUSES as readonly unknown[]).includes(status)) {
       throw new ValidationError(`status must be one of: ${DIAGNOSTIC_STATUSES.join(", ")}`, "status");
     }
-    const row = await setDiagnosticStatus(id, status as DiagnosticStatus);
+    const row = await setDiagnosticStatus(id, status as DiagnosticStatus, platformAuditActor(req));
     if (!row) throw new NotFoundError("Diagnostic", id);
     res.json(row);
   })
