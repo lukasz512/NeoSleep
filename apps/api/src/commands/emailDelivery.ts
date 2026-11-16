@@ -78,7 +78,8 @@ export async function ApplyResendEventCommand(event: WebhookEventPayload, delive
     } catch (err) {
       await client.query("ROLLBACK TO SAVEPOINT apply_webhook_event");
       await finishWebhookEvent(client, row.id, "failed", "failed", err instanceof Error ? err.message : String(err));
-      console.error(`[webhooks/resend] event ${deliveryId} failed:`, err);
+      // Our row id, not the svix-id header: a request header must not shape a log line (CodeQL).
+      console.error(`[webhooks/resend] webhook_event ${row.id} failed:`, err);
       return "failed";
     }
   });
