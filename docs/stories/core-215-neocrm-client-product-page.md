@@ -82,8 +82,8 @@ On the reference site `?para=<name>` (alias `for`) greets the prospect by name i
 
 ### Open Questions
 - [x] Which `para` proposals to build: 1 (greeting), 2 (sector) and 4 (role lens, the priority) in version 1; 3 right after; 5 and 6 later (Łukasz, 2026-11-16).
-- [ ] ISO 27001 wording: version 1 says "planned"; "in progress" once a first step is started.
-- [ ] Where demo requests go: version 1 opens a pre-filled email or WhatsApp message to the site's existing contact (the client site has no API). The demo form and the security PDF from D5 are not built yet.
+- [x] ISO 27001 wording: "in progress", with the first step recorded in `docs/CERTIFICATIONS.md` (internal gap analysis started 2026-11-16). The page says there is no certification or external audit yet (Łukasz, 2026-11-16, artifact decision D1).
+- [x] Where demo requests go: the demo form through the API plus the security PDF, built in CORE-218; until then version 1 opens a pre-filled email or WhatsApp message to the site's existing contact (Łukasz, 2026-11-16, artifact decision D2).
 
 ### Version 1 as built (2026-11-16)
 - Placement: a second page of the AJ Management site, `clients/ajm/corporativo/neocrm/index.html` + `src/neocrm/`, published at alfredjan.com/corporativo/neocrm/ by the existing deploy. It keeps its own copy and colours and imports nothing from neoCRM (CORE-47).

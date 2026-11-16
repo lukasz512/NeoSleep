@@ -127,7 +127,7 @@
       "lead": "Todavía no lo tenemos. Preferimos decirlo aquí antes que prometerlo en la portada. No damos fechas.",
       "items": [
         { "title": "Accesibilidad WCAG 2.2 AA · en curso", "body": "Pruebas automáticas en cada cambio y una declaración de accesibilidad pública." },
-        { "title": "ISO 27001 · planificado", "body": "Preparación del sistema de gestión de seguridad de la información." },
+        { "title": "ISO 27001 · en curso", "body": "Hemos empezado el análisis interno de brechas. Todavía no hay certificación ni auditoría externa." },
         { "title": "Verificación en dos pasos · planificado", "body": "Un segundo factor al iniciar sesión." },
         { "title": "Alojamiento en la Unión Europea · planificado", "body": "Opción de tener el servicio y los datos en una región europea." }
       ]

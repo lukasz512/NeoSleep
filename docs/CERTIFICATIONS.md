@@ -72,7 +72,11 @@ Track for certifications relevant to medical SaaS and pharma sales. Updated as r
 **Timeline:** 6–18 months from decision to certification.
 **Why pharma needs it:** Proof that patient and HCP data is handled with documented security controls.
 
+**Status:** In progress since 2026-11-16 (CORE-215). First step: the internal gap analysis below, checked against the repo. No consultant, no certification body and no external audit yet, so public copy may say "in progress: internal gap analysis started" and nothing stronger.
+
 ### Gap analysis checklist (current state)
+
+First internal pass, 2026-11-16. A ticked item has evidence in the repo; an unticked one is either missing or not verifiable from the repo.
 
 #### Organizational controls
 - [ ] Information security policy (written + approved by leadership)
@@ -84,13 +88,13 @@ Track for certifications relevant to medical SaaS and pharma sales. Updated as r
 #### Technical controls
 - [ ] Access control policy (principle of least privilege)
 - [ ] MFA enforced for all admin access ← verify current GoDaddy / VPS access
-- [ ] Secrets management (no secrets in git) ← `.env.example` exists, verify `.env` is gitignored
-- [ ] Encryption at rest (PostgreSQL, backups)
-- [ ] Encryption in transit (HTTPS everywhere, HSTS header)
-- [ ] Vulnerability management / dependency scanning (Dependabot or similar)
+- [x] Secrets management (no secrets in git): `.env` is gitignored, secrets live in a managed secret store (`docs/INFRASTRUCTURE.md`), secret scanning runs in `.github/workflows/security.yml`
+- [ ] Encryption at rest (PostgreSQL, backups): backups are encrypted before upload; database encryption at rest is the provider's and not yet documented here
+- [ ] Encryption in transit (HTTPS everywhere, HSTS header): the API sets security headers with `helmet` (`apps/api/src/server.ts`); the GoDaddy-hosted frontends are not verified
+- [x] Vulnerability management / dependency scanning: CodeQL and secret scanning (`.github/workflows/security.yml`), weekly dependency updates (`renovate.json`)
 - [ ] Penetration test before each major release
-- [ ] Audit logging — `audit_log` table exists ✅
-- [ ] Backup policy (frequency, retention, test restore)
+- [x] Audit logging: `audit_log` table, including reads of sensitive health data (`apps/api/src/db/audit-log.ts`)
+- [x] Backup policy (frequency, retention, test restore): nightly, 30-day retention, every dump restore-checked (`.github/workflows/nightly-backup.yml`, `docs/RUNBOOK_BACKUP_RESTORE.md`)
 - [ ] Incident response plan (who does what when breached)
 
 #### Third-party / supplier controls
