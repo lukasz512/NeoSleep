@@ -36,16 +36,24 @@ describe("neocrm copy › a general page for any company", () => {
   it.each([
     ["es", es],
     ["en", en],
-  ])("%s copy keeps medical wording inside the clinics sector", (_name, copy) => {
-    const medical = flattenCopy(copy).filter(([path, text]) => !path.split(".").includes("clinicas") && MEDICAL.test(text));
-    expect(medical.map(([path]) => path)).toEqual([]);
+  ])("%s copy has no medical wording anywhere", (_name, copy) => {
+    // Łukasz 2026-11-16: a general-purpose CRM, no clinics sector and nothing that reads as medical
+    expect(flattenCopy(copy).filter(([, text]) => MEDICAL.test(text)).map(([path]) => path)).toEqual([]);
+    expect(SECTORS.some((sector) => MEDICAL.test(sector))).toBe(false);
   });
   it("the headline is about growing the business", () => {
     expect(es.hero.titles.default).toMatch(/crecer/);
     expect(en.hero.titles.default).toMatch(/grow/);
   });
-  it("clinics are the last sector, not the first", () => {
-    expect(SECTORS.at(-1)).toBe("clinicas");
+  it.each([
+    ["es", es, /calendario/i, /notificaciones|avisos/i],
+    ["en", en, /calendar/i, /notifications/i],
+  ])("%s copy leads with the everyday CRM: calendar and notifications", (_name, copy, calendar, notifications) => {
+    expect(copy.hero.body).toMatch(calendar);
+    expect(copy.hero.body).toMatch(notifications);
+    const titles = copy.sections.product.items.map((item) => item.title).join(" · ");
+    expect(titles).toMatch(calendar);
+    expect(titles).toMatch(notifications);
   });
 });
 

@@ -1,15 +1,15 @@
 /**
  * The neoCRM page's "para" link, version 1 (CORE-215, Łukasz 2026-11-16): besides the greeting
  * (lib/prospect.ts), the link can say who is reading (?rol=it) and which sector they work in
- * (?sector=clinicas). The role only changes the order of the sections, never their content, and the
+ * (?sector=servicios). The role only changes the order of the sections, never their content, and the
  * sector only changes the hero and which use case is listed first. Anything unknown means the
  * normal page. Nothing is stored or sent: it all lives in the link.
  */
 export const ROLES = ["direccion", "it", "operaciones"] as const;
 export type Role = (typeof ROLES)[number];
 
-/** General business first: the page sells to any company and never names a size, clinics are one case of four. */
-export const SECTORS = ["equipos", "distribucion", "servicios", "clinicas"] as const;
+/** A general-purpose CRM: the page sells to any company, never names a size and has no medical sector. */
+export const SECTORS = ["equipos", "distribucion", "servicios", "comercios"] as const;
 export type Sector = (typeof SECTORS)[number];
 
 /** Sections between the hero (always first) and the demo request (always last), in the normal order. */
@@ -24,7 +24,7 @@ const ORDER: Record<Role, readonly SectionId[]> = {
 
 /** English links work too: ?role=management */
 const ROLE_ALIASES: Record<string, Role> = { management: "direccion", security: "it", operations: "operaciones" };
-const SECTOR_ALIASES: Record<string, Sector> = { clinics: "clinicas", distribution: "distribucion", teams: "equipos", services: "servicios" };
+const SECTOR_ALIASES: Record<string, Sector> = { shops: "comercios", distribution: "distribucion", teams: "equipos", services: "servicios" };
 
 export interface Lens {
   role: Role | null;

@@ -27,14 +27,14 @@ describe("neocrm page › role lens (CORE-215)", () => {
     expect(w.find('[data-role="it"]').attributes("aria-pressed")).toBe("true");
   });
   it("the switch reorders the page, announces it and keeps the rest of the link", async () => {
-    window.history.replaceState(null, "", "/?para=clinica-sol");
-    const w = page("?para=clinica-sol");
+    window.history.replaceState(null, "", "/?para=talleres-rivas");
+    const w = page("?para=talleres-rivas");
     await w.find('[data-role="operaciones"]').trigger("click");
     expect(sectionIds(w)[1]).toBe("product");
     expect(w.find('[data-role="operaciones"]').attributes("aria-pressed")).toBe("true");
     expect(w.find('[data-role="all"]').attributes("aria-pressed")).toBe("false");
     expect(w.find(".lens__note").text()).toContain("operaciones");
-    expect(window.location.search).toBe("?para=clinica-sol&rol=operaciones");
+    expect(window.location.search).toBe("?para=talleres-rivas&rol=operaciones");
   });
   it("section numbers follow the order on screen", () => {
     const w = page("?rol=it");
@@ -213,10 +213,10 @@ describe("neocrm look › the warm accent stays readable", () => {
 
 describe("neocrm page › greeting and sector", () => {
   it("greets the company named in the link, here and in the demo request", () => {
-    const w = page("?para=clinica-sol");
-    expect(w.find(".hero__greeting").text()).toBe("Hola, Clinica Sol:");
-    expect(w.find("#demo h2").text()).toContain("Clinica Sol");
-    expect(decodeURIComponent(w.find("#demo a[href^='mailto:']").attributes("href") ?? "")).toContain("somos Clinica Sol");
+    const w = page("?para=talleres-rivas");
+    expect(w.find(".hero__greeting").text()).toBe("Hola, Talleres Rivas:");
+    expect(w.find("#demo h2").text()).toContain("Talleres Rivas");
+    expect(decodeURIComponent(w.find("#demo a[href^='mailto:']").attributes("href") ?? "")).toContain("somos Talleres Rivas");
   });
   it("no name, no greeting", () => {
     expect(page().find(".hero__greeting").exists()).toBe(false);
@@ -231,9 +231,11 @@ describe("neocrm page › greeting and sector", () => {
     expect(w.find("#who h3").text()).toBe("Distribuidoras y mayoristas");
     expect(w.findAll("#who h3")).toHaveLength(4);
   });
-  it("without a sector the page opens with general business, clinics come last", () => {
+  it("without a sector the page lists four general kinds of business", () => {
     const titles = page().findAll("#who h3").map((h) => h.text());
-    expect(titles[0]).toBe("Equipos comerciales");
-    expect(titles.at(-1)).toBe("Clínicas y centros sanitarios");
+    expect(titles).toEqual(["Equipos comerciales", "Distribuidoras y mayoristas", "Empresas de servicios", "Tiendas y negocios locales"]);
+  });
+  it("the hero's second button leads to what the CRM includes", () => {
+    expect(page().find("#inicio .btn--quiet").attributes("href")).toBe("#product");
   });
 });

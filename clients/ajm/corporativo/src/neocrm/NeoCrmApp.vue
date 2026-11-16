@@ -27,7 +27,7 @@
             <p class="hero__body">{{ t("hero.body") }}</p>
             <p class="hero__actions">
               <a class="btn" href="#demo">{{ t("hero.cta") }}</a>
-              <a class="btn btn--quiet" href="#security">{{ t("hero.secondary") }}</a>
+              <a class="btn btn--quiet" href="#product">{{ t("hero.secondary") }}</a>
             </p>
           </div>
           <!-- drawn screens can be tried: each is one labelled group (data-fig) of real buttons -->
@@ -345,7 +345,7 @@ const SECTOR_ICONS: Record<Sector, string> = {
   equipos: "M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM3 19a6 6 0 0 1 12 0M17 11.5a2.5 2.5 0 1 0 0-5M16.5 14a5 5 0 0 1 4.5 5",
   distribucion: "M2 5h11v10H2zM13 8h4.5L21 11.5V15h-8zM6.5 19.3a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6zM16.5 19.3a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z",
   servicios: "M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM3 10h18M8 3v4M16 3v4M9 15.5l2 2 4-4",
-  clinicas: "M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zM12 8v8M8 12h8",
+  comercios: "M4 9l1.5-5h13L20 9M4 9h16M5 9v11h14V9M10 20v-6h4v6",
 };
 
 const message = computed(() => (prospect ? t("contact.messageFor", { name: prospect.name }) : t("contact.message")));

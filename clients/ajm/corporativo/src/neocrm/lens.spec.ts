@@ -3,16 +3,18 @@ import { ROLES, SECTIONS, isPersonalLink, lensFrom, lensQuery, sectionOrder } fr
 
 describe("neocrm lens › who is reading (CORE-215)", () => {
   it("reads the role and the sector from the link", () => {
-    expect(lensFrom("?para=clinica-sol&rol=it&sector=clinicas")).toEqual({ role: "it", sector: "clinicas" });
+    expect(lensFrom("?para=talleres-rivas&rol=it&sector=comercios")).toEqual({ role: "it", sector: "comercios" });
     expect(lensFrom("?rol=Direccion")).toEqual({ role: "direccion", sector: null });
   });
   it("English links work too", () => {
-    expect(lensFrom("?role=operations&sector=clinics")).toEqual({ role: "operaciones", sector: "clinicas" });
+    expect(lensFrom("?role=operations&sector=shops")).toEqual({ role: "operaciones", sector: "comercios" });
     expect(lensFrom("?sector=services")).toEqual({ role: null, sector: "servicios" });
   });
   it("anything unknown means the normal page", () => {
     expect(lensFrom("")).toEqual({ role: null, sector: null });
     expect(lensFrom("?rol=ceo&sector=%3Cscript%3E")).toEqual({ role: null, sector: null });
+    // the clinics sector is gone: an old link opens the general page
+    expect(lensFrom("?sector=clinicas")).toEqual({ role: null, sector: null });
   });
 });
 
@@ -32,7 +34,7 @@ describe("neocrm lens › the role reorders sections, it never hides one", () =>
 
 describe("neocrm lens › switching on the page keeps the rest of the link", () => {
   it("keeps the greeting and the language", () => {
-    expect(lensQuery("?para=clinica-sol&lang=en", { role: "it", sector: null })).toBe("?para=clinica-sol&lang=en&rol=it");
+    expect(lensQuery("?para=talleres-rivas&lang=en", { role: "it", sector: null })).toBe("?para=talleres-rivas&lang=en&rol=it");
   });
   it("replaces the old role, English spelling included", () => {
     expect(lensQuery("?role=management&sector=equipos", { role: "operaciones", sector: "equipos" })).toBe("?sector=equipos&rol=operaciones");
@@ -44,7 +46,7 @@ describe("neocrm lens › switching on the page keeps the rest of the link", () 
 
 describe("neocrm lens › personal links stay out of search engines", () => {
   it("any personal parameter marks the link", () => {
-    expect(isPersonalLink("?para=clinica-sol")).toBe(true);
+    expect(isPersonalLink("?para=talleres-rivas")).toBe(true);
     expect(isPersonalLink("?rol=it")).toBe(true);
     expect(isPersonalLink("?lang=en")).toBe(false);
     expect(isPersonalLink("")).toBe(false);

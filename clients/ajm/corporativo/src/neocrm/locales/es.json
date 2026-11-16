@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "neoCRM · El CRM para hacer crecer vuestra empresa, seguro y accesible",
-    "description": "neoCRM es un CRM con vuestra marca: clientes, visitas y próximos pasos en un solo sitio, permisos por rol y zona, registro de accesos y una interfaz pensada para todas las personas."
+    "title": "neoCRM · El CRM para hacer crecer vuestra empresa: clientes, calendario y avisos",
+    "description": "neoCRM es un CRM con vuestra marca: clientes, calendario, avisos y próximos pasos en un solo sitio, en el móvil y en el ordenador."
   },
   "nav": {
     "skip": "Saltar al contenido",
@@ -14,15 +14,15 @@
     "greeting": "Hola, {name}:",
     "eyebrow": "CRM con vuestra marca",
     "titles": {
-      "default": "El CRM para hacer crecer vuestra empresa, seguro y accesible",
-      "equipos": "El CRM para equipos comerciales que quieren crecer, seguro y accesible",
-      "distribucion": "El CRM para distribuidoras y mayoristas, seguro y accesible",
-      "servicios": "El CRM para empresas de servicios, seguro y accesible",
-      "clinicas": "El CRM para clínicas y centros sanitarios, seguro y accesible"
+      "default": "El CRM para hacer crecer vuestra empresa",
+      "equipos": "El CRM para equipos comerciales que quieren crecer",
+      "distribucion": "El CRM para distribuidoras y mayoristas",
+      "servicios": "El CRM para empresas de servicios",
+      "comercios": "El CRM para tiendas y negocios locales"
     },
-    "body": "Clientes, visitas y próximos pasos en un solo sitio, para que ninguna oportunidad se quede sin seguimiento. Con vuestra marca y en vuestro idioma: cada persona ve solo lo que le corresponde y todo acceso queda registrado.",
+    "body": "Clientes, calendario, avisos y próximos pasos en un solo sitio, para que ninguna oportunidad se quede sin seguimiento. Con vuestra marca, en vuestro idioma y en el móvil.",
     "cta": "Pedir una demo",
-    "secondary": "Ver cómo protegemos los datos"
+    "secondary": "Ver qué incluye"
   },
   "lens": {
     "label": "Ver la página como",
@@ -58,9 +58,9 @@
           "title": "Empresas de servicios",
           "body": "Instalación, mantenimiento o consultoría: cada cliente con su historial y la próxima cita apuntada."
         },
-        "clinicas": {
-          "title": "Clínicas y centros sanitarios",
-          "body": "Seguimiento de profesionales y centros, con registro de quién consulta datos de salud y permisos ajustados a cada puesto."
+        "comercios": {
+          "title": "Tiendas y negocios locales",
+          "body": "Clientes habituales con su historial, las citas en el calendario y un aviso cuando toca volver a llamar."
         }
       }
     },
@@ -68,65 +68,160 @@
       "title": "Qué hace por vuestro negocio",
       "lead": "Lo que el equipo usa cada día para que ningún cliente se quede sin seguimiento, pensado primero para el móvil.",
       "items": [
-        { "title": "Clientes y contactos", "body": "Empresas y personas en una sola ficha, con su historial de visitas." },
-        { "title": "Visitas con su informe", "body": "Un formulario breve después de cada visita, para que lo acordado no dependa de la memoria." },
-        { "title": "Territorios y calendario", "body": "Cada persona trabaja su zona y tiene sus visitas en un calendario." },
-        { "title": "Vista de equipo", "body": "Quien dirige ve la actividad del equipo; quien visita ve lo suyo." },
-        { "title": "En el móvil, como una aplicación", "body": "Se abre en el navegador y se puede instalar en la pantalla de inicio, sin pasar por una tienda de aplicaciones." }
+        {
+          "title": "Clientes y contactos",
+          "body": "Empresas y personas en una sola ficha, con su historial."
+        },
+        {
+          "title": "Calendario y citas",
+          "body": "Citas, visitas y eventos en un calendario; cada persona ve su agenda."
+        },
+        {
+          "title": "Avisos",
+          "body": "Notificaciones en la aplicación, en el móvil y por correo, para que nada se pase."
+        },
+        {
+          "title": "Visitas con su informe",
+          "body": "Un formulario breve después de cada visita, para que lo acordado no dependa de la memoria."
+        },
+        {
+          "title": "Formularios y firma",
+          "body": "Formularios que se rellenan en el móvil y se pueden firmar en pantalla."
+        },
+        {
+          "title": "Vista de equipo",
+          "body": "Quien dirige ve la actividad del equipo; cada persona ve lo suyo."
+        },
+        {
+          "title": "En el móvil, como una aplicación",
+          "body": "Se abre en el navegador y se puede instalar en la pantalla de inicio, sin pasar por una tienda de aplicaciones."
+        }
       ]
     },
     "brand": {
       "title": "Con vuestra marca y en vuestro idioma",
       "lead": "Vuestro equipo abre su propia herramienta, no la de un proveedor.",
       "items": [
-        { "title": "Vuestro nombre, logotipo y colores", "body": "La marca se configura para cada cliente, sin desarrollos a medida." },
-        { "title": "Español, inglés y polaco", "body": "Cada persona usa la aplicación en su idioma." },
-        { "title": "Vuestras palabras", "body": "Los nombres de menús y campos se pueden adaptar a cómo habláis en la empresa." }
+        {
+          "title": "Vuestro nombre, logotipo y colores",
+          "body": "La marca se configura para cada cliente, sin desarrollos a medida."
+        },
+        {
+          "title": "Español, inglés y polaco",
+          "body": "Cada persona usa la aplicación en su idioma."
+        },
+        {
+          "title": "Vuestras palabras",
+          "body": "Los nombres de menús y campos se pueden adaptar a cómo habláis en la empresa."
+        }
       ]
     },
     "security": {
       "title": "Seguridad",
       "lead": "Medidas que están en el producto hoy. Lo que aún no tenemos lo decimos más abajo, sin fechas.",
       "items": [
-        { "title": "Datos separados por cliente", "body": "Cada empresa tiene su propio esquema de base de datos; no comparte tablas con otras." },
-        { "title": "Permisos por rol y territorio", "body": "Seis roles, de administración a comercial, limitados además por zona. Cada persona ve solo lo que necesita." },
-        { "title": "Registro de accesos", "body": "Queda anotado quién hizo qué y quién consultó datos sensibles." },
-        { "title": "Contraseñas y sesiones", "body": "Las contraseñas se guardan cifradas con bcrypt y las sesiones usan credenciales de corta duración que se renuevan." },
-        { "title": "Protección del servicio", "body": "Límite de intentos, cabeceras de seguridad y lista de orígenes permitidos en la API." },
-        { "title": "Copias de seguridad", "body": "Cada noche, cifradas, con una comprobación de que se pueden restaurar." },
-        { "title": "Revisión continua del código", "body": "Análisis automático de seguridad y búsqueda de secretos en cada cambio; dependencias actualizadas cada semana." },
-        { "title": "Claves bajo llave", "body": "Las credenciales del servicio viven en un almacén de secretos gestionado, nunca en el código ni en el navegador." }
+        {
+          "title": "Datos separados por cliente",
+          "body": "Cada empresa tiene su propio esquema de base de datos; no comparte tablas con otras."
+        },
+        {
+          "title": "Permisos por rol y territorio",
+          "body": "Seis roles, de administración a comercial, limitados además por zona. Cada persona ve solo lo que necesita."
+        },
+        {
+          "title": "Registro de accesos",
+          "body": "Queda anotado quién hizo qué y quién consultó datos sensibles."
+        },
+        {
+          "title": "Contraseñas y sesiones",
+          "body": "Las contraseñas se guardan cifradas con bcrypt y las sesiones usan credenciales de corta duración que se renuevan."
+        },
+        {
+          "title": "Protección del servicio",
+          "body": "Límite de intentos, cabeceras de seguridad y lista de orígenes permitidos en la API."
+        },
+        {
+          "title": "Copias de seguridad",
+          "body": "Cada noche, cifradas, con una comprobación de que se pueden restaurar."
+        },
+        {
+          "title": "Revisión continua del código",
+          "body": "Análisis automático de seguridad y búsqueda de secretos en cada cambio; dependencias actualizadas cada semana."
+        },
+        {
+          "title": "Claves bajo llave",
+          "body": "Las credenciales del servicio viven en un almacén de secretos gestionado, nunca en el código ni en el navegador."
+        }
       ]
     },
     "access": {
       "title": "Accesibilidad",
       "lead": "Una herramienta de trabajo tiene que servir a todo el equipo. Esto es lo que ya hace la interfaz.",
       "items": [
-        { "title": "Texto con contraste suficiente", "body": "Los colores de texto y de los botones se eligen para que se lean bien, también en tema oscuro." },
-        { "title": "Botones cómodos para el dedo", "body": "Los controles táctiles miden al menos 44 píxeles." },
-        { "title": "Menos movimiento si lo pedís", "body": "La aplicación respeta el ajuste del dispositivo que reduce las animaciones." },
-        { "title": "Errores que se anuncian", "body": "Los errores de un formulario se comunican también a los lectores de pantalla." },
-        { "title": "Todo con teclado", "body": "Los diálogos se abren, se recorren y se cierran sin ratón." }
+        {
+          "title": "Texto con contraste suficiente",
+          "body": "Los colores de texto y de los botones se eligen para que se lean bien, también en tema oscuro."
+        },
+        {
+          "title": "Botones cómodos para el dedo",
+          "body": "Los controles táctiles miden al menos 44 píxeles."
+        },
+        {
+          "title": "Menos movimiento si lo pedís",
+          "body": "La aplicación respeta el ajuste del dispositivo que reduce las animaciones."
+        },
+        {
+          "title": "Errores que se anuncian",
+          "body": "Los errores de un formulario se comunican también a los lectores de pantalla."
+        },
+        {
+          "title": "Todo con teclado",
+          "body": "Los diálogos se abren, se recorren y se cierran sin ratón."
+        }
       ]
     },
     "privacy": {
       "title": "Privacidad y datos",
       "lead": "Diseñado con el RGPD en mente. Aquí preferimos ser exactos.",
       "items": [
-        { "title": "Dónde están los datos", "body": "Hoy el servicio y la base de datos se alojan en Estados Unidos, en proveedores de nube. Si necesitáis otra región, mirad «En qué estamos trabajando»." },
-        { "title": "Consentimientos registrados", "body": "El consentimiento de cada persona queda guardado con su fecha." },
-        { "title": "Quién ha visto qué", "body": "Cuando se guardan datos sensibles, queda anotado quién los consultó, para poder responder si alguien lo pregunta." },
-        { "title": "Esta página no os sigue", "body": "No usa cookies de publicidad ni analítica. Un enlace personal solo lleva un nombre en la dirección; no se guarda ni se envía." }
+        {
+          "title": "Dónde están los datos",
+          "body": "Hoy el servicio y la base de datos se alojan en Estados Unidos, en proveedores de nube. Si necesitáis otra región, mirad «En qué estamos trabajando»."
+        },
+        {
+          "title": "Consentimientos registrados",
+          "body": "El consentimiento de cada persona queda guardado con su fecha."
+        },
+        {
+          "title": "Quién ha visto qué",
+          "body": "Cuando se guardan datos sensibles, queda anotado quién los consultó, para poder responder si alguien lo pregunta."
+        },
+        {
+          "title": "Esta página no os sigue",
+          "body": "No usa cookies de publicidad ni analítica. Un enlace personal solo lleva un nombre en la dirección; no se guarda ni se envía."
+        }
       ]
     },
     "onboarding": {
       "title": "Puesta en marcha",
       "lead": "Empezar no debería ser un proyecto.",
       "items": [
-        { "title": "Demo", "body": "Os enseñamos el producto con un caso parecido al vuestro." },
-        { "title": "Vuestro espacio", "body": "Creamos vuestro espacio con marca, idioma, roles y territorios." },
-        { "title": "Vuestro equipo", "body": "Dais de alta a las personas y empiezan a registrar visitas desde el móvil." },
-        { "title": "Ajustes", "body": "Revisamos juntos las primeras semanas y adaptamos textos y permisos." }
+        {
+          "title": "Demo",
+          "body": "Os enseñamos el producto con un caso parecido al vuestro."
+        },
+        {
+          "title": "Vuestro espacio",
+          "body": "Creamos vuestro espacio con marca, idioma, roles y territorios."
+        },
+        {
+          "title": "Vuestro equipo",
+          "body": "Dais de alta a las personas y empiezan a registrar visitas desde el móvil."
+        },
+        {
+          "title": "Ajustes",
+          "body": "Revisamos juntos las primeras semanas y adaptamos textos y permisos."
+        }
       ]
     },
     "roadmap": {
@@ -134,23 +229,53 @@
       "lead": "Todavía no lo tenemos. Preferimos decirlo aquí antes que prometerlo en la portada. No damos fechas.",
       "filterLabel": "Mostrar",
       "all": "Todo",
-      "status": { "progress": "en curso", "planned": "planificado" },
+      "status": {
+        "progress": "en curso",
+        "planned": "planificado"
+      },
       "items": [
-        { "title": "Accesibilidad WCAG 2.2 AA", "body": "Pruebas automáticas en cada cambio y una declaración de accesibilidad pública." },
-        { "title": "ISO 27001", "body": "Hemos empezado el análisis interno de brechas. Todavía no hay certificación ni auditoría externa." },
-        { "title": "Verificación en dos pasos", "body": "Un segundo factor al iniciar sesión." },
-        { "title": "Alojamiento en la Unión Europea", "body": "Opción de tener el servicio y los datos en una región europea." }
+        {
+          "title": "Accesibilidad WCAG 2.2 AA",
+          "body": "Pruebas automáticas en cada cambio y una declaración de accesibilidad pública."
+        },
+        {
+          "title": "ISO 27001",
+          "body": "Hemos empezado el análisis interno de brechas. Todavía no hay certificación ni auditoría externa."
+        },
+        {
+          "title": "Verificación en dos pasos",
+          "body": "Un segundo factor al iniciar sesión."
+        },
+        {
+          "title": "Alojamiento en la Unión Europea",
+          "body": "Opción de tener el servicio y los datos en una región europea."
+        }
       ]
     },
     "faq": {
       "title": "Preguntas frecuentes",
       "lead": "Lo que suelen preguntarnos antes de una demo.",
       "items": [
-        { "title": "¿Necesitamos un departamento de sistemas?", "body": "No. Nosotros preparamos vuestro espacio; vosotros solo dais de alta a las personas." },
-        { "title": "¿Hay que instalar algo?", "body": "No. Funciona en el navegador del móvil y del ordenador, y se puede añadir a la pantalla de inicio." },
-        { "title": "¿Podemos usar nuestra marca?", "body": "Sí: nombre, logotipo, colores e idioma se configuran para cada cliente." },
-        { "title": "¿Tenéis sellos externos de seguridad?", "body": "Todavía no. Lo que está en marcha aparece en «En qué estamos trabajando»; lo que ya funciona, en «Seguridad»." },
-        { "title": "¿Cuánto cuesta?", "body": "Depende del número de personas y de la configuración. Os damos una propuesta después de la demo." }
+        {
+          "title": "¿Necesitamos un departamento de sistemas?",
+          "body": "No. Nosotros preparamos vuestro espacio; vosotros solo dais de alta a las personas."
+        },
+        {
+          "title": "¿Hay que instalar algo?",
+          "body": "No. Funciona en el navegador del móvil y del ordenador, y se puede añadir a la pantalla de inicio."
+        },
+        {
+          "title": "¿Podemos usar nuestra marca?",
+          "body": "Sí: nombre, logotipo, colores e idioma se configuran para cada cliente."
+        },
+        {
+          "title": "¿Tenéis sellos externos de seguridad?",
+          "body": "Todavía no. Lo que está en marcha aparece en «En qué estamos trabajando»; lo que ya funciona, en «Seguridad»."
+        },
+        {
+          "title": "¿Cuánto cuesta?",
+          "body": "Depende del número de personas y de la configuración. Os damos una propuesta después de la demo."
+        }
       ]
     }
   },
