@@ -971,6 +971,13 @@ body {
 :is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) > .app-dialog-header + .v-card-text {
   padding-top: var(--pwa-dialog-header-gap) !important;
 }
+/* CORE-196: with no actions row below, the body owns the 24dp bottom padding
+   itself — before, a dialog without buttons (session tokens, OrthoApnea log)
+   ended flush against the card edge. A class from AppFormDialog, not
+   :last-child: VCard renders its underlay/loader spans after the body. */
+.pwa-form-dialog__card > .pwa-form-dialog__body--end {
+  padding-bottom: var(--pwa-dialog-pad) !important;
+}
 :is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) > .v-card-actions {
   min-height: 0 !important;
   gap: var(--pwa-dialog-button-gap) !important;
@@ -999,6 +1006,12 @@ body {
   text-transform: none;
   font-size: 0.875rem;
   font-weight: 500;
+  letter-spacing: 0.00625em;
+}
+/* CORE-196: buttons inside the body too — an uppercase "NUEVO TOKEN" beside
+   sentence-case actions read as two design systems in one dialog. */
+:is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) > .v-card-text .v-btn {
+  text-transform: none;
   letter-spacing: 0.00625em;
 }
 /* M3 text button: 12dp side padding. The app-wide 24px (sized for the pill

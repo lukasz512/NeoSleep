@@ -10,7 +10,8 @@
  * the shell of every entity edit view; `?dialog=form-long` the same with a
  * real-length field list. `?dialog=event` mounts EventForm, `?dialog=confirm`
  * AppConfirmDialog, `?dialog=wizard` the OrthoApnea order wizard,
- * `?dialog=clinical` the medical-history questionnaire (a long checklist).
+ * `?dialog=clinical` the medical-history questionnaire (a long checklist),
+ * `?dialog=tokens` the work board's session tokens (no actions row).
  * `?theme=dark` switches the theme. `&reject=<field>[&reason=required]`
  * makes the folder form's Save come back as if the API rejected that field
  * (NEO-109, e2e/form-errors.spec.ts). Also used by e2e/dialog-scroll.spec.ts.
@@ -26,6 +27,7 @@ import EventForm from "../../src/components/EventForm.vue";
 import AppConfirmDialog from "../../src/components/AppConfirmDialog.vue";
 import OrthoApneaOrderWizard from "../../src/components/patient/OrthoApneaOrderWizard.vue";
 import ClinicalQuestionnaireDialog from "../../src/components/questionnaire/ClinicalQuestionnaireDialog.vue";
+import WorkSessionTokensDialog from "../../src/components/workBoard/WorkSessionTokensDialog.vue";
 import type { FormFieldDef } from "../../src/types/formField";
 import type { SubmitDone } from "../../src/composables/useEntitySubmit";
 import { identityFields } from "../../src/config/forms/identityFields";
@@ -127,6 +129,10 @@ const Harness = defineComponent({
           onSubmit: (_payload: Record<string, unknown>, done: SubmitDone) =>
             reject ? done(false, { [reject]: params.get("reason") === "required" ? "required" : "invalid" }) : done(false),
         });
+      }
+      if (dialog === "tokens") {
+        // A dialog with no actions row (CORE-196); the spec stubs its token list.
+        return h(WorkSessionTokensDialog, { open: true });
       }
       if (dialog === "clinical") {
         return h(ClinicalQuestionnaireDialog, { modelValue: true, kind: "medical_history", mode: "create" });

@@ -3270,6 +3270,8 @@
   "workBoard.tokens.lastUsed": "Last used {when}",
   "workBoard.tokens.neverUsed": "Never used",
   "workBoard.tokens.empty": "No tokens yet",
+  "workBoard.tokens.active": "Active · {n}",
+  "workBoard.tokens.revokedGroup": "Revoked ({n})",
   "workBoard.event.created": "Created in {status}",
   "workBoard.event.status": "{from} → {to}",
   "workBoard.event.edit": "Edited: {fields}",

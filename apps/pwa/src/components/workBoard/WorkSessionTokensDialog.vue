@@ -14,7 +14,7 @@
           v-model="name"
           :label="t('workBoard.tokens.name')"
           variant="outlined"
-          density="compact"
+          density="comfortable"
           hide-details
           maxlength="60"
           data-testid="work-token-name"
@@ -33,24 +33,57 @@
       <AppLoadingState v-if="loading" />
       <AppErrorState v-else-if="failure" :error="failure" :refresh-label="t('app.errorState.refresh')" @refresh="load" />
       <p v-else-if="!tokens.length" class="work-tokens__empty">{{ t("workBoard.tokens.empty") }}</p>
-      <ul v-else class="work-tokens__list">
-        <li v-for="token in tokens" :key="token.id" class="work-tokens__row" :class="{ 'work-tokens__row--revoked': token.revoked_at }">
-          <div class="work-tokens__meta">
-            <span class="work-tokens__name">{{ token.name }}</span>
-            <span class="work-tokens__used">{{ usedLabel(token) }}</span>
-          </div>
-          <span v-if="token.revoked_at" class="work-tokens__state">{{ t("workBoard.tokens.revoked") }}</span>
-          <AppButton v-else variant="text" size="small" color="error" :data-testid="`work-token-revoke-${token.id}`" @click="revoke(token)">
-            {{ t("workBoard.tokens.revoke") }}
+      <template v-else>
+        <template v-if="active.length">
+          <h3 class="work-tokens__label">{{ t("workBoard.tokens.active", { n: active.length }) }}</h3>
+          <ul class="work-tokens__list" data-testid="work-tokens-active">
+            <li v-for="token in active" :key="token.id" class="work-tokens__row">
+              <VIcon class="work-tokens__icon" icon="mdi-key-variant" size="18" />
+              <div class="work-tokens__meta">
+                <span class="work-tokens__name">{{ token.name }}</span>
+                <span class="work-tokens__used">{{ usedLabel(token) }}</span>
+              </div>
+              <AppButton variant="text" size="small" color="error" :data-testid="`work-token-revoke-${token.id}`" @click="revoke(token)">
+                {{ t("workBoard.tokens.revoke") }}
+              </AppButton>
+            </li>
+          </ul>
+        </template>
+        <!-- Revoked tokens are history, not choices (CORE-196 D2): folded away so the live ones stay in focus. -->
+        <template v-if="revoked.length">
+          <AppButton
+            class="work-tokens__toggle"
+            variant="text"
+            size="small"
+            :append-icon="showRevoked ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+            :aria-expanded="showRevoked"
+            data-testid="work-tokens-revoked-toggle"
+            @click="showRevoked = !showRevoked"
+          >
+            {{ t("workBoard.tokens.revokedGroup", { n: revoked.length }) }}
           </AppButton>
-        </li>
-      </ul>
+          <ul
+            v-if="showRevoked"
+            class="work-tokens__list work-tokens__list--revoked"
+            :aria-label="t('workBoard.tokens.revoked')"
+            data-testid="work-tokens-revoked"
+          >
+            <li v-for="token in revoked" :key="token.id" class="work-tokens__row">
+              <VIcon class="work-tokens__icon" icon="mdi-key-remove" size="18" />
+              <div class="work-tokens__meta">
+                <span class="work-tokens__name">{{ token.name }}</span>
+                <span class="work-tokens__used">{{ usedLabel(token) }}</span>
+              </div>
+            </li>
+          </ul>
+        </template>
+      </template>
     </div>
   </AppFormDialog>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AppFormDialog from "../AppFormDialog.vue";
 import AppButton from "../AppButton.vue";
@@ -75,6 +108,9 @@ const name = ref("");
 const issuing = ref(false);
 const plaintext = ref<string | null>(null);
 const copied = ref(false);
+const showRevoked = ref(false);
+const active = computed(() => tokens.value.filter((x) => !x.revoked_at));
+const revoked = computed(() => tokens.value.filter((x) => x.revoked_at));
 
 async function load(): Promise<void> {
   loading.value = true;
@@ -133,6 +169,7 @@ watch(
   () => props.open,
   (open) => {
     plaintext.value = null;
+    showRevoked.value = false;
     if (open) void load();
   },
   { immediate: true },
@@ -143,13 +180,12 @@ watch(
 .work-tokens {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 }
 
 .work-tokens__hint,
 .work-tokens__empty,
-.work-tokens__used,
-.work-tokens__state {
+.work-tokens__used {
   margin: 0;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   font-size: 0.875rem;
@@ -181,30 +217,61 @@ watch(
   font-size: 0.8125rem;
 }
 
+/* The field (comfortable, 48px) and the filled button share one row height. */
+.work-tokens__new :deep(.v-btn) {
+  height: 48px;
+}
+
+.work-tokens__label {
+  margin: 0 0 -8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+/* One grouped card with hairlines between rows, instead of loose text lines. */
 .work-tokens__list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
   margin: 0;
   padding: 0;
   list-style: none;
+  border-radius: 12px;
+  background: rgba(var(--v-theme-on-surface), 0.04);
+  overflow: hidden;
 }
 
 .work-tokens__row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  min-height: 44px;
+  min-height: 56px;
+  padding: 8px 8px 8px 16px;
 }
 
-.work-tokens__row--revoked .work-tokens__name {
-  text-decoration: line-through;
-  opacity: 0.6;
+.work-tokens__row + .work-tokens__row {
+  border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.work-tokens__icon {
+  flex: none;
+  color: rgb(var(--v-theme-primary));
+}
+
+.work-tokens__list--revoked .work-tokens__icon,
+.work-tokens__list--revoked .work-tokens__name {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.work-tokens__toggle {
+  align-self: flex-start;
+  /* The label, not the button's padding, lines up with the 24dp content edge. */
+  margin-left: -12px;
 }
 
 .work-tokens__meta {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   min-width: 0;
 }

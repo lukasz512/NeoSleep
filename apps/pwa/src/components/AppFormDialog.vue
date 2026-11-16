@@ -33,7 +33,11 @@
       <VCardText
         ref="bodyRef"
         class="pwa-form-dialog__body"
-        :class="{ 'pwa-form-dialog__body--scrolled': scrolled, 'pwa-form-dialog__body--more': hasMore }"
+        :class="{
+          'pwa-form-dialog__body--scrolled': scrolled,
+          'pwa-form-dialog__body--more': hasMore,
+          'pwa-form-dialog__body--end': !$slots.actions,
+        }"
         data-testid="app-form-dialog-body"
         @scroll.passive="measure"
       >

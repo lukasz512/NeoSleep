@@ -151,6 +151,28 @@ describe("WorkBoardView", () => {
     expect(dialog().textContent).toContain("Laptop");
   });
 
+  it("folds revoked tokens away until asked (CORE-196 D2)", async () => {
+    serve([]);
+    const base = apiFetch.getMockImplementation()!;
+    const row = (id: string, name: string, revoked_at: string | null) => ({
+      id, name, created_by: "me", created_at: "2026-10-07T10:00:00Z", last_used_at: null, revoked_at,
+    });
+    apiFetch.mockImplementation(async (path: string, init?: RequestInit) =>
+      path.includes("/session-tokens") ? ok({ items: [row("t1", "Laptop", null), row("t2", "Old Mac", "2026-10-08T10:00:00Z")] }) : base(path, init),
+    );
+    const { wrapper } = await render();
+    await wrapper.get("[data-testid='work-board-tokens']").trigger("click");
+    await flushPromises();
+    const dialog = () => document.querySelector("[data-testid='work-tokens-dialog']")!;
+    expect(dialog().querySelector("[data-testid='work-tokens-active']")?.textContent).toContain("Laptop");
+    expect(dialog().querySelector("[data-testid='work-token-revoke-t1']")).not.toBeNull();
+    expect(dialog().textContent).not.toContain("Old Mac");
+    (dialog().querySelector("[data-testid='work-tokens-revoked-toggle']") as HTMLButtonElement).click();
+    await flushPromises();
+    expect(dialog().querySelector("[data-testid='work-tokens-revoked']")?.textContent).toContain("Old Mac");
+    expect(dialog().querySelector("[data-testid='work-token-revoke-t2']")).toBeNull();
+  });
+
   it("shows a card's spec, PR and CI links", async () => {
     serve([
       item({
