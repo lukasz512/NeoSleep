@@ -11,6 +11,7 @@
     @after-leave="emit('after-leave')"
   >
     <VCard
+      ref="cardRef"
       class="pwa-form-dialog__card"
       :class="{ 'pwa-form-dialog__card--folder': asFolder }"
       data-testid="app-form-dialog"
@@ -174,19 +175,63 @@ function measure() {
 // and the viewport — observe both, since neither fires a scroll event.
 // VDialog renders its content lazily, so start observing when the inner
 // wrapper actually mounts, not when modelValue flips.
+const cardRef = ref<{ $el: unknown } | null>(null);
+let cardHeight = 0;
+let innerWidth = 0;
+let heightMotion: Animation | null = null;
 let observer: ResizeObserver | null = null;
 watch(innerRef, (inner) => {
   observer?.disconnect();
   observer = null;
+  cardHeight = 0;
   const el = bodyEl();
   if (!inner || !el || typeof ResizeObserver === "undefined") return;
-  observer = new ResizeObserver(measure);
+  observer = new ResizeObserver((entries) => {
+    if (entries.some((entry) => entry.target === inner)) easeHeight(inner);
+    if (!heightMotion) measure();
+  });
   observer.observe(el);
   observer.observe(inner);
   measure();
 });
 
-onBeforeUnmount(() => observer?.disconnect());
+// Content growing or shrinking (a section folding open, a wizard step) eases the
+// card to its new height instead of jumping there in one frame (CORE-204). The
+// observer runs after layout and before paint, so the card already has its new
+// height: animate from the old one (FLIP). A width change (viewport resize, the
+// enter transition) only records the height.
+
+function easeHeight(inner: HTMLElement) {
+  const card: unknown = cardRef.value?.$el;
+  if (!(card instanceof HTMLElement)) return;
+  const width = inner.offsetWidth;
+  const widthChanged = width !== innerWidth;
+  innerWidth = width;
+  // Mid-animation, start from what is on screen, not from the last target.
+  const from = heightMotion ? card.offsetHeight : cardHeight;
+  heightMotion?.cancel();
+  heightMotion = null;
+  // offsetHeight, not the bounding box: the enter transition scales the card.
+  const to = card.offsetHeight;
+  cardHeight = to;
+  if (!from || widthChanged || Math.abs(to - from) < 1) return;
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  const motion = card.animate([{ height: `${from}px` }, { height: `${to}px` }], {
+    duration: 240,
+    easing: "cubic-bezier(0.2, 0, 0, 1)", // M3 standard
+  });
+  heightMotion = motion;
+  motion.onfinish = motion.oncancel = () => {
+    if (heightMotion !== motion) return;
+    heightMotion = null;
+    measure();
+  };
+}
+
+onBeforeUnmount(() => {
+  observer?.disconnect();
+  heightMotion?.cancel();
+});
 
 defineExpose({ bodyEl, measure });
 </script>
