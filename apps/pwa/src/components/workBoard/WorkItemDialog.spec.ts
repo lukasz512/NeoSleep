@@ -398,3 +398,47 @@ describe("WorkItemDialog inline images (CORE-195)", () => {
     expect(problemOf(calls.find((c) => c.method === "PATCH")!.body)).toBe("![bug.png](attachment:new-1)");
   });
 });
+
+describe("WorkItemDialog image size and preview (CORE-202)", () => {
+  const editor = () => q("work-item-problem")!.querySelector(".ProseMirror")!;
+  const problemOf = (body: unknown) => JSON.parse(String(body)).problem as string;
+  const sizeButton = (size: string) => editor().querySelector(`[data-testid='work-image-size-${size}']`) as HTMLButtonElement;
+
+  it("switches an inline image between S / M / L / full and saves the size in the description", async () => {
+    serve(item({ problem: "Before\n![bug.png](attachment:att-1)" }), [attachment()]);
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(editor().querySelector("[data-testid='work-image']")!.getAttribute("data-size")).toBe("full");
+    expect(sizeButton("full").getAttribute("aria-pressed")).toBe("true");
+
+    sizeButton("s").click();
+    await flushPromises();
+    expect(editor().querySelector("[data-testid='work-image']")!.getAttribute("data-size")).toBe("s");
+    expect(sizeButton("s").getAttribute("aria-pressed")).toBe("true");
+    (q("work-item-save") as HTMLButtonElement).click();
+    await flushPromises();
+    expect(problemOf(calls.find((c) => c.method === "PATCH")!.body)).toBe('Before\n![bug.png](attachment:att-1 "s")');
+  });
+
+  it("opens an inline image full screen", async () => {
+    serve(item({ problem: '![bug.png](attachment:att-1 "m")' }), [attachment()]);
+    await render({ itemKey: "CORE-9", creating: false });
+    (editor().querySelector("[data-testid='work-image-expand']") as HTMLButtonElement).click();
+    await flushPromises();
+    expect(q("work-image-preview")!.querySelector("img")?.getAttribute("src")).toBe("https://signed.test/att-1");
+  });
+
+  it("previews attached images in place; a PDF still opens in a tab", async () => {
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    serve(item(), [attachment({ id: "att-2", filename: "log.pdf", mime_type: "application/pdf" }), attachment({ id: "att-3" })]);
+    await render({ itemKey: "CORE-9", creating: false });
+    const tiles = Array.from(document.querySelectorAll("[data-testid='work-item-attachment'] .work-dialog__thumb")) as HTMLButtonElement[];
+    tiles[1]!.click();
+    await flushPromises();
+    expect(open).not.toHaveBeenCalled();
+    expect(q("work-image-preview")!.querySelector("img")?.getAttribute("src")).toBe("https://signed.test/att-3");
+    tiles[0]!.click();
+    await flushPromises();
+    expect(open).toHaveBeenCalledTimes(1);
+    open.mockRestore();
+  });
+});

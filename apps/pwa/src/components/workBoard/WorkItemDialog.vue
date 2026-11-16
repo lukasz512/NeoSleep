@@ -109,6 +109,7 @@
         :aria-label="t('workBoard.field.problem')"
         data-testid="work-item-problem"
         @files="onEditorFiles"
+        @preview="previewInline"
       />
 
       <div v-for="name in SECTION_FIELDS" v-show="shown[name]" :key="name" class="work-dialog__section">
@@ -283,6 +284,13 @@
           </ul>
         </template>
       </div>
+
+      <!-- CORE-202: an image opens here, full screen, instead of in a new tab. -->
+      <AppFormDialog :model-value="!!preview" :title="preview?.alt" max-width="96vw" @update:model-value="preview = null" @close="preview = null">
+        <div v-if="preview" class="work-dialog__preview" data-testid="work-image-preview">
+          <img :src="preview.url" :alt="preview.alt" :title="t('workBoard.image.closePreview')" @click="preview = null" />
+        </div>
+      </AppFormDialog>
     </div>
     <template #actions>
       <VSpacer />
@@ -694,9 +702,25 @@ function onPick(event: Event, target: "item" | "comment"): void {
   input.value = "";
 }
 
+/** The image shown full screen (CORE-202); null when the preview is closed. */
+const preview = ref<{ url: string; alt: string } | null>(null);
+
+function previewInline(imageRef: string): void {
+  const url = inlineImages.value[imageRef];
+  if (url) preview.value = { url, alt: loaded.value?.attachments.find((a) => a.id === imageRef)?.filename ?? "" };
+}
+
 async function openAttachment(file: WorkAttachment): Promise<void> {
   if (!loaded.value) return;
-  // Opened before the await so Safari keeps it as a user gesture, then pointed at the fresh URL.
+  if (isImage(file.mime_type)) {
+    try {
+      preview.value = { url: urls[file.id] ?? (await fetchAttachmentUrl(loaded.value.item.key, file.id)), alt: file.filename };
+    } catch {
+      // benign: the URL could not be signed; the thumbnail stays and a second click asks again.
+    }
+    return;
+  }
+  // A PDF opens in a tab, before the await so Safari keeps it as a user gesture, then pointed at the fresh URL. the await so Safari keeps it as a user gesture, then pointed at the fresh URL.
   // ("noopener" would make window.open return null, so the opener is cut by hand.)
   const tab = window.open("", "_blank");
   if (tab) tab.opener = null;
@@ -913,7 +937,24 @@ function eventText(event: WorkItemEvent): string {
 .work-dialog__thumb img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* The whole screenshot, not its cropped middle (CORE-202). */
+  object-fit: contain;
+}
+
+/* No actions row under it, so the body needs its own bottom breathing room (as AddonCard's lightbox). */
+.work-dialog__preview {
+  display: grid;
+  place-items: center;
+  padding-bottom: 16px;
+}
+
+.work-dialog__preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 80vh;
+  object-fit: contain;
+  border-radius: 8px;
+  cursor: zoom-out;
 }
 
 .work-dialog__thumb--small {
