@@ -243,7 +243,9 @@ dev_mergeable_check() {
 # 2026-09-25 (Łukasz, NEO-57): "after merge, test it on pwa-dev too". Once everything this
 # branch shipped is in origin/dev (the PR was merged), the turn can't end until the deployed
 # pwa-dev has been checked and the result recorded in the branch's Artifact marker as
-#   "devVerified": { "sha": "<HEAD sha>", "ok": true, "at": "<ISO time>", "summary": "..." }
+#   "devVerified": { "sha": "<HEAD sha>", "ok": true, "webkit": true, "at": "<ISO time>", "summary": "..." }
+# webkit: smoke-dev-ui.mjs ran its WebKit iPhone pass too (CORE-201: a
+# Chromium-only check let an iPhone-only hang through).
 # Checking means: the "Deploy NeoSleepCare App" run on dev for a commit containing HEAD
 # finished green (gh run list --workflow deploy-pwa.yml --branch dev)
 # (deploys are path-filtered: a change that doesn't touch the app starts no app deploy, so
@@ -266,8 +268,8 @@ dev_deploy_check() {
   GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh} -o ConnectTimeout=10 -o BatchMode=yes" git fetch --quiet origin dev 2>/dev/null || return 0
   head="$(git rev-parse HEAD 2>/dev/null)" || return 0
   git merge-base --is-ancestor "$head" origin/dev 2>/dev/null || return 0
-  if ! jq -e --arg sha "$head" '.devVerified.sha == $sha and .devVerified.ok == true' "$marker" >/dev/null 2>&1; then
-    FAILS+=("'${BRANCH}' is merged into dev (HEAD ${head:0:7} is in origin/dev) but not verified on pwa-dev yet. Wait for the dev 'Deploy NeoSleepCare App' run containing it to finish green (gh run list --workflow deploy-pwa.yml --branch dev; deploys are path-filtered, so for a change outside the app check deploy-api.yml or deploy-web.yml instead), run node infrastructure/scripts/smoke-dev-bundle.mjs --markers <this change's markers> (store them as 'smokeMarkers' in $marker), then node infrastructure/scripts/smoke-dev-ui.mjs --check '<route>=<selector>' ... (logged-in click-through with the QA account in .claude/local/qa-dev.json; skip only if that file doesn't exist and say so), then record devVerified {sha, ok, at, summary} in $marker and tell Łukasz the result.")
+  if ! jq -e --arg sha "$head" '.devVerified.sha == $sha and .devVerified.ok == true and .devVerified.webkit == true' "$marker" >/dev/null 2>&1; then
+    FAILS+=("'${BRANCH}' is merged into dev (HEAD ${head:0:7} is in origin/dev) but not verified on pwa-dev yet. Wait for the dev 'Deploy NeoSleepCare App' run containing it to finish green (gh run list --workflow deploy-pwa.yml --branch dev; deploys are path-filtered, so for a change outside the app check deploy-api.yml or deploy-web.yml instead), run node infrastructure/scripts/smoke-dev-bundle.mjs --markers <this change's markers> (store them as 'smokeMarkers' in $marker), then node infrastructure/scripts/smoke-dev-ui.mjs --check '<route>=<selector>' ... (logged-in click-through with the QA account in .claude/local/qa-dev.json; skip only if that file doesn't exist and say so), (it runs Chromium desktop/phone and WebKit iPhone; all three must pass), then record devVerified {sha, ok, webkit: true, at, summary} in $marker and tell Łukasz the result.")
   fi
 }
 

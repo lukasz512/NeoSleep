@@ -9,6 +9,12 @@ import { createRouter, createMemoryHistory } from "vue-router";
 import en from "@i18n/en.json";
 import { AUTH_BACKDROP_KEY, type AuthBackdrop } from "../composables/authBackdrop";
 import AuthView from "./AuthView.vue";
+import { reportCaught } from "@api";
+
+vi.mock("@api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@api")>()),
+  reportCaught: vi.fn(),
+}));
 
 /**
  * AuthView ↔ layout-owned backdrop contract (NEO-52): the breathing orbs live
@@ -91,6 +97,28 @@ describe("AuthView — shared auth backdrop", () => {
     const { backdrop } = createFakeBackdrop();
     await mountWithBackdrop(vi.fn(), backdrop);
     expect(backdrop.whenEntered).toHaveBeenCalled();
+  });
+
+  // CORE-201: on Chrome iOS the intro never settled and the screen stayed on
+  // the orbs alone, with no way to sign in. The card must show regardless.
+  it("shows the card anyway, and reports it, when the backdrop intro never finishes", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const { backdrop } = createFakeBackdrop();
+      backdrop.whenEntered.mockReturnValue(new Promise<void>(() => {}));
+      const { wrapper } = await mountWithBackdrop(vi.fn(), backdrop);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(wrapper.find(".animated-card--visible").exists()).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(6000);
+      expect(wrapper.find(".animated-card--visible").exists()).toBe(true);
+      expect(reportCaught).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ where: "AuthView.enterFailsafe" }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("marks the backdrop busy while sign-in is in flight, then plays the backdrop exit on success", async () => {

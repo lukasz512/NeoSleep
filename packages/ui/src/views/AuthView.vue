@@ -291,7 +291,7 @@ import { PASSWORD_CHANGED_NOTICE } from "../composables/useChangePasswordFlow";
 import { createUseResetPasswordFlow } from "../composables/useResetPasswordFlow";
 import { useMagneticPointer } from "../composables/useMagneticPointer";
 import { AUTH_BACKDROP_KEY } from "../composables/authBackdrop";
-import type { ApiFetchOptions } from "@api";
+import { reportCaught, type ApiFetchOptions } from "@api";
 import { useThemeStore, type AuthTokenStorage } from "@stores";
 import { useAppVersionLabel } from "../composables/useAppVersionLabel";
 import AuthChrome from "../components/AuthChrome.vue";
@@ -483,6 +483,24 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// The whole intro takes ~2–3 s. If anything in it never settles (CORE-201:
+// Chrome on iOS sat on the orbs alone, no card, no way to sign in), show the
+// card anyway and report which step was stuck — a hang throws nothing, so it
+// would otherwise never reach the error log.
+const ENTER_FAILSAFE_MS = 6000;
+let enterStage = "mounted";
+const enterFailsafe = setTimeout(() => {
+  if (badgeVisible.value) return;
+  reportCaught(new Error(`Login card entrance stuck at "${enterStage}"`), {
+    where: "AuthView.enterFailsafe",
+    extra: { stage: enterStage },
+  });
+  void authCardRef.value?.playEnter();
+  void authChromeRef.value?.playEnter();
+  badgeVisible.value = true;
+}, ENTER_FAILSAFE_MS);
+onBeforeUnmount(() => clearTimeout(enterFailsafe));
+
 onMounted(async () => {
   if (prefersReducedMotion) {
     // Both resolve instantly under reduced motion — still needed, since
@@ -492,9 +510,13 @@ onMounted(async () => {
     badgeVisible.value = true;
     return;
   }
+  enterStage = "backdrop";
   await backdrop?.whenEntered();
+  enterStage = "card";
   await authCardRef.value?.playEnter();
+  enterStage = "chrome";
   await authChromeRef.value?.playEnter();
+  enterStage = "badge";
   await wait(BADGE_ENTER_DELAY);
   badgeVisible.value = true;
 });

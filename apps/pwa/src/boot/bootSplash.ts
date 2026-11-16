@@ -10,6 +10,10 @@ const FADE_OUT_MS = 450;
 // Never let a stuck stylesheet request keep the splash up forever — past this,
 // show the app anyway (possibly still styling in) rather than hang.
 const STYLES_TIMEOUT_MS = 10_000;
+// Same for the splash's intro (~1.4 s): Chrome on iOS was seen never settling
+// one of its animations, which kept the splash up and the login card out for
+// good (CORE-201). Past this, lift it anyway.
+const INTRO_TIMEOUT_MS = 3000;
 
 let stylesReady: Promise<void> = Promise.resolve();
 
@@ -55,7 +59,9 @@ function introFinished(el: HTMLElement): Promise<void> {
     .getAnimations({ subtree: true })
     .filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity);
   // benign: `finished` rejects when an animation is cancelled — that still counts as done here.
-  return Promise.all(finite.map((animation) => animation.finished.catch(() => undefined))).then(() => undefined);
+  const finished = Promise.all(finite.map((animation) => animation.finished.catch(() => undefined))).then(() => undefined);
+  const timeout = new Promise<void>((resolve) => window.setTimeout(resolve, INTRO_TIMEOUT_MS));
+  return Promise.race([finished, timeout]);
 }
 
 /**
