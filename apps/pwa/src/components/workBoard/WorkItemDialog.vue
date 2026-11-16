@@ -79,6 +79,31 @@
           </VCard>
         </VMenu>
 
+        <VChip
+          v-if="canHold"
+          :prepend-icon="form.hold ? 'mdi-pause-circle' : 'mdi-pause-circle-outline'"
+          :variant="form.hold ? 'flat' : 'tonal'"
+          :color="form.hold ? 'primary' : undefined"
+          size="small"
+          :aria-pressed="form.hold"
+          :title="t('workBoard.hold.hint')"
+          data-testid="work-item-hold"
+          @click="form.hold = !form.hold"
+        >
+          {{ t(form.hold ? "workBoard.hold.on" : "workBoard.hold.off") }}
+        </VChip>
+
+        <VChip
+          v-if="git"
+          :prepend-icon="GIT_ICONS[git]"
+          variant="outlined"
+          size="small"
+          :title="current?.git_sha ? t('workBoard.git.commit', { sha: current.git_sha.slice(0, 7) }) : undefined"
+          data-testid="work-item-git"
+        >
+          {{ t(`workBoard.git.${git}`) }}
+        </VChip>
+
         <VMenu v-if="developmentCount">
           <template #activator="{ props: activator }">
             <VChip v-bind="activator" prepend-icon="mdi-source-branch" variant="tonal" size="small" data-testid="work-item-development">
@@ -311,8 +336,11 @@ import AppSpinner from "../AppSpinner.vue";
 import AppSkeletonLines from "../AppSkeletonLines.vue";
 import AppErrorState from "../AppErrorState.vue";
 import {
+  GIT_ICONS,
+  HOLD_LABEL,
   WORK_PRIORITIES,
   WORK_STATUS_OPTIONS,
+  gitMarker,
   addWorkItemComment,
   createWorkItem,
   deleteWorkAttachment,
@@ -408,6 +436,8 @@ interface Form {
   assignee: string | null;
   /** YYYY-MM-DD, or "" for none (what a date input gives). */
   due_date: string;
+  /** Label `hold`: stays in Needs Review when the code reaches prod (CORE-221). */
+  hold: boolean;
 }
 const form = reactive<Form>(blankForm());
 
@@ -422,6 +452,7 @@ function blankForm(): Form {
     priority: 0,
     assignee: null,
     due_date: "",
+    hold: false,
   };
 }
 
@@ -436,6 +467,7 @@ function formFrom(item: WorkItem): Form {
     priority: item.priority,
     assignee: item.assignee,
     due_date: item.due_date ?? "",
+    hold: item.labels.includes(HOLD_LABEL),
   };
 }
 
@@ -494,6 +526,10 @@ const listChips = computed<ListChip[]>(() => {
 });
 
 const hiddenSections = computed(() => SECTION_FIELDS.filter((name) => !shown[name]));
+/** Where the code is, as CI last reported it (CORE-221). */
+const git = computed(() => (current.value ? gitMarker(current.value) : null));
+/** Hold only means something while the ticket is open. */
+const canHold = computed(() => !session.creating && !!current.value && form.status !== "done" && form.status !== "canceled");
 const developmentCount = computed(() => (current.value ? current.value.links.length + (current.value.branch ? 1 : 0) : 0));
 /** What the description shows inline stays out of the attachment strip (CORE-195). */
 const inlineRefs = computed(() => attachmentRefs(form.problem));
@@ -528,6 +564,10 @@ const patch = computed<WorkItemPatch>(() => {
   if (form.priority !== before.priority) out.priority = form.priority;
   if (form.assignee !== before.assignee) out.assignee = form.assignee;
   if (form.due_date !== before.due_date) out.due_date = form.due_date || null;
+  if (form.hold !== before.hold) {
+    const rest = current.value.labels.filter((label) => label !== HOLD_LABEL);
+    out.labels = form.hold ? [...rest, HOLD_LABEL] : rest;
+  }
   return out;
 });
 

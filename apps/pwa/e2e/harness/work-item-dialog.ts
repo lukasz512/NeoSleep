@@ -48,6 +48,9 @@ const ITEM: WorkItem = {
   updated_at: "2026-11-10T10:00:00Z",
   status_changed_at: "2026-11-10T10:00:00Z",
   completed_at: null,
+  git_state: null,
+  git_sha: null,
+  git_checked_at: null,
 };
 
 const json = (body: unknown, status = 200) =>

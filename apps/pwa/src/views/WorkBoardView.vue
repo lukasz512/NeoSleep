@@ -21,6 +21,29 @@
         >
           {{ t("workBoard.sessionFilter") }}
         </AppButton>
+        <AppButton
+          v-if="outOfStepCount || outOfStepOnly"
+          :variant="outOfStepOnly ? 'tonal' : 'outlined'"
+          :color="outOfStepOnly ? 'primary' : undefined"
+          :prepend-icon="outOfStepOnly ? 'mdi-check' : 'mdi-source-branch-remove'"
+          :aria-pressed="outOfStepOnly"
+          :title="t('workBoard.outOfStepHint')"
+          data-testid="work-board-out-of-step"
+          @click="outOfStepOnly = !outOfStepOnly"
+        >
+          {{ t("workBoard.outOfStep", { count: outOfStepCount }) }}
+        </AppButton>
+        <AppButton
+          v-if="canceledCount"
+          :variant="showCanceled ? 'tonal' : 'text'"
+          :color="showCanceled ? 'primary' : undefined"
+          :prepend-icon="showCanceled ? 'mdi-check' : 'mdi-cancel'"
+          :aria-pressed="showCanceled"
+          data-testid="work-board-canceled"
+          @click="showCanceled = !showCanceled"
+        >
+          {{ t("workBoard.showCanceled", { count: canceledCount }) }}
+        </AppButton>
         <VTextField
           ref="searchRef"
           v-model="query"
@@ -41,9 +64,9 @@
       </div>
       <p v-if="!compact" class="work-board__hint">{{ t("workBoard.shortcuts") }}</p>
 
-      <!-- Phone: one list grouped by status (same data as the columns). -->
+      <!-- Phone: one list grouped by status (same data as the columns); empty statuses are left out. -->
       <div v-if="compact" class="work-board__list" data-testid="work-board-list">
-        <section v-for="status in WORK_BOARD_COLUMNS" :key="status" class="work-board__group">
+        <section v-for="status in filledColumns" :key="status" class="work-board__group">
           <h2 class="work-board__heading">
             {{ t(`workBoard.status.${status}`) }} <span class="work-board__count">{{ grouped[status].length }}</span>
           </h2>
@@ -54,13 +77,14 @@
         </section>
       </div>
 
-      <!-- Desktop: kanban columns; drag a card or focus it and press [ / ]. -->
+      <!-- Desktop: kanban columns; drag a card or focus it and press [ / ]. A status with no
+           tickets folds into a narrow strip that still takes a drop (CORE-221). -->
       <div v-else class="work-board__columns" data-testid="work-board-columns">
         <section
-          v-for="status in WORK_BOARD_COLUMNS"
+          v-for="status in columns"
           :key="status"
           class="work-board__column"
-          :class="{ 'work-board__column--over': dropTarget === status }"
+          :class="{ 'work-board__column--over': dropTarget === status, 'work-board__column--empty': !grouped[status].length }"
           :data-testid="`work-column-${status}`"
           @dragover.prevent="dropTarget = status"
           @dragleave="dropTarget = dropTarget === status ? null : dropTarget"
@@ -113,6 +137,7 @@ import {
   groupByStatus,
   matchesQuery,
   neighbourStatus,
+  outOfStep,
   patchWorkItem,
 } from "../composables/useWorkBoard";
 import type { WorkItem, WorkStatus, WorkTeam } from "../types/workBoard";
@@ -137,6 +162,10 @@ const query = ref<string | null>("");
 const creating = ref(false);
 /** Only tickets a Claude Code session created (label `session`, CORE-187). */
 const sessionsOnly = ref(false);
+/** Only Needs Review tickets git disagrees with (CORE-221). */
+const outOfStepOnly = ref(false);
+/** Canceled tickets get a column only when asked for (CORE-221). */
+const showCanceled = ref(false);
 const tokensOpen = ref(false);
 const dropTarget = ref<WorkStatus | null>(null);
 const searchRef = ref<{ focus: () => void } | null>(null);
@@ -147,7 +176,7 @@ const teamOptions = computed(() => [
   ...(teams.value ?? []).map((tm) => ({ value: tm.key, label: tm.key })),
 ]);
 
-const visible = computed(() =>
+const matching = computed(() =>
   items.value.filter(
     (item) =>
       (team.value === ALL || item.team_key === team.value) &&
@@ -155,7 +184,14 @@ const visible = computed(() =>
       matchesQuery(item, query.value ?? ""),
   ),
 );
+const outOfStepCount = computed(() => matching.value.filter(outOfStep).length);
+const visible = computed(() => (outOfStepOnly.value ? matching.value.filter(outOfStep) : matching.value));
 const grouped = computed(() => groupByStatus(visible.value));
+const canceledCount = computed(() => grouped.value.canceled.length);
+const columns = computed<readonly WorkStatus[]>(() =>
+  showCanceled.value && canceledCount.value ? [...WORK_BOARD_COLUMNS, "canceled"] : WORK_BOARD_COLUMNS,
+);
+const filledColumns = computed(() => columns.value.filter((status) => grouped.value[status].length));
 
 /** Done keeps growing (all of Linear's history lands there), so it shows the newest few until asked. */
 const DONE_PREVIEW = 20;
@@ -275,14 +311,17 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
   gap: 12px;
 }
 
+/* The chips scroll inside their own row, so they report no width of their own: the floor
+   keeps the filters from squeezing them out, and a crowded toolbar wraps instead (CORE-221). */
 .work-board__teams {
   flex: 1 1 auto;
-  min-width: 0;
+  min-width: min(100%, 224px);
 }
 
 .work-board__search {
-  flex: 0 1 240px;
+  flex: 1 1 160px;
   min-width: 160px;
+  max-width: 240px;
 }
 
 /* Phone: chips on their own row, then search + New sharing the next one. */
@@ -293,6 +332,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
 .work-board__toolbar--compact .work-board__search {
   flex: 1 1 140px;
   min-width: 0;
+  max-width: none;
 }
 
 .work-board__hint {
@@ -302,9 +342,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
 }
 
 .work-board__columns {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(240px, 1fr);
+  display: flex;
   gap: 12px;
   overflow-x: auto;
   padding-bottom: 12px;
@@ -312,8 +350,10 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
 
 .work-board__column {
   display: flex;
+  flex: 1 0 240px;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
   min-height: 240px;
   padding: 8px;
   background: rgba(var(--v-theme-on-surface), 0.03);
@@ -323,6 +363,23 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
 
 .work-board__column--over {
   border-color: rgb(var(--v-theme-primary));
+}
+
+/* No tickets: a strip wide enough to read the name sideways and to drop a card on. */
+.work-board__column--empty {
+  flex: 0 0 40px;
+  align-items: center;
+  padding: 8px 4px;
+}
+
+.work-board__column--empty .work-board__heading {
+  writing-mode: vertical-rl;
+  white-space: nowrap;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.work-board__column--empty .work-board__count {
+  display: none;
 }
 
 .work-board__cards {

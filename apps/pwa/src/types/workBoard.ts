@@ -48,7 +48,14 @@ export interface WorkItem {
   updated_at: string;
   status_changed_at: string;
   completed_at: string | null;
+  /** Where the code is, read from git by CI (CORE-221); null until the first report. */
+  git_state: WorkGitState | null;
+  /** Newest commit citing the ticket. */
+  git_sha: string | null;
+  git_checked_at: string | null;
 }
+
+export type WorkGitState = "none" | "dev" | "prod";
 
 export interface WorkItemEvent {
   id: string;
@@ -82,6 +89,8 @@ export interface WorkItemPatch {
   status?: WorkStatus;
   assignee?: string | null;
   due_date?: string | null;
+  /** The whole label set, not a delta. */
+  labels?: string[];
 }
 
 /** An image or PDF on an item, or on one of its comments (`event_id`). The bytes stay private; ask for a signed URL. */
