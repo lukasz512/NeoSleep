@@ -41,6 +41,9 @@ function item(overrides: Partial<WorkItem> = {}): WorkItem {
     updated_at: "2026-11-10T10:00:00Z",
     status_changed_at: "2026-11-10T10:00:00Z",
     completed_at: null,
+    git_state: null,
+    git_sha: null,
+    git_checked_at: null,
     ...overrides,
   };
 }
@@ -321,6 +324,39 @@ describe("WorkItemDialog open/close (CORE-195)", () => {
     await flushPromises();
     expect(titleValue()).toBe("Typed while loading");
     expect(q("work-item-history-skeleton")).toBeNull();
+  });
+});
+
+describe("WorkItemDialog git state and hold (CORE-221)", () => {
+  it("shows where the code is and saves Hold as a label", async () => {
+    serve(item({ status: "needs_review", git_state: "prod", git_sha: "0123456789abcdef", labels: ["session"] }));
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(q("work-item-git")?.textContent).toContain("On prod");
+    expect(q("work-item-git")?.getAttribute("title")).toBe("Commit 0123456");
+    expect(q("work-item-hold")?.textContent).toContain("Put on hold");
+    (q("work-item-hold") as HTMLElement).click();
+    await flushPromises();
+    expect(q("work-item-hold")?.textContent).toContain("On hold");
+    (q("work-item-save") as HTMLButtonElement).click();
+    await flushPromises();
+    expect(JSON.parse(String(calls.find((c) => c.method === "PATCH")!.body))).toEqual({ labels: ["session", "hold"] });
+  });
+
+  it("takes a ticket off hold and keeps its other labels", async () => {
+    serve(item({ status: "needs_review", labels: ["hold", "session"] }));
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(q("work-item-git")).toBeNull();
+    (q("work-item-hold") as HTMLElement).click();
+    await flushPromises();
+    (q("work-item-save") as HTMLButtonElement).click();
+    await flushPromises();
+    expect(JSON.parse(String(calls.find((c) => c.method === "PATCH")!.body))).toEqual({ labels: ["session"] });
+  });
+
+  it("offers no hold on a new item", async () => {
+    serve(null);
+    await render({ itemKey: null, creating: true });
+    expect(q("work-item-hold")).toBeNull();
   });
 });
 

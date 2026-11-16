@@ -11,6 +11,7 @@ import {
   WORK_SESSION_LABEL,
   WORK_STATUSES,
   addWorkItemComment,
+  applyWorkGitStates,
   createWorkItem,
   deleteWorkAttachment,
   getWorkAttachment,
@@ -34,6 +35,7 @@ import {
   type WorkActor,
   type WorkAttachmentRow,
   type WorkCiState,
+  type WorkGitReport,
   type WorkItemPatch,
   type WorkItemRow,
   type WorkLabelColor,
@@ -85,6 +87,9 @@ const MAX_COMMENT = 5000;
 const MAX_LINKS = 20;
 const MAX_LABELS = 10;
 const MAX_LABEL = 40;
+/** One git report names every ticket ever cited in a commit. */
+const MAX_GIT_REPORTS = 5000;
+const GIT_SHA_RE = /^[0-9a-f]{7,40}$/;
 /** Long enough to look at a screenshot, short enough that a leaked link soon dies (CORE-192). */
 const ATTACHMENT_URL_SECONDS = 600;
 const ATTACHMENT_MIME_RE = /^image\/[a-z0-9.+-]+$/;
@@ -346,6 +351,48 @@ workBoardRouter.post(
       actor
     );
     res.status(201).json({ item });
+  })
+);
+
+function gitReportsValue(value: unknown): WorkGitReport[] {
+  if (!Array.isArray(value) || value.length > MAX_GIT_REPORTS) {
+    throw new ValidationError(`items must be a list of up to ${MAX_GIT_REPORTS}`, "items");
+  }
+  return value.map((raw) => {
+    const key = field(raw, "key");
+    const state = field(raw, "state");
+    const sha = field(raw, "sha");
+    const parsed = typeof key === "string" ? parseWorkItemKey(key) : null;
+    if (!parsed || (state !== "dev" && state !== "prod") || typeof sha !== "string" || !GIT_SHA_RE.test(sha)) {
+      throw new ValidationError("each item needs { key, state: dev|prod, sha }", "items");
+    }
+    return { ...parsed, state, sha };
+  });
+}
+
+// POST /api/v1/platform/work/git-state — where each ticket's code is (CORE-221). GitHub Actions
+// reports after every push to dev and every prod deploy (infrastructure/scripts/board-git-state.mjs).
+// `complete` (every ticket left out has nothing merged) and `close` (the prod smoke test passed:
+// Needs Review tickets on prod move to Done unless labeled `hold`) are for the agent and people;
+// that close is the one exception to "closing stays human", decided in board-statuses-r1 D2.
+workBoardRouter.post(
+  "/platform/work/git-state",
+  asyncHandler(async (req, res) => {
+    const actor = actorOf(res);
+    const reports = gitReportsValue(field(req.body, "items"));
+    const complete = field(req.body, "complete") === true;
+    let close: { smoke_url: string } | null = null;
+    if (hasField(req.body, "close")) {
+      const url = field(field(req.body, "close"), "smoke_url");
+      if (typeof url !== "string" || !/^https:\/\/\S+$/.test(url) || url.length > 500) {
+        throw new ValidationError("close needs { smoke_url } (https)", "close");
+      }
+      close = { smoke_url: url };
+    }
+    if (actor.kind === "session" && (complete || close)) {
+      throw new ForbiddenError("A session can report a ticket's git state, not close tickets or send a complete report");
+    }
+    res.json(await applyWorkGitStates(reports, { complete, close }, actor));
   })
 );
 

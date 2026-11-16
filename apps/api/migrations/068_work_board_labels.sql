@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 067: work board label catalog (CORE-219, decision D2)
+-- Migration 068: work board label catalog (CORE-219, decision D2)
 --
 -- docs/stories/work-board-labels-and-session-indicators.md. Items keep their
 -- labels by name in work_item.labels (TEXT[], migration 059); the catalog beside

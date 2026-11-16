@@ -258,6 +258,110 @@ describe("platform work board", () => {
     });
   });
 
+  describe("git state (CORE-221)", () => {
+    const SHA = "a".repeat(40);
+    const SMOKE = "https://github.com/lukasz512/neoSLEEP/actions/runs/1";
+
+    async function inReview(title: string, labels: string[] = []): Promise<string> {
+      const created = await create({ title, status: "needs_review", labels });
+      return created.body.item.key as string;
+    }
+    async function read(key: string) {
+      return (await request(app).get(`${BASE}/items/${key}`).set("Authorization", platformAdmin.auth)).body;
+    }
+    function reportGit(body: Record<string, unknown>) {
+      return asAgent(request(app).post(`${BASE}/git-state`)).send(body);
+    }
+
+    it("a new item has never been checked", async () => {
+      const created = await create({ title: "Unchecked" });
+      expect(created.body.item.git_state).toBeNull();
+    });
+
+    it("stores the state and commit per item and skips unknown keys", async () => {
+      const key = await inReview("On dev");
+      const res = await reportGit({ items: [{ key, state: "dev", sha: SHA }, { key: `${TEAM}-99999`, state: "prod", sha: SHA }] });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ updated: 1, closed: [] });
+      const { item, events } = await read(key);
+      expect(item).toMatchObject({ git_state: "dev", git_sha: SHA, status: "needs_review" });
+      expect(item.git_checked_at).not.toBeNull();
+      // A git fact is not an edit: the trail holds only the creation.
+      expect(events.map((e: { kind: string }) => e.kind)).toEqual(["created"]);
+    });
+
+    it("a complete report marks every item it leaves out as not merged", async () => {
+      const cited = await inReview("Cited");
+      const left = await inReview("Left out");
+      await reportGit({ items: [{ key: left, state: "dev", sha: SHA }] });
+      await reportGit({ items: [{ key: cited, state: "prod", sha: SHA }], complete: true });
+      expect((await read(cited)).item.git_state).toBe("prod");
+      expect((await read(left)).item).toMatchObject({ git_state: "none", git_sha: null });
+    });
+
+    it("without close, an item on prod stays in Needs Review", async () => {
+      const key = await inReview("Shipped, smoke unknown");
+      const res = await reportGit({ items: [{ key, state: "prod", sha: SHA }] });
+      expect(res.body.closed).toEqual([]);
+      expect((await read(key)).item.status).toBe("needs_review");
+    });
+
+    it("close moves Needs Review items on prod to Done with a status event and a comment", async () => {
+      const shipped = await inReview("Shipped");
+      const held = await inReview("Shipped but held", ["hold"]);
+      const onDev = await inReview("Only on dev");
+      const building = (await create({ title: "Building, on prod", status: "building" })).body.item.key as string;
+      const res = await reportGit({
+        items: [
+          { key: shipped, state: "prod", sha: SHA },
+          { key: held, state: "prod", sha: SHA },
+          { key: onDev, state: "dev", sha: SHA },
+          { key: building, state: "prod", sha: SHA },
+        ],
+        close: { smoke_url: SMOKE },
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.closed).toContain(shipped);
+      for (const key of [held, onDev, building]) expect(res.body.closed).not.toContain(key);
+
+      const done = await read(shipped);
+      expect(done.item.status).toBe("done");
+      expect(done.item.completed_at).not.toBeNull();
+      const status = done.events.find((e: { kind: string }) => e.kind === "status");
+      expect(status).toMatchObject({ from_status: "needs_review", to_status: "done", actor: "agent", actor_kind: "agent" });
+      const comment = done.events.find((e: { kind: string }) => e.kind === "comment");
+      expect(comment.body).toContain("aaaaaaa");
+      expect(comment.body).toContain(SMOKE);
+
+      expect((await read(held)).item.status).toBe("needs_review");
+      expect((await read(onDev)).item.status).toBe("needs_review");
+      expect((await read(building)).item.status).toBe("building");
+    });
+
+    it("a session may report a state but may not close or send a complete report", async () => {
+      const issued = await request(app).post(`${BASE}/session-tokens`).set("Authorization", platformAdmin.auth).send({ name: `Git ${SUFFIX}` });
+      const asSession = (body: Record<string, unknown>) => request(app).post(`${BASE}/git-state`).set("X-Session-Token", issued.body.token).send(body);
+      const key = await inReview("Session report");
+      const items = [{ key, state: "prod", sha: SHA }];
+      expect((await asSession({ items })).status).toBe(200);
+      expect((await asSession({ items, close: { smoke_url: SMOKE } })).status).toBe(403);
+      expect((await asSession({ items, complete: true })).status).toBe(403);
+      expect((await read(key)).item).toMatchObject({ git_state: "prod", status: "needs_review" });
+      await getDb().query("DELETE FROM platform.work_session_token WHERE id = $1", [issued.body.item.id]);
+    });
+
+    it("403 for a tenant admin, 400 with the field for bad input", async () => {
+      const key = await inReview("Validation");
+      const tenant = await request(app).post(`${BASE}/git-state`).set("Authorization", tenantAdmin.auth).send({ items: [] });
+      expect(tenant.status).toBe(403);
+      expect((await reportGit({})).body.field).toBe("items");
+      expect((await reportGit({ items: [{ key, state: "none", sha: SHA }] })).body.field).toBe("items");
+      expect((await reportGit({ items: [{ key, state: "dev", sha: "not a sha" }] })).body.field).toBe("items");
+      expect((await reportGit({ items: [{ key: "nope", state: "dev", sha: SHA }] })).body.field).toBe("items");
+      expect((await reportGit({ items: [], close: { smoke_url: "http://insecure" } })).body.field).toBe("close");
+    });
+  });
+
   describe("validation", () => {
     it("answers 400 with the field for bad input", async () => {
       expect((await create({ title: "" })).body.field).toBe("title");

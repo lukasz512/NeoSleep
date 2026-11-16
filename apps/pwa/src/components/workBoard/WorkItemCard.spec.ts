@@ -14,6 +14,7 @@ function item(done_when: string | null): WorkItem {
     id: "item-1", key: "CORE-9", team_key: "CORE", number: 9, title: "Paste does not work", problem: null, change: null, done_when,
     status: "building", priority: 0, labels: [], links: [], branch: null, assignee: null, due_date: null, source: "manual",
     created_at: "2026-11-10T10:00:00Z", updated_at: "2026-11-10T10:00:00Z", status_changed_at: "2026-11-10T10:00:00Z", completed_at: null,
+    git_state: null, git_sha: null, git_checked_at: null,
   };
 }
 

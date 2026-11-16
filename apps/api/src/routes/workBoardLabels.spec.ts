@@ -17,7 +17,7 @@ const SUFFIX = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const TAG = Math.random().toString(36).slice(2, 8);
 const TEAM = `L${Math.random().toString(36).slice(2, 8).toUpperCase().replace(/[^A-Z0-9]/g, "X")}`;
 const BASE = "/api/v1/platform/work";
-const MIGRATION = fileURLToPath(new URL("../../migrations/067_work_board_labels.sql", import.meta.url));
+const MIGRATION = fileURLToPath(new URL("../../migrations/068_work_board_labels.sql", import.meta.url));
 const TICKET = { problem: "Labels are invisible.", change: "- Show them", done_when: "- A test proves it" };
 
 interface Label { id: string; name: string; color: string }

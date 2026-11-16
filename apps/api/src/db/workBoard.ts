@@ -42,7 +42,7 @@ export interface WorkLink {
   state?: WorkCiState;
 }
 
-/** The label palette; the PWA maps each key to a theme colour. Same list as the CHECK in migration 067. */
+/** The label palette; the PWA maps each key to a theme colour. Same list as the CHECK in migration 068. */
 export const WORK_LABEL_COLORS = ["blue", "teal", "green", "amber", "orange", "red", "pink", "purple"] as const;
 export type WorkLabelColor = (typeof WORK_LABEL_COLORS)[number];
 
@@ -55,6 +55,13 @@ export interface WorkLabelRow {
   color: WorkLabelColor;
   created_at: string;
 }
+
+/** Where a ticket's code is, as reported from git (CORE-221). */
+export const WORK_GIT_STATES = ["none", "dev", "prod"] as const;
+export type WorkGitState = (typeof WORK_GIT_STATES)[number];
+
+/** Keeps a ticket in Needs Review when the board closes shipped ones (CORE-221). */
+export const HOLD_LABEL = "hold";
 
 export interface WorkTeamRow {
   key: string;
@@ -92,6 +99,10 @@ export interface WorkItemRow {
   completed_at: string | null;
   /** When a Claude Code session last wrote to the item; null when none ever did (CORE-219). */
   session_active_at: string | null;
+  /** null until the first git report (CORE-221). */
+  git_state: WorkGitState | null;
+  git_sha: string | null;
+  git_checked_at: string | null;
 }
 
 export interface WorkItemEventRow {
@@ -108,7 +119,7 @@ export interface WorkItemEventRow {
 const ITEM_COLUMNS = `id, team_key || '-' || number AS key, team_key, number, title, problem, change,
   done_when, status, priority, labels, links, branch, assignee, to_char(due_date, 'YYYY-MM-DD') AS due_date,
   source, linear_identifier, external_ref, created_by,
-  created_at, updated_at, status_changed_at, completed_at,
+  created_at, updated_at, status_changed_at, completed_at, git_state, git_sha, git_checked_at,
   (SELECT max(e.created_at) FROM platform.work_item_event e
     WHERE e.item_id = work_item.id AND e.actor_kind = 'session') AS session_active_at`;
 
@@ -433,6 +444,63 @@ export async function addWorkItemComment(
     );
     await client.query(`UPDATE platform.work_item SET updated_at = now() WHERE id = $1`, [current.id]);
     return rows[0]!;
+  });
+}
+
+export interface WorkGitReport {
+  team: string;
+  number: number;
+  state: Exclude<WorkGitState, "none">;
+  sha: string;
+}
+
+/**
+ * Stores what git says about each reported ticket (CORE-221). With `complete` the report
+ * covers the whole repository, so every other ticket becomes `none`. With `close` (the prod
+ * smoke test passed) each Needs Review ticket that is on prod and not labeled `hold` moves
+ * to Done, with a status event and a comment. A state change alone leaves no event: it is
+ * a fact about git, not an edit of the ticket.
+ */
+export async function applyWorkGitStates(
+  reports: readonly WorkGitReport[],
+  options: { complete: boolean; close: { smoke_url: string } | null },
+  actor: WorkActor
+): Promise<{ updated: number; closed: string[] }> {
+  return inPlatformTransaction(async (client) => {
+    const teams = reports.map((r) => r.team);
+    const numbers = reports.map((r) => r.number);
+    const { rowCount } = await client.query(
+      `UPDATE platform.work_item w SET git_state = r.state, git_sha = r.sha, git_checked_at = now()
+         FROM unnest($1::text[], $2::int[], $3::text[], $4::text[]) AS r(team, number, state, sha)
+        WHERE w.team_key = r.team AND w.number = r.number`,
+      [teams, numbers, reports.map((r) => r.state), reports.map((r) => r.sha)]
+    );
+    if (options.complete) {
+      await client.query(
+        `UPDATE platform.work_item w SET git_state = 'none', git_sha = NULL, git_checked_at = now()
+          WHERE NOT EXISTS (SELECT 1 FROM unnest($1::text[], $2::int[]) AS r(team, number)
+                             WHERE r.team = w.team_key AND r.number = w.number)`,
+        [teams, numbers]
+      );
+    }
+    const closed: string[] = [];
+    if (options.close) {
+      const { rows } = await client.query<WorkItemRow>(
+        `UPDATE platform.work_item SET status = 'done', status_changed_at = now(), completed_at = now(), updated_at = now()
+          WHERE status = 'needs_review' AND git_state = 'prod' AND NOT ($1 = ANY (labels))
+          RETURNING ${ITEM_COLUMNS}`,
+        [HOLD_LABEL]
+      );
+      for (const item of rows) {
+        await insertEvent(client, item.id, actor, { kind: "status", from_status: "needs_review", to_status: "done" });
+        await insertEvent(client, item.id, actor, {
+          kind: "comment",
+          body: `Closed automatically: commit ${(item.git_sha ?? "").slice(0, 7)} is on prod and the prod smoke test passed (${options.close.smoke_url}). Label a ticket "${HOLD_LABEL}" to keep it in Needs Review.`,
+        });
+        closed.push(item.key);
+      }
+    }
+    return { updated: rowCount ?? 0, closed: closed.sort() };
   });
 }
 

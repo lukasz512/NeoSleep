@@ -65,7 +65,14 @@ export interface WorkItem {
   completed_at: string | null;
   /** The newest event a Claude session wrote on the item, for the live dot (CORE-219). */
   session_active_at?: string | null;
+  /** Where the code is, read from git by CI (CORE-221); null until the first report. */
+  git_state: WorkGitState | null;
+  /** Newest commit citing the ticket. */
+  git_sha: string | null;
+  git_checked_at: string | null;
 }
+
+export type WorkGitState = "none" | "dev" | "prod";
 
 export interface WorkItemEvent {
   id: string;
@@ -100,6 +107,7 @@ export interface WorkItemPatch {
   status?: WorkStatus;
   assignee?: string | null;
   due_date?: string | null;
+  /** The whole label set, not a delta. */
   labels?: string[];
 }
 

@@ -1,8 +1,9 @@
 /**
- * DB-free harness for the platform work board (CORE-219) — served only by the
- * Vite dev server, never part of `vite build`. Mounts the real WorkBoardView
- * and answers the work board API from fixtures, so the board can be looked at
- * (and screenshot) in a real browser without an API or a database.
+ * DB-free harness for the platform work board (CORE-219, CORE-221) — served only by the
+ * Vite dev server, never part of `vite build`. Mounts the real WorkBoardView and answers the
+ * work board API from fixtures, so the board can be looked at (and screenshot) in a real
+ * browser without an API or a database: labels and sessions, two statuses with no tickets,
+ * git markers of every kind in Building and Needs Review, one ticket on hold, two canceled.
  *
  * The board's own query works here too: `?sort=label` · `?labels=api` · `?sessions=1` · `?team=NEO`
  * Harness switches: `?theme=dark` · `?lang=pl|mx`
@@ -20,8 +21,8 @@ import type { WorkItem, WorkLabel, WorkLink, WorkSessionToken, WorkStatus, WorkT
 
 const params = new URLSearchParams(location.search);
 const theme = params.get("theme") === "dark" ? darkTheme : lightTheme;
-vuetify.theme.change(theme);
-document.documentElement.setAttribute("data-theme", theme);
+vuetify.theme.global.name.value = theme;
+document.documentElement.setAttribute("data-theme", theme === darkTheme ? "dark" : "light");
 const lang = params.get("lang");
 if (lang === "pl" || lang === "mx") i18n.global.locale.value = lang;
 
@@ -41,6 +42,7 @@ const LABELS: WorkLabel[] = [
   { id: "l3", name: "ci", color: "purple", created_at: ago(30 * DAY) },
   { id: "l4", name: "frontend", color: "green", created_at: ago(30 * DAY) },
   { id: "l5", name: "security", color: "red", created_at: ago(30 * DAY) },
+  { id: "l6", name: "hold", color: "teal", created_at: ago(30 * DAY) },
 ];
 
 const TOKENS: WorkSessionToken[] = [
@@ -52,6 +54,10 @@ const TOKENS: WorkSessionToken[] = [
 const pr = (n: number): WorkLink => ({ kind: "pr", url: `https://github.com/example/repo/pull/${n}` });
 const ci = (state?: "passed" | "failed"): WorkLink => ({ kind: "ci", url: "https://github.com/example/repo/actions/runs/1", ...(state ? { state } : {}) });
 const spec: WorkLink = { kind: "spec", url: "https://claude.ai/artifact/example" };
+
+const checked = { git_checked_at: ago(60 * MINUTE) };
+const onDev = (sha: string) => ({ git_state: "dev" as const, git_sha: sha, ...checked });
+const onProd = (sha: string) => ({ git_state: "prod" as const, git_sha: sha, ...checked });
 
 let seq = 0;
 function item(key: string, title: string, status: WorkStatus, overrides: Partial<WorkItem> = {}): WorkItem {
@@ -77,14 +83,17 @@ function item(key: string, title: string, status: WorkStatus, overrides: Partial
     updated_at: ago(DAY),
     status_changed_at: ago(2 * 60 * MINUTE),
     completed_at: null,
+    git_state: "none",
+    git_sha: null,
+    ...checked,
     ...overrides,
   };
 }
 
 let items: WorkItem[] = [
-  item("CORE-231", "Doctor cannot reopen a closed visit", "triage", { priority: 2 }),
+  item("CORE-231", "Doctor cannot reopen a closed visit", "backlog", { priority: 2 }),
   item("NEO-164", "Invoice PDF shows the wrong tax id", "backlog", { labels: ["billing"], priority: 3, assignee: "ana.lopez@example.com" }),
-  item("CORE-228", "Rate-limit the public questionnaire endpoint", "to_spec", { labels: ["security", "api"], priority: 2, due_date: day(5) }),
+  item("CORE-228", "Rate-limit the public questionnaire endpoint", "backlog", { labels: ["security", "api"], priority: 2, due_date: day(5) }),
   item("CORE-226", "Patient list filter by referring doctor", "spec_ready", { labels: ["frontend"], links: [spec], assignee: "Marta Nowak" }),
   item("NEO-160", "Monthly statement export for clinics", "approved", { labels: ["billing", "api"], priority: 1, due_date: day(-2), assignee: "jan.kowalski@example.com" }),
   item("CORE-219", "Work board: labels, lanes and session indicators", "building", {
@@ -96,15 +105,47 @@ let items: WorkItem[] = [
     done_when: "- [x] Label catalog\n- [x] Lanes\n- [ ] Verified on dev",
     status_changed_at: ago(DAY + 60 * MINUTE),
   }),
-  item("CORE-221", "Board statuses follow the git state", "building", { labels: ["session", "ci"], links: [pr(529), ci("failed")], status_changed_at: ago(9 * DAY) }),
-  item("CORE-214", "Webhook retries keep the original signature", "needs_review", { labels: ["session", "api", "security", "ci", "billing"], links: [pr(527), ci("passed")], status_changed_at: ago(4 * DAY) }),
-  item("NEO-158", "Consent form: second signature for minors", "needs_review", { labels: ["frontend"], links: [spec, pr(525), ci("passed")], assignee: "Marta Nowak", due_date: day(1), status_changed_at: ago(DAY) }),
-  item("CORE-208", "Pin the CI runner image", "done", { labels: ["session", "ci"], links: [pr(526), ci("passed")], completed_at: ago(3 * DAY), status_changed_at: ago(3 * DAY) }),
-  item("CORE-209", "Support inbox syncs with the platform", "done", { labels: ["api"], links: [pr(524)], completed_at: ago(5 * DAY), status_changed_at: ago(5 * DAY) }),
+  item("CORE-221", "Board statuses follow the git state", "building", {
+    labels: ["session", "ci"],
+    links: [pr(529), ci("failed")],
+    status_changed_at: ago(9 * DAY),
+    ...onDev("4be1a9c0d2"),
+  }),
+  item("CORE-214", "Webhook retries keep the original signature", "needs_review", {
+    labels: ["session", "api", "security", "ci", "billing"],
+    links: [pr(527), ci("passed")],
+    status_changed_at: ago(4 * DAY),
+    ...onDev("9a31f07b55"),
+  }),
+  item("NEO-158", "Consent form: second signature for minors", "needs_review", {
+    labels: ["frontend"],
+    links: [spec, pr(525), ci("passed")],
+    assignee: "Marta Nowak",
+    due_date: day(1),
+    status_changed_at: ago(DAY),
+    ...onProd("c500f14e21"),
+  }),
+  item("CORE-25", "Calendar sync with Google", "needs_review", { labels: ["hold", "api"], links: [pr(520)], status_changed_at: ago(6 * DAY), ...onProd("b768deb3aa") }),
+  item("CORE-208", "Pin the CI runner image", "done", {
+    labels: ["session", "ci"],
+    links: [pr(526), ci("passed")],
+    completed_at: ago(3 * DAY),
+    status_changed_at: ago(3 * DAY),
+    ...onProd("c500f14e21"),
+  }),
+  item("CORE-209", "Support inbox syncs with the platform", "done", {
+    labels: ["api"],
+    links: [pr(524)],
+    completed_at: ago(5 * DAY),
+    status_changed_at: ago(5 * DAY),
+    ...onProd("b768deb3aa"),
+  }),
+  item("CORE-140", "Offline queue for visit notes", "canceled", { labels: ["frontend"] }),
+  item("NEO-77", "Fax export for referrals", "canceled"),
 ];
 
 const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
 
 const realFetch = window.fetch.bind(window);
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {

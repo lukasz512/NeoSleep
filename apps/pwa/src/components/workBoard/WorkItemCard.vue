@@ -37,6 +37,14 @@
       >
         <VIcon icon="mdi-checkbox-marked-outline" size="14" aria-hidden="true" />{{ progress.done }}/{{ progress.total }}
       </span>
+      <span v-if="git || held" class="work-card__marks">
+        <span v-if="git" class="work-card__git" :class="{ 'work-card__git--alert': alert }" data-testid="work-card-git">
+          <VIcon :icon="GIT_ICONS[git]" size="14" aria-hidden="true" />{{ t(`workBoard.git.${git}`) }}
+        </span>
+        <span v-if="held" class="work-card__git" data-testid="work-card-hold">
+          <VIcon icon="mdi-pause-circle-outline" size="14" aria-hidden="true" />{{ t("workBoard.hold.on") }}
+        </span>
+      </span>
     </button>
     <span v-if="!board.dense.value && labels.length" class="work-card__labels" data-testid="work-card-labels">
       <WorkLabelChip
@@ -102,14 +110,18 @@
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import {
+  GIT_ICONS,
+  HOLD_LABEL,
   SESSION_LABEL,
   cardLinks,
   checklistProgress,
   daysInColumn,
+  gitMarker,
   initialsOf,
   isLive,
   isOverdue,
   isStale,
+  outOfStep,
   shownLabels,
 } from "../../composables/useWorkBoard";
 import WorkLabelChip from "./WorkLabelChip.vue";
@@ -117,10 +129,10 @@ import { useWorkBoardContext } from "./workBoardContext";
 import type { WorkItem, WorkLink, WorkLinkKind } from "../../types/workBoard";
 
 /**
- * One board card: KEY-n, priority, title, its labels, and a footer with the assignee, the due
- * date, the days in this column and the spec/artifact/PR/CI links as icons (CORE-219). A robot
- * marks a ticket a Claude session created; the green dot means a session touched it in the last
- * 15 minutes. Compact density keeps only the top rows and the links.
+ * One board card: KEY-n, priority, title, where the code is (CORE-221), its labels, and a footer
+ * with the assignee, the due date, the days in this column and the spec/artifact/PR/CI links as
+ * icons (CORE-219). A robot marks a ticket a Claude session created; the green dot means a session
+ * touched it in the last 15 minutes. Compact density keeps only the top rows and the links.
  * `[` / `]` on a focused card ask the board to move it one column left / right; clicking a label
  * asks it to filter by that label.
  */
@@ -133,6 +145,10 @@ const MAX_CHIPS = 3;
 const dragging = ref(false);
 /** How much of "Done when" is ticked (CORE-195); null when it isn't a checklist. */
 const progress = computed(() => checklistProgress(props.item.done_when));
+const git = computed(() => gitMarker(props.item));
+/** Status and git disagree; the marker turns into a warning. */
+const alert = computed(() => outOfStep(props.item));
+const held = computed(() => props.item.status === "needs_review" && props.item.labels.includes(HOLD_LABEL));
 
 const links = computed(() => cardLinks(props.item));
 const labels = computed(() => shownLabels(props.item));
@@ -268,6 +284,24 @@ function onKeydown(event: KeyboardEvent): void {
 
 .work-card__progress--complete {
   color: rgb(var(--v-theme-success));
+}
+
+.work-card__marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.work-card__git {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.work-card__git--alert {
+  color: rgb(var(--v-theme-warning));
 }
 
 .work-card__title {

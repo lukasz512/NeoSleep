@@ -11,6 +11,29 @@
     <template v-else>
       <div class="work-board__toolbar" :class="{ 'work-board__toolbar--compact': compact }">
         <AppChipTabs v-model="team" :options="teamOptions" class="work-board__teams" data-testid="work-board-teams" />
+        <AppButton
+          v-if="outOfStepCount || outOfStepOnly"
+          :variant="outOfStepOnly ? 'tonal' : 'outlined'"
+          :color="outOfStepOnly ? 'primary' : undefined"
+          :prepend-icon="outOfStepOnly ? 'mdi-check' : 'mdi-source-branch-remove'"
+          :aria-pressed="outOfStepOnly"
+          :title="t('workBoard.outOfStepHint')"
+          data-testid="work-board-out-of-step"
+          @click="outOfStepOnly = !outOfStepOnly"
+        >
+          {{ t("workBoard.outOfStep", { count: outOfStepCount }) }}
+        </AppButton>
+        <AppButton
+          v-if="canceledCount"
+          :variant="showCanceled ? 'tonal' : 'text'"
+          :color="showCanceled ? 'primary' : undefined"
+          :prepend-icon="showCanceled ? 'mdi-check' : 'mdi-cancel'"
+          :aria-pressed="showCanceled"
+          data-testid="work-board-canceled"
+          @click="showCanceled = !showCanceled"
+        >
+          {{ t("workBoard.showCanceled", { count: canceledCount }) }}
+        </AppButton>
         <VTextField
           ref="searchRef"
           v-model="query"
@@ -50,7 +73,12 @@
       <p v-if="!compact" class="work-board__hint">{{ t("workBoard.shortcuts") }}</p>
 
       <!-- By label: one lane per label, each with the same status columns; the lanes scroll sideways together. -->
-      <div v-if="sort === 'label' && lanes.length" class="work-board__lanes" :class="{ 'work-board__lanes--compact': compact }" data-testid="work-board-lanes">
+      <div
+        v-if="sort === 'label' && lanes.length"
+        class="work-board__lanes"
+        :class="{ 'work-board__lanes--compact': compact, 'work-board__lanes--canceled': canceledColumn }"
+        data-testid="work-board-lanes"
+      >
         <section v-for="lane in lanes" :key="laneId(lane)" class="work-board__lane" :data-testid="`work-lane-${lane.label ?? 'none'}`">
           <button
             type="button"
@@ -69,6 +97,7 @@
             v-if="!isCollapsed(lane)"
             :items="lane.items"
             :layout="compact ? 'list' : 'columns'"
+            :canceled="canceledColumn"
             lane
             @open="openItem"
             @move="moveBy"
@@ -79,8 +108,9 @@
       </div>
       <WorkBoardColumns
         v-else
-        :items="visible"
+        :items="onBoard"
         :layout="compact ? 'list' : 'columns'"
+        :canceled="canceledColumn"
         @open="openItem"
         @move="moveBy"
         @drop="moveTo"
@@ -131,6 +161,7 @@ import {
   matchesLabels,
   matchesQuery,
   neighbourStatus,
+  outOfStep,
   patchWorkItem,
   refreshWorkItems,
   shownLabels,
@@ -194,6 +225,10 @@ const selectedLabels = ref<string[]>(queryList(route.query.labels));
 const sort = ref<WorkBoardSort>(route.query.sort === "label" ? "label" : "priority");
 const dense = ref(prefs.dense);
 const collapsed = ref<string[]>(prefs.collapsed);
+/** Only Needs Review tickets git disagrees with (CORE-221). */
+const outOfStepOnly = ref(false);
+/** Canceled tickets get a column only when asked for (CORE-221). */
+const showCanceled = ref(false);
 const tokensOpen = ref(false);
 const labelsOpen = ref(false);
 /** Tokens that still work; null until the first answer (the key then shows no number). */
@@ -216,7 +251,7 @@ const teamOptions = computed(() => [
 
 const inTeam = computed(() => items.value.filter((item) => team.value === ALL || item.team_key === team.value));
 const sessionCount = computed(() => inTeam.value.filter((item) => item.labels.includes(SESSION_LABEL)).length);
-const visible = computed(() =>
+const matching = computed(() =>
   inTeam.value.filter(
     (item) =>
       (!sessionsOnly.value || item.labels.includes(SESSION_LABEL)) &&
@@ -224,7 +259,13 @@ const visible = computed(() =>
       matchesQuery(item, query.value ?? ""),
   ),
 );
-const lanes = computed(() => groupByLabel(visible.value));
+const outOfStepCount = computed(() => matching.value.filter(outOfStep).length);
+const visible = computed(() => (outOfStepOnly.value ? matching.value.filter(outOfStep) : matching.value));
+const canceledCount = computed(() => visible.value.filter((item) => item.status === "canceled").length);
+const canceledColumn = computed(() => showCanceled.value && canceledCount.value > 0);
+/** What the columns and lanes get: canceled tickets only while their column is shown. */
+const onBoard = computed(() => (canceledColumn.value ? visible.value : visible.value.filter((item) => item.status !== "canceled")));
+const lanes = computed(() => groupByLabel(onBoard.value));
 const tokensText = computed(() =>
   tokenCount.value === null ? t("workBoard.tokens.open") : t("workBoard.tokens.count", { n: tokenCount.value }),
 );
@@ -430,14 +471,17 @@ onBeforeUnmount(() => {
   gap: 12px;
 }
 
+/* The chips scroll inside their own row, so they report no width of their own: the floor
+   keeps the filters from squeezing them out, and a crowded toolbar wraps instead (CORE-221). */
 .work-board__teams {
   flex: 1 1 auto;
-  min-width: 0;
+  min-width: min(100%, 224px);
 }
 
 .work-board__search {
-  flex: 0 1 240px;
+  flex: 1 1 160px;
   min-width: 160px;
+  max-width: 240px;
 }
 
 .work-board__tokens {
@@ -452,6 +496,7 @@ onBeforeUnmount(() => {
 .work-board__toolbar--compact .work-board__search {
   flex: 1 1 140px;
   min-width: 0;
+  max-width: none;
 }
 
 .work-board__hint {
@@ -474,6 +519,11 @@ onBeforeUnmount(() => {
   gap: 8px;
   /* Eight 240px columns and their gaps, so every lane's columns line up. */
   min-width: 2004px;
+}
+
+/* One more column while canceled tickets are shown. */
+.work-board__lanes--canceled .work-board__lane {
+  min-width: 2256px;
 }
 
 .work-board__lanes--compact .work-board__lane {

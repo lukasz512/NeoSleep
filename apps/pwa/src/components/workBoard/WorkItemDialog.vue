@@ -79,6 +79,31 @@
           </VCard>
         </VMenu>
 
+        <VChip
+          v-if="canHold"
+          :prepend-icon="held ? 'mdi-pause-circle' : 'mdi-pause-circle-outline'"
+          :variant="held ? 'flat' : 'tonal'"
+          :color="held ? 'primary' : undefined"
+          size="small"
+          :aria-pressed="held"
+          :title="t('workBoard.hold.hint')"
+          data-testid="work-item-hold"
+          @click="toggleHold"
+        >
+          {{ t(held ? "workBoard.hold.on" : "workBoard.hold.off") }}
+        </VChip>
+
+        <VChip
+          v-if="git"
+          :prepend-icon="GIT_ICONS[git]"
+          variant="outlined"
+          size="small"
+          :title="current?.git_sha ? t('workBoard.git.commit', { sha: current.git_sha.slice(0, 7) }) : undefined"
+          data-testid="work-item-git"
+        >
+          {{ t(`workBoard.git.${git}`) }}
+        </VChip>
+
         <VMenu v-if="developmentCount">
           <template #activator="{ props: activator }">
             <VChip v-bind="activator" prepend-icon="mdi-source-branch" variant="tonal" size="small" data-testid="work-item-development">
@@ -313,8 +338,11 @@ import AppSpinner from "../AppSpinner.vue";
 import AppSkeletonLines from "../AppSkeletonLines.vue";
 import AppErrorState from "../AppErrorState.vue";
 import {
+  GIT_ICONS,
+  HOLD_LABEL,
   WORK_PRIORITIES,
   WORK_STATUS_OPTIONS,
+  gitMarker,
   addWorkItemComment,
   createWorkItem,
   deleteWorkAttachment,
@@ -414,7 +442,7 @@ interface Form {
   assignee: string | null;
   /** YYYY-MM-DD, or "" for none (what a date input gives). */
   due_date: string;
-  /** Without the technical `session` label, which nobody edits here. */
+  /** Without the technical `session` label, which nobody edits here. Hold is one of them (CORE-221). */
   labels: string[];
 }
 const form = reactive<Form>(blankForm());
@@ -504,6 +532,15 @@ const listChips = computed<ListChip[]>(() => {
 });
 
 const hiddenSections = computed(() => SECTION_FIELDS.filter((name) => !shown[name]));
+/** Where the code is, as CI last reported it (CORE-221). */
+const git = computed(() => (current.value ? gitMarker(current.value) : null));
+/** Hold only means something while the ticket is open. */
+const canHold = computed(() => !session.creating && !!current.value && form.status !== "done" && form.status !== "canceled");
+/** Hold is the label `hold`, so the button and the label picker edit the same list. */
+const held = computed(() => form.labels.includes(HOLD_LABEL));
+function toggleHold(): void {
+  form.labels = held.value ? form.labels.filter((label) => label !== HOLD_LABEL) : [...form.labels, HOLD_LABEL];
+}
 const developmentCount = computed(() => (current.value ? current.value.links.length + (current.value.branch ? 1 : 0) : 0));
 /** What the description shows inline stays out of the attachment strip (CORE-195). */
 const inlineRefs = computed(() => attachmentRefs(form.problem));

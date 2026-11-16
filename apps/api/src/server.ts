@@ -149,6 +149,8 @@ app.use("/api/v1/patient/:id/historia-clinica/email", express.json({ limit: "600
 app.use("/api/v1/public/questionnaire/opened", express.text({ type: "text/plain", limit: "1kb" }));
 // Resend signs the exact bytes it sends — keep the raw body for that one path (NEO-190).
 app.use("/api/v1/webhooks/resend", express.raw({ type: "*/*", limit: "256kb" }));
+// One git report lists every ticket a commit ever cited, ~80 bytes each (CORE-221).
+app.use("/api/v1/platform/work/git-state", express.json({ limit: "600kb" }));
 app.use(express.json({ limit: "50kb" }));
 // Express 5 (body-parser 2) leaves req.body undefined when nothing was parsed — a
 // GET, a bodiless POST/DELETE, or a non-JSON content type. Express 4 always set {}.
