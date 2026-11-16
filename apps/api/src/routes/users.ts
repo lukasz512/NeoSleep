@@ -92,7 +92,7 @@ usersRouter.post(
         region: typeof body.region === "string" ? body.region : null,
         country_code: typeof body.country_code === "string" ? body.country_code : null,
         phone: typeof body.phone === "string" ? body.phone : null,
-      });
+      }, resolveFrontendOrigin(req));
     });
 
     res.status(201).json(user);

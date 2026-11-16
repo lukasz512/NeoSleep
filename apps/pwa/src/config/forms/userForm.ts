@@ -14,11 +14,11 @@ import { loadScopeTerritoryOptions } from "./territoryOptions";
  * Staff user entity config for the generic FormRenderer (apps/pwa/src/
  * components/FormRenderer.vue + useFormRenderer.ts).
  *
- * No password field here: new accounts are created without a password —
- * ensureInitialUserPasswords() (apps/api/src/auth.ts) sets one on next
- * server startup, or an admin can immediately trigger the "reset password"
- * row action to email the new user a set-password link. Admins never
- * type/see another person's password.
+ * No password field here: new accounts are created without a password. On
+ * create the API emails the new user a set-password link (7 days, CORE-199)
+ * and reports `invite_email: "sent" | "not_sent"`; when it is "not_sent" the
+ * admin can trigger the "reset password" row action to send a fresh link.
+ * Admins never type/see another person's password.
  *
  * `email` is marked `immutableOnEdit` — FormRenderer disables it once
  * initialData.id is set, so the edit dialog no longer shows a live-looking

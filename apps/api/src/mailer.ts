@@ -192,6 +192,55 @@ export async function sendPasswordResetEmail(to: string, resetLink: string, reci
   });
 }
 
+export interface AccountCreatedContext {
+  /** Who created the account (shown as "<inviter> created ..."). */
+  inviterName: string;
+  tenantName: string;
+}
+
+/**
+ * Welcome email for a staff account an admin/manager just created (CORE-199): a
+ * set-password link (reuses the password-reset token flow, 7-day expiry) plus a
+ * note that Google sign-in works too. Locale: the user's language, else their region's.
+ * Returns the Resend message id, or null when Resend isn't configured (nothing sent).
+ */
+export async function sendAccountCreatedEmail(
+  to: string,
+  setPasswordLink: string,
+  recipient: EmailRecipient,
+  context: AccountCreatedContext
+): Promise<string | null> {
+  const locale = recipient.language ?? localeForRegion(recipient.region);
+  const greetingName = formatGreetingName(recipient, to);
+  const params = { inviter: context.inviterName, tenant: context.tenantName };
+
+  const bodyHtml = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.accountCreated.title", params))}</h1>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: greetingName }))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.accountCreated.body", params))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.accountCreated.google"))}</p>
+    <p style="margin:0;font-size:13px;color:#7a827e;">${escapeHtml(emailT(locale, "email.accountCreated.expiry"))}</p>`;
+
+  const socials = getSocialsForRegion(recipient.region);
+  const html = renderEmailLayout({
+    preheader: emailT(locale, "email.accountCreated.title", params),
+    bodyHtml,
+    cta: { text: emailT(locale, "email.accountCreated.cta"), href: setPasswordLink },
+    footerTagline: emailT(locale, "email.footer.tagline"),
+    footerCities: emailT(locale, "email.footer.cities"),
+    footerCopyright: emailT(locale, "email.footer.copyright", { year: String(new Date().getFullYear()) }),
+    supportLeadIn: emailT(locale, "email.footer.support"),
+    socials,
+  });
+
+  return sendEmail("account created email", {
+    to,
+    subject: emailT(locale, "email.accountCreated.subject", params),
+    html,
+    attachments: getEmailAttachments(socials),
+  });
+}
+
 /** Trackable reports: which reporter email — the receipt, or the closing one (D3). */
 export type ProblemReportEmailKind = "received" | "resolved" | "dismissed";
 
