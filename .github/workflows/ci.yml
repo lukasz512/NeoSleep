@@ -45,7 +45,11 @@ jobs:
     # (e.g. renovate/*); a skipped job counts as passed for required checks. Head dev =
     # the dev→prod promote PR: it runs, but only to copy the dev run's result (Scope step).
     if: github.event_name != 'pull_request' || !(startsWith(github.head_ref, 'worktree-') || startsWith(github.head_ref, 'worker/') || startsWith(github.head_ref, 'claude/'))
-    runs-on: ubuntu-latest
+    # CORE-208: pinned, not ubuntu-latest. On ubuntu-26.04 Playwright's WebKit barely
+    # renders frames (2 animation frames in 670 ms, wheel scroll never lands), so the
+    # same WebKit e2e specs failed on every dev run; on 24.04 the same build is green.
+    # Move to 26.04 only after a manual run of this workflow passes there.
+    runs-on: ubuntu-24.04
     # CORE-151: a hung e2e used to hold the job (and the session waiting on it) for up
     # to an hour; the default limit is 6 h. The nightly 3-engine e2e alone takes ~23 min
     # (2026-10-06: 507 tests in 22.8 min), so the nightly/manual run gets more room.

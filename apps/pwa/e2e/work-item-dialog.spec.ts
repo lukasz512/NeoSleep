@@ -34,7 +34,11 @@ test("a screenshot pasted into the description shows inline, not in the strip", 
     const bytes = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0));
     const data = new DataTransfer();
     data.items.add(new File([bytes], "bug.png", { type: "image/png" }));
-    el.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+    // Set on the event, not through the constructor: Firefox ignores `clipboardData` there and
+    // hands a scripted paste an empty DataTransfer, so the file never reached the editor (CORE-208).
+    const paste = new ClipboardEvent("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(paste, "clipboardData", { value: data });
+    el.dispatchEvent(paste);
   });
 
   await expect(editor.locator("img[alt='bug.png']")).toHaveAttribute("src", /^blob:/);
