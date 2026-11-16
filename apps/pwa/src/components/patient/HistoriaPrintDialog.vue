@@ -27,7 +27,7 @@
 
     <template v-if="canSign">
       <p class="print-picker__hint text-body-medium text-medium-emphasis">{{ t("app.clinical.doctorSignature.hint") }}</p>
-      <ConsentSignatureField v-if="modelValue" ref="fieldRef" data-testid="doctor-signature-field" @change="empty = $event" />
+      <ConsentSignatureField :key="opening" ref="fieldRef" data-testid="doctor-signature-field" @change="empty = $event" />
     </template>
 
     <template #actions>
@@ -74,10 +74,14 @@ const fieldRef = ref<InstanceType<typeof ConsentSignatureField> | null>(null);
 const empty = ref(true);
 const consent = ref(!props.consentSignedOn);
 
-// Every opening starts from the defaults and an empty pad (the field is re-created by v-if).
+// Every opening starts from the defaults and an empty pad (a new key re-creates the field).
+// Only on open, so a closing dialog keeps what it shows while it fades (CORE-195).
+const opening = ref(0);
 watch(
   () => [props.modelValue, props.consentSignedOn] as const,
-  () => {
+  ([open]) => {
+    if (!open) return;
+    opening.value += 1;
     empty.value = true;
     consent.value = !props.consentSignedOn;
   }

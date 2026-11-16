@@ -175,3 +175,46 @@ async function requestNoContent(where: string, path: string): Promise<void> {
 export function linkOf(item: WorkItem, kind: WorkLinkKind): string | null {
   return item.links.find((l) => l.kind === kind)?.url ?? null;
 }
+
+/** A markdown task line: `- [ ] text` / `- [x] text` (`*` bullets and `[X]` too). */
+const TASK_LINE = /^(\s*[-*]\s+\[)([ xX])(\]\s?)(.*)$/;
+
+export interface ChecklistLine {
+  /** Line number in the text, for toggleChecklistLine. */
+  line: number;
+  text: string;
+  done: boolean;
+}
+
+/** The task lines of "Done when" (CORE-195); other lines are left out. */
+export function checklistLines(text: string | null): ChecklistLine[] {
+  if (!text) return [];
+  return text.split("\n").flatMap((raw, line) => {
+    const match = TASK_LINE.exec(raw);
+    return match ? [{ line, text: match[4]!, done: match[2] !== " " }] : [];
+  });
+}
+
+/** Ticked of total task lines, for the card; null when the text has none. */
+export function checklistProgress(text: string | null): { done: number; total: number } | null {
+  const lines = checklistLines(text);
+  return lines.length ? { done: lines.filter((l) => l.done).length, total: lines.length } : null;
+}
+
+/** Ticks or unticks the task on `line`; every other character stays as it was. */
+export function toggleChecklistLine(text: string, line: number): string {
+  const lines = text.split("\n");
+  const match = TASK_LINE.exec(lines[line] ?? "");
+  if (!match) return text;
+  lines[line] = `${match[1]}${match[2] === " " ? "x" : " "}${match[3]}${match[4]}`;
+  return lines.join("\n");
+}
+
+/** Every non-blank line as a task: plain lines and `-` bullets become open ones, task lines stay. */
+export function asChecklist(text: string): string {
+  return text
+    .split("\n")
+    .filter((raw) => raw.trim())
+    .map((raw) => (TASK_LINE.test(raw) ? raw : `- [ ] ${raw.trim().replace(/^[-*]\s+/, "")}`))
+    .join("\n");
+}
