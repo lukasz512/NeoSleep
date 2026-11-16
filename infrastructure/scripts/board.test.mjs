@@ -70,6 +70,12 @@ test("move, link and branch patch the item", async () => {
   ]);
 });
 
+test("link --state reports how a CI run ended", async () => {
+  const { calls, impl } = fakeFetch();
+  await run(["link", "CORE-9", "--kind", "ci", "--url", "https://github.com/x/y/actions/runs/1", "--state", "passed"], { config: CONFIG, fetchImpl: impl, log: () => {} });
+  assert.deepEqual(calls[0].body, { add_links: [{ kind: "ci", url: "https://github.com/x/y/actions/runs/1", state: "passed" }] });
+});
+
 test("surfaces the API's refusal", async () => {
   const { impl } = fakeFetch({ error: "The session cannot move needs_review to done" }, 403);
   await assert.rejects(run(["move", "CORE-9", "done"], { config: CONFIG, fetchImpl: impl, log: () => {} }), /403: The session cannot move/);
