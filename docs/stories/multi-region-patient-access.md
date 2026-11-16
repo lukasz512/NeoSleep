@@ -46,12 +46,17 @@
 - [ ] Doctor access follows Q1; whichever answer, a test covers a doctor on the care team of a patient in another country.
 - [ ] All API tests on real Postgres.
 
-### Open Questions → decision form (CORE-224)
-- [ ] Q1 May a doctor reach a patient from another country when they are on that patient's care team?
-- [ ] Q2 A patient created without a territory: assign the creator's country automatically?
-- [ ] Q3 May one manager cover several countries?
-- [ ] Q4 Keep PL and MX patients in one database for now (separated by territory only)?
+### Decisions (form core-224-r1, answered by Łukasz 2026-11-16)
+- [x] Q1 Doctor and another country → **yes**: the care team is enough; region does not limit a doctor (unchanged behavior).
+- [x] Q2 Patient without a territory → **more**: assign the creator's country; when it cannot be derived (global admin, old rows) the patient goes to a "to assign" queue only an admin sees. The backfill migration uses the same rule, then the `IS NULL OR` fallback is removed.
+- [x] Q3 Manager, several countries → **more**: an admin can grant several countries, and lists and reports get a country switch.
+- [x] Q4 One database → **more**: stay on one database separated by territory; legal review (GDPR / LFPDPPP) before real PL patients, physical split decided after it.
+
+### Open Questions
+- none
 
 ### Hand-off
-→ `/dev` slice 1 now (reason-coded 403 + role-kind parity), no decision needed.
-→ `/arch assess` + `/perspective legal` for slice 2 once the form is answered.
+→ `/dev` slice 1: reason-coded 403 + role-kind parity.
+→ `/arch assess` slice 2: territory on create, admin "to assign" queue, backfill migration, fallback removal.
+→ Slice 3: manager multi-country grant in the admin UI + country switch (`/ux`).
+→ `/perspective legal`: data residency review before PL patients (Q4).
