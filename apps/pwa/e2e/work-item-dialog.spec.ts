@@ -22,9 +22,13 @@ test("Attach opens the file chooser and uploads the picked file", async ({ page 
 test("a screenshot pasted into the description shows inline, not in the strip", async ({ page }) => {
   await page.goto("/e2e/harness/work-item-dialog.html?delay=0");
   await page.getByTestId("board-card").click();
+  await expect(page.getByTestId("work-item-events")).toBeVisible();
   const editor = page.getByTestId("work-item-problem").locator(".ProseMirror");
   await editor.click();
-  await page.keyboard.press("End");
+  // Caret to the end of the text. Click + End left it at the start under load
+  // (the paste then landed above the text — CORE-196).
+  await editor.evaluate((el) => window.getSelection()?.selectAllChildren(el));
+  await editor.evaluate(() => window.getSelection()?.collapseToEnd());
   // A 1×1 PNG, pasted the way a browser delivers a copied screenshot.
   await editor.evaluate((el) => {
     const bytes = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0));

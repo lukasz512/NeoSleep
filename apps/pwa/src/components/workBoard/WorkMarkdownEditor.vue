@@ -123,7 +123,14 @@ watch(
   (value) => {
     if (value === emitted || !editor.value) return;
     emitted = value;
+    // An upload finishing re-points an image's ref while the user may still be typing;
+    // keep the caret where it was instead of letting setContent reset it (CORE-196).
+    const { from, to } = editor.value.state.selection;
     editor.value.commands.setContent(markdownToDoc(value), { emitUpdate: false });
+    if (focused.value) {
+      const max = editor.value.state.doc.content.size;
+      editor.value.commands.setTextSelection({ from: Math.min(from, max), to: Math.min(to, max) });
+    }
   },
 );
 
