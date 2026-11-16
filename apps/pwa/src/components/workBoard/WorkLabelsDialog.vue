@@ -185,6 +185,8 @@ function recolor(row: Row, color: WorkLabelColor): void {
 .work-labels__swatch {
   display: inline-flex;
   align-items: center;
+  /* One column for every colour name, so the name fields line up. */
+  min-width: 96px;
   padding: 0;
   background: none;
   border: 0;
