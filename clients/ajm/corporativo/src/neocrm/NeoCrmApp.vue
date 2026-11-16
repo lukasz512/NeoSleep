@@ -289,6 +289,7 @@
       <p>{{ t("footer.note") }}</p>
       <a :href="homeLink">{{ t("footer.back") }}</a>
     </footer>
+    <ScrollTrail />
   </div>
 </template>
 
@@ -296,6 +297,7 @@
 import { computed, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import es from "./locales/es.json";
+import ScrollTrail from "./ScrollTrail.vue";
 import { ROLES, SECTORS, lensFrom, lensQuery, sectionOrder, type Role, type SectionId, type Sector } from "./lens";
 import { CONTACT, whatsappLink } from "../content/contact";
 import { switchLocalePath, type Locale } from "../lib/locale";
@@ -397,6 +399,7 @@ function toggleTheme() {
 
 <style scoped>
 .ncrm {
+  position: relative;
   max-width: 1120px;
   margin: 0 auto;
   padding: 0 var(--ncrm-gutter);
