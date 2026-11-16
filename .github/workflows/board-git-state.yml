@@ -3,6 +3,9 @@
 #
 # - sync:  on every push to dev, reads git log of origin/dev and origin/prod and
 #          reports which tickets are on dev, on prod, or not merged at all.
+#          Every report also tidies Building (CORE-223): a ticket on dev moves
+#          to Needs Review, a ticket with no branch for 3 days returns to
+#          Backlog. The daily run makes that rule fire on days without a push.
 # - close: after a prod deploy finishes green, checks the prod API and the prod
 #          PWA respond (the smoke test), reports the same snapshot and asks the
 #          board to move Needs Review tickets that are on prod to Done. Tickets
@@ -20,6 +23,8 @@ on:
     workflows: ["Deploy NeoSleepCare App", "Deploy API (Cloud Run)"]
     types: [completed]
     branches: [prod]
+  schedule:
+    - cron: "17 5 * * *"
   workflow_dispatch: {}
 
 permissions:

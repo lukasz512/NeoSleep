@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { citedKeys, gitStates, parseLog, report } from "./board-git-state.mjs";
+import { branchKeys, citedKeys, gitStates, parseLog, report } from "./board-git-state.mjs";
 
 const TEAMS = ["NEO", "CORE"];
 /** One `git log --format=%H%x1f%s%x1f%b%x1e` record. */
@@ -60,7 +60,19 @@ test("reports a complete snapshot with the agent token", async () => {
   await report({ items: ITEMS, config: CONFIG, fetchImpl: impl });
   assert.equal(calls[0].url, "https://api.test/api/v1/platform/work/git-state");
   assert.equal(calls[0].headers["X-Agent-Token"], "agent_x");
-  assert.deepEqual(calls[0].body, { items: ITEMS, complete: true });
+  assert.deepEqual(calls[0].body, { items: ITEMS, complete: true, tidy: { branches: [] } });
+});
+
+test("lists the keys cited by remote branch names, without dev and prod", () => {
+  const refs = "origin\norigin/dev\norigin/prod\norigin/worktree-core-58-stable-ci\norigin/worktree-neo-133-notifications-epic-docs\norigin/renovate/vite-7.x\norigin/worktree-core-58-second\n";
+  assert.deepEqual(branchKeys(refs, TEAMS), ["CORE-58", "NEO-133"]);
+  assert.deepEqual(branchKeys("", TEAMS), []);
+});
+
+test("sends the branch keys so the board can tidy Building (CORE-223)", async () => {
+  const { calls, impl } = fakeFetch();
+  await report({ items: ITEMS, branches: ["CORE-58"], config: CONFIG, fetchImpl: impl });
+  assert.deepEqual(calls[0].body.tidy, { branches: ["CORE-58"] });
 });
 
 test("asks the board to close only when told the prod smoke test passed", async () => {

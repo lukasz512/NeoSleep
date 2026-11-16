@@ -315,8 +315,9 @@ workBoardRouter.post(
     let labels = hasField(req.body, "labels") ? labelsValue(field(req.body, "labels")) : [];
     if (actor.kind === "session") {
       // Decision core187-r1 Q2: the session is already working on it; the label makes it filterable.
+      // A side ticket for later asks for Backlog (board-upkeep-r1 P1, CORE-223).
       requireSessionTicket(problem, change, doneWhen);
-      status = "building";
+      status = status === "backlog" && hasField(req.body, "status") ? "backlog" : "building";
       labels = [...new Set([...labels, SESSION_LABEL])];
     }
     const item = await createWorkItem(
@@ -360,6 +361,8 @@ function gitReportsValue(value: unknown): WorkGitReport[] {
 // `complete` (every ticket left out has nothing merged) and `close` (the prod smoke test passed:
 // Needs Review tickets on prod move to Done unless labeled `hold`) are for the agent and people;
 // that close is the one exception to "closing stays human", decided in board-statuses-r1 D2.
+// `tidy: { branches: [keys with a remote branch] }` keeps Building to tickets somebody is building
+// (board-upkeep-r1 P1, CORE-223); like close, not for sessions.
 workBoardRouter.post(
   "/platform/work/git-state",
   asyncHandler(async (req, res) => {
@@ -374,10 +377,19 @@ workBoardRouter.post(
       }
       close = { smoke_url: url };
     }
-    if (actor.kind === "session" && (complete || close)) {
-      throw new ForbiddenError("A session can report a ticket's git state, not close tickets or send a complete report");
+    let tidy: { branches: { team: string; number: number }[] } | null = null;
+    if (hasField(req.body, "tidy")) {
+      const branches = field(field(req.body, "tidy"), "branches");
+      const parsed = Array.isArray(branches) && branches.length <= MAX_GIT_REPORTS
+        ? branches.map((key) => (typeof key === "string" ? parseWorkItemKey(key) : null))
+        : [null];
+      if (parsed.some((key) => key === null)) throw new ValidationError("tidy needs { branches: [ticket keys] }", "tidy");
+      tidy = { branches: parsed.filter((key) => key !== null) };
     }
-    res.json(await applyWorkGitStates(reports, { complete, close }, actor));
+    if (actor.kind === "session" && (complete || close || tidy)) {
+      throw new ForbiddenError("A session can report a ticket's git state, not close or tidy tickets or send a complete report");
+    }
+    res.json(await applyWorkGitStates(reports, { complete, close, tidy }, actor));
   })
 );
 
