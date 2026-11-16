@@ -3,6 +3,7 @@ import { mount } from "@vue/test-utils";
 import { createVuetify } from "vuetify";
 import * as vuetifyComponents from "vuetify/components";
 import AppSegmentedTabs from "./AppSegmentedTabs.vue";
+import AppSegmentedTabsSource from "./AppSegmentedTabs.vue?raw";
 
 const OPTIONS = [
   { value: "details", label: "Details" },
@@ -42,6 +43,14 @@ describe("AppSegmentedTabs", () => {
     expect(wrapper.classes()).toContain("app-segmented-tabs--underline");
     expect(wrapper.classes()).not.toContain("rounded-pill");
     expect(wrapper.find(".app-segmented-tabs__thumb").classes()).not.toContain("rounded-pill");
+  });
+
+  // CORE-179: jsdom has no cascade, so pin the rule itself — the shared thumb rule
+  // paints it surface-colored (CORE-135), which hid the bar and left no tab looking selected.
+  it("underline: the bar and the active label are primary-colored", () => {
+    const rules = AppSegmentedTabsSource.replace(/\s+/g, " ");
+    expect(rules).toMatch(/\.app-segmented-tabs--underline \.app-segmented-tabs__thumb \{[^}]*background: rgb\(var\(--v-theme-primary\)\)/);
+    expect(rules).toMatch(/\.app-segmented-tabs--underline \.app-segmented-tabs__tab--active \{[^}]*color: rgb\(var\(--v-theme-primary\)\)/);
   });
 
   // CORE-135: one look for every switcher — the calendar's grey track with a light sliding thumb, not the teal pill.

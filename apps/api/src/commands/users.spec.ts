@@ -8,10 +8,16 @@ import { CreateUserCommand, UpdateUserCommand, DeleteUserCommand, ResetUserPassw
 // mailer.ts is the external boundary (Resend) — mocked here, same pattern as
 // commands/invitePractitioner.spec.ts / leadOffer.spec.ts, per CLAUDE.md's
 // "No mock-only tests" rule (scoped to Postgres, not third-party APIs).
-const { sendPasswordResetEmailMock } = vi.hoisted(() => ({
+const { sendPasswordResetEmailMock, sendAccountCreatedEmailMock } = vi.hoisted(() => ({
   sendPasswordResetEmailMock: vi.fn().mockResolvedValue(undefined),
+  sendAccountCreatedEmailMock: vi.fn().mockResolvedValue("msg-test-id"),
 }));
-vi.mock("../mailer.js", () => ({ sendPasswordResetEmail: sendPasswordResetEmailMock }));
+vi.mock("../mailer.js", () => ({
+  sendPasswordResetEmail: sendPasswordResetEmailMock,
+  sendAccountCreatedEmail: sendAccountCreatedEmailMock,
+}));
+
+const FRONTEND_ORIGIN = "https://pwa.neosleepcare.com";
 
 const TENANT_SLUG = process.env.DEFAULT_TENANT_SLUG ?? "neosleep";
 
@@ -33,6 +39,8 @@ async function buildTestContext(client: Parameters<typeof CreateUserCommand>[0][
 
 beforeEach(() => {
   sendPasswordResetEmailMock.mockClear();
+  sendAccountCreatedEmailMock.mockReset();
+  sendAccountCreatedEmailMock.mockResolvedValue("msg-test-id");
 });
 
 describe("ResetUserPasswordCommand", () => {
@@ -47,7 +55,7 @@ describe("ResetUserPasswordCommand", () => {
       const targetEmail = `qa-admin-reset-target-${uniqueSuffix()}@neosleepcare.com`;
       const target = await CreateUserCommand(ctx, {
         first_name: "Target", last_name: "User", email: targetEmail, role: "rep",
-      });
+      }, FRONTEND_ORIGIN);
 
       const frontendOrigin = "https://pwa.neosleepcare.com";
       await ResetUserPasswordCommand(ctx, target.id, frontendOrigin);
@@ -70,12 +78,12 @@ describe("UpdateUserCommand / DeleteUserCommand — country-scope enforcement", 
         first_name: "PL", last_name: `Target-${uniqueSuffix()}`,
         email: `qa-scope-pl-${uniqueSuffix()}@neosleepcare.com`,
         role: "rep", country_code: "PL",
-      });
+      }, FRONTEND_ORIGIN);
       const mxTarget = await CreateUserCommand(adminCtx, {
         first_name: "MX", last_name: `Target-${uniqueSuffix()}`,
         email: `qa-scope-mx-${uniqueSuffix()}@neosleepcare.com`,
         role: "rep", country_code: "MX",
-      });
+      }, FRONTEND_ORIGIN);
 
       const plTerritoryId = await getCountryTerritoryId(client, "PL");
       if (!plTerritoryId) throw new Error("PL territory not seeded — check migrations/002_seed.sql");
@@ -114,7 +122,7 @@ describe("UpdateUserCommand / DeleteUserCommand — country-scope enforcement", 
         first_name: "MX", last_name: `Target-${uniqueSuffix()}`,
         email: `qa-scope-global-${uniqueSuffix()}@neosleepcare.com`,
         role: "rep", country_code: "MX",
-      });
+      }, FRONTEND_ORIGIN);
 
       const updated = await UpdateUserCommand(adminCtx, mxTarget.id, { phone: "+52555000000" });
       expect(updated?.phone).toBe("+52555000000");
@@ -166,7 +174,7 @@ describe("UpdateUserCommand / CreateUserCommand — role-change authorization", 
         first_name: "QA", last_name: `RoleTarget-${uniqueSuffix()}`,
         email: `qa-role-target-${uniqueSuffix()}@neosleepcare.com`,
         role: "rep",
-      });
+      }, FRONTEND_ORIGIN);
 
       await expect(UpdateUserCommand(managerCtx, target.id, { role: "manager" })).rejects.toThrow(ForbiddenError);
       // Unrelated field, no role change — still allowed for a manager.
@@ -183,13 +191,13 @@ describe("UpdateUserCommand / CreateUserCommand — role-change authorization", 
           first_name: "QA", last_name: `EscalationAttempt-${uniqueSuffix()}`,
           email: `qa-role-escalate-${uniqueSuffix()}@neosleepcare.com`,
           role: "admin",
-        })
+        }, FRONTEND_ORIGIN)
       ).rejects.toThrow(ForbiddenError);
 
       const repUser = await CreateUserCommand(managerCtx, {
         first_name: "QA", last_name: `DefaultRep-${uniqueSuffix()}`,
         email: `qa-role-default-rep-${uniqueSuffix()}@neosleepcare.com`,
-      });
+      }, FRONTEND_ORIGIN);
       expect(repUser.role).toBe("rep");
     });
   }, 15000);
@@ -203,14 +211,14 @@ describe("UpdateUserCommand / CreateUserCommand — role-change authorization", 
           first_name: "QA", last_name: `DoctorAttempt-${uniqueSuffix()}`,
           email: `qa-role-doctor-attempt-${uniqueSuffix()}@neosleepcare.com`,
           role: "doctor",
-        })
+        }, FRONTEND_ORIGIN)
       ).rejects.toThrow(ValidationError);
 
       const repTarget = await CreateUserCommand(adminCtx, {
         first_name: "QA", last_name: `DoctorSwitchAttempt-${uniqueSuffix()}`,
         email: `qa-role-doctor-switch-${uniqueSuffix()}@neosleepcare.com`,
         role: "rep",
-      });
+      }, FRONTEND_ORIGIN);
       await expect(UpdateUserCommand(adminCtx, repTarget.id, { role: "doctor" })).rejects.toThrow(ValidationError);
     });
   }, 15000);

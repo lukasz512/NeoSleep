@@ -3,7 +3,7 @@ import { toArray } from "./helpers.js";
 import { AppError, DatabaseError } from "../errors.js";
 import { displayNameSql } from "../utils/personName.js";
 
-export type StaffRole = "admin" | "manager" | "kam" | "msl" | "rep" | "doctor";
+export type StaffRole = "admin" | "manager" | "kam" | "msl" | "rep" | "doctor" | "support";
 
 export interface User {
   id: string;
@@ -430,7 +430,8 @@ export async function getUsersPaginated(
   const whereClause = `WHERE ${conditions.join(" AND ")}`;
   const orderCol = isUserSortColumn(sortBy) ? sortBy : "created_at";
   const orderDir = sortOrder === "asc" ? "ASC" : "DESC";
-  const safeOrder = orderCol === "created_at" ? "u.created_at" : `i."${orderCol}"`;
+  // created_at and status live on users; the name and email columns on identities.
+  const safeOrder = orderCol === "created_at" || orderCol === "status" ? `u.${orderCol}` : `i."${orderCol}"`;
 
   try {
     const countResult = await client.query<{ count: string }>(

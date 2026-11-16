@@ -4,7 +4,7 @@ import bcrypt from "bcrypt";
 import { randomUUID } from "node:crypto";
 import type { Request, Response } from "express";
 import { app } from "../server.js";
-import { getDb, withTenant, insertStaffUser } from "../db.js";
+import { getDb, withTenant, insertStaffUser, listPlatformAudit } from "../db.js";
 import { signAuthToken } from "../utils/jwt.js";
 import { errorHandler } from "../middleware/errorHandler.js";
 import { ValidationError } from "../errors.js";
@@ -247,7 +247,7 @@ describe("problem reports and admin issues", () => {
         .set("Authorization", reporter.auth)
         .send({ description: DESCRIPTION, request_ids: [requestId] });
 
-      const list = await request(app).get("/api/v1/admin/diagnostics?env=test").set("Authorization", platformAdmin.auth);
+      const list = await request(app).get("/api/v1/admin/diagnostics?env=local").set("Authorization", platformAdmin.auth);
       expect(list.status).toBe(200);
       const item = list.body.items.find((d: { id: string }) => d.id === row!.id);
       expect(item).toBeTruthy();
@@ -256,10 +256,16 @@ describe("problem reports and admin issues", () => {
       const resolved = await request(app).patch(`/api/v1/admin/diagnostics/${row!.id}`).set("Authorization", platformAdmin.auth).send({ status: "resolved" });
       expect(resolved.status).toBe(200);
       expect(resolved.body.status).toBe("resolved");
+      // CORE-213: the status change is in platform.audit, with who and before → after.
+      const trail = await listPlatformAudit("diagnostic", row!.id);
+      expect(trail).toHaveLength(1);
+      expect(trail[0]).toMatchObject({ action: "diagnostic.status", before: { status: "open" }, after: { status: "resolved" } });
+      expect(trail[0]!.actor_email).toBe(platformAdmin.email);
+      expect(trail[0]!.actor_id).not.toBeNull();
 
-      const openOnly = await request(app).get("/api/v1/admin/diagnostics?env=test").set("Authorization", platformAdmin.auth);
+      const openOnly = await request(app).get("/api/v1/admin/diagnostics?env=local").set("Authorization", platformAdmin.auth);
       expect(openOnly.body.items.some((d: { id: string }) => d.id === row!.id)).toBe(false);
-      const all = await request(app).get("/api/v1/admin/diagnostics?status=all&env=test").set("Authorization", platformAdmin.auth);
+      const all = await request(app).get("/api/v1/admin/diagnostics?status=all&env=local").set("Authorization", platformAdmin.auth);
       expect(all.body.items.some((d: { id: string }) => d.id === row!.id)).toBe(true);
 
       expect((await request(app).patch(`/api/v1/admin/diagnostics/${row!.id}`).set("Authorization", platformAdmin.auth).send({ status: "nope" })).status).toBe(400);

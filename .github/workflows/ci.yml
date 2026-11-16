@@ -45,7 +45,11 @@ jobs:
     # (e.g. renovate/*); a skipped job counts as passed for required checks. Head dev =
     # the dev→prod promote PR: it runs, but only to copy the dev run's result (Scope step).
     if: github.event_name != 'pull_request' || !(startsWith(github.head_ref, 'worktree-') || startsWith(github.head_ref, 'worker/') || startsWith(github.head_ref, 'claude/'))
-    runs-on: ubuntu-latest
+    # CORE-208: pinned, not ubuntu-latest. On ubuntu-26.04 Playwright's WebKit barely
+    # renders frames (2 animation frames in 670 ms, wheel scroll never lands), so the
+    # same WebKit e2e specs failed on every dev run; on 24.04 the same build is green.
+    # Move to 26.04 only after a manual run of this workflow passes there.
+    runs-on: ubuntu-24.04
     # CORE-151: a hung e2e used to hold the job (and the session waiting on it) for up
     # to an hour; the default limit is 6 h. The nightly 3-engine e2e alone takes ~23 min
     # (2026-10-06: 507 tests in 22.8 min), so the nightly/manual run gets more room.
@@ -288,7 +292,7 @@ jobs:
       - name: Tooling self-tests
         run: |
           git config --global user.name ci && git config --global user.email ci@example.com
-          node --test .claude/skills/ship-artifact/ticket.test.mjs
-          bash .claude/hooks/pre-tool-linear-ticket-format.test.sh
+          node --test .claude/skills/ship-artifact/ticket.test.mjs .claude/skills/ship-artifact/index-rows.test.mjs .claude/skills/ship-artifact/pr-body.test.mjs infrastructure/scripts/board.test.mjs infrastructure/scripts/board-git-state.test.mjs
+          bash .claude/hooks/pre-tool-linear-readonly.test.sh
           bash infrastructure/scripts/worktree-clean.test.sh
           bash infrastructure/scripts/test-db.test.sh

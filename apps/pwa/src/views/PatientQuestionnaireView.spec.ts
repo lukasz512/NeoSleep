@@ -11,10 +11,22 @@ import en from "@i18n/en.json";
 const apiFetch = vi.fn();
 // The top bar loads the tenant's branding (public /config/app) on its own —
 // answered here so the per-test mocks stay the questionnaire's calls only.
+// The consent pad's "sign on your phone" QR (CORE-172) starts and polls on its
+// own too — recorded in handoffFetch, kept out of the questionnaire's calls.
+const handoffFetch = vi.fn((url: string) =>
+  Promise.resolve({
+    ok: true,
+    status: 200,
+    json: async () => (url.endsWith("/pickup") ? { status: "pending" } : { handoffToken: "h", pickupToken: "p" }),
+  })
+);
 vi.mock("../composables/useApi", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  apiFetch: (...args: unknown[]) =>
-    args[0] === "/api/v1/config/app" ? Promise.resolve({ ok: false, status: 404, json: async () => ({}) }) : apiFetch(...args),
+  apiFetch: (...args: unknown[]) => {
+    if (args[0] === "/api/v1/config/app") return Promise.resolve({ ok: false, status: 404, json: async () => ({}) });
+    if (typeof args[0] === "string" && /sign-handoff|signature-handoff/.test(args[0])) return handoffFetch(args[0]);
+    return apiFetch(...args);
+  },
 }));
 
 import PatientQuestionnaireView from "./PatientQuestionnaireView.vue";

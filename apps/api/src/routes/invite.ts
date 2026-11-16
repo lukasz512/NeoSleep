@@ -1,15 +1,12 @@
 import { Router, type Router as RouterType, type Request, type Response } from "express";
 import { asyncHandler } from "../middleware/errorHandler.js";
-import { inviteAcceptLimiter, invitePreviewLimiter, inviteSignHandoffLimiter } from "../middleware/rateLimiter.js";
+import { inviteAcceptLimiter, invitePreviewLimiter, signatureHandoffLimiter } from "../middleware/rateLimiter.js";
 import { withTenant, tenantSlugFromHost, insertAuditLog } from "../db.js";
 import {
   ValidateInviteTokenQuery,
   AcceptPractitionerInviteCommand,
   GetPartnerDocumentPreviewQuery,
   StartPartnerSignHandoffCommand,
-  GetPartnerSignHandoffQuery,
-  SignPartnerSignHandoffCommand,
-  PickUpPartnerSignHandoffQuery,
 } from "../commands/invitePractitioner.js";
 import { sendSignedDocumentsEmail } from "../mailer.js";
 import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
@@ -72,15 +69,13 @@ function str(value: unknown): string {
 }
 
 // ---------------------------------------------------------------------------
-// Sign on your phone (CORE-166). The desktop starts a handoff with the invite
-// token and shows the returned sign-only token as a QR; the phone reads and
-// signs with that token alone; the desktop polls pickup with both tokens.
+// POST /api/v1/invite/sign-handoff — the QR next to the agreement's signature
+// pad (CORE-166). The phone and the pickup use the shared public routes
+// (/public/signature-handoff/*, routes/public.ts, CORE-172).
 // ---------------------------------------------------------------------------
-const EXPIRED_QR = { error: "This QR code has expired. Show a new one on the computer." };
-
 inviteRouter.post(
   "/invite/sign-handoff",
-  inviteSignHandoffLimiter,
+  signatureHandoffLimiter,
   asyncHandler(async (req: Request, res: Response) => {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const slug = tenantSlugFromHost(req.hostname);
@@ -91,59 +86,6 @@ inviteRouter.post(
     }
     res.set("Cache-Control", "no-store");
     res.json(started);
-  })
-);
-
-inviteRouter.get(
-  "/invite/sign-handoff",
-  inviteSignHandoffLimiter,
-  asyncHandler(async (req: Request, res: Response) => {
-    const slug = tenantSlugFromHost(req.hostname);
-    const view = await withTenant(slug, (client) => GetPartnerSignHandoffQuery(client, str(req.query.h)));
-    if (!view) {
-      res.status(404).json(EXPIRED_QR);
-      return;
-    }
-    res.set("Cache-Control", "no-store");
-    res.json(view);
-  })
-);
-
-inviteRouter.post(
-  "/invite/sign-handoff/sign",
-  inviteSignHandoffLimiter,
-  asyncHandler(async (req: Request, res: Response) => {
-    const body = (req.body ?? {}) as Record<string, unknown>;
-    const slug = tenantSlugFromHost(req.hostname);
-    const stored = await withTenant(slug, (client) =>
-      SignPartnerSignHandoffCommand(
-        client,
-        { handoffToken: str(body.h), signatureDataUrl: str(body.signatureDataUrl) },
-        { requestId: (req as RequestWithId).requestId, ip: req.ip ?? null, userAgent: req.headers["user-agent"] ?? null }
-      )
-    );
-    if (!stored) {
-      res.status(404).json(EXPIRED_QR);
-      return;
-    }
-    res.json({ success: true });
-  })
-);
-
-inviteRouter.get(
-  "/invite/sign-handoff/pickup",
-  inviteSignHandoffLimiter,
-  asyncHandler(async (req: Request, res: Response) => {
-    const slug = tenantSlugFromHost(req.hostname);
-    const result = await withTenant(slug, (client) =>
-      PickUpPartnerSignHandoffQuery(client, str(req.query.token), str(req.query.h))
-    );
-    if (!result) {
-      res.status(404).json({ error: "Invalid or expired invitation link." });
-      return;
-    }
-    res.set("Cache-Control", "no-store");
-    res.json(result);
   })
 );
 

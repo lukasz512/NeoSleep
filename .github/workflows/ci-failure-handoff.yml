@@ -1,8 +1,9 @@
 # NEO-182: when CI goes red on a work branch, tell whoever fixes it — a comment
-# on the open PR with the failing tests, and the branch's Linear ticket back to
-# "Ready for Worker" with the `ci-failed` label so the nightly linear-worker
-# fixes it on the same branch (at most .claude/ci-autofix.json's maxFixAttempts
-# times; after that the ticket goes to "Needs Review" for Łukasz).
+# on the open PR with the failing tests and the same comment on the branch's board
+# ticket (CORE-188, was Linear). A worker/* ticket still in `building` goes back to
+# `approved` so the nightly worker fixes it on the same branch (at most
+# .claude/ci-autofix.json's maxFixAttempts times; after that it goes to
+# `needs_review` for Łukasz). Secrets: BOARD_API_URL + BOARD_AGENT_TOKEN.
 # The logic lives in infrastructure/scripts/ci-failure-handoff.mjs.
 name: CI failure handoff
 
@@ -36,10 +37,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: ".nvmrc"
-      - name: Hand the failure to the PR and the Linear ticket
+      - name: Hand the failure to the PR and the board ticket
         run: node infrastructure/scripts/ci-failure-handoff.mjs
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ github.event.workflow_run.head_branch }}
           SHA: ${{ github.event.workflow_run.head_sha }}
-          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
+          BOARD_API_URL: ${{ secrets.BOARD_API_URL }}
+          BOARD_AGENT_TOKEN: ${{ secrets.BOARD_AGENT_TOKEN }}

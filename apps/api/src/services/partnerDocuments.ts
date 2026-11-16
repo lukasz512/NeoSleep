@@ -60,7 +60,7 @@ export async function uploadPartnerDocument(
  * public or signed URL: it only ever leaves the server embedded in a
  * token-gated document preview or a generated PDF.
  */
-export async function downloadPartnerDocument(path: string): Promise<Uint8Array> {
+export async function downloadPartnerDocument(path: string): Promise<Uint8Array<ArrayBuffer>> {
   const client = getSupabase();
   const { data, error } = await client.storage.from(SUPABASE_DOCUMENTS_BUCKET).download(path);
   if (error || !data) throw new PartnerServiceError("supabase-storage", `download failed: ${error?.message ?? "unknown error"}`, error);
@@ -82,4 +82,22 @@ export async function getPartnerDocumentSignedUrl(path: string, expiresInSeconds
     .createSignedUrl(path, expiresInSeconds);
   if (error || !data) throw new PartnerServiceError("supabase-storage", `signed URL failed: ${error?.message ?? "unknown error"}`, error);
   return data.signedUrl;
+}
+
+export interface SignedUpload {
+  path: string;
+  /** Full PUT URL; its token is good for this one path only, so the browser never holds a storage key. */
+  signedUrl: string;
+}
+
+/**
+ * Lets the browser upload one object straight to the private bucket (NEO-262
+ * scan files): Cloud Run caps a request at 32 MiB, a full-arch STL is often
+ * bigger, so the bytes never pass through the API.
+ */
+export async function createPartnerDocumentUploadUrl(path: string): Promise<SignedUpload> {
+  const client = getSupabase();
+  const { data, error } = await client.storage.from(SUPABASE_DOCUMENTS_BUCKET).createSignedUploadUrl(path);
+  if (error || !data) throw new PartnerServiceError("supabase-storage", `signed upload URL failed: ${error?.message ?? "unknown error"}`, error);
+  return { path: data.path, signedUrl: data.signedUrl };
 }

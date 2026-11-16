@@ -69,7 +69,7 @@ export async function fetchAttachmentUrl(id: string): Promise<string> {
 export async function fetchDiagnostics(status: DiagnosticStatus | "all"): Promise<DiagnosticGroup[]> {
   const body = await request<{ items?: DiagnosticGroup[] } | DiagnosticGroup[]>(
     "useIssues.diagnostics",
-    `/api/v1/admin/diagnostics?status=${status}&env=production`,
+    `/api/v1/admin/diagnostics?status=${status}&env=prod`,
   );
   return unwrapItems(body);
 }

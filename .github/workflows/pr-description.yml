@@ -1,0 +1,39 @@
+# Fails a PR into dev whose description has no real text under "## Summary" (CORE-188).
+# The "Create PR" link from ship-artifact fills the whole template (pr-body.mjs); this
+# catches PRs opened another way, e.g. GitHub's "Compare & pull request" banner, which
+# pastes the commit message above an empty template. Edit the description and the
+# check re-runs on its own. Renovate and the dev→prod promote PR are exempt.
+
+name: PR description
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+    branches: [dev]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-description:
+    if: github.event.pull_request.user.login != 'renovate[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .claude/skills/ship-artifact
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+      - name: Summary is filled in
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          node --input-type=module -e '
+            const { hasEmptySummary } = await import(process.cwd() + "/.claude/skills/ship-artifact/pr-body.mjs");
+            if (hasEmptySummary(process.env.BODY)) {
+              console.log("::error::The PR description has no text under ## Summary. Use the Create PR link from the Artifact, or fill in Summary, Changes, Testing and Rollback.");
+              process.exit(1);
+            }
+            console.log("Summary present.");'

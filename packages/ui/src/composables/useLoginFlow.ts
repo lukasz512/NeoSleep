@@ -62,7 +62,7 @@ export function createUseLoginFlow(apiFetch: ApiFetchFn, tokenStorage: AuthToken
         const data = (await res.json()) as {
           token: string;
           refresh_token: string;
-          user: { id: string; email: string; name?: string; picture?: string; role: "admin" | "manager" | "kam" | "msl" | "rep" | "doctor"; forcePasswordChange?: boolean };
+          user: { id: string; email: string; name?: string; picture?: string; role: "admin" | "manager" | "kam" | "msl" | "rep" | "doctor" | "support"; forcePasswordChange?: boolean };
           forcePasswordChange: boolean;
         };
 

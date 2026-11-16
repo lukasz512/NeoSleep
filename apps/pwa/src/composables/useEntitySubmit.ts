@@ -1,7 +1,7 @@
 import { getCurrentInstance } from "vue";
 import { useRouter } from "vue-router";
 import { reportCaught } from "@api";
-import { useNotifications, type NotificationIcon, type ShowOptions } from "./useNotifications";
+import { useNotifications, type NotificationIcon, type NotificationType, type ShowOptions } from "./useNotifications";
 import { fieldErrorsFromResponse, type FieldErrors } from "./useFormErrors";
 
 export interface EntitySubmitResult {
@@ -18,6 +18,12 @@ export interface EntitySubmitOptions {
   request: () => Promise<EntitySubmitResult>;
   successMessage: string;
   errorMessage: string;
+  /**
+   * Overrides `successMessage` once the response is known, for a save whose
+   * outcome has two shades (CORE-199: account created, but the welcome email
+   * may not have gone out). Return null to keep `successMessage`.
+   */
+  successToast?: (result: EntitySubmitResult) => Promise<{ message: string; type: NotificationType } | null>;
   onSuccess?: (result: EntitySubmitResult) => void | Promise<void>;
   refresh?: boolean;
   /** What the form saves (patient, clinic, visit…) — the toast's tile icon. */
@@ -93,7 +99,11 @@ export function useEntitySubmit() {
       done(false);
       return;
     }
-    notifications.show(opts.successMessage, "success", undefined, toast);
+    const custom = opts.successToast ? await opts.successToast(result).catch((err: unknown) => {
+          reportCaught(err, { where: "useEntitySubmit.successToast" });
+          return null;
+        }) : null;
+    notifications.show(custom?.message ?? opts.successMessage, custom?.type ?? "success", undefined, toast);
     done(true);
     if (opts.refresh !== false) window.dispatchEvent(new Event("entity-list-refresh"));
     if (opts.onSuccess) await opts.onSuccess(result);

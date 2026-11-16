@@ -18,7 +18,7 @@ import { routeParam } from "./utils.js";
 
 /**
  * Document-content routes — thin waiters, same shape as routes/users.ts.
- * Admin/manager only, throughout (requireRole("admin","manager"), the
+ * Admin/manager (and NeoCRM support, CORE-197) only, throughout (requireRole, the
  * exact reuse target confirmed in docs/stories/document-content-editor.md).
  *
  * Every route still goes through withTenant()+buildContext() even the
@@ -31,7 +31,7 @@ export const documentContentRouter: RouterType = Router();
 
 documentContentRouter.get(
   "/document-content",
-  requireRole("admin", "manager"),
+  requireRole("admin", "manager", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const result = await withTenant(slug, async (client) => {
@@ -52,7 +52,7 @@ documentContentRouter.get(
 // ---------------------------------------------------------------------------
 documentContentRouter.get(
   "/document-content/:templateKey/entity-types",
-  requireRole("admin", "manager"),
+  requireRole("admin", "manager", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     const templateKey = routeParam(req, "templateKey") ?? "";
     const slug = tenantSlugFromHost(req.hostname);
@@ -66,7 +66,7 @@ documentContentRouter.get(
 
 documentContentRouter.put(
   "/document-content/:templateKey/entity-types",
-  requireRole("admin", "manager"),
+  requireRole("admin", "manager", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     const templateKey = routeParam(req, "templateKey") ?? "";
     const entityTypes = Array.isArray(req.body?.entityTypes)
@@ -87,7 +87,7 @@ documentContentRouter.put(
 // the ":locale" wildcard below, same reason as entity-types above.
 documentContentRouter.get(
   "/document-content/:templateKey/patient-checklist",
-  requireRole("admin", "manager"),
+  requireRole("admin", "manager", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     const templateKey = routeParam(req, "templateKey") ?? "";
     const slug = tenantSlugFromHost(req.hostname);
@@ -101,7 +101,7 @@ documentContentRouter.get(
 
 documentContentRouter.put(
   "/document-content/:templateKey/patient-checklist",
-  requireRole("admin", "manager"),
+  requireRole("admin", "manager", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     const templateKey = routeParam(req, "templateKey") ?? "";
     const slug = tenantSlugFromHost(req.hostname);
@@ -115,7 +115,7 @@ documentContentRouter.put(
 
 documentContentRouter.get(
   "/document-content/:templateKey/:locale",
-  requireRole("admin", "manager"),
+  requireRole("admin", "manager", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     const templateKey = routeParam(req, "templateKey") ?? "";
     const locale = routeParam(req, "locale") ?? "";
@@ -130,7 +130,7 @@ documentContentRouter.get(
 
 documentContentRouter.get(
   "/document-content/:templateKey/:locale/versions",
-  requireRole("admin", "manager"),
+  requireRole("admin", "manager", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     const templateKey = routeParam(req, "templateKey") ?? "";
     const locale = routeParam(req, "locale") ?? "";
@@ -147,7 +147,7 @@ documentContentRouter.get(
 
 documentContentRouter.get(
   "/document-content/:templateKey/:locale/versions/:versionId",
-  requireRole("admin", "manager"),
+  requireRole("admin", "manager", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     const versionId = routeParam(req, "versionId") ?? "";
     const slug = tenantSlugFromHost(req.hostname);
@@ -166,7 +166,7 @@ documentContentRouter.get(
 // ---------------------------------------------------------------------------
 documentContentRouter.get(
   "/document-content/:templateKey/:locale/approval",
-  requireRole("admin", "manager"),
+  requireRole("admin", "manager", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     const templateKey = routeParam(req, "templateKey") ?? "";
     const locale = routeParam(req, "locale") ?? "";
@@ -181,7 +181,7 @@ documentContentRouter.get(
 
 documentContentRouter.post(
   "/document-content/:templateKey/:locale/versions/:versionId/approve",
-  requireRole("admin", "manager"),
+  requireRole("admin", "manager", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     const templateKey = routeParam(req, "templateKey") ?? "";
     const locale = routeParam(req, "locale") ?? "";
@@ -197,7 +197,7 @@ documentContentRouter.post(
 
 documentContentRouter.post(
   "/document-content/:templateKey/:locale",
-  requireRole("admin", "manager"),
+  requireRole("admin", "manager", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     const templateKey = routeParam(req, "templateKey") ?? "";
     const locale = routeParam(req, "locale") ?? "";

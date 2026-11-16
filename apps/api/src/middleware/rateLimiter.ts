@@ -33,12 +33,12 @@ export const invitePreviewLimiter = rateLimit({
 });
 
 /**
- * Applied to the "sign on your phone" routes (CORE-166) — public, token-gated.
+ * Applied to the "sign on your phone" routes (CORE-166, CORE-172) — public, token-gated.
  * The desktop polls pickup every 4 s while the QR (15 min) is open: ≤225
  * requests, plus the phone's few; 300 per 15 minutes per IP covers one
  * session and still caps guessing.
  */
-export const inviteSignHandoffLimiter = rateLimit({
+export const signatureHandoffLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 300,
   standardHeaders: true,

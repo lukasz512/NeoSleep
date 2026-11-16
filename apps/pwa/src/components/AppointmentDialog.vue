@@ -260,8 +260,10 @@ const chosenDoctorName = computed(
 watch(
   [() => props.modelValue, patientId],
   async ([open, patient]) => {
+    // Closing keeps what is shown until the dialog has faded (CORE-195).
+    if (!open) return;
     careTeamIds.value = null;
-    if (!open || !patient || isEdit.value || isDoctor.value) return;
+    if (!patient || isEdit.value || isDoctor.value) return;
     try {
       const res = await apiFetch(`/api/v1/patient/${patient}/care-team`, { handleErrors: false });
       if (!res.ok || patientId.value !== patient) return;

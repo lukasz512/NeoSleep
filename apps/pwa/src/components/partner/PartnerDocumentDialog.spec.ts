@@ -96,7 +96,7 @@ describe("PartnerDocumentDialog — privacy notice", () => {
   });
 });
 
-describe("PartnerDocumentDialog — sign on your phone (CORE-166)", () => {
+describe("PartnerDocumentDialog — sign on your phone (CORE-166, CORE-172)", () => {
   function json(body: unknown): Response {
     return { ok: true, status: 200, json: async () => body } as Response;
   }
@@ -105,8 +105,8 @@ describe("PartnerDocumentDialog — sign on your phone (CORE-166)", () => {
   function routeApi(pickups: unknown[]) {
     apiFetch.mockImplementation(async (url: string) => {
       if (url.startsWith("/api/v1/invite/document")) return json(PREVIEW);
-      if (url === "/api/v1/invite/sign-handoff") return json({ handoffToken: "qr-token", expiresAt: "2099-01-01T00:00:00Z" });
-      if (url.startsWith("/api/v1/invite/sign-handoff/pickup")) return json(pickups.shift() ?? { status: "pending" });
+      if (url === "/api/v1/invite/sign-handoff") return json({ handoffToken: "qr-token", pickupToken: "pickup-token", expiresAt: "2099-01-01T00:00:00Z" });
+      if (url === "/api/v1/public/signature-handoff/pickup") return json(pickups.shift() ?? { status: "pending" });
       throw new Error(`unexpected ${url}`);
     });
   }
@@ -133,8 +133,9 @@ describe("PartnerDocumentDialog — sign on your phone (CORE-166)", () => {
     await vi.advanceTimersByTimeAsync(4000);
     await flushPromises();
 
-    const pickup = apiFetch.mock.calls.find(([url]) => String(url).startsWith("/api/v1/invite/sign-handoff/pickup"));
-    expect(pickup![0]).toBe("/api/v1/invite/sign-handoff/pickup?token=t&h=qr-token");
+    // The computer polls with the pickup secret, in the body — never the QR's token.
+    const pickup = apiFetch.mock.calls.find(([url]) => url === "/api/v1/public/signature-handoff/pickup");
+    expect(JSON.parse((pickup![1] as RequestInit).body as string)).toEqual({ p: "pickup-token" });
     expect(wrapper.emitted("signed")).toEqual([[{ signatureDataUrl: SIGNATURE, versionIds: ["agr-1", "dpa-1"] }]]);
   });
 
@@ -146,8 +147,8 @@ describe("PartnerDocumentDialog — sign on your phone (CORE-166)", () => {
     await vi.advanceTimersByTimeAsync(4000);
     await flushPromises();
 
-    expect(document.body.textContent).toContain(en["user.partnerRegistration.dialog.phoneExpired"]);
-    expect(buttonByText(en["user.partnerRegistration.dialog.phoneNewCode"])).toBeDefined();
+    expect(document.body.textContent).toContain(en["app.phoneSign.expired"]);
+    expect(buttonByText(en["app.phoneSign.newCode"])).toBeDefined();
     expect(document.querySelector(".signature-pad")).not.toBeNull();
   });
 

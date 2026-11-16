@@ -406,9 +406,70 @@
             <VRadio value="impression" :label="t('app.orthoApneaOrder.form.impressionTraditional')" />
             <VRadio value="scanner" :label="t('app.orthoApneaOrder.form.scannerIntraoral')" />
             <VRadio value="platform" :label="t('app.deviceOrder.registration.platform')" />
+            <VRadio value="files" :label="t('app.deviceOrder.registration.files')" />
           </VRadioGroup>
 
-          <template v-if="order.registration.method !== 'impression'">
+          <!-- NEO-262: scans go straight to private storage; the order carries their paths. -->
+          <div v-if="order.registration.method === 'files'" class="oa-wizard__scans" data-field="registration.files">
+            <input
+              ref="scanInput"
+              type="file"
+              multiple
+              class="oa-wizard__scan-input"
+              :accept="SCAN_ACCEPT"
+              data-testid="scan-file-input"
+              @change="onScanFilesChosen"
+            >
+            <ul v-if="order.registration.files.length > 0 || scanUploads.length > 0" class="oa-wizard__scan-list">
+              <li v-for="file in order.registration.files" :key="file.path" class="oa-wizard__scan" data-testid="scan-file">
+                <AppIcon name="check-circle" class="oa-wizard__scan-icon oa-wizard__scan-icon--done" />
+                <span class="oa-wizard__scan-name">{{ file.name }}</span>
+                <span class="oa-wizard__scan-size">{{ formatMegabytes(file.size) }}</span>
+                <AppButton
+                  icon
+                  variant="text"
+                  size="small"
+                  :aria-label="t('app.deviceOrder.registration.removeFile', { name: file.name })"
+                  @click="removeScanFile(file.path)"
+                >
+                  <AppIcon name="close" class="oa-wizard__scan-icon" />
+                </AppButton>
+              </li>
+              <li v-for="upload in scanUploads" :key="upload.key" class="oa-wizard__scan" data-testid="scan-upload">
+                <AppIcon :name="upload.state === 'failed' ? 'x-circle' : 'upload'" class="oa-wizard__scan-icon" :class="{ 'oa-wizard__scan-icon--failed': upload.state === 'failed' }" />
+                <span class="oa-wizard__scan-name">{{ upload.name }}</span>
+                <template v-if="upload.state === 'uploading'">
+                  <VProgressLinear
+                    :model-value="upload.progress * 100"
+                    color="primary"
+                    rounded
+                    class="oa-wizard__scan-progress"
+                    :aria-label="t('app.deviceOrder.registration.uploading', { name: upload.name })"
+                  />
+                </template>
+                <template v-else>
+                  <span class="oa-wizard__scan-error" role="alert">{{ t(`app.deviceOrder.errors.${upload.problem}`, SCAN_LIMITS) }}</span>
+                  <AppButton
+                    icon
+                    variant="text"
+                    size="small"
+                    :aria-label="t('app.deviceOrder.registration.removeFile', { name: upload.name })"
+                    @click="dismissScanUpload(upload.key)"
+                  >
+                    <AppIcon name="close" class="oa-wizard__scan-icon" />
+                  </AppButton>
+                </template>
+              </li>
+            </ul>
+            <AppButton variant="tonal" color="primary" data-testid="scan-file-add" @click="scanInput?.click()">
+              <template #prepend><AppIcon name="upload" class="oa-wizard__scan-icon" /></template>
+              {{ t("app.deviceOrder.registration.addFiles") }}
+            </AppButton>
+            <p class="oa-wizard__scan-hint">{{ t("app.deviceOrder.registration.filesHint", SCAN_LIMITS) }}</p>
+            <p v-if="fieldError('registration.files')" class="oa-wizard__scan-error" role="alert">{{ fieldError("registration.files") }}</p>
+          </div>
+
+          <template v-else-if="order.registration.method !== 'impression'">
             <VSelect
               v-if="order.registration.method === 'scanner'"
               :model-value="order.registration.scannerTreatment"
@@ -431,9 +492,6 @@
               density="comfortable"
               @update:model-value="setScanner"
             />
-            <AppInlineAlert type="info">
-              {{ t("app.orthoApneaOrder.fileUploadDeferredNotice") }}
-            </AppInlineAlert>
           </template>
         </div>
 
@@ -442,6 +500,9 @@
         <div v-else-if="step === 4">
           <AppInlineAlert v-if="labOrdersDisabledMessage" type="warning" class="mb-4" data-testid="lab-orders-disabled">
             {{ labOrdersDisabledMessage }}
+          </AppInlineAlert>
+          <AppInlineAlert v-if="scanUploading" type="info" class="mb-4" data-testid="scan-uploading">
+            {{ t("app.deviceOrder.registration.waitForUploads") }}
           </AppInlineAlert>
           <VCheckbox v-model="order.noContactDoctorForRedesign" color="primary" :label="t('app.orthoApneaOrder.form.noContactDoctorForRedesign')" />
         </div>
@@ -457,7 +518,7 @@
       <AppButton v-if="step < 4" icon size="x-large" variant="text" color="primary" :aria-label="t('app.orthoApneaOrder.actions.next')" @click="goNext">
         <AppIcon name="arrow-right" class="oa-wizard__nav-arrow" />
       </AppButton>
-      <AppButton v-else color="primary" variant="flat" :loading="submitLoading" @click="onConfirm">
+      <AppButton v-else color="primary" variant="flat" :loading="submitLoading" :disabled="scanUploading" @click="onConfirm">
         {{ t("app.orthoApneaOrder.actions.confirm") }}
       </AppButton>
     </template>
@@ -483,6 +544,8 @@ import { useI18n } from "vue-i18n";
 import { useDisplay } from "vuetify";
 import {
   CONFIRMABLE_WARNINGS,
+  MAX_SCAN_FILE_BYTES,
+  SCAN_FILE_EXTENSIONS,
   issuesFor,
   PRODUCT_CODES,
   SCANNER_PLATFORMS,
@@ -538,7 +601,10 @@ import { useAuthStore } from "../../stores/auth";
  * - Step 3's registration is part of the order: the pickers show brand names
  *   and the order carries OA's enum names (Łukasz D2). No promotion-code field.
  *
- * Still deferred (flagged inline): photo/CBCT and scan-file upload.
+ * - Or the doctor uploads the scan files (NEO-262): straight to private
+ *   storage, Confirm waits for every upload, the API sends them to OA.
+ *
+ * Still deferred (flagged inline): photo/CBCT upload.
  */
 export type { OrthoApneaDraftPlan };
 
@@ -568,7 +634,7 @@ const scannerOptions = computed(() =>
 const platformOptions = SCANNER_PLATFORMS.map((name) => ({ value: name, title: PLATFORM_BRANDS[name] }));
 
 function onRegistrationMethodPicked(value: unknown) {
-  if (value === "impression" || value === "scanner" || value === "platform") setRegistrationMethod(value);
+  if (value === "impression" || value === "scanner" || value === "platform" || value === "files") setRegistrationMethod(value);
 }
 
 /** OrthoApnea's own reference images, downloaded locally (see assets/orthoapnea/ — public static files, not behind their auth). */
@@ -623,6 +689,7 @@ const FIELD_LABELS: Readonly<Record<string, string>> = {
   registration: "app.orthoApneaOrder.form.registrationMethod",
   "registration.scannerTreatment": "app.orthoApneaOrder.form.scanner",
   "registration.scannerPlatform": "app.deviceOrder.registration.platformField",
+  "registration.files": "app.deviceOrder.registration.files",
 };
 const FIELD_KEYS = Object.keys(FIELD_LABELS).sort((a, b) => b.length - a.length);
 
@@ -685,6 +752,11 @@ const {
   setWarningAcknowledged,
   setRegistrationMethod,
   setScanner,
+  scanUploads,
+  scanUploading,
+  addScanFiles,
+  removeScanFile,
+  dismissScanUpload,
   resetForOpen,
   loadProducts,
   loadDoctorsAndDefault,
@@ -694,6 +766,24 @@ const {
 } = useOrthoApneaOrderWizard(() => isDoctor.value);
 
 watch(order, () => { touched.value = true; }, { deep: true });
+
+// ── Scan files (NEO-262) ────────────────────────────────────────────────────
+
+const SCAN_ACCEPT = SCAN_FILE_EXTENSIONS.map((ext) => `.${ext}`).join(",");
+const SCAN_LIMITS = { maxMb: MAX_SCAN_FILE_BYTES / (1024 * 1024), types: SCAN_FILE_EXTENSIONS.map((ext) => ext.toUpperCase()).join(", ") };
+const scanInput = ref<HTMLInputElement | null>(null);
+
+function formatMegabytes(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function onScanFilesChosen(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  // Cleared so picking the same file again (after removing it) fires change.
+  input.value = "";
+  if (files.length > 0) void addScanFiles(props.patientId, files);
+}
 
 // ── Product + sequence ──────────────────────────────────────────────────────
 
@@ -1383,6 +1473,68 @@ watch(
 /* Paso 3 (band/finish pickers) and Paso 4 (teeth diagram) share this same
    max-width, centered, so both sections read as equally wide instead of the
    teeth diagram looking narrower/off-center next to the pickers above it. */
+/* NEO-262 scan files: one quiet row per file, the same height uploading or done. */
+.oa-wizard__scans {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.oa-wizard__scan-input {
+  display: none;
+}
+.oa-wizard__scan-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.oa-wizard__scan {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 4px 0 12px;
+  border-radius: 8px;
+  background: rgba(var(--v-theme-on-surface), 0.04);
+}
+.oa-wizard__scan-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oa-wizard__scan-size,
+.oa-wizard__scan-hint {
+  font-size: 0.875rem;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  margin: 0;
+}
+.oa-wizard__scan-progress {
+  flex: 0 0 96px;
+  margin-right: 12px;
+}
+.oa-wizard__scan-icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.oa-wizard__scan-icon--done {
+  color: rgb(var(--v-theme-success));
+}
+.oa-wizard__scan-icon--failed,
+.oa-wizard__scan-error {
+  color: rgb(var(--v-theme-error));
+}
+.oa-wizard__scan-error {
+  font-size: 0.875rem;
+  margin: 0;
+}
+
 .oa-wizard__section--centered {
   max-width: 800px;
   margin: 0 auto;

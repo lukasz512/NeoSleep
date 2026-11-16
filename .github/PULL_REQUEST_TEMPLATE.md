@@ -19,7 +19,7 @@
 - [ ] New or updated automated tests
 
 ## Compliance & data impact
-<!-- See CLAUDE.md's Compliance Data Map / arch skill — check what applies, delete what doesn't. -->
+<!-- See the Compliance Data Map in .claude/skills/arch/references/checklists.md — check what applies, delete what doesn't. -->
 - [ ] Touches personal or health data (GDPR Art. 6/9) — describe below
 - [ ] Adds/changes an `audit_log` write for a mutation
 - [ ] Crosses a tenant boundary — confirm `withTenant()` wraps every new query

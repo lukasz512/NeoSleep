@@ -230,7 +230,7 @@ describe("document system (header, title, banner, sections, signatures, footer)"
     const html = renderDocumentHtml("historiaEndo", "mx", "<p>historia</p>", { informedConsent: "<p>CONSENT-DAM-BODY</p>" });
     const body = html.slice(html.indexOf("<body>"));
     const page2 = body.indexOf('<div class="hc-p2">');
-    const page3 = body.indexOf('<div class="hc-p3">');
+    const page3 = body.indexOf('<div class="hc-p3" data-state-field="consent_page">');
     expect(body.slice(0, body.indexOf("</header>"))).toContain('<span class="logo">');
     expect(body).not.toContain("hc-mono");
     expect(body).toContain('data-field="telefono"');
@@ -246,8 +246,8 @@ describe("document system (header, title, banner, sections, signatures, footer)"
   it("Historia clínica (NEO-249 D1/D2): one consent — the record consent follows the informed consent on page 3, page 2 keeps only the doctor's signature; a stamp can replace the patient's line", () => {
     const html = renderDocumentHtml("historiaEndo", "mx", "<p>RECORD-CONSENT</p>", { informedConsent: "<p>CONSENT-DAM-BODY</p>" });
     const body = html.slice(html.indexOf("<body>"));
-    const page2 = body.slice(body.indexOf('<div class="hc-p2">'), body.indexOf('<div class="hc-p3">'));
-    const page3 = body.slice(body.indexOf('<div class="hc-p3">'));
+    const page2 = body.slice(body.indexOf('<div class="hc-p2">'), body.indexOf('<div class="hc-p3" data-state-field="consent_page">'));
+    const page3 = body.slice(body.indexOf('<div class="hc-p3" data-state-field="consent_page">'));
     expect(page2).not.toContain("RECORD-CONSENT");
     expect(page2).not.toContain('data-field="firma_paciente"');
     expect(page2).toContain('data-field="firma_doctor"');

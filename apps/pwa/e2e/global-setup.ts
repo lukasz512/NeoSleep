@@ -1,8 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { chromium, type FullConfig } from "@playwright/test";
-
-const EMAIL = "e2e-auth@neosleepcare.com";
-const PASSWORD = "e2e-correct-horse-battery-staple";
+import { E2E_EMAIL as EMAIL, e2ePassword, ensureE2EPassword } from "./credentials";
 
 /** Seeds the one deterministic user every auth.spec.ts scenario logs in as —
  *  see apps/api/scripts/seed-e2e-user.ts. Runs once before the whole suite,
@@ -32,7 +30,7 @@ async function warmUpDevServer(baseURL: string): Promise<void> {
     page.setDefaultTimeout(180_000);
     await page.goto("/login");
     await page.getByLabel("Email", { exact: true }).fill(EMAIL);
-    await page.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await page.getByLabel("Password", { exact: true }).fill(e2ePassword());
     await page.getByRole("button", { name: "Sign in" }).click();
     await page.waitForURL("**/leads");
     await page.waitForLoadState("networkidle");
@@ -47,6 +45,7 @@ async function warmUpDevServer(baseURL: string): Promise<void> {
 }
 
 export default async function globalSetup(config: FullConfig): Promise<void> {
+  ensureE2EPassword();
   seedE2EUser();
   const baseURL = config.projects[0]?.use.baseURL;
   if (baseURL) await warmUpDevServer(baseURL);

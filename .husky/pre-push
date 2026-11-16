@@ -52,6 +52,12 @@ if ! pnpm $FILTER_ARGS test; then
   exit 1
 fi
 
+# CORE-175: depcruise moved here from the Stop gate (it ran after every Claude reply).
+if ! pnpm depcruise; then
+  echo "pre-push: dependency rules broken (pnpm depcruise) — fix the imports above before pushing." >&2
+  exit 1
+fi
+
 # NEO-182: a .vue/.css/.scss change also runs the e2e specs it can break — only the
 # harness ones (no API/DB), in Chromium, ~1-3 min. NEO-132's red CI would have shown
 # here. The rest of e2e stays with CI. Rule: .claude/ci-autofix.json localE2eOnUiChange.

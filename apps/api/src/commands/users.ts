@@ -9,15 +9,17 @@ import {
   getUserById,
   getTerritoryById,
   createPasswordResetToken,
+  getTenantName,
   type UpdateUserInput,
   type StaffRole,
   type User,
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
+import { syncSupportPlatformAccess } from "../db/platformAdmin.js";
 import { assertTerritoryAccess } from "../middleware/requireScope.js";
 import { EmailInUseError, ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
 import { hashToken } from "../utils/hashToken.js";
-import { sendPasswordResetEmail } from "../mailer.js";
+import { sendPasswordResetEmail, sendAccountCreatedEmail } from "../mailer.js";
 
 /**
  * COMMANDS — User (staff: rep/manager/kam/msl/admin/doctor) domain.
@@ -33,7 +35,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // *new* value on CreateUserCommand/UpdateUserCommand (see below). An
 // existing doctor user's unchanged role is allowed to round-trip through
 // UpdateUserCommand — this list only gates role being newly assigned.
-const VALID_ROLES: StaffRole[] = ["admin", "manager", "kam", "msl", "rep"];
+const VALID_ROLES: StaffRole[] = ["admin", "manager", "kam", "msl", "rep", "support"];
 const BCRYPT_ROUNDS = 12;
 
 /** A user's own RBAC scope must be a country or the global root (migration
@@ -46,6 +48,8 @@ async function assertValidScopeKind(ctx: TenantContext, territoryId: string): Pr
   }
 }
 const PASSWORD_RESET_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+/** A new staff member may not open the welcome email the same day (CORE-199). */
+const ACCOUNT_INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // ---------------------------------------------------------------------------
 // CREATE USER
@@ -66,7 +70,19 @@ export interface CreateUserInput {
   territory_id?: string | null;
 }
 
-export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInput): Promise<User> {
+export type InviteEmailStatus = "sent" | "not_sent";
+
+/**
+ * A mail failure never rolls the user back: the account exists either way, and
+ * `invite_email` tells the caller whether the welcome email went out so the UI
+ * can point the admin at "Reset password" when it did not.
+ */
+export async function CreateUserCommand(
+  ctx: TenantContext,
+  input: CreateUserInput,
+  /** Resolved by the route from the request (see utils/frontendOrigin.ts) — commands have no req/res. */
+  frontendOrigin: string
+): Promise<User & { invite_email: InviteEmailStatus }> {
   const firstName = input.first_name?.trim() ?? "";
   const lastName = input.last_name?.trim() ?? "";
   const email = input.email?.trim().toLowerCase() ?? "";
@@ -103,6 +119,7 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
     input.country_code ?? null
   );
   if (!user) throw new EmailInUseError(email);
+  await syncSupportPlatformAccess(ctx.client, ctx.user.email, user);
 
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,
@@ -113,7 +130,45 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
     request_id: ctx.requestId,
   });
 
-  return user;
+  const invite_email = await sendAccountCreatedInvite(ctx, user, frontendOrigin);
+
+  return { ...user, invite_email };
+}
+
+async function sendAccountCreatedInvite(ctx: TenantContext, user: User, frontendOrigin: string): Promise<InviteEmailStatus> {
+  // DB work stays outside the try: a failing query would poison the transaction, so it must surface.
+  const token = crypto.randomBytes(32).toString("hex");
+  await createPasswordResetToken(ctx.client, user.id, hashToken(token), new Date(Date.now() + ACCOUNT_INVITE_EXPIRY_MS));
+  const tenantName = await getTenantName(ctx.client);
+
+  let sent = false;
+  try {
+    const messageId = await sendAccountCreatedEmail(
+      user.email,
+      `${frontendOrigin}/reset-password?token=${encodeURIComponent(token)}`,
+      {
+        title: user.salutation,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        language: user.language,
+        region: user.region ?? user.country_code,
+      },
+      { inviterName: ctx.user.name?.trim() || ctx.user.email, tenantName }
+    );
+    sent = messageId !== null;
+  } catch (err) {
+    console.error("[users] Welcome email failed; the account was kept:", err);
+  }
+  if (!sent) return "not_sent";
+
+  await insertAuditLog(ctx.client, {
+    user_id: ctx.user.id,
+    action: "invite_sent",
+    entity_type: "User",
+    entity_id: user.id,
+    request_id: ctx.requestId,
+  });
+  return "sent";
 }
 
 // ---------------------------------------------------------------------------
@@ -151,6 +206,8 @@ export async function UpdateUserCommand(
 
   const before = await updateUser(ctx.client, id, input, ctx.user.id);
   if (!before) return null;
+  const after = await getUserById(ctx.client, id);
+  if (after) await syncSupportPlatformAccess(ctx.client, ctx.user.email, after);
 
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,
@@ -215,6 +272,7 @@ export async function DeleteUserCommand(ctx: TenantContext, id: string): Promise
   await assertTerritoryAccess(ctx, target.country_code);
 
   await softDeleteUser(ctx.client, id);
+  await syncSupportPlatformAccess(ctx.client, ctx.user.email, { ...target, deleted: true });
 
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,

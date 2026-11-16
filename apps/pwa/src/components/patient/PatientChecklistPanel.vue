@@ -175,7 +175,7 @@
       :format-date-time="formatDateTime"
       @send="onEmailSend"
     />
-    <DoctorSignatureDialog v-model="doctorSignatureOpen" @print="onDoctorSignaturePrint" />
+    <HistoriaPrintDialog v-model="historiaPrintOpen" :can-sign="isDoctor" :consent-signed-on="consentSignedOn" @print="onHistoriaPrint" />
     <StudyUploadDialog
       v-model="uploadDialog.open"
       :items="items"
@@ -380,7 +380,7 @@ import AppIcon from "../AppIcon.vue";
 import AppLoadingState from "../AppLoadingState.vue";
 import AppErrorState from "../AppErrorState.vue";
 import ClinicalQuestionnaireDialog from "../questionnaire/ClinicalQuestionnaireDialog.vue";
-import DoctorSignatureDialog from "./DoctorSignatureDialog.vue";
+import HistoriaPrintDialog, { type HistoriaPrintSelection } from "./HistoriaPrintDialog.vue";
 import QuestionnaireQrDialog from "../questionnaire/QuestionnaireQrDialog.vue";
 import QrStatusButton from "../questionnaire/QrStatusButton.vue";
 import StudyUploadDialog from "../questionnaire/StudyUploadDialog.vue";
@@ -683,31 +683,39 @@ const PRINT_KEY_FOR_FORM: Record<ClinicalRecordKind, string> = {
   tmj_exam: "tmjExam",
 };
 
-/** NEO-255 D1: a doctor signs the Historia clínica in a dialog before it prints. */
+/**
+ * NEO-260 D7: the Historia clínica asks what to print first (every role); a doctor
+ * also signs there (NEO-255 D1). The consent's state sets the dialog's defaults.
+ */
 const HISTORIA_CLINICA_KEY = "historiaEndo";
-const doctorSignatureOpen = ref(false);
+const historiaPrintOpen = ref(false);
+const isDoctor = computed(() => authStore.user?.role === "doctor");
+const consentSignedOn = computed(() => {
+  const signed = checklist.value?.items.find((i) => i.key === "informedConsent")?.history.find((h) => h.type === "consent");
+  return signed ? formatDate(signed.created_at) : null;
+});
 
 async function onPrint(key: string, recordId?: string) {
-  if (key === HISTORIA_CLINICA_KEY && authStore.user?.role === "doctor") {
-    doctorSignatureOpen.value = true;
+  if (key === HISTORIA_CLINICA_KEY && !recordId) {
+    historiaPrintOpen.value = true;
     return;
   }
   await printNow(key, recordId);
 }
 
-async function printNow(key: string, recordId?: string, doctorSignature?: string) {
+async function printNow(key: string, recordId?: string, doctorSignature?: string, include?: { consent: boolean }) {
   printingKey.value = key;
   try {
-    await checklistApi.print(key, recordId, doctorSignature);
+    await checklistApi.print(key, recordId, doctorSignature, include);
   } finally {
     printingKey.value = null;
   }
 }
 
 /** Called inside the dialog's click, so the PDF tab still opens past popup blockers. */
-function onDoctorSignaturePrint(signature: string | null) {
-  doctorSignatureOpen.value = false;
-  void printNow(HISTORIA_CLINICA_KEY, undefined, signature ?? undefined);
+function onHistoriaPrint(selection: HistoriaPrintSelection) {
+  historiaPrintOpen.value = false;
+  void printNow(HISTORIA_CLINICA_KEY, undefined, selection.signature ?? undefined, { consent: selection.consent });
 }
 
 function onPrintRecord() {

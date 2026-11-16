@@ -3,6 +3,7 @@ import {
   parseDeviceOrder,
   PRODUCT_CODES,
   RULES_VERSION,
+  scanFileProblem,
   validateDeliveryAddress,
   validateDeviceOrder,
   type DeliveryAddress,
@@ -28,6 +29,8 @@ import type { DeliveryOrganization } from "../db/practitionerOrganization.js";
 import { buildContext, type TenantContext } from "../context/TenantContext.js";
 import { getViewer, requirePatientInScope, requirePractitionerInScope } from "../queries/entityAccess.js";
 import { getDeviceOrderProvider } from "../services/deviceOrders/index.js";
+import { isOwnScanFilePath, newScanFilePath } from "../services/deviceOrders/scanFiles.js";
+import { createPartnerDocumentUploadUrl } from "../services/partnerDocuments.js";
 import { notify } from "../notifications/notify.js";
 import { ForbiddenError, LabOrdersDisabledError, NotFoundError } from "../errors.js";
 import { getLabOrdersSendConfig, setLabOrdersSendEnabled } from "../db/config.js";
@@ -249,6 +252,17 @@ deviceOrdersRouter.post(
       sendValidationError(res, [{ path: "order", code: "invalid" }], localValidation.warnings);
       return;
     }
+    // Scan files: only paths this API issued for this tenant and patient (NEO-262).
+    if (order.registration.method === "files") {
+      const foreign: OrderIssue[] = order.registration.files
+        .map((file, i) => ({ file, i }))
+        .filter(({ file }) => !isOwnScanFilePath(file.path, slug, patientId))
+        .map(({ i }) => ({ path: `registration.files.${i}`, code: "invalid" }));
+      if (foreign.length > 0) {
+        sendValidationError(res, foreign, localValidation.warnings);
+        return;
+      }
+    }
     // Then the one rule that needs the lab: the earliest desired date. When the
     // lab can't be asked (null), the lab itself is the judge on submit.
     const minDesiredDate = await provider.minDesiredDate(order.productCode);
@@ -325,6 +339,40 @@ deviceOrdersRouter.post(
     }
 
     res.status(201).json({ externalId: receipt.externalId, externalStatus: receipt.externalStatus, warnings: validation.warnings });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// POST /api/v1/device-orders/scan-uploads { patient_id, file_name, size }
+// A one-path signed upload URL for a scan file (NEO-262). The browser PUTs
+// the bytes straight to private storage; the order then carries the path.
+// ---------------------------------------------------------------------------
+
+deviceOrdersRouter.post(
+  "/device-orders/scan-uploads",
+  requireStudyRole,
+  asyncHandler(async (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as { patient_id?: unknown; file_name?: unknown; size?: unknown };
+    const patientId = typeof body.patient_id === "string" ? body.patient_id.trim() : "";
+    const fileName = typeof body.file_name === "string" ? body.file_name.trim() : "";
+    const size = typeof body.size === "number" && Number.isInteger(body.size) ? body.size : -1;
+    const issues: OrderIssue[] = [];
+    if (!UUID_RE.test(patientId)) issues.push({ path: "patient_id", code: patientId ? "invalid" : "required" });
+    const problem = fileName ? scanFileProblem(fileName, size) : null;
+    if (!fileName) issues.push({ path: "file_name", code: "required" });
+    else if (problem) issues.push({ path: "file", code: problem });
+    if (issues.length > 0) {
+      sendValidationError(res, issues);
+      return;
+    }
+
+    const slug = tenantSlugFromHost(req.hostname);
+    await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      await requirePatientInScope(ctx, patientId);
+    });
+    const upload = await createPartnerDocumentUploadUrl(newScanFilePath(slug, patientId, fileName));
+    res.status(201).json({ path: upload.path, uploadUrl: upload.signedUrl });
   })
 );
 

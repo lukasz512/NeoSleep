@@ -1,4 +1,5 @@
 import type { Request } from "express";
+import type { PlatformAuditActor } from "../db/platformAudit.js";
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 10;
@@ -39,6 +40,11 @@ export function toFilterArray(q: unknown): string[] | undefined {
  * this narrows it without a type assertion. Returns undefined when the param is
  * absent (or, defensively, when it is an array).
  */
+/** Who did a platform-admin action, for platform.audit (CORE-213). */
+export function platformAuditActor(req: Request, email: string | null = req.user?.email ?? null): PlatformAuditActor {
+  return { email, ip: req.ip ?? null, userAgent: req.get("user-agent") ?? null };
+}
+
 export function routeParam(req: Request, name: string): string | undefined {
   const value = req.params[name];
   return typeof value === "string" ? value : undefined;

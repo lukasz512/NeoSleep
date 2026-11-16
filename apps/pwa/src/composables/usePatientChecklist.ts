@@ -306,15 +306,16 @@ export function usePatientChecklist(patientId: () => string) {
    * blob) or, for a signed consent, the stored document. The tab is opened
    * synchronously inside the click so popup blockers (Safari) allow it.
    * `doctorSignature`: the doctor's drawn signature for the Historia clínica (NEO-255).
+   * `include`: what the print dialog picked for the Historia clínica (NEO-260).
    */
-  async function print(key: string, recordId?: string, doctorSignature?: string): Promise<void> {
+  async function print(key: string, recordId?: string, doctorSignature?: string, include?: { consent: boolean }): Promise<void> {
     const tab = window.open("", "_blank");
     if (tab) tab.opener = null; // what "noopener" would do — passing it would make window.open return null
-    const body = { ...(recordId ? { recordId } : {}), ...(doctorSignature ? { doctorSignature } : {}) };
+    const body = { ...(recordId ? { recordId } : {}), ...(doctorSignature ? { doctorSignature } : {}), ...(include ? { include } : {}) };
     const res = await apiFetch(`/api/v1/patient/${patientId()}/checklist/${key}/print`, { ...json(body), handleErrors: false });
     if (!res.ok) {
       tab?.close();
-      await failWith(res, "app.clinical.generatePdfError", "printer", () => print(key, recordId, doctorSignature));
+      await failWith(res, "app.clinical.generatePdfError", "printer", () => print(key, recordId, doctorSignature, include));
       return;
     }
     const target = res.headers.get("Content-Type")?.includes("application/pdf")

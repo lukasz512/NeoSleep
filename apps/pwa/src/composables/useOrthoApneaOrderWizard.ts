@@ -13,7 +13,9 @@ import {
   type OrderValidation,
   type ProductCode,
   type Registration,
+  type ScanFileProblem,
   type SequenceUnit,
+  scanFileProblem,
 } from "@device-order";
 import { computed, reactive, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -22,6 +24,7 @@ import { fieldErrorsFromResponse } from "./useFormErrors";
 import { retryAction, useNotifications, type ShowOptions } from "./useNotifications";
 import { draftToOrder, toDraft } from "../utils/deviceOrderDraft";
 import { isScannerPlatform, isScannerTreatment } from "../utils/deviceOrderRegistration";
+import { putScanFile } from "../utils/scanUpload";
 
 /**
  * The device-order wizard's state and every API call it makes (CORE-95).
@@ -145,6 +148,17 @@ function parseIssues(raw: unknown): OrderIssue[] {
   });
 }
 
+/** A scan file being uploaded, or one that failed (NEO-262). `problem` says why it failed. */
+export interface ScanUpload {
+  key: number;
+  name: string;
+  size: number;
+  /** 0..1 */
+  progress: number;
+  state: "uploading" | "failed";
+  problem: ScanFileProblem | "scanUploadFailed";
+}
+
 /** An order already saved locally (treatment_plan) whose POST /device-orders still has to go through. */
 interface UnsentOrder {
   planId: string;
@@ -216,7 +230,67 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
         ? { method: "scanner", scannerTreatment: null }
         : method === "platform"
           ? { method: "platform", scannerPlatform: null }
-          : { method: "impression" };
+          : method === "files"
+            ? { method: "files", files: [] }
+            : { method: "impression" };
+  }
+
+  /** Scans on their way to storage (NEO-262); a finished one moves into order.registration.files. */
+  const scanUploads = ref<ScanUpload[]>([]);
+  const scanUploading = computed(() => scanUploads.value.some((u) => u.state === "uploading"));
+  let scanUploadSeq = 0;
+
+  function patchScanUpload(key: number, patch: Partial<ScanUpload>) {
+    scanUploads.value = scanUploads.value.map((u) => (u.key === key ? { ...u, ...patch } : u));
+  }
+
+  /**
+   * The doctor picked scan files: each one is checked by the shared rule,
+   * gets a signed URL from the API and goes straight to storage. A file that
+   * fails stays listed with why, until the doctor removes it.
+   */
+  async function addScanFiles(patientId: string, files: readonly File[]): Promise<void> {
+    if (order.registration.method !== "files") setRegistrationMethod("files");
+    await Promise.all(
+      files.map(async (file) => {
+        const key = ++scanUploadSeq;
+        const problem = scanFileProblem(file.name, file.size);
+        scanUploads.value = [
+          ...scanUploads.value,
+          { key, name: file.name, size: file.size, progress: 0, state: problem ? "failed" : "uploading", problem: problem ?? "scanUploadFailed" },
+        ];
+        if (problem) return;
+        try {
+          const res = await apiFetch("/api/v1/device-orders/scan-uploads", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ patient_id: patientId, file_name: file.name, size: file.size }),
+            handleErrors: false,
+          });
+          if (!res.ok) throw new Error(`scan-uploads ${res.status}`);
+          const { path, uploadUrl } = (await res.json()) as { path: string; uploadUrl: string };
+          await putScanFile(uploadUrl, file, (progress) => patchScanUpload(key, { progress }));
+          scanUploads.value = scanUploads.value.filter((u) => u.key !== key);
+          // The doctor may have switched method meanwhile; the file then simply isn't part of the order.
+          const reg = order.registration;
+          if (reg.method === "files") order.registration = { method: "files", files: [...reg.files, { path, name: file.name, size: file.size }] };
+        } catch (err) {
+          reportCaught(err, { where: "useOrthoApneaOrderWizard.addScanFiles" });
+          patchScanUpload(key, { state: "failed" });
+        }
+      }),
+    );
+  }
+
+  /** Takes an uploaded scan off the order. */
+  function removeScanFile(path: string) {
+    const reg = order.registration;
+    if (reg.method === "files") order.registration = { method: "files", files: reg.files.filter((f) => f.path !== path) };
+  }
+
+  /** Dismisses a failed upload row. */
+  function dismissScanUpload(key: number) {
+    scanUploads.value = scanUploads.value.filter((u) => u.key !== key);
   }
 
   /** The picked scanner / platform, as OA's enum name; a name from the other list is ignored. */
@@ -306,6 +380,7 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
     context.value = null;
     contextFailed.value = false;
     deliveryOrganizationId.value = null;
+    scanUploads.value = [];
     const draft = draftPlan?.metadata?.orthoapneaDraft;
     const resumed = draft ? draftToOrder(draft) : defaultDeviceOrder();
     Object.assign(order, resumed);
@@ -530,7 +605,8 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
    * toast), a re-entrant click, or nothing saved at all.
    */
   async function confirmOrder(patientId: string, sleepStudyId: string): Promise<boolean> {
-    if (submitLoading.value) return false;
+    // A scan still uploading isn't on the order yet; the view disables Confirm meanwhile.
+    if (submitLoading.value || scanUploading.value) return false;
     serverIssues.value = [];
     labOrdersDisabled.value = false;
     submitLoading.value = true;
@@ -620,6 +696,11 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
     setWarningAcknowledged,
     setRegistrationMethod,
     setScanner,
+    scanUploads,
+    scanUploading,
+    addScanFiles,
+    removeScanFile,
+    dismissScanUpload,
     resetForOpen,
     loadProducts,
     loadDoctorsAndDefault,

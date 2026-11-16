@@ -2,12 +2,14 @@ import { describe, it, expect } from "vitest";
 import {
   defaultDeviceOrder,
   parseDeviceOrder,
+  MAX_SCAN_FILE_BYTES,
   PRODUCT_CODES,
   SCANNER_PLATFORMS,
   SCANNER_TREATMENTS,
   standardSequenceOffsets,
   startingPointMm,
   validateDeliveryAddress,
+  scanFileProblem,
   validateDeviceOrder,
   type DeviceOrder,
 } from "./index.js";
@@ -85,6 +87,41 @@ describe("validateDeviceOrder — one table, run identically by the PWA and the 
     }
     expect(SCANNER_TREATMENTS).toContain("MEDIT");
     expect(SCANNER_PLATFORMS).toContain("MEDIT_LINK");
+  });
+
+  describe("uploaded scan files (NEO-262)", () => {
+    const scan = (name: string, size = 1024) => ({ path: `t/device-orders/patients/p/scans/${name}`, name, size });
+
+    it("accepts upper + lower STL scans", () => {
+      expect(validateDeviceOrder(order({ registration: { method: "files", files: [scan("upper.stl"), scan("lower.STL")] } })).errors).toEqual([]);
+    });
+
+    it("blocks the upload option with no file", () => {
+      expect(codes(validateDeviceOrder(order({ registration: { method: "files", files: [] } })).errors)).toEqual(["registration.files:required"]);
+    });
+
+    it("blocks an empty, non-scan or oversize file, per file", () => {
+      const files = [scan("ok.ply"), scan("empty.stl", 0), scan("photo.jpg"), scan("huge.obj", MAX_SCAN_FILE_BYTES + 1)];
+      expect(codes(validateDeviceOrder(order({ registration: { method: "files", files } })).errors)).toEqual([
+        "registration.files.1:scanFileEmpty",
+        "registration.files.2:scanFileType",
+        "registration.files.3:scanFileTooLarge",
+      ]);
+    });
+
+    it("scanFileProblem: STL/PLY/OBJ in any case, nothing else, never 0 bytes or over the limit", () => {
+      expect(scanFileProblem("Upper Jaw.StL", 10)).toBeNull();
+      expect(scanFileProblem("scan.obj", MAX_SCAN_FILE_BYTES)).toBeNull();
+      expect(scanFileProblem("scan", 10)).toBe("scanFileType");
+      expect(scanFileProblem("scan.exe", 10)).toBe("scanFileType");
+      expect(scanFileProblem("scan.stl", 0)).toBe("scanFileEmpty");
+      expect(scanFileProblem("scan.stl", MAX_SCAN_FILE_BYTES + 1)).toBe("scanFileTooLarge");
+    });
+
+    it("parseDeviceOrder keeps the files", () => {
+      const files = [scan("upper.stl")];
+      expect(parseDeviceOrder(order({ registration: { method: "files", files } }))?.registration).toEqual({ method: "files", files });
+    });
   });
 
   it("blocks a desired date before OA's manufacturing date", () => {

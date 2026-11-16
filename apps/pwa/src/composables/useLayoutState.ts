@@ -73,6 +73,7 @@ export function useLayoutState() {
     if (role === "msl") return t("user.user.roleMsl");
     if (role === "rep") return t("user.user.roleRep");
     if (role === "doctor") return t("user.user.roleDoctor");
+    if (role === "support") return t("user.user.roleSupport");
     return t("user.user.role");
   });
 

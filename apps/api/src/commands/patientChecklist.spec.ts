@@ -9,6 +9,10 @@ import { PrintChecklistItemCommand, UploadPatientStudyCommand, DeletePatientStud
 import { GetPatientChecklistQuery } from "../queries/patientChecklist.js";
 import { GetCurrentDocumentContentQuery } from "../queries/documentContent.js";
 import { insertConsent } from "../db/consent.js";
+import { insertFileAttachment } from "../db/fileAttachment.js";
+import { renderDocumentHtml } from "@neo/documents";
+import { renderHtmlToPdf } from "../services/documentRenderer.js";
+import { encodePng } from "../utils/pdfSignatureImage.js";
 
 /**
  * Patient Estudios checklist (ADR-024) — real Postgres, real PDF rendering;
@@ -231,7 +235,7 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
       const [html, options] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string> }];
       expect(options.dataFields.telefono).toBe("+52 55 1234 5678");
       expect(options.dataFields.email).toMatch(/^ana-.*@example\.mx$/);
-      expect(html.slice(html.indexOf('<div class="hc-p3">'))).toContain(consent);
+      expect(html.slice(html.indexOf('<div class="hc-p3" data-state-field="consent_page">'))).toContain(consent);
       expect(options.dataFields.consent_stamp).toBe(""); // not signed yet → the empty line to sign on paper
 
       // NEO-249 D2: signed electronically → a dated stamp instead of the line.
@@ -259,6 +263,57 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
       renderSpy.mockClear();
       await PrintChecklistItemCommand(ctx, patient.id, "historiaEndo"); // download rejects (the default mock)
       expect((renderSpy.mock.calls[0] as [string, { dataImages: Record<string, string> }])[1].dataImages).toEqual({});
+
+      // NEO-255 D2: signed before NEO-252 (only the signed PDF kept) → the drawn signature is recovered from that PDF, nothing written back.
+      const signature = `data:image/png;base64,${encodePng(2, 1, Buffer.from([0x1d, 0x2b, 0x5a, 0xff, 0, 0, 0, 0])).toString("base64")}`;
+      const signedPdf = await renderHtmlToPdf(renderDocumentHtml("informedConsent", "mx", consent), { dataImages: { firma_paciente: signature } });
+      await client.query(`UPDATE consent SET withdrawn_at = now() WHERE entity_id = $1`, [patient.id]);
+      const pdfPath = `patient/${patient.id}/consent-informedConsent-0.pdf`;
+      const attachment = await insertFileAttachment(client, {
+        entity_type: "patient", entity_id: patient.id, url: pdfPath, storage_provider: "supabase", bucket: "partner-documents", path: pdfPath,
+        filename: "informedConsent.pdf", mime_type: "application/pdf", size_bytes: signedPdf.byteLength, is_public: false, uploaded_by: null,
+      });
+      await insertConsent(client, {
+        entity_type: "patient", entity_id: patient.id, legal_basis: "consent", jurisdiction: "MX", purpose: "informedConsent",
+        metadata: { file_attachment_id: attachment.id },
+      });
+      downloadMock.mockResolvedValueOnce(signedPdf);
+      const uploadsBeforeRecovery = uploadMock.mock.calls.length;
+      renderSpy.mockClear();
+      await PrintChecklistItemCommand(ctx, patient.id, "historiaEndo");
+      const [, recovered] = renderSpy.mock.calls[0] as [string, { dataImages: Record<string, string> }];
+      expect(downloadMock).toHaveBeenLastCalledWith(pdfPath);
+      expect(recovered.dataImages.firma_paciente).toMatch(/^data:image\/png;base64,/);
+      expect(uploadMock.mock.calls.length).toBe(uploadsBeforeRecovery);
+    });
+  }, 60000);
+
+  it("the consent page prints only when picked; a consent already signed prints marked as a copy (NEO-260)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await insertPatient(client, { first_name: "Ana", last_name: `Pick-${uniqueSuffix()}` });
+      type Call = [string, { stateFields: Record<string, string> }];
+      const consentState = async (include?: { consent?: boolean }) => {
+        renderSpy.mockClear();
+        await PrintChecklistItemCommand(ctx, patient.id, "historiaEndo", include ? { include } : {});
+        const [html, options] = renderSpy.mock.calls[0] as Call;
+        expect(html).toContain('<div class="hc-p3" data-state-field="consent_page">');
+        return options.stateFields.consent_page;
+      };
+
+      expect(await consentState()).toBeUndefined(); // one copy of the consent: not in the HC unless asked
+      expect(await consentState({ consent: false })).toBeUndefined();
+      expect(await consentState({ consent: true })).toBe("on"); // unsigned → the page to sign on paper
+
+      await insertConsent(client, { entity_type: "patient", entity_id: patient.id, legal_basis: "consent", jurisdiction: "MX", purpose: "informedConsent" });
+      expect(await consentState({ consent: true })).toBe("copy"); // signed → the original stays in storage, this is a COPIA
+      expect(await consentState()).toBeUndefined();
+
+      const { rows } = await client.query<{ entity_after: { include?: { consent: boolean } } }>(
+        `SELECT entity_after FROM audit_log WHERE entity_type = 'ChecklistItemPrint' AND entity_id = $1 ORDER BY created_at`,
+        [patient.id]
+      );
+      expect(rows.map((r) => r.entity_after.include?.consent)).toEqual([false, false, true, true, false]);
     });
   }, 60000);
 
@@ -271,7 +326,7 @@ describe("PrintChecklistItemCommand (real rendering)", () => {
       renderSpy.mockClear();
       await PrintChecklistItemCommand(ctx, patientId, "historiaEndo");
       const [html, unsigned] = renderSpy.mock.calls[0] as [string, { dataFields: Record<string, string>; dataImages: Record<string, string> }];
-      const consentPage = html.slice(html.indexOf('<div class="hc-p3">'));
+      const consentPage = html.slice(html.indexOf('<div class="hc-p3" data-state-field="consent_page">'));
       expect(consentPage).toContain('data-field="firma_paciente"');
       expect(consentPage).not.toContain('data-field="firma_doctor"'); // the consent is the patient's alone
       expect(html.match(/data-field="firma_doctor"/g)).toHaveLength(1); // page 2

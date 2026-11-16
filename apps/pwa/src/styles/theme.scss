@@ -801,6 +801,16 @@ body {
   box-shadow: 0 0 0 1px var(--pwa-sheet-ring), 0 -12px 40px -12px rgb(0 0 0 / 0.28) !important;
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+/* `fill` (CORE-192): a work surface rather than a quick form takes the whole phone screen. */
+.pwa-form-dialog--sheet.pwa-form-dialog--fill > .v-overlay__content,
+.pwa-form-dialog--sheet.pwa-form-dialog--fill .pwa-form-dialog__card {
+  height: 100%;
+  max-height: 100%;
+  border-radius: 0 !important;
+}
+.pwa-form-dialog--sheet.pwa-form-dialog--fill .pwa-form-dialog__card {
+  padding-top: env(safe-area-inset-top, 0px);
+}
 
 /*
  * Content scrolled behind the header / actions fades out over
@@ -961,6 +971,13 @@ body {
 :is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) > .app-dialog-header + .v-card-text {
   padding-top: var(--pwa-dialog-header-gap) !important;
 }
+/* CORE-196: with no actions row below, the body owns the 24dp bottom padding
+   itself — before, a dialog without buttons (session tokens, OrthoApnea log)
+   ended flush against the card edge. A class from AppFormDialog, not
+   :last-child: VCard renders its underlay/loader spans after the body. */
+.pwa-form-dialog__card > .pwa-form-dialog__body--end {
+  padding-bottom: var(--pwa-dialog-pad) !important;
+}
 :is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) > .v-card-actions {
   min-height: 0 !important;
   gap: var(--pwa-dialog-button-gap) !important;
@@ -989,6 +1006,12 @@ body {
   text-transform: none;
   font-size: 0.875rem;
   font-weight: 500;
+  letter-spacing: 0.00625em;
+}
+/* CORE-196: buttons inside the body too — an uppercase "NUEVO TOKEN" beside
+   sentence-case actions read as two design systems in one dialog. */
+:is(.pwa-form-dialog__card, .pwa-confirm-dialog__card) > .v-card-text .v-btn {
+  text-transform: none;
   letter-spacing: 0.00625em;
 }
 /* M3 text button: 12dp side padding. The app-wide 24px (sized for the pill

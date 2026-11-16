@@ -4,12 +4,14 @@
     :max-width="maxWidth"
     :persistent="persistent"
     scrollable
-    :class="['pwa-form-dialog', { 'pwa-form-dialog--sheet': asSheet }]"
+    :class="['pwa-form-dialog', { 'pwa-form-dialog--sheet': asSheet, 'pwa-form-dialog--fill': asSheet && fill }]"
     content-class="pwa-form-dialog__content"
     :transition="asSheet ? sheetDialogTransition : originDialogTransition"
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
+    @after-leave="emit('after-leave')"
   >
     <VCard
+      ref="cardRef"
       class="pwa-form-dialog__card"
       :class="{ 'pwa-form-dialog__card--folder': asFolder }"
       data-testid="app-form-dialog"
@@ -33,7 +35,11 @@
       <VCardText
         ref="bodyRef"
         class="pwa-form-dialog__body"
-        :class="{ 'pwa-form-dialog__body--scrolled': scrolled, 'pwa-form-dialog__body--more': hasMore }"
+        :class="{
+          'pwa-form-dialog__body--scrolled': scrolled,
+          'pwa-form-dialog__body--more': hasMore,
+          'pwa-form-dialog__body--end': !$slots.actions,
+        }"
         data-testid="app-form-dialog-body"
         @scroll.passive="measure"
       >
@@ -70,6 +76,10 @@
  * Guarded by AppFormDialog.spec.ts (no raw VDialog outside the shells) and
  * e2e/dialog-scroll.spec.ts (real-browser scrolling, all engines).
  *
+ * Lifecycle rule (CORE-195): a caller keeps its content unchanged until
+ * `after-leave` and resets there (or on the next open), and opens with the
+ * data it already has instead of a loader. e2e/dialog-leave.spec.ts guards it.
+ *
  * On phone widths it is a bottom sheet (sheetDialogTransition, theme.scss
  * `.pwa-form-dialog--sheet`); elsewhere it grows from the tapped element.
  *
@@ -103,6 +113,8 @@ const props = withDefaults(
      * `header-extra` instead.
      */
     folder?: boolean;
+    /** On phones, the whole screen instead of a bottom sheet (CORE-192 work items). */
+    fill?: boolean;
   }>(),
   {
     title: undefined,
@@ -114,6 +126,7 @@ const props = withDefaults(
     persistent: false,
     maxWidth: 680,
     folder: false,
+    fill: false,
   },
 );
 
@@ -123,6 +136,12 @@ const emit = defineEmits<{
   close: [];
   /** The body scrolled or resized — the folder's section index follows it. */
   "body-scroll": [el: HTMLElement];
+  /**
+   * The leave transition has finished and the dialog is gone (CORE-195).
+   * Reset form state here, never on close: a reset on close redraws the
+   * content in front of the user while it fades out.
+   */
+  "after-leave": [];
 }>();
 
 // Phones (< 600px, Vuetify xs): an M3 bottom sheet sliding up from the screen
@@ -156,19 +175,63 @@ function measure() {
 // and the viewport — observe both, since neither fires a scroll event.
 // VDialog renders its content lazily, so start observing when the inner
 // wrapper actually mounts, not when modelValue flips.
+const cardRef = ref<{ $el: unknown } | null>(null);
+let cardHeight = 0;
+let innerWidth = 0;
+let heightMotion: Animation | null = null;
 let observer: ResizeObserver | null = null;
 watch(innerRef, (inner) => {
   observer?.disconnect();
   observer = null;
+  cardHeight = 0;
   const el = bodyEl();
   if (!inner || !el || typeof ResizeObserver === "undefined") return;
-  observer = new ResizeObserver(measure);
+  observer = new ResizeObserver((entries) => {
+    if (entries.some((entry) => entry.target === inner)) easeHeight(inner);
+    if (!heightMotion) measure();
+  });
   observer.observe(el);
   observer.observe(inner);
   measure();
 });
 
-onBeforeUnmount(() => observer?.disconnect());
+// Content growing or shrinking (a section folding open, a wizard step) eases the
+// card to its new height instead of jumping there in one frame (CORE-204). The
+// observer runs after layout and before paint, so the card already has its new
+// height: animate from the old one (FLIP). A width change (viewport resize, the
+// enter transition) only records the height.
+
+function easeHeight(inner: HTMLElement) {
+  const card: unknown = cardRef.value?.$el;
+  if (!(card instanceof HTMLElement)) return;
+  const width = inner.offsetWidth;
+  const widthChanged = width !== innerWidth;
+  innerWidth = width;
+  // Mid-animation, start from what is on screen, not from the last target.
+  const from = heightMotion ? card.offsetHeight : cardHeight;
+  heightMotion?.cancel();
+  heightMotion = null;
+  // offsetHeight, not the bounding box: the enter transition scales the card.
+  const to = card.offsetHeight;
+  cardHeight = to;
+  if (!from || widthChanged || Math.abs(to - from) < 1) return;
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  const motion = card.animate([{ height: `${from}px` }, { height: `${to}px` }], {
+    duration: 240,
+    easing: "cubic-bezier(0.2, 0, 0, 1)", // M3 standard
+  });
+  heightMotion = motion;
+  motion.onfinish = motion.oncancel = () => {
+    if (heightMotion !== motion) return;
+    heightMotion = null;
+    measure();
+  };
+}
+
+onBeforeUnmount(() => {
+  observer?.disconnect();
+  heightMotion?.cancel();
+});
 
 defineExpose({ bodyEl, measure });
 </script>
