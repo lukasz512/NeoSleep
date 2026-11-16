@@ -1,6 +1,8 @@
+import type { PoolClient } from "pg";
 import type { WebhookEventPayload } from "resend";
 import { withTenant, getActiveTenantSlugs, tenantSlugFromHost } from "../db/tenant.js";
 import { applyPatientEmailStatus, patientEmailSendExists, type PatientEmailStatus } from "../db/patientEmailSend.js";
+import { claimWebhookEvent, finishWebhookEvent } from "../db/webhookEvent.js";
 
 /**
  * NEO-190: turns a verified Resend webhook event into a delivery status on
@@ -22,7 +24,7 @@ const STATUS_BY_EVENT: Partial<Record<WebhookEventPayload["type"], PatientEmailS
   "email.complained": "complained",
 };
 
-export type EmailDeliveryOutcome = "applied" | "ignored_event" | "no_tenant" | "unknown_email" | "stale";
+export type EmailDeliveryOutcome = "applied" | "ignored_event" | "no_tenant" | "unknown_email" | "stale" | "duplicate" | "failed";
 
 function statusDetail(event: WebhookEventPayload): string | null {
   switch (event.type) {
@@ -37,20 +39,48 @@ function statusDetail(event: WebhookEventPayload): string | null {
   }
 }
 
-export async function ApplyResendEventCommand(event: WebhookEventPayload): Promise<EmailDeliveryOutcome> {
+/** What applying the event did to patient_email_send; throws only on a real failure. */
+async function applyToPatientEmail(client: PoolClient, event: WebhookEventPayload, tenant: string | null): Promise<EmailDeliveryOutcome> {
   const status = STATUS_BY_EVENT[event.type];
   if (!status || !("email_id" in event.data)) return "ignored_event";
-  const data = event.data as { email_id: string; tags?: Record<string, string> };
-
-  const tenant = data.tags?.tenant;
-  const known = new Set([...(await getActiveTenantSlugs()), tenantSlugFromHost("")]);
-  if (!tenant || !known.has(tenant)) return "no_tenant";
-
+  if (!tenant) return "no_tenant";
+  const emailId = (event.data as { email_id: string }).email_id;
+  if (!(await patientEmailSendExists(client, emailId))) return "unknown_email";
   const at = new Date(event.created_at);
-  const applied = await withTenant(tenant, async (client) => {
-    if (!(await patientEmailSendExists(client, data.email_id))) return "unknown_email" as const;
-    const moved = await applyPatientEmailStatus(client, data.email_id, status, statusDetail(event), Number.isNaN(at.getTime()) ? new Date() : at);
-    return moved ? ("applied" as const) : ("stale" as const);
+  const moved = await applyPatientEmailStatus(client, emailId, status, statusDetail(event), Number.isNaN(at.getTime()) ? new Date() : at);
+  return moved ? "applied" : "stale";
+}
+
+/**
+ * CORE-213: the event is stored in webhook_event first — in its tenant's schema, or in
+ * the default tenant's when it names none (every verified event is kept) — keyed by
+ * the delivery id Resend repeats on every retry (svix-id). A delivery already
+ * processed or skipped answers "duplicate" and changes nothing; a failed one is
+ * re-applied. A failure rolls back only the apply (savepoint) and leaves the row
+ * "failed" with its error, so the route answers 500 and Resend retries.
+ */
+export async function ApplyResendEventCommand(event: WebhookEventPayload, deliveryId: string): Promise<EmailDeliveryOutcome> {
+  // Every Resend event has a data object; only email events carry tags (mailer.ts EmailTags).
+  const tag = (event.data as { tags?: Record<string, string> }).tags?.tenant;
+  const defaultTenant = tenantSlugFromHost("");
+  const known = new Set([...(await getActiveTenantSlugs()), defaultTenant]);
+  const tenant = tag && known.has(tag) ? tag : null;
+
+  return withTenant(tenant ?? defaultTenant, async (client) => {
+    const { row, fresh } = await claimWebhookEvent(client, { source: "resend", eventType: event.type, externalId: deliveryId, payload: event });
+    if (!fresh && (row.status === "processed" || row.status === "skipped")) return "duplicate";
+
+    await client.query("SAVEPOINT apply_webhook_event");
+    try {
+      const outcome = await applyToPatientEmail(client, event, tenant);
+      await finishWebhookEvent(client, row.id, outcome === "applied" || outcome === "stale" ? "processed" : "skipped", outcome);
+      return outcome;
+    } catch (err) {
+      await client.query("ROLLBACK TO SAVEPOINT apply_webhook_event");
+      await finishWebhookEvent(client, row.id, "failed", "failed", err instanceof Error ? err.message : String(err));
+      // Our row id, not the svix-id header: a request header must not shape a log line (CodeQL).
+      console.error(`[webhooks/resend] webhook_event ${row.id} failed:`, err);
+      return "failed";
+    }
   });
-  return applied;
 }

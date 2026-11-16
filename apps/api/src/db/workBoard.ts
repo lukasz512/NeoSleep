@@ -1,5 +1,6 @@
 import type { PoolClient } from "pg";
 import { getDb } from "./connection.js";
+import { inPlatformTransaction, insertPlatformAudit, type PlatformAuditActor } from "./platformAudit.js";
 
 /**
  * Platform-schema SQL for the work board (CORE-177, docs/stories/platform-work-board.md).
@@ -147,21 +148,6 @@ export async function listWorkItemEvents(itemId: string): Promise<WorkItemEventR
   return rows;
 }
 
-async function inTransaction<T>(work: (client: PoolClient) => Promise<T>): Promise<T> {
-  const client = await getDb().connect();
-  try {
-    await client.query("BEGIN");
-    const result = await work(client);
-    await client.query("COMMIT");
-    return result;
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
-}
-
 async function insertEvent(
   client: PoolClient,
   itemId: string,
@@ -193,7 +179,7 @@ export interface WorkItemInsert {
 
 /** Takes the team's next number under a row lock, so KEY-n never repeats. */
 export async function createWorkItem(input: WorkItemInsert, actor: WorkActor): Promise<WorkItemRow> {
-  return inTransaction(async (client) => {
+  return inPlatformTransaction(async (client) => {
     const team = await client.query<{ number: number }>(
       `UPDATE platform.work_team SET next_number = next_number + 1
         WHERE key = $1 AND NOT archived RETURNING next_number - 1 AS number`,
@@ -261,7 +247,7 @@ export async function updateWorkItem(
   actor: WorkActor,
   check?: (current: WorkItemRow) => void
 ): Promise<WorkItemRow | null> {
-  return inTransaction(async (client) => {
+  return inPlatformTransaction(async (client) => {
     const current = (
       await client.query<WorkItemRow>(
         `SELECT ${ITEM_COLUMNS} FROM platform.work_item WHERE team_key = $1 AND number = $2 FOR UPDATE`,
@@ -330,7 +316,7 @@ export async function addWorkItemComment(
   actor: WorkActor,
   check?: (current: WorkItemRow) => void
 ): Promise<WorkItemEventRow | null> {
-  return inTransaction(async (client) => {
+  return inPlatformTransaction(async (client) => {
     const current = (
       await client.query<WorkItemRow>(
         `SELECT ${ITEM_COLUMNS} FROM platform.work_item WHERE team_key = $1 AND number = $2 FOR UPDATE`,
@@ -388,7 +374,7 @@ export async function insertWorkAttachment(
   input: { item_id: string; event_id: string | null; path: string; filename: string; mime_type: string; size_bytes: number },
   actor: WorkActor
 ): Promise<WorkAttachmentRow | null> {
-  return inTransaction(async (client) => {
+  return inPlatformTransaction(async (client) => {
     const { rows } = await client.query<WorkAttachmentRow>(
       `INSERT INTO platform.work_item_attachment (item_id, event_id, path, filename, mime_type, size_bytes, uploaded_by)
        SELECT $1, $2, $3, $4, $5, $6, $7
@@ -407,7 +393,7 @@ export async function insertWorkAttachment(
 
 /** Deletes the row and logs it; the caller removes the stored object. Null when it was not there. */
 export async function deleteWorkAttachment(itemId: string, id: string, actor: WorkActor): Promise<WorkAttachmentRow | null> {
-  return inTransaction(async (client) => {
+  return inPlatformTransaction(async (client) => {
     const { rows } = await client.query<WorkAttachmentRow>(
       `DELETE FROM platform.work_item_attachment WHERE item_id = $1 AND id = $2 RETURNING ${ATTACHMENT_COLUMNS}`,
       [itemId, id]
@@ -439,12 +425,17 @@ export interface WorkSessionTokenRow {
 const TOKEN_COLUMNS = "id, name, created_by, created_at, last_used_at, revoked_at";
 
 /** Stores only the token's SHA-256; the caller hands the plaintext out once (CORE-187). */
-export async function insertSessionToken(name: string, tokenSha256: string, createdBy: string): Promise<WorkSessionTokenRow> {
-  const { rows } = await getDb().query<WorkSessionTokenRow>(
-    `INSERT INTO platform.work_session_token (name, token_sha256, created_by) VALUES ($1, $2, $3) RETURNING ${TOKEN_COLUMNS}`,
-    [name, tokenSha256, createdBy]
-  );
-  return rows[0]!;
+/** Issuing and revoking a token are platform-admin actions: each leaves a platform.audit row (CORE-213). */
+export async function insertSessionToken(name: string, tokenSha256: string, createdBy: string, actor: PlatformAuditActor): Promise<WorkSessionTokenRow> {
+  return inPlatformTransaction(async (client) => {
+    const { rows } = await client.query<WorkSessionTokenRow>(
+      `INSERT INTO platform.work_session_token (name, token_sha256, created_by) VALUES ($1, $2, $3) RETURNING ${TOKEN_COLUMNS}`,
+      [name, tokenSha256, createdBy]
+    );
+    const row = rows[0]!;
+    await insertPlatformAudit(client, actor, { action: "board.session_token.issue", targetType: "work_session_token", targetId: row.id, after: { name } });
+    return row;
+  });
 }
 
 export async function listSessionTokens(): Promise<WorkSessionTokenRow[]> {
@@ -455,12 +446,16 @@ export async function listSessionTokens(): Promise<WorkSessionTokenRow[]> {
 }
 
 /** False when the token does not exist or was already revoked. */
-export async function revokeSessionToken(id: string): Promise<boolean> {
-  const { rowCount } = await getDb().query(
-    `UPDATE platform.work_session_token SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL`,
-    [id]
-  );
-  return (rowCount ?? 0) > 0;
+export async function revokeSessionToken(id: string, actor: PlatformAuditActor): Promise<boolean> {
+  return inPlatformTransaction(async (client) => {
+    const { rows } = await client.query<{ name: string }>(
+      `UPDATE platform.work_session_token SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL RETURNING name`,
+      [id]
+    );
+    if (!rows[0]) return false;
+    await insertPlatformAudit(client, actor, { action: "board.session_token.revoke", targetType: "work_session_token", targetId: id, before: { name: rows[0].name } });
+    return true;
+  });
 }
 
 /** The live token with this hash (touching last_used_at), or null. */

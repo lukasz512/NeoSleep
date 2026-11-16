@@ -4,7 +4,7 @@ import bcrypt from "bcrypt";
 import { randomUUID } from "node:crypto";
 import type { Request, Response } from "express";
 import { app } from "../server.js";
-import { getDb, withTenant, insertStaffUser } from "../db.js";
+import { getDb, withTenant, insertStaffUser, listPlatformAudit } from "../db.js";
 import { signAuthToken } from "../utils/jwt.js";
 import { errorHandler } from "../middleware/errorHandler.js";
 import { ValidationError } from "../errors.js";
@@ -256,6 +256,12 @@ describe("problem reports and admin issues", () => {
       const resolved = await request(app).patch(`/api/v1/admin/diagnostics/${row!.id}`).set("Authorization", platformAdmin.auth).send({ status: "resolved" });
       expect(resolved.status).toBe(200);
       expect(resolved.body.status).toBe("resolved");
+      // CORE-213: the status change is in platform.audit, with who and before → after.
+      const trail = await listPlatformAudit("diagnostic", row!.id);
+      expect(trail).toHaveLength(1);
+      expect(trail[0]).toMatchObject({ action: "diagnostic.status", before: { status: "open" }, after: { status: "resolved" } });
+      expect(trail[0]!.actor_email).toBe(platformAdmin.email);
+      expect(trail[0]!.actor_id).not.toBeNull();
 
       const openOnly = await request(app).get("/api/v1/admin/diagnostics?env=local").set("Authorization", platformAdmin.auth);
       expect(openOnly.body.items.some((d: { id: string }) => d.id === row!.id)).toBe(false);
