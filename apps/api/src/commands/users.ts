@@ -15,6 +15,7 @@ import {
   type User,
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
+import { syncSupportPlatformAccess } from "../db/platformAdmin.js";
 import { assertTerritoryAccess } from "../middleware/requireScope.js";
 import { EmailInUseError, ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
 import { hashToken } from "../utils/hashToken.js";
@@ -118,6 +119,7 @@ export async function CreateUserCommand(
     input.country_code ?? null
   );
   if (!user) throw new EmailInUseError(email);
+  await syncSupportPlatformAccess(ctx.client, ctx.user.email, user);
 
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,
@@ -204,6 +206,8 @@ export async function UpdateUserCommand(
 
   const before = await updateUser(ctx.client, id, input, ctx.user.id);
   if (!before) return null;
+  const after = await getUserById(ctx.client, id);
+  if (after) await syncSupportPlatformAccess(ctx.client, ctx.user.email, after);
 
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,
@@ -268,6 +272,7 @@ export async function DeleteUserCommand(ctx: TenantContext, id: string): Promise
   await assertTerritoryAccess(ctx, target.country_code);
 
   await softDeleteUser(ctx.client, id);
+  await syncSupportPlatformAccess(ctx.client, ctx.user.email, { ...target, deleted: true });
 
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,
