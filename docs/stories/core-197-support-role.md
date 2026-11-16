@@ -23,7 +23,7 @@ content without access to patients, HCPs, leads, users or territories.
   patients, HCPs, HCOs, leads, users, territories, appointments, encounters, device orders,
   sleep studies and treatment plans answer 403 (`supportAllowlist.spec.ts`)
 - without a platform.users row, errors and the board answer 403
-- migration 064 adds `support` to `user_roles_role_check` in every tenant and in
+- migration 065 adds `support` to `user_roles_role_check` in every tenant and in
   `create_tenant_schema()` (CI parity check)
 
 ## Creating the account (by hand)

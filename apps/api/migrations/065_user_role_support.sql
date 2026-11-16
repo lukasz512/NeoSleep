@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 064: tenant role 'support' (CORE-197)
+-- Migration 065: tenant role 'support' (CORE-197)
 --
 -- A NeoCRM employee who signs in to a tenant to help it: Calendar, Resources,
 -- Documents, Reports (+ Errors) and the work board, nothing else. The API
