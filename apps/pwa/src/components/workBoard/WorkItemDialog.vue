@@ -43,18 +43,32 @@
       <div class="work-dialog__chips" data-testid="work-item-chips">
         <VMenu v-for="chip in listChips" :key="chip.name">
           <template #activator="{ props: activator }">
-            <VChip v-bind="activator" :prepend-icon="chip.icon" variant="tonal" size="small" :data-testid="`work-item-${chip.name}`">
+            <VChip
+              v-bind="activator"
+              variant="tonal"
+              size="small"
+              :class="{ 'work-dialog__chip--tinted': chip.tone }"
+              :style="chip.tone ? { '--chip-tone': chip.tone } : undefined"
+              :data-testid="`work-item-${chip.name}`"
+            >
+              <template #prepend>
+                <WorkStatusGlyph v-if="chip.name === 'status'" :status="form.status" :size="14" class="work-dialog__chip-mark" />
+                <WorkPriorityMark v-else-if="chip.name === 'priority'" :priority="form.priority" :size="14" class="work-dialog__chip-mark" />
+                <VIcon v-else :icon="chip.icon" start />
+              </template>
               {{ chip.label }}
             </VChip>
           </template>
           <VList density="compact" :data-testid="`work-item-${chip.name}-menu`">
-            <VListItem
-              v-for="option in chip.options"
-              :key="String(option.value)"
-              :title="option.title"
-              :active="option.value === chip.value"
-              @click="chip.select(option.value)"
-            />
+            <template v-for="option in chip.options" :key="String(option.value)">
+              <VListSubheader v-if="option.group" data-testid="work-item-menu-group">{{ option.group }}</VListSubheader>
+              <VListItem :title="option.title" :active="option.value === chip.value" @click="chip.select(option.value)">
+                <template v-if="option.status || option.priority !== undefined" #prepend>
+                  <WorkStatusGlyph v-if="option.status" :status="option.status" class="work-dialog__menu-mark" />
+                  <WorkPriorityMark v-else-if="option.priority !== undefined" :priority="option.priority" class="work-dialog__menu-mark" />
+                </template>
+              </VListItem>
+            </template>
           </VList>
         </VMenu>
 
@@ -244,7 +258,20 @@
               <span class="work-dialog__event-meta">
                 {{ actorLabel(event) }} · {{ formatRelativeTime(event.created_at, locale) }}
               </span>
-              <span class="work-dialog__event-text">{{ eventText(event) }}</span>
+              <I18nT v-if="event.kind === 'status'" keypath="workBoard.event.status" tag="span" class="work-dialog__event-move" scope="global">
+                <template #from>
+                  <span class="work-dialog__event-status"><WorkStatusGlyph :status="event.from_status ?? 'backlog'" :size="14" />{{ t(`workBoard.status.${event.from_status ?? "backlog"}`) }}</span>
+                </template>
+                <template #to>
+                  <span class="work-dialog__event-status"><WorkStatusGlyph :status="event.to_status ?? 'backlog'" :size="14" />{{ t(`workBoard.status.${event.to_status ?? "backlog"}`) }}</span>
+                </template>
+              </I18nT>
+              <I18nT v-else-if="event.kind === 'created'" keypath="workBoard.event.created" tag="span" class="work-dialog__event-move" scope="global">
+                <template #status>
+                  <span class="work-dialog__event-status"><WorkStatusGlyph :status="event.to_status ?? 'backlog'" :size="14" />{{ t(`workBoard.status.${event.to_status ?? "backlog"}`) }}</span>
+                </template>
+              </I18nT>
+              <span v-else class="work-dialog__event-text">{{ eventText(event) }}</span>
               <span v-if="attachmentsOf(event.id).length" class="work-dialog__event-files">
                 <button
                   v-for="file in attachmentsOf(event.id)"
@@ -356,6 +383,9 @@ import {
 } from "../../composables/useWorkBoard";
 import { WORK_ATTACHMENT_ACCEPT, filesFromTransfer, isImage, usePendingAttachments, type PendingAttachment } from "../../composables/useWorkAttachments";
 import WorkMarkdownEditor from "./WorkMarkdownEditor.vue";
+import WorkStatusGlyph from "./WorkStatusGlyph.vue";
+import WorkPriorityMark from "./WorkPriorityMark.vue";
+import { WORK_STATUS_GROUPS, WORK_URGENT_COLOR, workStatusColor } from "./workGlyphs";
 import { attachmentRefs, rewriteAttachmentRefs } from "./workMarkdown";
 import { formatRelativeTime } from "../../utils/relativeTime";
 import type { WorkAttachment, WorkItem, WorkItemEvent, WorkItemPatch, WorkPerson, WorkStatus, WorkTeam } from "../../types/workBoard";
@@ -476,7 +506,10 @@ interface ListChip {
   icon: string;
   label: string;
   value: string | number | null;
-  options: { value: string | number | null; title: string }[];
+  /** The value's colour, when the chip is tinted by it (CORE-225). */
+  tone?: string;
+  /** `group` opens a menu section above the option; `status` / `priority` draw its mark. */
+  options: { value: string | number | null; title: string; group?: string; status?: WorkStatus; priority?: number }[];
   select: (value: string | number | null) => void;
 }
 
@@ -502,7 +535,15 @@ const listChips = computed<ListChip[]>(() => {
       icon: "mdi-circle-half-full",
       label: t(`workBoard.status.${form.status}`),
       value: form.status,
-      options: WORK_STATUS_OPTIONS.map((value) => ({ value, title: t(`workBoard.status.${value}`) })),
+      tone: workStatusColor(form.status),
+      options: WORK_STATUS_GROUPS.flatMap((group) =>
+        group.statuses.map((value, index) => ({
+          value,
+          title: t(`workBoard.status.${value}`),
+          status: value,
+          group: index === 0 ? t(`workBoard.statusGroup.${group.id}`) : undefined,
+        })),
+      ),
       select: (v) => (form.status = v as WorkStatus),
     },
     {
@@ -510,7 +551,8 @@ const listChips = computed<ListChip[]>(() => {
       icon: "mdi-signal-cellular-2",
       label: t(`workBoard.priority.p${form.priority}`),
       value: form.priority,
-      options: WORK_PRIORITIES.map((value) => ({ value, title: t(`workBoard.priority.p${value}`) })),
+      tone: form.priority === 1 ? WORK_URGENT_COLOR : undefined,
+      options: WORK_PRIORITIES.map((value) => ({ value, title: t(`workBoard.priority.p${value}`), priority: value })),
       select: (v) => (form.priority = Number(v)),
     },
     {
@@ -846,19 +888,8 @@ function actorLabel(event: WorkItemEvent): string {
 }
 
 function eventText(event: WorkItemEvent): string {
-  switch (event.kind) {
-    case "created":
-      return t("workBoard.event.created", { status: t(`workBoard.status.${event.to_status ?? "backlog"}`) });
-    case "status":
-      return t("workBoard.event.status", {
-        from: t(`workBoard.status.${event.from_status ?? "backlog"}`),
-        to: t(`workBoard.status.${event.to_status ?? "backlog"}`),
-      });
-    case "edit":
-      return t("workBoard.event.edit", { fields: event.body ?? "" });
-    default:
-      return event.body ?? "";
-  }
+  // Created and status events are drawn in the template, with their status glyphs.
+  return event.kind === "edit" ? t("workBoard.event.edit", { fields: event.body ?? "" }) : (event.body ?? "");
 }
 </script>
 
@@ -890,6 +921,24 @@ function eventText(event: WorkItemEvent): string {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+/* A chip takes the colour of its value (CORE-225); the glyph's shape still carries the meaning. */
+.work-dialog__chip--tinted {
+  background: color-mix(in srgb, var(--chip-tone) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--chip-tone) 36%, transparent);
+}
+
+.work-dialog__chip--tinted :deep(.v-chip__underlay) {
+  opacity: 0;
+}
+
+.work-dialog__chip-mark {
+  margin-inline-end: 4px;
+}
+
+.work-dialog__menu-mark {
+  margin-inline-end: 12px;
 }
 
 .work-dialog__due-menu {
@@ -1067,6 +1116,20 @@ function eventText(event: WorkItemEvent): string {
   font-size: 0.875rem;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.work-dialog__event-move {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.875rem;
+}
+
+.work-dialog__event-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .work-dialog__event-files {
