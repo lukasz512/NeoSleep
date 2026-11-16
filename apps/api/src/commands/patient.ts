@@ -124,6 +124,9 @@ export async function CreatePatientCommand(
 
   // Support legacy hcp_id → practitioner_id. A doctor's new patient is always their own (CORE-104).
   const practitionerId = (await practitionerIdForWrite(ctx, input.practitioner_id?.trim() || input.hcp_id?.trim() || undefined)) ?? undefined;
+  // A new patient can't land in a territory its creator doesn't cover (CORE-226) — same
+  // check UpdatePatientCommand runs on a territory change. Doctors are scoped by care team.
+  if (ctx.user.role !== "doctor") await assertTerritoryAccessByTerritoryId(ctx, input.territory_id);
 
   const insertInput: PatientInsert = {
     salutation:     input.salutation?.trim() || undefined,

@@ -80,8 +80,20 @@ export class AuthError extends AppError {
   }
 }
 
+/**
+ * Why a 403 was refused (CORE-226). The client picks its message from this, so a
+ * "not the booker" refusal no longer reads as "outside your region".
+ */
+export type ForbiddenReason =
+  | "outside_scope"
+  | "not_own_patient"
+  | "other_doctor"
+  | "not_booker"
+  | "clinical_only"
+  | "close_not_allowed";
+
 export class ForbiddenError extends AppError {
-  constructor(message = "Forbidden") {
+  constructor(message = "Forbidden", public readonly reason?: ForbiddenReason) {
     super(message, "FORBIDDEN", 403);
   }
 }

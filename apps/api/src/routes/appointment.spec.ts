@@ -138,6 +138,8 @@ describe("/api/v1/appointments", () => {
       .set("Authorization", auth)
       .send({ patient_id: own, practitioner_id: other.practitionerId, start_at: futureSlot() });
     expect([ok.status, foreignPatient.status, otherDoctor.status]).toEqual([201, 403, 403]);
+    // CORE-226: every refusal names its reason, so the PWA can say what is actually wrong.
+    expect([foreignPatient.body.reason, otherDoctor.body.reason]).toEqual(["not_own_patient", "other_doctor"]);
 
     const admin = await staff("admin");
     const othersAppointment = await request(app).post("/api/v1/appointments").set("Authorization", admin.auth).send({ patient_id: foreign, start_at: futureSlot() });
@@ -148,6 +150,7 @@ describe("/api/v1/appointments", () => {
     expect(ids).not.toContain(othersAppointment.body.id);
     const peek = await request(app).get(`/api/v1/appointments/${othersAppointment.body.id}`).set("Authorization", auth);
     expect(peek.status).toBe(403);
+    expect(peek.body.reason).toBe("other_doctor");
   });
 
   it("a doctor booking for themselves doesn't notify themselves", async () => {
@@ -172,6 +175,7 @@ describe("/api/v1/appointments", () => {
       .set("Authorization", actor.auth)
       .send({ patient_id: plPatient, start_at: futureSlot(), notes: "clinical" });
     expect([booked.status, outside.status, withNotes.status]).toEqual([201, 403, 403]);
+    expect([outside.body.reason, withNotes.body.reason]).toEqual(["outside_scope", "clinical_only"]);
 
     const clinical = await request(app)
       .post("/api/v1/appointments")
@@ -195,10 +199,12 @@ describe("/api/v1/appointments", () => {
     const reschedule = await request(app).patch(`/api/v1/appointments/${own.body.id}`).set("Authorization", rep.auth).send({ start_at: futureSlot() });
     const cancel = await request(app).patch(`/api/v1/appointments/${own.body.id}`).set("Authorization", rep.auth).send({ status: "cancelled" });
     expect([complete.status, reschedule.status, cancel.status]).toEqual([403, 200, 200]);
+    expect(complete.body.reason).toBe("close_not_allowed");
 
     const adminBooked = await request(app).post("/api/v1/appointments").set("Authorization", admin.auth).send({ patient_id: plPatient, start_at: futureSlot() });
     const foreignCancel = await request(app).patch(`/api/v1/appointments/${adminBooked.body.id}`).set("Authorization", rep.auth).send({ status: "cancelled" });
     expect(foreignCancel.status).toBe(403);
+    expect(foreignCancel.body.reason).toBe("not_booker");
   });
 
   it("manager and the appointment's doctor close appointments; reschedule keeps the length and notifies the doctor", async () => {

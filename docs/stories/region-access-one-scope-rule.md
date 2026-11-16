@@ -44,10 +44,12 @@ properly, with platform growth in mind, no bottlenecks, easy to duplicate betwee
   ON DELETE SET NULL today, which can only fail at runtime).
 
 ### Slices (one PR each, in this order)
-1. **Honest refusals + consistent checks.** Error codes on every scope 403, PWA maps code → message; writes scoped
-   like reads; one NULL rule in both helpers (still fail-open until slice 2); territory delete guard. No data change.
+1. **Honest refusals + consistent checks.** A `reason` on every appointment and scope 403, PWA maps reason →
+   message; create/update/delete of practitioner, organization and lead (and patient create) scoped like reads;
+   a territory with role grants can't be deleted (409 `TERRITORY_IN_USE`). No data change.
 2. **Mandatory territory (D1).** Auto-assign on create for patient, practitioner, organization, lead; backfill
-   migration; then fail-closed. The backfill list (row counts per table, the rule that picked each territory) is
+   migration; then fail-closed, with one NULL rule in both scope helpers (moved here from slice 1: aligning them
+   before the backfill would mean opening the country-code helper, which denies NULL today). The backfill list (row counts per table, the rule that picked each territory) is
    shown to Łukasz and approved before it runs on the shared database.
 3. **Scope follows the grant (D3).** Remove the admin special cases; every list/get/write resolves scope from
    `user_roles`. Appointment territory follows the patient for future rows.

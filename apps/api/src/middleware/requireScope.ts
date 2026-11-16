@@ -60,7 +60,7 @@ export async function assertTerritoryAccess(
   if (allowedPaths === null) return; // global
 
   if (allowedPaths.length === 0 || !recordCountryCode) {
-    throw new ForbiddenError("This record is outside your assigned region");
+    throw new ForbiddenError("This record is outside your assigned region", "outside_scope");
   }
 
   const { rows } = await ctx.client.query<{ ok: boolean }>(
@@ -68,7 +68,7 @@ export async function assertTerritoryAccess(
     [recordCountryCode, allowedPaths]
   );
   if (!rows[0]?.ok) {
-    throw new ForbiddenError("This record is outside your assigned region");
+    throw new ForbiddenError("This record is outside your assigned region", "outside_scope");
   }
 }
 
@@ -91,7 +91,7 @@ export async function assertTerritoryAccessByTerritoryId(
   if (!recordTerritoryId) return; // unassigned — rollout-safety fallback
 
   if (allowedPaths.length === 0) {
-    throw new ForbiddenError("This record is outside your assigned region");
+    throw new ForbiddenError("This record is outside your assigned region", "outside_scope");
   }
 
   const { rows } = await ctx.client.query<{ ok: boolean }>(
@@ -99,6 +99,22 @@ export async function assertTerritoryAccessByTerritoryId(
     [recordTerritoryId, allowedPaths]
   );
   if (!rows[0]?.ok) {
-    throw new ForbiddenError("This record is outside your assigned region");
+    throw new ForbiddenError("This record is outside your assigned region", "outside_scope");
+  }
+}
+
+/**
+ * A write reaches exactly as far as a read (CORE-226): the record's current
+ * territory must be inside the caller's scope, and so must the territory it is
+ * being moved to. Create passes the new territory as `currentTerritoryId`.
+ */
+export async function assertTerritoryWriteAccess(
+  ctx: TenantContext,
+  currentTerritoryId: string | null | undefined,
+  targetTerritoryId?: string | null
+): Promise<void> {
+  await assertTerritoryAccessByTerritoryId(ctx, currentTerritoryId);
+  if (targetTerritoryId && targetTerritoryId !== currentTerritoryId) {
+    await assertTerritoryAccessByTerritoryId(ctx, targetTerritoryId);
   }
 }

@@ -63,11 +63,29 @@ export const APPOINTMENT_STATUS_COLOR: Record<AppointmentStatus, string> = {
   no_show: "warning",
 };
 
+/** Why the API refused a write with 403 — mirrors ForbiddenReason in apps/api/src/errors.ts (CORE-226). */
+export const APPOINTMENT_REFUSAL_REASONS = ["outside_scope", "not_own_patient", "other_doctor", "not_booker", "clinical_only", "close_not_allowed"] as const;
+export type AppointmentRefusalReason = (typeof APPOINTMENT_REFUSAL_REASONS)[number];
+
+/** The `reason` of a 403 body, or null when the API named none (or one this client doesn't know yet). */
+async function refusalReasonFromResponse(res: { status: number; clone?: () => { json: () => Promise<unknown> } }): Promise<AppointmentRefusalReason | null> {
+  if (res.status !== 403 || !res.clone) return null;
+  try {
+    const { reason } = (await res.clone().json()) as { reason?: unknown };
+    return APPOINTMENT_REFUSAL_REASONS.find((r) => r === reason) ?? null;
+  } catch {
+    // benign: a non-JSON 403 names no reason — the caller shows the generic message.
+    return null;
+  }
+}
+
 /** Result of a write — `conflict` = the doctor's slot is taken (409), `forbidden` = outside the caller's rights (403). */
 export interface AppointmentWriteResult {
   ok: boolean;
   conflict: boolean;
   forbidden: boolean;
+  /** Which rule refused a 403 (CORE-226); null = unnamed, show the generic message. */
+  refusalReason: AppointmentRefusalReason | null;
   appointment: Appointment | null;
   /** A 400 naming a payload key (e.g. `duration_minutes`) — the form marks that field (NEO-109). */
   fieldErrors: FieldErrors | null;
@@ -82,7 +100,8 @@ async function write(path: string, method: "POST" | "PATCH", body: Record<string
   });
   const appointment = res.ok ? ((await res.json()) as Appointment) : null;
   const fieldErrors = res.ok ? null : await fieldErrorsFromResponse(res);
-  return { ok: res.ok, conflict: res.status === 409, forbidden: res.status === 403, appointment, fieldErrors };
+  const refusalReason = res.ok ? null : await refusalReasonFromResponse(res);
+  return { ok: res.ok, conflict: res.status === 409, forbidden: res.status === 403, refusalReason, appointment, fieldErrors };
 }
 
 /**

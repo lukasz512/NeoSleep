@@ -346,6 +346,16 @@ export async function updateTerritory(
   return getTerritoryById(client, id);
 }
 
+/** How many role grants (user_roles rows) are scoped to this territory node itself. */
+export async function countRoleGrantsOnTerritory(client: PoolClient, id: string): Promise<number> {
+  try {
+    const { rows } = await client.query<{ n: number }>(`SELECT count(*)::int AS n FROM user_roles WHERE territory_id = $1`, [id]);
+    return rows[0]?.n ?? 0;
+  } catch (err) {
+    throw new DatabaseError("countRoleGrantsOnTerritory", err);
+  }
+}
+
 /**
  * Soft-deletes a territory node — a hard delete would either cascade (per
  * territory.parent_id's ON DELETE SET NULL, orphaning children up a level
