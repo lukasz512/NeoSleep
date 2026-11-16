@@ -3,7 +3,7 @@ import { toArray } from "./helpers.js";
 import { AppError, DatabaseError } from "../errors.js";
 import { displayNameSql } from "../utils/personName.js";
 
-export type StaffRole = "admin" | "manager" | "kam" | "msl" | "rep" | "doctor";
+export type StaffRole = "admin" | "manager" | "kam" | "msl" | "rep" | "doctor" | "support";
 
 export interface User {
   id: string;

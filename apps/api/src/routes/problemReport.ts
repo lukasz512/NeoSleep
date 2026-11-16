@@ -11,7 +11,7 @@ import {
   PROBLEM_REPORT_STATUSES,
   getProblemReportAttachmentPath,
   insertProblemReport,
-  isPlatformAdmin,
+  isPlatformStaff,
   listDiagnostics,
   listMyProblemReports,
   listProblemReports,
@@ -142,8 +142,8 @@ function requireUuid(req: Request, resource: string): string {
   return id;
 }
 
-async function requirePlatformAdmin(req: Request): Promise<void> {
-  if (!(await isPlatformAdmin(req.user?.email))) throw new ForbiddenError("Platform admin only");
+async function requirePlatformStaff(req: Request): Promise<void> {
+  if (!(await isPlatformStaff(req.user?.email))) throw new ForbiddenError("Platform staff only");
 }
 
 // ---------------------------------------------------------------------------
@@ -263,9 +263,9 @@ function parseReporterReply(value: unknown): string | null | undefined {
 // ---------------------------------------------------------------------------
 problemReportRouter.get(
   "/admin/issues/access",
-  requireRole("admin"),
+  requireRole("admin", "support"),
   asyncHandler(async (req: Request, res: Response) => {
-    res.json({ platformAdmin: await isPlatformAdmin(req.user?.email) });
+    res.json({ platformAdmin: await isPlatformStaff(req.user?.email) });
   })
 );
 
@@ -274,7 +274,7 @@ problemReportRouter.get(
 // ---------------------------------------------------------------------------
 problemReportRouter.get(
   "/admin/problem-reports",
-  requireRole("admin"),
+  requireRole("admin", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     const status = parseStatusFilter<ProblemReportStatus>(req.query.status, PROBLEM_REPORT_STATUSES, "status");
     const items = await listProblemReports(tenantSlugFromHost(req.hostname), status);
@@ -287,7 +287,7 @@ problemReportRouter.get(
 // ---------------------------------------------------------------------------
 problemReportRouter.patch(
   "/admin/problem-reports/:id",
-  requireRole("admin"),
+  requireRole("admin", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = requireUuid(req, "ProblemReport");
     const statusRaw = field(req.body, "status");
@@ -321,7 +321,7 @@ problemReportRouter.patch(
 // ---------------------------------------------------------------------------
 problemReportRouter.get(
   "/admin/problem-reports/:id/attachment",
-  requireRole("admin"),
+  requireRole("admin", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = requireUuid(req, "ProblemReport");
     const path = await getProblemReportAttachmentPath(tenantSlugFromHost(req.hostname), id);
@@ -335,9 +335,9 @@ problemReportRouter.get(
 // ---------------------------------------------------------------------------
 problemReportRouter.get(
   "/admin/diagnostics",
-  requireRole("admin"),
+  requireRole("admin", "support"),
   asyncHandler(async (req: Request, res: Response) => {
-    await requirePlatformAdmin(req);
+    await requirePlatformStaff(req);
     const statusQuery = req.query.status === undefined || req.query.status === "" ? "open" : req.query.status;
     const status = parseStatusFilter<DiagnosticStatus>(statusQuery, DIAGNOSTIC_STATUSES, "status");
     const env = optionalText(req.query.env, 50);
@@ -352,9 +352,9 @@ problemReportRouter.get(
 // ---------------------------------------------------------------------------
 problemReportRouter.patch(
   "/admin/diagnostics/:id",
-  requireRole("admin"),
+  requireRole("admin", "support"),
   asyncHandler(async (req: Request, res: Response) => {
-    await requirePlatformAdmin(req);
+    await requirePlatformStaff(req);
     const id = requireUuid(req, "Diagnostic");
     const status = field(req.body, "status");
     if (!(DIAGNOSTIC_STATUSES as readonly unknown[]).includes(status)) {

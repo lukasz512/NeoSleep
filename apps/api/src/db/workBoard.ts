@@ -422,7 +422,7 @@ export async function deleteWorkAttachment(itemId: string, id: string, actor: Wo
 /** Platform staff who can be assigned work: active platform.users with a board role. */
 export async function listWorkPeople(): Promise<{ email: string; name: string }[]> {
   const { rows } = await getDb().query<{ email: string; name: string }>(
-    `SELECT email, name FROM platform.users WHERE is_active AND role IN ('owner', 'admin') ORDER BY name, email`
+    `SELECT email, name FROM platform.users WHERE is_active AND role IN ('owner', 'admin', 'support') ORDER BY name, email`
   );
   return rows;
 }
