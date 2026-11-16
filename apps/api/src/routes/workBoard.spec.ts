@@ -195,6 +195,13 @@ describe("platform work board", () => {
       expect(detail.body.events[0]).toMatchObject({ kind: "created", actor_kind: "session", actor: `session:QA laptop ${SUFFIX}` });
     });
 
+    it("creates a side ticket in Backlog when the session asks for it (CORE-223)", async () => {
+      const res = await asSession(request(app).post(`${BASE}/items`)).send({ team: TEAM, title: "For later", status: "backlog", ...TICKET });
+      expect(res.status).toBe(201);
+      expect(res.body.item).toMatchObject({ status: "backlog", source: "session" });
+      expect(res.body.item.labels).toContain("session");
+    });
+
     it("rejects a ticket without Problem / Change / Done when or over 1500 characters", async () => {
       const missing = await asSession(request(app).post(`${BASE}/items`)).send({ team: TEAM, title: "No body", problem: "x" });
       expect(missing.status).toBe(400);
@@ -282,7 +289,7 @@ describe("platform work board", () => {
       const key = await inReview("On dev");
       const res = await reportGit({ items: [{ key, state: "dev", sha: SHA }, { key: `${TEAM}-99999`, state: "prod", sha: SHA }] });
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ updated: 1, closed: [] });
+      expect(res.body).toEqual({ updated: 1, closed: [], tidied: { to_review: [], to_backlog: [] } });
       const { item, events } = await read(key);
       expect(item).toMatchObject({ git_state: "dev", git_sha: SHA, status: "needs_review" });
       expect(item.git_checked_at).not.toBeNull();
@@ -348,6 +355,83 @@ describe("platform work board", () => {
       expect((await asSession({ items, complete: true })).status).toBe(403);
       expect((await read(key)).item).toMatchObject({ git_state: "prod", status: "needs_review" });
       await getDb().query("DELETE FROM platform.work_session_token WHERE id = $1", [issued.body.item.id]);
+    });
+
+    describe("tidy: Building means a branch exists (CORE-223)", () => {
+      async function building(title: string, daysInBuilding: number, extra: Record<string, unknown> = {}): Promise<string> {
+        const key = (await create({ title, status: "building", ...extra })).body.item.key as string;
+        await getDb().query(
+          `UPDATE platform.work_item SET status_changed_at = now() - make_interval(days => $2::int) WHERE team_key || '-' || number = $1`,
+          [key, daysInBuilding]
+        );
+        return key;
+      }
+      async function patch(key: string, body: Record<string, unknown>) {
+        return request(app).patch(`${BASE}/items/${key}`).set("Authorization", platformAdmin.auth).send(body);
+      }
+
+      it("moves a Building item that git sees on dev to Needs Review, with a status event and a comment", async () => {
+        const merged = await building("Merged, still Building", 0);
+        const held = await building("Merged, on hold", 0, { labels: ["hold"] });
+        const res = await reportGit({ items: [{ key: merged, state: "dev", sha: SHA }, { key: held, state: "dev", sha: SHA }], tidy: { branches: [] } });
+        expect(res.status).toBe(200);
+        expect(res.body.tidied.to_review).toContain(merged);
+        expect(res.body.tidied.to_review).not.toContain(held);
+
+        const moved = await read(merged);
+        expect(moved.item.status).toBe("needs_review");
+        const status = moved.events.find((e: { kind: string }) => e.kind === "status");
+        expect(status).toMatchObject({ from_status: "building", to_status: "needs_review", actor_kind: "agent" });
+        expect(moved.events.find((e: { kind: string }) => e.kind === "comment").body).toContain("aaaaaaa");
+        expect((await read(held)).item.status).toBe("building");
+      });
+
+      it("returns a Building item with no branch for more than 3 days to Backlog, and says why", async () => {
+        const idle = await building("Idle, no branch", 4);
+        const res = await reportGit({ items: [], tidy: { branches: [] } });
+        expect(res.body.tidied.to_backlog).toContain(idle);
+        const moved = await read(idle);
+        expect(moved.item.status).toBe("backlog");
+        expect(moved.events.find((e: { kind: string }) => e.kind === "status")).toMatchObject({ from_status: "building", to_status: "backlog" });
+        expect(moved.events.find((e: { kind: string }) => e.kind === "comment").body).toContain("no branch");
+      });
+
+      it("leaves a young item, one with a branch, one with a remote branch and one on hold", async () => {
+        const young = await building("Young", 2);
+        const withBranch = await building("Has the branch field", 30);
+        await patch(withBranch, { branch: "worktree-qa-1-has-branch" });
+        await getDb().query(`UPDATE platform.work_item SET status_changed_at = now() - interval '30 days' WHERE team_key || '-' || number = $1`, [withBranch]);
+        const remote = await building("Has a remote branch", 30);
+        const held = await building("Idle, on hold", 30, { labels: ["hold"] });
+        const res = await reportGit({ items: [], tidy: { branches: [remote] } });
+        for (const key of [young, withBranch, remote, held]) {
+          expect(res.body.tidied.to_backlog).not.toContain(key);
+          expect((await read(key)).item.status).toBe("building");
+        }
+      });
+
+      it("does not bounce an item a person sent back from Needs Review for rework", async () => {
+        const key = await inReview("Rework");
+        await patch(key, { status: "building" });
+        const res = await reportGit({ items: [{ key, state: "dev", sha: SHA }], tidy: { branches: [] } });
+        expect(res.body.tidied.to_review).not.toContain(key);
+        expect((await read(key)).item.status).toBe("building");
+      });
+
+      it("without tidy nothing in Building moves; a session cannot tidy; bad input names the field", async () => {
+        const idle = await building("Idle, no tidy asked", 10);
+        expect((await reportGit({ items: [] })).body.tidied).toEqual({ to_review: [], to_backlog: [] });
+        expect((await read(idle)).item.status).toBe("building");
+
+        const issued = await request(app).post(`${BASE}/session-tokens`).set("Authorization", platformAdmin.auth).send({ name: `Tidy ${SUFFIX}` });
+        const session = await request(app).post(`${BASE}/git-state`).set("X-Session-Token", issued.body.token).send({ items: [], tidy: { branches: [] } });
+        expect(session.status).toBe(403);
+        expect((await read(idle)).item.status).toBe("building");
+        await getDb().query("DELETE FROM platform.work_session_token WHERE id = $1", [issued.body.item.id]);
+
+        expect((await reportGit({ items: [], tidy: {} })).body.field).toBe("tidy");
+        expect((await reportGit({ items: [], tidy: { branches: ["nope"] } })).body.field).toBe("tidy");
+      });
     });
 
     it("403 for a tenant admin, 400 with the field for bad input", async () => {

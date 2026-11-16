@@ -41,8 +41,11 @@ export interface WorkLink {
 export const WORK_GIT_STATES = ["none", "dev", "prod"] as const;
 export type WorkGitState = (typeof WORK_GIT_STATES)[number];
 
-/** Keeps a ticket in Needs Review when the board closes shipped ones (CORE-221). */
+/** Keeps a ticket where it is when the board closes or tidies tickets (CORE-221, CORE-223). */
 export const HOLD_LABEL = "hold";
+
+/** Days a ticket may sit in Building without a branch before the tidy returns it to Backlog (CORE-223). */
+export const BUILDING_WITHOUT_BRANCH_DAYS = 3;
 
 export interface WorkTeamRow {
   key: string;
@@ -360,12 +363,22 @@ export interface WorkGitReport {
  * smoke test passed) each Needs Review ticket that is on prod and not labeled `hold` moves
  * to Done, with a status event and a comment. A state change alone leaves no event: it is
  * a fact about git, not an edit of the ticket.
+ *
+ * With `tidy` (CORE-223) Building keeps only tickets somebody is building: one that git sees
+ * on dev or prod moves to Needs Review, unless a person sent it back from there for rework;
+ * one with no branch (neither the `branch` field nor a remote branch in `tidy.branches`) and
+ * nothing merged after BUILDING_WITHOUT_BRANCH_DAYS returns to Backlog. Tickets labeled
+ * `hold` stay. Each move leaves a status event and a comment.
  */
 export async function applyWorkGitStates(
   reports: readonly WorkGitReport[],
-  options: { complete: boolean; close: { smoke_url: string } | null },
+  options: {
+    complete: boolean;
+    close: { smoke_url: string } | null;
+    tidy?: { branches: readonly { team: string; number: number }[] } | null;
+  },
   actor: WorkActor
-): Promise<{ updated: number; closed: string[] }> {
+): Promise<{ updated: number; closed: string[]; tidied: { to_review: string[]; to_backlog: string[] } }> {
   return inPlatformTransaction(async (client) => {
     const teams = reports.map((r) => r.team);
     const numbers = reports.map((r) => r.number);
@@ -400,7 +413,46 @@ export async function applyWorkGitStates(
         closed.push(item.key);
       }
     }
-    return { updated: rowCount ?? 0, closed: closed.sort() };
+    const toReview: string[] = [];
+    const toBacklog: string[] = [];
+    if (options.tidy) {
+      const merged = await client.query<WorkItemRow>(
+        `UPDATE platform.work_item w SET status = 'needs_review', status_changed_at = now(), updated_at = now()
+          WHERE w.status = 'building' AND w.git_state IN ('dev', 'prod') AND NOT ($1 = ANY (w.labels))
+            AND 'needs_review' IS DISTINCT FROM (SELECT e.from_status FROM platform.work_item_event e
+                                                  WHERE e.item_id = w.id AND e.kind = 'status'
+                                                  ORDER BY e.id DESC LIMIT 1)
+          RETURNING ${ITEM_COLUMNS}`,
+        [HOLD_LABEL]
+      );
+      for (const item of merged.rows) {
+        await insertEvent(client, item.id, actor, { kind: "status", from_status: "building", to_status: "needs_review" });
+        await insertEvent(client, item.id, actor, {
+          kind: "comment",
+          body: `Moved to Needs Review automatically: commit ${(item.git_sha ?? "").slice(0, 7)} is on ${item.git_state}. Label a ticket "${HOLD_LABEL}" to keep it in Building.`,
+        });
+        toReview.push(item.key);
+      }
+      const idle = await client.query<WorkItemRow>(
+        `UPDATE platform.work_item w SET status = 'backlog', status_changed_at = now(), updated_at = now()
+          WHERE w.status = 'building' AND w.branch IS NULL AND COALESCE(w.git_state, 'none') = 'none'
+            AND w.status_changed_at < now() - make_interval(days => $2::int)
+            AND NOT ($1 = ANY (w.labels))
+            AND NOT EXISTS (SELECT 1 FROM unnest($3::text[], $4::int[]) AS b(team, number)
+                             WHERE b.team = w.team_key AND b.number = w.number)
+          RETURNING ${ITEM_COLUMNS}`,
+        [HOLD_LABEL, BUILDING_WITHOUT_BRANCH_DAYS, options.tidy.branches.map((b) => b.team), options.tidy.branches.map((b) => b.number)]
+      );
+      for (const item of idle.rows) {
+        await insertEvent(client, item.id, actor, { kind: "status", from_status: "building", to_status: "backlog" });
+        await insertEvent(client, item.id, actor, {
+          kind: "comment",
+          body: `Returned to Backlog automatically: ${BUILDING_WITHOUT_BRANCH_DAYS} days in Building with no branch and nothing merged. Building is for tickets with a branch (pnpm board branch). Label a ticket "${HOLD_LABEL}" to keep it there.`,
+        });
+        toBacklog.push(item.key);
+      }
+    }
+    return { updated: rowCount ?? 0, closed: closed.sort(), tidied: { to_review: toReview.sort(), to_backlog: toBacklog.sort() } };
   });
 }
 
