@@ -309,6 +309,18 @@ async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) =>
           body: JSON.stringify(payload),
         }),
       successMessage: t("user.users.form.success"),
+      // The API says whether the welcome email went out (CORE-199) — a failed
+      // send is a warning pointing at "Reset password", not a silent success.
+      successToast: async (result) => {
+        const body = (await result.clone?.().json()) as { invite_email?: string } | undefined;
+        if (body?.invite_email === "sent") {
+          return { message: t("user.users.form.successInvited", { email: String(payload.email ?? "") }), type: "success" };
+        }
+        if (body?.invite_email === "not_sent") {
+          return { message: t("user.users.form.successNotInvited"), type: "warning" };
+        }
+        return null;
+      },
       icon: "nav-users",
       errorMessage: t("user.users.form.errorSave"),
     },

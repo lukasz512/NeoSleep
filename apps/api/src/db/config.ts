@@ -1,3 +1,4 @@
+import type { PoolClient } from "pg";
 import { AppError, DatabaseError } from "../errors.js";
 import { DEPLOY_ENV } from "../env.js";
 import { withTenant, tenantSlugFromHost } from "./tenant.js";
@@ -81,6 +82,18 @@ const DEFAULT_APP_CONFIG: AppConfig = {
 function stringRecord(value: unknown): Record<string, string> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return Object.fromEntries(Object.entries(value).filter((e): e is [string, string] => typeof e[1] === "string"));
+}
+
+/** The tenant's display name on the caller's own (tenant-scoped) connection; the default when none is set. */
+export async function getTenantName(client: PoolClient): Promise<string> {
+  try {
+    const r = await client.query<{ tenant_name: string | null }>(
+      `SELECT NULLIF(tenant_name, '') AS tenant_name FROM app_config LIMIT 1`
+    );
+    return r.rows[0]?.tenant_name ?? DEFAULT_APP_CONFIG.tenant_name;
+  } catch (err) {
+    throw new DatabaseError("getTenantName", err);
+  }
 }
 
 export async function getAppConfig(): Promise<AppConfig> {
