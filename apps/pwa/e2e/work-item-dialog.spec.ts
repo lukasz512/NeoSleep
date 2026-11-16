@@ -25,10 +25,10 @@ test("a screenshot pasted into the description shows inline, not in the strip", 
   await expect(page.getByTestId("work-item-events")).toBeVisible();
   const editor = page.getByTestId("work-item-problem").locator(".ProseMirror");
   await editor.click();
-  // Caret to the end of the text. Click + End left it at the start under load
-  // (the paste then landed above the text — CORE-196).
-  await editor.evaluate((el) => window.getSelection()?.selectAllChildren(el));
-  await editor.evaluate(() => window.getSelection()?.collapseToEnd());
+  // Caret to the end of the text, set through the editor itself (Tiptap puts it on its DOM node).
+  // A DOM selection reaches ProseMirror only on the async selectionchange, so under load the
+  // paste still saw the caret at the start and landed above the text (CORE-196, CORE-204).
+  await editor.evaluate((el) => (el as HTMLElement & { editor: { commands: { focus: (at: "end") => boolean } } }).editor.commands.focus("end"));
   // A 1×1 PNG, pasted the way a browser delivers a copied screenshot.
   await editor.evaluate((el) => {
     const bytes = Uint8Array.from(atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="), (c) => c.charCodeAt(0));
