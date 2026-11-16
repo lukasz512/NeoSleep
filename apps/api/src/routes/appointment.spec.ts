@@ -281,4 +281,35 @@ describe("/api/v1/appointments", () => {
     expect(inWindow.body.items.map((a: { id: string }) => a.id)).toEqual([created.body.id]);
     expect(before.body.items).toEqual([]);
   });
+
+  it("each 403 carries its own reason, so the app never calls a booking rule a region problem (CORE-224)", async () => {
+    const rep = await staff("rep", "PL");
+    const admin = await staff("admin");
+    const doc = await doctor();
+    const other = await doctor();
+    const plPatient = await patient(doc.practitionerId, "PL");
+    const mxPatient = await patient(doc.practitionerId, "MX");
+    const foreign = await patient(other.practitionerId);
+    const post = (auth: string, body: Record<string, unknown>) => request(app).post("/api/v1/appointments").set("Authorization", auth).send({ start_at: futureSlot(), ...body });
+    const patch = (auth: string, id: string, body: Record<string, unknown>) => request(app).patch(`/api/v1/appointments/${id}`).set("Authorization", auth).send(body);
+
+    const own = await post(rep.auth, { patient_id: plPatient });
+    const adminBooked = await post(admin.auth, { patient_id: plPatient });
+    const othersAppointment = await post(admin.auth, { patient_id: foreign });
+    expect([own.status, adminBooked.status, othersAppointment.status]).toEqual([201, 201, 201]);
+
+    const refusals = {
+      OUTSIDE_TERRITORY: await post(rep.auth, { patient_id: mxPatient }),
+      CLINICAL_FIELDS: await post(rep.auth, { patient_id: plPatient, notes: "clinical" }),
+      NOT_BOOKER: await patch(rep.auth, adminBooked.body.id, { start_at: futureSlot() }),
+      CANNOT_CLOSE: await patch(rep.auth, own.body.id, { status: "completed" }),
+      NOT_OWN_PATIENT: await post(doc.login!.auth, { patient_id: foreign }),
+      OTHER_DOCTOR: await patch(doc.login!.auth, othersAppointment.body.id, { start_at: futureSlot() }),
+    };
+    for (const [reason, res] of Object.entries(refusals)) {
+      expect([reason, res.status, res.body.code, res.body.reason]).toEqual([reason, 403, "FORBIDDEN", reason]);
+    }
+    const clinicalOnUpdate = await patch(rep.auth, own.body.id, { notes: "clinical" });
+    expect(clinicalOnUpdate.body.reason).toBe("CLINICAL_FIELDS");
+  });
 });

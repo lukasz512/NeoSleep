@@ -79,6 +79,24 @@ describe("AppointmentDetailDialog — patient can't attend (NEO-254)", () => {
     expect(byTestId("appointment-keep")).toBeNull();
   });
 
+  // CORE-224: support can only read (API allowlist), so no button that would end in a 403.
+  it("support sees the visit without complete, no-show, reschedule, cancel or book-next", async () => {
+    await open(BASE, "support");
+    expect(byTestId("appointment-status")).not.toBeNull();
+    for (const id of ["appointment-complete", "appointment-no-show", "appointment-reschedule", "appointment-cancel"]) expect(byTestId(id), id).toBeNull();
+    await open({ ...BASE, status: "completed" }, "support");
+    expect(byTestId("appointment-book-next")).toBeNull();
+  });
+
+  it("a refused change says why — the API's reason, not a generic save error (CORE-224)", async () => {
+    await open(BASE);
+    apiFetch.mockResolvedValueOnce({ ok: false, status: 403, json: async () => ({ code: "FORBIDDEN", reason: "CANNOT_CLOSE" }) } as Response);
+    byTestId("appointment-complete")!.click();
+    await flushPromises();
+    expect(document.body.textContent).toContain("Only the doctor or clinic staff can mark an appointment as completed or no-show.");
+    expect(document.body.textContent).not.toContain("Could not save the appointment");
+  });
+
   it("cannot_attend hides complete and no-show and offers Nueva fecha / Sí vendrá / Cancelar", async () => {
     await open(DECLINED);
     expect(byTestId("appointment-complete")).toBeNull();
