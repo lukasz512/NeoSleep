@@ -1,4 +1,4 @@
-# Notification clock (CORE-3, ADR-027): every 5 minutes, per tenant, escalate
+# Notification clock (CORE-3, ADR-027): once a day for now, per tenant, escalate
 # notifications unread past their escalateAfterMin to email, dispatch due
 # pending deliveries to the channel adapters (push CORE-5, email CORE-6; until
 # they exist those rows just stay pending), and purge by retention window.
@@ -6,11 +6,14 @@
 # is harmless. Same secrets as appointment-reminders.yml (API_URL_DEV,
 # API_URL_PROD, INTERNAL_JOB_SECRET); without them the job only warns.
 
-name: Notification tick (every 5 min)
+name: Notification tick (daily)
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    # Daily at 05:00 UTC while there is no traffic and no push/email adapter
+    # (CORE-5/6). Back to every 5 min once adapters ship: the 30-min escalation
+    # and quiet-hours deferrals need a short tick.
+    - cron: "0 5 * * *"
   workflow_dispatch: {}
 
 permissions:

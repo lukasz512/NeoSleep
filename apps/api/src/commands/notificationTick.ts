@@ -4,7 +4,7 @@ import { escalateUnreadNotifications } from "../notifications/escalation.js";
 import { purgeNotifications, type PurgeResult } from "../notifications/purge.js";
 
 /**
- * CORE-3: the notification clock. Run every 5 minutes by
+ * CORE-3: the notification clock. Run daily for now (every 5 min once CORE-5/6 add adapters) by
  * .github/workflows/notification-tick.yml through POST
  * /api/v1/internal/jobs/notifications/tick. One tick per tenant does, in order:
  *   1. escalate: important notifications unread for escalateAfterMin get an email delivery;

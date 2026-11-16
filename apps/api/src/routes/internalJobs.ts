@@ -6,7 +6,7 @@ import { RunNotificationTickAllTenants } from "../commands/notificationTick.js";
 /** Machine-to-machine job endpoints, called by GitHub Actions cron (INTERNAL_JOB_SECRET). */
 export const internalJobsRouter: RouterType = Router();
 
-// POST /api/v1/internal/jobs/notifications/tick: CORE-3, every 5 min by
+// POST /api/v1/internal/jobs/notifications/tick: CORE-3, daily (for now) by
 // .github/workflows/notification-tick.yml.
 internalJobsRouter.post(
   "/internal/jobs/notifications/tick",
