@@ -7,6 +7,7 @@ import { isApiError, reportCaught, reportFailedResponse } from "@api";
 import { apiFetch } from "./useApi";
 import type {
   WorkAttachment,
+  WorkGitState,
   WorkItem,
   WorkItemDraft,
   WorkItemEvent,
@@ -18,7 +19,7 @@ import type {
   WorkTeam,
 } from "../types/workBoard";
 
-/** Board columns, left to right. `canceled` is closed and has no column. */
+/** Board columns, left to right. `canceled` is closed; its column shows only when asked for (CORE-221). */
 export const WORK_BOARD_COLUMNS: readonly WorkStatus[] = [
   "triage",
   "backlog",
@@ -145,6 +146,31 @@ export function neighbourStatus(status: WorkStatus, step: -1 | 1): WorkStatus | 
 
 /** Label a Claude Code session puts on the tickets it creates (CORE-187). */
 export const SESSION_LABEL = "session";
+
+/** Label that keeps a ticket in Needs Review when its code reaches prod (CORE-221). */
+export const HOLD_LABEL = "hold";
+
+/**
+ * Where the code is, for the card and the dialog (CORE-221): always for Building and Needs
+ * Review once CI has reported, elsewhere only when something is merged. Never on a closed item.
+ */
+export function gitMarker(item: WorkItem): WorkGitState | null {
+  if (!item.git_state || item.status === "done" || item.status === "canceled") return null;
+  if (item.status === "building" || item.status === "needs_review") return item.git_state;
+  return item.git_state === "none" ? null : item.git_state;
+}
+
+export const GIT_ICONS: Record<WorkGitState, string> = {
+  none: "mdi-source-branch",
+  dev: "mdi-source-merge",
+  prod: "mdi-rocket-launch-outline",
+};
+
+/** A Needs Review ticket git disagrees with: nothing merged, or on prod and not held. */
+export function outOfStep(item: WorkItem): boolean {
+  if (item.status !== "needs_review") return false;
+  return item.git_state === "none" || (item.git_state === "prod" && !item.labels.includes(HOLD_LABEL));
+}
 
 export async function fetchSessionTokens(): Promise<WorkSessionToken[]> {
   return (await request<{ items: WorkSessionToken[] }>("useWorkBoard.tokens", `${BASE}/session-tokens`)).items;

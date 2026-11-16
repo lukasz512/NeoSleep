@@ -1,0 +1,90 @@
+# Work board git state (CORE-221) — tells the board where each ticket's code is,
+# so nobody has to compare the Needs Review column with git by hand.
+#
+# - sync:  on every push to dev, reads git log of origin/dev and origin/prod and
+#          reports which tickets are on dev, on prod, or not merged at all.
+# - close: after a prod deploy finishes green, checks the prod API and the prod
+#          PWA respond (the smoke test), reports the same snapshot and asks the
+#          board to move Needs Review tickets that are on prod to Done. Tickets
+#          labeled `hold` stay. A failed deploy or smoke test closes nothing.
+#
+# Secrets: BOARD_API_URL + BOARD_AGENT_TOKEN (same as ci-failure-handoff.yml),
+# API_URL_PROD. workflow_run only fires from this file on the default branch (dev).
+
+name: Work board git state
+
+on:
+  push:
+    branches: [dev]
+  workflow_run:
+    workflows: ["Deploy NeoSleepCare App", "Deploy API (Cloud Run)"]
+    types: [completed]
+    branches: [prod]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# Reports are whole snapshots, so they must land in order.
+concurrency:
+  group: board-git-state
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Full history of both branches: a ticket's commit can be many merges back.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+      - name: Report where each ticket's code is
+        run: node infrastructure/scripts/board-git-state.mjs
+        env:
+          BOARD_API_URL: ${{ secrets.BOARD_API_URL }}
+          BOARD_AGENT_TOKEN: ${{ secrets.BOARD_AGENT_TOKEN }}
+
+  close:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      API_URL: ${{ secrets.API_URL_PROD }}
+      SITE: https://pwa.neosleepcare.com
+    steps:
+      # workflow_run always checks out the default branch — the script is the
+      # reviewed one on dev; origin/prod is read from the full history.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+
+      - name: Prod API health
+        run: curl -sf --max-time 30 "$API_URL/health" | tee /dev/stderr | jq -e '.ok == true' > /dev/null
+
+      - name: Prod page and all its assets load
+        run: |
+          html=$(curl -sf --max-time 30 -H 'Cache-Control: no-cache' "$SITE/") || { echo "::error::$SITE/ did not load"; exit 1; }
+          assets=$(echo "$html" | grep -oE '(src|href)="/[^"]+\.(js|css)"' | sed -E 's/^(src|href)="//; s/"$//' | sort -u)
+          if [ -z "$assets" ]; then echo "::error::$SITE/ references no JS/CSS — not a built page"; exit 1; fi
+          failed=0
+          for a in $assets; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$SITE$a")
+            echo "$code $a"
+            [ "$code" = "200" ] || failed=1
+          done
+          if [ "$failed" = "1" ]; then echo "::error::$SITE is missing assets — nothing is closed"; exit 1; fi
+
+      - name: Report and close what is on prod
+        run: node infrastructure/scripts/board-git-state.mjs --close --smoke-url "$RUN_URL"
+        env:
+          BOARD_API_URL: ${{ secrets.BOARD_API_URL }}
+          BOARD_AGENT_TOKEN: ${{ secrets.BOARD_AGENT_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

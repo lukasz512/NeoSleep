@@ -24,6 +24,14 @@
       >
         <VIcon icon="mdi-checkbox-marked-outline" size="14" aria-hidden="true" />{{ progress.done }}/{{ progress.total }}
       </span>
+      <span v-if="git || held" class="work-card__marks">
+        <span v-if="git" class="work-card__git" :class="{ 'work-card__git--alert': alert }" data-testid="work-card-git">
+          <VIcon :icon="GIT_ICONS[git]" size="14" aria-hidden="true" />{{ t(`workBoard.git.${git}`) }}
+        </span>
+        <span v-if="held" class="work-card__git" data-testid="work-card-hold">
+          <VIcon icon="mdi-pause-circle-outline" size="14" aria-hidden="true" />{{ t("workBoard.hold.on") }}
+        </span>
+      </span>
     </button>
     <span v-if="links.length" class="work-card__links">
       <a
@@ -42,11 +50,12 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { CARD_LINK_KINDS, checklistProgress, linkOf } from "../../composables/useWorkBoard";
+import { CARD_LINK_KINDS, GIT_ICONS, HOLD_LABEL, checklistProgress, gitMarker, linkOf, outOfStep } from "../../composables/useWorkBoard";
 import type { WorkItem, WorkLinkKind } from "../../types/workBoard";
 
 /**
- * One board card: KEY-n, priority, title, and the spec/artifact/PR/CI links that exist.
+ * One board card: KEY-n, priority, title, where the code is (CORE-221), and the
+ * spec/artifact/PR/CI links that exist.
  * `[` / `]` on a focused card ask the board to move it one column left / right.
  */
 const props = withDefaults(defineProps<{ item: WorkItem; draggable?: boolean }>(), { draggable: true });
@@ -55,6 +64,10 @@ const { t } = useI18n();
 const dragging = ref(false);
 /** How much of "Done when" is ticked (CORE-195); null when it isn't a checklist. */
 const progress = computed(() => checklistProgress(props.item.done_when));
+const git = computed(() => gitMarker(props.item));
+/** Status and git disagree; the marker turns into a warning. */
+const alert = computed(() => outOfStep(props.item));
+const held = computed(() => props.item.status === "needs_review" && props.item.labels.includes(HOLD_LABEL));
 
 const links = computed(() =>
   CARD_LINK_KINDS.map((kind) => ({ kind, url: linkOf(props.item, kind) })).filter(
@@ -158,6 +171,24 @@ function onKeydown(event: KeyboardEvent): void {
 
 .work-card__progress--complete {
   color: rgb(var(--v-theme-success));
+}
+
+.work-card__marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.work-card__git {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.work-card__git--alert {
+  color: rgb(var(--v-theme-warning));
 }
 
 .work-card__title {
