@@ -13,7 +13,7 @@ describe("work item markdown", () => {
   it("makes a whole-line image an image node and leaves an inline one as text", () => {
     const doc = markdownToDoc("see ![a](attachment:x) here\n![b](attachment:y)");
     expect(doc.content.map((block) => block.type)).toEqual(["paragraph", "workImage"]);
-    expect(doc.content[1]!.attrs).toEqual({ ref: "y", alt: "b" });
+    expect(doc.content[1]!.attrs).toEqual({ ref: "y", alt: "b", size: "full" });
   });
 
   it("lists the attachments the text shows", () => {
@@ -26,6 +26,16 @@ describe("work item markdown", () => {
     expect(rewriteAttachmentRefs("![a](attachment:pending-1)\n![b](attachment:pending-2)", { "pending-1": "uuid-1" })).toBe(
       "![a](attachment:uuid-1)\n![b](attachment:pending-2)",
     );
+  });
+
+  it("keeps an image's size as its title and leaves full width without one (CORE-202)", () => {
+    const sized = "![a](attachment:x \"s\")\n![b](attachment:y \"l\")\n![c](attachment:z)";
+    expect(markdownToDoc(sized).content.map((block) => block.attrs?.size)).toEqual(["s", "l", "full"]);
+    expect(docToMarkdown(markdownToDoc(sized))).toBe(sized);
+    expect(imageMarkdown("x", "a", "m")).toBe('![a](attachment:x "m")');
+    expect(imageMarkdown("x", "a", "full")).toBe("![a](attachment:x)");
+    expect([...attachmentRefs(sized)]).toEqual(["x", "y", "z"]);
+    expect(rewriteAttachmentRefs('![a](attachment:pending-1 "m")', { "pending-1": "uuid-1" })).toBe('![a](attachment:uuid-1 "m")');
   });
 
   it("writes a name that can't break the markdown", () => {
