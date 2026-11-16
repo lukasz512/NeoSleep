@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "neoCRM · The CRM to grow your company, secure and accessible",
-    "description": "neoCRM is a CRM for small and mid-sized companies under your own brand: customers, visits and next steps in one place, permissions by role and area, an access log and an interface built for everyone."
+    "description": "neoCRM is a CRM under your own brand: customers, visits and next steps in one place, permissions by role and area, an access log and an interface built for everyone."
   },
   "nav": {
     "skip": "Skip to content",
@@ -12,7 +12,7 @@
   },
   "hero": {
     "greeting": "Hello, {name}:",
-    "eyebrow": "CRM for small and mid-sized companies",
+    "eyebrow": "A CRM under your own brand",
     "titles": {
       "default": "The CRM to grow your company, secure and accessible",
       "equipos": "The CRM for sales teams that want to grow, secure and accessible",
@@ -42,7 +42,9 @@
   "sections": {
     "who": {
       "title": "Who it is for",
-      "lead": "Small and mid-sized companies that want to grow without losing the thread: knowing who was seen, what was said and what comes next, even when the team works away from the office.",
+      "pick": "Pick your sector and the page adjusts.",
+      "picked": "Page adjusted for: {sector}.",
+      "lead": "Companies that want to grow without losing the thread: knowing who was seen, what was said and what comes next, even when the team works away from the office.",
       "items": {
         "equipos": {
           "title": "Sales teams",
@@ -119,7 +121,7 @@
     },
     "onboarding": {
       "title": "Getting started",
-      "lead": "For a small company, starting should not be a project.",
+      "lead": "Starting should not be a project.",
       "items": [
         { "title": "Demo", "body": "We show you the product with a case close to yours." },
         { "title": "Your space", "body": "We create your space with brand, language, roles and territories." },
@@ -130,6 +132,8 @@
     "roadmap": {
       "title": "What we are working on",
       "lead": "We do not have these yet. We would rather say so here than promise them on the cover. We give no dates.",
+      "filterLabel": "Show",
+      "all": "Everything",
       "status": { "progress": "in progress", "planned": "planned" },
       "items": [
         { "title": "WCAG 2.2 AA accessibility", "body": "Automated tests on every change and a public accessibility statement." },
@@ -142,7 +146,7 @@
       "title": "Frequent questions",
       "lead": "What people usually ask us before a demo.",
       "items": [
-        { "title": "Does it suit a small company?", "body": "Yes. It is made for teams of a few people who need order without setting up an IT department." },
+        { "title": "Do we need an IT department?", "body": "No. We prepare your space; you only add your people." },
         { "title": "Is there anything to install?", "body": "No. It runs in the browser on phone and computer, and can be added to the home screen." },
         { "title": "Can we use our brand?", "body": "Yes: name, logo, colours and language are configured per client." },
         { "title": "Do you hold external security seals?", "body": "Not yet. What is under way appears in \"What we are working on\"; what already works, in \"Security\"." },
@@ -151,32 +155,35 @@
     }
   },
   "visuals": {
-    "note": "Illustrative screen with example companies.",
+    "note": "Illustrative screen with example companies. Tap a visit.",
     "hero": {
-      "alt": "Phone screen with today's three visits and the next step noted",
+      "alt": "Phone screen with today's three visits; picking one shows its next step",
       "today": "Today",
       "count": "Tuesday · 3 visits",
       "visits": [
         {
           "time": "09:30",
           "name": "Ferretería Olmos",
-          "note": "Report pending"
+          "note": "Report pending",
+          "next": "Ferretería Olmos: complete the visit report."
         },
         {
           "time": "12:00",
           "name": "Talleres Rivas",
-          "note": "Send proposal"
+          "note": "Send proposal",
+          "next": "Talleres Rivas: send the proposal and call on Thursday."
         },
         {
           "time": "16:15",
           "name": "Bodegas Lera",
-          "note": "First visit"
+          "note": "First visit",
+          "next": "Bodegas Lera: first visit, note who you speak to."
         }
-      ],
-      "toast": "Report saved. Next step: call on Thursday."
+      ]
     },
     "product": {
-      "alt": "Visit report form with the customer, what was agreed and the next step",
+      "alt": "Example visit report: pick the next step and save it",
+      "hint": "Try it: pick the next step and save.",
       "title": "Visit report",
       "fields": [
         {
@@ -186,24 +193,48 @@
         {
           "label": "What was agreed",
           "value": "Proposal for 12 seats"
-        },
-        {
-          "label": "Next step",
-          "value": "Call on Thursday"
         }
       ],
-      "save": "Save"
+      "nextLabel": "Next step",
+      "options": [
+        "Call on Thursday",
+        "Send proposal",
+        "Second visit"
+      ],
+      "save": "Save",
+      "saved": "Report saved. Next step: {step}."
     },
     "brand": {
-      "alt": "The same screen under the brand of three different companies",
+      "alt": "The same screen under the brand and language you pick",
+      "hint": "Change the brand and the language: the screen stays the same.",
+      "brandLabel": "Brand",
+      "langLabel": "Language",
       "names": [
         "Talleres Rivas",
         "Bodegas Lera",
         "Ferretería Olmos"
+      ],
+      "langs": [
+        {
+          "code": "ES",
+          "hello": "Buenos días, Marta",
+          "action": "Nueva visita"
+        },
+        {
+          "code": "EN",
+          "hello": "Good morning, Marta",
+          "action": "New visit"
+        },
+        {
+          "code": "PL",
+          "hello": "Dzień dobry, Marta",
+          "action": "Nowa wizyta"
+        }
       ]
     },
     "security": {
-      "alt": "Layers of protection around your data",
+      "alt": "Layers of protection around your data; each layer can be pressed",
+      "hint": "Press a layer to see what it does.",
       "layers": [
         "Your company · its own data schema",
         "Role and territory · each person sees their own",
@@ -212,19 +243,33 @@
       "core": "Your customers"
     },
     "access": {
-      "alt": "The same screen in the light and the dark theme, with a button 44 pixels tall",
+      "alt": "An example screen that changes theme and shows the size of its button",
+      "hint": "Change the theme and look at the sizes.",
+      "themeLabel": "Theme",
       "light": "Light",
       "dark": "Dark",
+      "measures": "Show sizes",
       "sample": "Next visit",
       "button": "Save",
       "measure": "44 px"
     },
     "privacy": {
-      "alt": "Consent record with its state and date",
+      "alt": "Consent record with its state, its date and who viewed it",
       "title": "Consent",
       "person": "Lucía Ferrer",
       "state": "Accepted",
-      "date": "12 March"
+      "date": "12 March",
+      "logShow": "See who viewed it",
+      "log": [
+        {
+          "who": "Marta Gil",
+          "detail": "Manager · 12 March, 10:42"
+        },
+        {
+          "who": "Iván Soto",
+          "detail": "Sales rep · 14 March, 09:05"
+        }
+      ]
     }
   },
   "contact": {
@@ -239,7 +284,7 @@
     "messageFor": "Hello, we are {name} and we would like to see a demo of neoCRM."
   },
   "footer": {
-    "note": "neoCRM · CRM for small and mid-sized companies",
+    "note": "neoCRM · A CRM under your own brand",
     "back": "Back to AJ Management"
   }
 }

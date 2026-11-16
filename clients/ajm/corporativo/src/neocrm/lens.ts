@@ -8,7 +8,7 @@
 export const ROLES = ["direccion", "it", "operaciones"] as const;
 export type Role = (typeof ROLES)[number];
 
-/** General business first: the page sells to any small or mid-sized company, clinics are one case of four. */
+/** General business first: the page sells to any company and never names a size, clinics are one case of four. */
 export const SECTORS = ["equipos", "distribucion", "servicios", "clinicas"] as const;
 export type Sector = (typeof SECTORS)[number];
 

@@ -1,5 +1,5 @@
 <!-- The neoCRM product page (CORE-215), a second page of this site at /corporativo/neocrm/. It sells the
-     CRM to small companies, mainly in Spain, and only says what the product does today (claims.ts).
+     CRM to companies, mainly in Spain, never naming a size, and only says what the product does today (claims.ts).
      A personal link can greet the company (?para=), set its sector (?sector=) and say who is reading
      (?rol=): the role reorders the sections in the DOM itself, so keyboard and screen-reader order
      match what is on screen. Hero first and the demo request last, always. -->
@@ -30,20 +30,20 @@
               <a class="btn btn--quiet" href="#security">{{ t("hero.secondary") }}</a>
             </p>
           </div>
-          <!-- drawn screens are one image each (role="img"): a screen reader hears the label, not the parts -->
+          <!-- drawn screens can be tried: each is one labelled group (data-fig) of real buttons -->
           <div class="shot">
-            <div class="phone" role="img" :aria-label="t('visuals.hero.alt')">
+            <div class="phone" role="group" data-fig :aria-label="t('visuals.hero.alt')">
               <div class="phone__screen">
                 <p class="phone__head">
                   <strong>{{ t("visuals.hero.today") }}</strong>
                   <span>{{ t("visuals.hero.count") }}</span>
                 </p>
-                <p v-for="n in 3" :key="n" class="visit">
+                <button v-for="n in 3" :key="n" type="button" class="visit" :aria-pressed="visit === n - 1" @click="visit = n - 1">
                   <span class="visit__time">{{ t(`visuals.hero.visits.${n - 1}.time`) }}</span>
                   <span class="visit__name">{{ t(`visuals.hero.visits.${n - 1}.name`) }}</span>
                   <span class="visit__note">{{ t(`visuals.hero.visits.${n - 1}.note`) }}</span>
-                </p>
-                <p class="toast is-warm">{{ t("visuals.hero.toast") }}</p>
+                </button>
+                <p class="toast is-warm" aria-live="polite">{{ t(`visuals.hero.visits.${visit}.next`) }}</p>
               </div>
             </div>
             <p class="shot__note">{{ t("visuals.note") }}</p>
@@ -77,55 +77,91 @@
         </header>
         <div class="sec__body">
           <div v-if="id === 'product'" class="fig">
-            <div class="card" role="img" :aria-label="t('visuals.product.alt')">
+            <!-- a visit report to fill in: pick the next step, save -->
+            <div class="card" role="group" data-fig :aria-label="t('visuals.product.alt')">
               <p class="card__title">{{ t("visuals.product.title") }}</p>
-              <p v-for="n in 3" :key="n" class="field">
+              <p v-for="n in 2" :key="n" class="field">
                 <span class="field__label">{{ t(`visuals.product.fields.${n - 1}.label`) }}</span>
-                <span class="field__value" :class="{ 'is-warm': n === 3 }">{{ t(`visuals.product.fields.${n - 1}.value`) }}</span>
+                <span class="field__value">{{ t(`visuals.product.fields.${n - 1}.value`) }}</span>
               </p>
-              <span class="card__btn">{{ t("visuals.product.save") }}</span>
+              <div class="field" role="group" aria-labelledby="next-step-label">
+                <span id="next-step-label" class="field__label">{{ t("visuals.product.nextLabel") }}</span>
+                <span class="seg">
+                  <button v-for="n in 3" :key="n" type="button" class="chip" :class="{ 'is-warm': step === n - 1 }" :aria-pressed="step === n - 1" @click="pickStep(n - 1)">
+                    {{ t(`visuals.product.options.${n - 1}`) }}
+                  </button>
+                </span>
+              </div>
+              <button type="button" class="card__btn" @click="saved = true">{{ t("visuals.product.save") }}</button>
+              <p class="card__saved" aria-live="polite">{{ saved ? t("visuals.product.saved", { step: t(`visuals.product.options.${step}`) }) : "" }}</p>
             </div>
+            <p class="fig__hint">{{ t("visuals.product.hint") }}</p>
           </div>
           <div v-else-if="id === 'brand'" class="fig">
-            <div class="brands" role="img" :aria-label="t('visuals.brand.alt')">
-              <div v-for="n in 3" :key="n" class="brand" :class="`brand--${n}`">
-                <p class="brand__head" :class="{ 'is-warm': n === 3 }">
+            <!-- one screen, re-skinned by the brand and language picked -->
+            <div class="skin" role="group" data-fig :aria-label="t('visuals.brand.alt')">
+              <div class="seg" role="group" :aria-label="t('visuals.brand.brandLabel')">
+                <button v-for="n in 3" :key="n" type="button" class="seg__btn" :data-brand="n - 1" :aria-pressed="brand === n - 1" @click="brand = n - 1">
                   {{ t(`visuals.brand.names.${n - 1}`) }}
-                </p>
+                </button>
+              </div>
+              <div class="seg" role="group" :aria-label="t('visuals.brand.langLabel')">
+                <button v-for="n in 3" :key="n" type="button" class="seg__btn" :data-lang="n - 1" :aria-pressed="lang === n - 1" @click="lang = n - 1">
+                  {{ t(`visuals.brand.langs.${n - 1}.code`) }}
+                </button>
+              </div>
+              <div class="brand" :class="`brand--${brand + 1}`">
+                <p class="brand__head" :class="{ 'is-warm': brand === 2 }">{{ t(`visuals.brand.names.${brand}`) }}</p>
+                <p class="brand__hello">{{ t(`visuals.brand.langs.${lang}.hello`) }}</p>
                 <span class="brand__row" />
                 <span class="brand__row brand__row--short" />
-                <span class="brand__btn" />
+                <span class="brand__btn">{{ t(`visuals.brand.langs.${lang}.action`) }}</span>
               </div>
             </div>
+            <p class="fig__hint">{{ t("visuals.brand.hint") }}</p>
           </div>
           <div v-else-if="id === 'security'" class="fig">
-            <div class="layers" role="img" :aria-label="t('visuals.security.alt')">
-              <div class="layer">
-                <span class="layer__label">{{ t("visuals.security.layers.0") }}</span>
-                <div class="layer">
-                  <span class="layer__label">{{ t("visuals.security.layers.1") }}</span>
-                  <div class="layer">
-                    <span class="layer__label">{{ t("visuals.security.layers.2") }}</span>
+            <!-- each layer is a button; the line below explains the one pressed (the section's first three facts) -->
+            <div class="layers" role="group" data-fig :aria-label="t('visuals.security.alt')">
+              <div class="layer" :class="{ 'layer--on': layer === 0 }">
+                <button type="button" class="layer__label" :aria-pressed="layer === 0" @click="layer = 0">{{ t("visuals.security.layers.0") }}</button>
+                <div class="layer" :class="{ 'layer--on': layer === 1 }">
+                  <button type="button" class="layer__label" :aria-pressed="layer === 1" @click="layer = 1">{{ t("visuals.security.layers.1") }}</button>
+                  <div class="layer" :class="{ 'layer--on': layer === 2 }">
+                    <button type="button" class="layer__label" :aria-pressed="layer === 2" @click="layer = 2">{{ t("visuals.security.layers.2") }}</button>
                     <strong class="layers__core is-warm">{{ t("visuals.security.core") }}</strong>
                   </div>
                 </div>
               </div>
+              <p class="layers__detail" aria-live="polite">{{ t(`sections.security.items.${layer}.body`) }}</p>
             </div>
+            <p class="fig__hint">{{ t("visuals.security.hint") }}</p>
           </div>
           <div v-else-if="id === 'access'" class="fig">
-            <div class="tones" role="img" :aria-label="t('visuals.access.alt')">
-              <div v-for="tone in TONES" :key="tone" class="tone" :class="`ncrm-tone-${tone}`">
-                <span class="tone__name">{{ t(`visuals.access.${tone}`) }}</span>
+            <!-- one screen with live settings: theme and the 44 px measure -->
+            <div class="skin" role="group" data-fig :aria-label="t('visuals.access.alt')">
+              <div class="seg" role="group" :aria-label="t('visuals.access.themeLabel')">
+                <button v-for="option in TONES" :key="option" type="button" class="seg__btn" :data-tone="option" :aria-pressed="tone === option" @click="tone = option">
+                  {{ t(`visuals.access.${option}`) }}
+                </button>
+              </div>
+              <button type="button" class="switch" role="switch" :aria-checked="measures" @click="measures = !measures">
+                <span class="switch__track" aria-hidden="true" />
+                {{ t("visuals.access.measures") }}
+              </button>
+              <div class="tone" :class="`ncrm-tone-${tone}`">
                 <strong class="tone__sample">{{ t("visuals.access.sample") }}</strong>
                 <span class="tone__row">
-                  <span class="tone__btn">{{ t("visuals.access.button") }}</span>
-                  <span v-if="tone === 'light'" class="tone__measure is-warm">{{ t("visuals.access.measure") }}</span>
+                  <span class="tone__btn" :class="{ 'tone__btn--measured': measures }">{{ t("visuals.access.button") }}</span>
+                  <span v-if="measures" class="tone__measure is-warm">{{ t("visuals.access.measure") }}</span>
                 </span>
               </div>
             </div>
+            <p class="fig__hint">{{ t("visuals.access.hint") }}</p>
           </div>
           <div v-else-if="id === 'privacy'" class="fig">
-            <div class="card" role="img" :aria-label="t('visuals.privacy.alt')">
+            <!-- a consent record that opens its own access log -->
+            <div class="card" role="group" data-fig :aria-label="t('visuals.privacy.alt')">
               <p class="card__title">{{ t("visuals.privacy.title") }}</p>
               <p class="consent__person">{{ t("visuals.privacy.person") }}</p>
               <p class="consent__meta">
@@ -137,18 +173,78 @@
                 </span>
                 <span>{{ t("visuals.privacy.date") }}</span>
               </p>
+              <button type="button" class="card__link" :aria-expanded="logOpen" aria-controls="consent-log" @click="logOpen = !logOpen">{{ t("visuals.privacy.logShow") }}</button>
+              <ul v-show="logOpen" id="consent-log" class="log">
+                <li v-for="n in 2" :key="n">
+                  <strong>{{ t(`visuals.privacy.log.${n - 1}.who`) }}</strong>
+                  <span>{{ t(`visuals.privacy.log.${n - 1}.detail`) }}</span>
+                </li>
+              </ul>
             </div>
           </div>
 
-          <ul class="sec__items" :class="{ path: id === 'onboarding' }">
-            <li v-for="(key, n) in itemKeys(id)" :key="key" class="item">
-              <span v-if="id === 'who'" class="item__icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path :d="sectorIcon(n)" /></svg>
-              </span>
-              <span v-else-if="id === 'onboarding'" class="path__num" :class="{ 'is-warm': n === 0 }">{{ n + 1 }}</span>
-              <span v-else-if="id === 'roadmap'" class="pill" :class="[`pill--${ROADMAP_STATUS[n]}`, { 'is-warm': ROADMAP_STATUS[n] === 'progress' }]">
-                {{ t(`sections.roadmap.status.${ROADMAP_STATUS[n]}`) }}
-              </span>
+          <!-- who: a sector card is a button that adjusts the page (headline and link) -->
+          <template v-if="id === 'who'">
+            <ul class="sec__items">
+              <li v-for="sector in sectors" :key="sector" class="item item--pick" :class="{ 'item--on': lens.sector === sector }">
+                <span class="item__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path :d="SECTOR_ICONS[sector]" /></svg>
+                </span>
+                <h3 class="item__title">
+                  <button type="button" class="item__pick" :data-sector="sector" :aria-pressed="lens.sector === sector" @click="setSector(sector)">
+                    {{ t(`sections.who.items.${sector}.title`) }}
+                  </button>
+                </h3>
+                <p class="item__body">{{ t(`sections.who.items.${sector}.body`) }}</p>
+              </li>
+            </ul>
+            <p class="sec__note" aria-live="polite">{{ lens.sector ? t("sections.who.picked", { sector: t(`sections.who.items.${lens.sector}.title`) }) : t("sections.who.pick") }}</p>
+          </template>
+          <!-- onboarding: four numbered stops, one explained at a time -->
+          <div v-else-if="id === 'onboarding'" class="steps">
+            <ol class="path">
+              <li v-for="(key, n) in itemKeys(id)" :key="key" class="path__step">
+                <h3 class="item__title">
+                  <button type="button" class="path__btn" :aria-current="stage === n ? 'step' : undefined" @click="stage = n">
+                    <span class="path__num" :class="{ 'is-warm': stage === n }">{{ n + 1 }}</span>
+                    {{ t(`${key}.title`) }}
+                  </button>
+                </h3>
+              </li>
+            </ol>
+            <p class="steps__detail" aria-live="polite">{{ t(`sections.onboarding.items.${stage}.body`) }}</p>
+          </div>
+          <!-- roadmap: filter by status -->
+          <template v-else-if="id === 'roadmap'">
+            <div class="seg" role="group" :aria-label="t('sections.roadmap.filterLabel')">
+              <button v-for="option in FILTERS" :key="option" type="button" class="seg__btn" :data-filter="option" :aria-pressed="filter === option" @click="filter = option">
+                {{ option === "all" ? t("sections.roadmap.all") : t(`sections.roadmap.status.${option}`) }}
+              </button>
+            </div>
+            <ul class="sec__items">
+              <li v-for="(key, n) in itemKeys(id)" v-show="filter === 'all' || filter === ROADMAP_STATUS[n]" :key="key" class="item">
+                <span class="pill" :class="[`pill--${ROADMAP_STATUS[n]}`, { 'is-warm': ROADMAP_STATUS[n] === 'progress' }]">
+                  {{ t(`sections.roadmap.status.${ROADMAP_STATUS[n]}`) }}
+                </span>
+                <h3 class="item__title">{{ t(`${key}.title`) }}</h3>
+                <p class="item__body">{{ t(`${key}.body`) }}</p>
+              </li>
+            </ul>
+          </template>
+          <!-- faq: one answer open at a time -->
+          <ul v-else-if="id === 'faq'" class="faq">
+            <li v-for="(key, n) in itemKeys(id)" :key="key" class="faq__item">
+              <h3 class="item__title">
+                <button type="button" class="faq__q" :aria-expanded="answer === n" :aria-controls="`faq-${n}`" @click="answer = answer === n ? -1 : n">
+                  {{ t(`${key}.title`) }}
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                </button>
+              </h3>
+              <p v-show="answer === n" :id="`faq-${n}`" class="item__body">{{ t(`${key}.body`) }}</p>
+            </li>
+          </ul>
+          <ul v-else class="sec__items" :class="{ 'sec__items--rows': id === 'product' }">
+            <li v-for="key in itemKeys(id)" :key="key" class="item">
               <h3 class="item__title">{{ t(`${key}.title`) }}</h3>
               <p class="item__body">{{ t(`${key}.body`) }}</p>
             </li>
@@ -196,21 +292,53 @@ const lens = reactive(lensFrom(props.search));
 const prospect = prospectFrom(props.search);
 const order = computed(() => sectionOrder(lens.role));
 
-function setRole(role: Role | null) {
-  lens.role = role;
+/** The address follows every switch, so the page can be shared as it is being read. */
+function syncLink() {
   query.value = lensQuery(query.value, lens);
-  // the address follows the switch, so the page can be shared as it is being read
   window.history.replaceState(null, "", `${window.location.pathname}${query.value}${window.location.hash}`);
 }
-
-/** "Who it is for" lists the reader's own sector first. */
-const sectors = computed<readonly Sector[]>(() => (lens.sector ? [lens.sector, ...SECTORS.filter((s) => s !== lens.sector)] : SECTORS));
-
-/** i18n keys of a section's items. */
-function itemKeys(id: SectionId): string[] {
-  if (id === "who") return sectors.value.map((s) => `sections.who.items.${s}`);
-  return es.sections[id].items.map((_, i) => `sections.${id}.items.${i}`);
+function setRole(role: Role | null) {
+  lens.role = role;
+  syncLink();
 }
+/** Picking the sector already picked goes back to the general page. */
+function setSector(sector: Sector) {
+  lens.sector = lens.sector === sector ? null : sector;
+  syncLink();
+}
+
+/** "Who it is for" lists the sector from the link first; picking another one on the page moves no card. */
+const linked = lens.sector;
+const sectors: readonly Sector[] = linked ? [linked, ...SECTORS.filter((s) => s !== linked)] : SECTORS;
+
+/** i18n keys of a section's listed items. Security's first three are told by its layers instead. */
+function itemKeys(id: SectionId): string[] {
+  if (id === "who") return [];
+  return es.sections[id].items.map((_, i) => `sections.${id}.items.${i}`).slice(id === "security" ? 3 : 0);
+}
+
+/** Status of each roadmap item, in the order of sections.roadmap.items. */
+const ROADMAP_STATUS = ["progress", "progress", "planned", "planned"] as const;
+const FILTERS = ["all", "progress", "planned"] as const;
+const TONES = ["light", "dark"] as const;
+
+// what the reader has picked inside each drawn screen; none of it is stored or sent
+const visit = ref(1);
+const step = ref(0);
+const saved = ref(false);
+function pickStep(n: number) {
+  step.value = n;
+  saved.value = false;
+}
+const brand = ref(0);
+const lang = ref(props.locale === "en" ? 1 : 0);
+const layer = ref(0);
+const tone = ref<(typeof TONES)[number]>("light");
+const measures = ref(true);
+const logOpen = ref(false);
+const stage = ref(0);
+const filter = ref<(typeof FILTERS)[number]>("all");
+const answer = ref(0);
 
 /** One line icon per sector, drawn as a single 24 px path. */
 const SECTOR_ICONS: Record<Sector, string> = {
@@ -219,10 +347,6 @@ const SECTOR_ICONS: Record<Sector, string> = {
   servicios: "M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zM3 10h18M8 3v4M16 3v4M9 15.5l2 2 4-4",
   clinicas: "M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zM12 8v8M8 12h8",
 };
-const sectorIcon = (n: number) => SECTOR_ICONS[sectors.value[n] ?? "equipos"];
-/** Status of each roadmap item, in the order of sections.roadmap.items. */
-const ROADMAP_STATUS = ["progress", "progress", "planned", "planned"] as const;
-const TONES = ["light", "dark"] as const;
 
 const message = computed(() => (prospect ? t("contact.messageFor", { name: prospect.name }) : t("contact.message")));
 const mailLink = computed(() => {
@@ -441,6 +565,18 @@ function toggleTheme() {
   border: 1px solid var(--ncrm-line);
   border-radius: 16px;
   background: var(--ncrm-surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.visit:hover,
+.visit[aria-pressed="true"] {
+  border-color: var(--ncrm-primary);
+}
+.visit[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px var(--ncrm-primary);
 }
 .visit__time {
   grid-row: span 2;
@@ -520,27 +656,45 @@ function toggleTheme() {
   flex-wrap: wrap;
   gap: 8px;
 }
-.lens__option {
+/* every choice on the page is a pill button, at least 44 px tall: the role lens, and the ones inside the drawings */
+.seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.lens__option,
+.seg__btn,
+.chip {
   min-height: 44px;
   padding: 0 16px;
   border: 1px solid var(--ncrm-line);
   border-radius: 999px;
-  background: none;
+  background: var(--ncrm-surface);
   color: var(--ncrm-ink);
   font: inherit;
+  font-size: 15px;
   font-weight: 500;
   cursor: pointer;
   transition:
     background-color 0.15s ease,
     color 0.15s ease;
 }
-.lens__option:hover {
+.lens__option:hover,
+.seg__btn:hover,
+.chip:hover {
   border-color: var(--ncrm-primary);
 }
-.lens__option[aria-pressed="true"] {
+.lens__option[aria-pressed="true"],
+.seg__btn[aria-pressed="true"] {
   background: var(--ncrm-primary);
   border-color: var(--ncrm-primary);
   color: var(--ncrm-on-primary);
+}
+.chip.is-warm {
+  background: var(--ncrm-warm);
+  border-color: var(--ncrm-warm);
+  color: var(--ncrm-warm-ink);
+  font-weight: 600;
 }
 .lens__note {
   margin: 12px 0 0;
@@ -580,6 +734,7 @@ function toggleTheme() {
 .fig {
   display: grid;
   justify-items: center;
+  gap: 16px;
   padding: clamp(20px, 4vw, 40px);
   border-radius: 24px;
   background: var(--ncrm-tint);
@@ -587,10 +742,15 @@ function toggleTheme() {
 .fig p {
   margin: 0;
 }
+.fig__hint {
+  font-size: 13px;
+  color: var(--ncrm-muted);
+  text-align: center;
+}
 .card {
   display: grid;
   gap: 12px;
-  width: min(100%, 360px);
+  width: min(100%, 400px);
   padding: 20px;
   border: 1px solid var(--ncrm-line);
   border-radius: 20px;
@@ -605,13 +765,56 @@ function toggleTheme() {
   justify-self: start;
   display: inline-flex;
   align-items: center;
-  min-height: 40px;
-  padding: 0 20px;
+  min-height: 44px;
+  padding: 0 24px;
+  border: 0;
   border-radius: 999px;
   background: var(--ncrm-primary);
   color: var(--ncrm-on-primary);
+  font: inherit;
   font-size: 14px;
   font-weight: 600;
+  cursor: pointer;
+}
+.card__btn:hover {
+  background: var(--ncrm-primary-hover);
+}
+.card__saved {
+  min-height: 1.5em;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ncrm-primary);
+}
+.card__link {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ncrm-primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.log {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--ncrm-line);
+  list-style: none;
+  font-size: 13px;
+}
+.log li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 12px;
+}
+.log span {
+  color: var(--ncrm-muted);
 }
 .field {
   display: grid;
@@ -629,34 +832,30 @@ function toggleTheme() {
   font-size: 14px;
   font-weight: 500;
 }
-.field__value.is-warm {
-  border-color: var(--ncrm-warm);
-  font-weight: 600;
-}
 
-/* one screen, three brands */
-.brands {
+/* one screen with its settings above it: brand and language, or theme and measures */
+.skin {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-  width: 100%;
+  width: min(100%, 460px);
 }
 .brand {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   align-content: start;
-  padding-bottom: 14px;
+  margin-top: 4px;
+  padding-bottom: 16px;
   border: 1px solid var(--ncrm-line);
   border-radius: 16px;
   background: var(--ncrm-surface);
   overflow: hidden;
 }
 .brand__head {
-  padding: 12px 10px;
-  font-size: clamp(11px, 1.6vw, 14px);
+  padding: 14px 16px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 1.2;
-  overflow-wrap: anywhere;
+  transition: background-color 0.15s ease;
 }
 .brand--1 .brand__head {
   background: var(--ncrm-primary);
@@ -666,10 +865,15 @@ function toggleTheme() {
   background: var(--ncrm-navy);
   color: var(--ncrm-on-navy);
 }
-.brand__row,
-.brand__btn {
+.brand__hello {
+  padding: 4px 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.brand__row {
   height: 8px;
-  margin: 0 10px;
+  margin: 0 16px;
   border-radius: 999px;
   background: var(--ncrm-line);
 }
@@ -677,14 +881,63 @@ function toggleTheme() {
   width: 55%;
 }
 .brand__btn {
-  width: 40%;
-  height: 16px;
-  margin-top: 6px;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  margin: 4px 16px 0;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--ncrm-ink);
+  color: var(--ncrm-surface);
+  font-size: 13px;
+  font-weight: 600;
+}
+.switch {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ncrm-ink);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.switch__track {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
   background: var(--ncrm-muted);
+  transition: background-color 0.15s ease;
+}
+.switch__track::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--ncrm-surface);
+  transition: transform 0.15s ease;
+}
+.switch[aria-checked="true"] .switch__track {
+  background: var(--ncrm-primary);
+}
+.switch[aria-checked="true"] .switch__track::after {
+  transform: translateX(18px);
 }
 
 /* layers of protection, nested around the customer data */
 .layers {
+  display: grid;
+  gap: 12px;
   width: min(100%, 520px);
 }
 .layer {
@@ -703,9 +956,34 @@ function toggleTheme() {
   border-radius: 12px;
   background: var(--ncrm-surface);
 }
+.layer--on {
+  box-shadow: 0 0 0 2px var(--ncrm-primary);
+}
 .layer__label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--ncrm-ink);
+  font: inherit;
   font-size: 13px;
   font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.layer__label::before {
+  content: "";
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--ncrm-primary);
+  border-radius: 50%;
+}
+.layer__label[aria-pressed="true"]::before {
+  background: var(--ncrm-primary);
 }
 .layers__core {
   padding: 14px;
@@ -713,29 +991,30 @@ function toggleTheme() {
   font-size: 16px;
   text-align: center;
 }
-
-/* the same screen in both themes (colors from .ncrm-tone-* in neocrm.css) */
-.tones {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
-  gap: 12px;
-  width: 100%;
+.layers__detail {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--ncrm-surface);
+  font-size: 15px;
 }
+
+/* the example screen in the theme picked (colors from .ncrm-tone-* in neocrm.css) */
 .tone {
   display: grid;
-  gap: 8px;
-  padding: 16px;
+  gap: 12px;
+  margin-top: 4px;
+  padding: 20px;
   border: 1px solid var(--ncrm-line);
   border-radius: 16px;
   background: var(--ncrm-surface);
   color: var(--ncrm-ink);
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
-.tone__name {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ncrm-muted);
+.tone__btn--measured {
+  outline: 2px dashed var(--ncrm-ink);
+  outline-offset: 3px;
 }
 .tone__sample {
   font-size: 18px;
@@ -842,32 +1121,95 @@ function toggleTheme() {
   stroke-width: 1.7;
 }
 
-/* onboarding: four numbered stops joined by a dotted line */
-.path {
-  grid-template-columns: 1fr;
-  gap: 0;
-}
-.path .item {
+/* who: the whole card is the button (its ::after covers the card) */
+.item--pick {
   position: relative;
-  padding: 0 0 28px 60px;
+  transition: border-color 0.15s ease;
+}
+.item--pick:hover,
+.item--on {
+  border-color: var(--ncrm-primary);
+}
+.item--on {
+  box-shadow: inset 0 0 0 1px var(--ncrm-primary);
+}
+.item--on .item__icon {
+  background: var(--ncrm-primary);
+  color: var(--ncrm-on-primary);
+}
+.item__pick {
+  padding: 0;
   border: 0;
   background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.path .item:last-child {
-  padding-bottom: 0;
-}
-.path .item:not(:last-child)::before {
+.item__pick::after {
   content: "";
   position: absolute;
-  left: 21px;
-  top: 50px;
-  bottom: 6px;
-  border-left: 2px dotted var(--ncrm-muted);
+  inset: 0;
+  border-radius: 12px;
+}
+.item__pick:focus-visible {
+  outline: none;
+}
+.item__pick:focus-visible::after {
+  outline: 3px solid var(--ncrm-primary);
+  outline-offset: 3px;
+}
+.sec__note {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ncrm-muted);
+}
+
+/* product: plain rows, not cards */
+.sec__items--rows {
+  gap: 20px 24px;
+  margin-top: 8px;
+}
+.sec__items--rows .item {
+  padding: 2px 0 2px 16px;
+  border: 0;
+  border-left: 3px solid var(--ncrm-primary);
+  border-radius: 0;
+  background: none;
+}
+
+/* onboarding: four numbered stops joined by a dotted line; the one picked is explained below */
+.steps {
+  display: grid;
+  gap: 20px;
+}
+.path {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.path__step {
+  position: relative;
+}
+.path__btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 .path__num {
-  position: absolute;
-  left: 0;
-  top: 0;
+  flex: none;
   display: grid;
   place-items: center;
   width: 44px;
@@ -882,28 +1224,77 @@ function toggleTheme() {
   background: var(--ncrm-warm);
   color: var(--ncrm-warm-ink);
 }
-.path .item__title {
-  padding-top: 10px;
+.steps__detail {
+  margin: 0;
+  padding: 20px 24px;
+  border-radius: 16px;
+  background: var(--ncrm-tint);
+  font-size: clamp(17px, 2vw, 20px);
+  text-wrap: balance;
 }
 @media (min-width: 640px) {
   .path {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 20px;
   }
-  .path .item {
-    padding: 60px 0 0;
+  .path__btn {
+    flex-direction: column;
+    align-items: flex-start;
   }
-  .path .item:not(:last-child)::before {
+  .path__step:not(:last-child)::before {
+    content: "";
+    position: absolute;
     left: 52px;
     right: -12px;
-    top: 21px;
-    bottom: auto;
-    border-left: 0;
+    top: 25px;
     border-top: 2px dotted var(--ncrm-muted);
+    pointer-events: none;
   }
-  .path .item__title {
-    padding-top: 0;
-  }
+}
+
+/* faq: questions open one at a time; the plus turns into a cross */
+.faq {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--ncrm-line);
+  list-style: none;
+}
+.faq__item {
+  border-bottom: 1px solid var(--ncrm-line);
+}
+.faq__q {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 64px;
+  padding: 12px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.faq__q svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: var(--ncrm-primary);
+  stroke-width: 2;
+  stroke-linecap: round;
+  transition: transform 0.15s ease;
+}
+.faq__q[aria-expanded="true"] svg {
+  transform: rotate(45deg);
+}
+.faq__item .item__body {
+  margin: 0;
+  padding: 0 0 20px;
+  max-width: 60ch;
 }
 
 /* work in progress reads as unfinished: dashed, no fill */
@@ -926,9 +1317,6 @@ function toggleTheme() {
 .pill--progress {
   border-color: var(--ncrm-warm);
   color: var(--ncrm-warm-ink);
-}
-.sec--faq .sec__items {
-  grid-template-columns: 1fr;
 }
 @media (min-width: 900px) {
   .sec {

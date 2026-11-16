@@ -23,8 +23,16 @@ describe("neocrm copy › no claim the product can't back today (CORE-215)", () 
   });
 });
 
-describe("neocrm copy › a general page for small and mid-sized companies", () => {
+describe("neocrm copy › a general page for any company", () => {
   const MEDICAL = /cl[ií]nic|sanitari|salud|health|m[eé]dic|paciente|patient|laborator|pharma|farmac/i;
+  // Łukasz 2026-11-16: the page never says how big the customer is
+  const SIZE = /peque[ñn]|median[ao]s?\b|pymes?\b|\bsmall\b|mid-sized|medium-sized|\bSMEs?\b|pocas personas|few people/i;
+  it.each([
+    ["es", es],
+    ["en", en],
+  ])("%s copy never names a company size", (_name, copy) => {
+    expect(flattenCopy(copy).filter(([, text]) => SIZE.test(text)).map(([path]) => path)).toEqual([]);
+  });
   it.each([
     ["es", es],
     ["en", en],

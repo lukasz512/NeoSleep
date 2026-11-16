@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "neoCRM · El CRM para hacer crecer vuestra empresa, seguro y accesible",
-    "description": "neoCRM es un CRM para pequeñas y medianas empresas con vuestra marca: clientes, visitas y próximos pasos en un solo sitio, permisos por rol y zona, registro de accesos y una interfaz pensada para todas las personas."
+    "description": "neoCRM es un CRM con vuestra marca: clientes, visitas y próximos pasos en un solo sitio, permisos por rol y zona, registro de accesos y una interfaz pensada para todas las personas."
   },
   "nav": {
     "skip": "Saltar al contenido",
@@ -12,7 +12,7 @@
   },
   "hero": {
     "greeting": "Hola, {name}:",
-    "eyebrow": "CRM para pequeñas y medianas empresas",
+    "eyebrow": "CRM con vuestra marca",
     "titles": {
       "default": "El CRM para hacer crecer vuestra empresa, seguro y accesible",
       "equipos": "El CRM para equipos comerciales que quieren crecer, seguro y accesible",
@@ -42,7 +42,9 @@
   "sections": {
     "who": {
       "title": "Para quién es",
-      "lead": "Empresas pequeñas y medianas que quieren crecer sin perder el hilo: saber a quién se ha visto, qué se habló y qué toca después, aunque el equipo trabaje fuera de la oficina.",
+      "pick": "Elegid vuestro sector y la página se ajusta.",
+      "picked": "Página ajustada para: {sector}.",
+      "lead": "Empresas que quieren crecer sin perder el hilo: saber a quién se ha visto, qué se habló y qué toca después, aunque el equipo trabaje fuera de la oficina.",
       "items": {
         "equipos": {
           "title": "Equipos comerciales",
@@ -119,7 +121,7 @@
     },
     "onboarding": {
       "title": "Puesta en marcha",
-      "lead": "Para una empresa pequeña, empezar no debería ser un proyecto.",
+      "lead": "Empezar no debería ser un proyecto.",
       "items": [
         { "title": "Demo", "body": "Os enseñamos el producto con un caso parecido al vuestro." },
         { "title": "Vuestro espacio", "body": "Creamos vuestro espacio con marca, idioma, roles y territorios." },
@@ -130,6 +132,8 @@
     "roadmap": {
       "title": "En qué estamos trabajando",
       "lead": "Todavía no lo tenemos. Preferimos decirlo aquí antes que prometerlo en la portada. No damos fechas.",
+      "filterLabel": "Mostrar",
+      "all": "Todo",
       "status": { "progress": "en curso", "planned": "planificado" },
       "items": [
         { "title": "Accesibilidad WCAG 2.2 AA", "body": "Pruebas automáticas en cada cambio y una declaración de accesibilidad pública." },
@@ -142,7 +146,7 @@
       "title": "Preguntas frecuentes",
       "lead": "Lo que suelen preguntarnos antes de una demo.",
       "items": [
-        { "title": "¿Sirve para una empresa pequeña?", "body": "Sí. Está pensado para equipos de pocas personas que necesitan orden sin montar un departamento de sistemas." },
+        { "title": "¿Necesitamos un departamento de sistemas?", "body": "No. Nosotros preparamos vuestro espacio; vosotros solo dais de alta a las personas." },
         { "title": "¿Hay que instalar algo?", "body": "No. Funciona en el navegador del móvil y del ordenador, y se puede añadir a la pantalla de inicio." },
         { "title": "¿Podemos usar nuestra marca?", "body": "Sí: nombre, logotipo, colores e idioma se configuran para cada cliente." },
         { "title": "¿Tenéis sellos externos de seguridad?", "body": "Todavía no. Lo que está en marcha aparece en «En qué estamos trabajando»; lo que ya funciona, en «Seguridad»." },
@@ -151,32 +155,35 @@
     }
   },
   "visuals": {
-    "note": "Pantalla ilustrativa con empresas de ejemplo.",
+    "note": "Pantalla ilustrativa con empresas de ejemplo. Tocad una visita.",
     "hero": {
-      "alt": "Pantalla del móvil con las tres visitas de hoy y el próximo paso apuntado",
+      "alt": "Pantalla del móvil con las tres visitas de hoy; al elegir una se ve su próximo paso",
       "today": "Hoy",
       "count": "martes · 3 visitas",
       "visits": [
         {
           "time": "09:30",
           "name": "Ferretería Olmos",
-          "note": "Informe pendiente"
+          "note": "Informe pendiente",
+          "next": "Ferretería Olmos: completar el informe de la visita."
         },
         {
           "time": "12:00",
           "name": "Talleres Rivas",
-          "note": "Enviar propuesta"
+          "note": "Enviar propuesta",
+          "next": "Talleres Rivas: enviar la propuesta y llamar el jueves."
         },
         {
           "time": "16:15",
           "name": "Bodegas Lera",
-          "note": "Primera visita"
+          "note": "Primera visita",
+          "next": "Bodegas Lera: primera visita, apuntar con quién se habla."
         }
-      ],
-      "toast": "Informe guardado. Próximo paso: llamar el jueves."
+      ]
     },
     "product": {
-      "alt": "Formulario de informe de visita con el cliente, lo acordado y el próximo paso",
+      "alt": "Informe de visita de ejemplo: elegid el próximo paso y guardadlo",
+      "hint": "Probadlo: elegid el próximo paso y guardad.",
       "title": "Informe de visita",
       "fields": [
         {
@@ -186,24 +193,48 @@
         {
           "label": "Qué se acordó",
           "value": "Propuesta para 12 puestos"
-        },
-        {
-          "label": "Próximo paso",
-          "value": "Llamar el jueves"
         }
       ],
-      "save": "Guardar"
+      "nextLabel": "Próximo paso",
+      "options": [
+        "Llamar el jueves",
+        "Enviar propuesta",
+        "Segunda visita"
+      ],
+      "save": "Guardar",
+      "saved": "Informe guardado. Próximo paso: {step}."
     },
     "brand": {
-      "alt": "La misma pantalla con la marca de tres empresas distintas",
+      "alt": "La misma pantalla con la marca y el idioma que elijáis",
+      "hint": "Cambiad de marca y de idioma: la pantalla es la misma.",
+      "brandLabel": "Marca",
+      "langLabel": "Idioma",
       "names": [
         "Talleres Rivas",
         "Bodegas Lera",
         "Ferretería Olmos"
+      ],
+      "langs": [
+        {
+          "code": "ES",
+          "hello": "Buenos días, Marta",
+          "action": "Nueva visita"
+        },
+        {
+          "code": "EN",
+          "hello": "Good morning, Marta",
+          "action": "New visit"
+        },
+        {
+          "code": "PL",
+          "hello": "Dzień dobry, Marta",
+          "action": "Nowa wizyta"
+        }
       ]
     },
     "security": {
-      "alt": "Capas de protección alrededor de vuestros datos",
+      "alt": "Capas de protección alrededor de vuestros datos; cada capa se puede pulsar",
+      "hint": "Pulsad una capa para ver qué hace.",
       "layers": [
         "Vuestra empresa · esquema de datos propio",
         "Rol y territorio · cada persona ve lo suyo",
@@ -212,19 +243,33 @@
       "core": "Vuestros clientes"
     },
     "access": {
-      "alt": "La misma pantalla en tema claro y en tema oscuro, con un botón de 44 píxeles de alto",
+      "alt": "Una pantalla de ejemplo que cambia de tema y enseña la medida de su botón",
+      "hint": "Cambiad el tema y mirad las medidas.",
+      "themeLabel": "Tema",
       "light": "Claro",
       "dark": "Oscuro",
+      "measures": "Mostrar medidas",
       "sample": "Próxima visita",
       "button": "Guardar",
       "measure": "44 px"
     },
     "privacy": {
-      "alt": "Ficha de consentimiento con su estado y su fecha",
+      "alt": "Ficha de consentimiento con su estado, su fecha y quién la consultó",
       "title": "Consentimiento",
       "person": "Lucía Ferrer",
       "state": "Aceptado",
-      "date": "12 de marzo"
+      "date": "12 de marzo",
+      "logShow": "Ver quién lo consultó",
+      "log": [
+        {
+          "who": "Marta Gil",
+          "detail": "Responsable · 12 de marzo, 10:42"
+        },
+        {
+          "who": "Iván Soto",
+          "detail": "Comercial · 14 de marzo, 09:05"
+        }
+      ]
     }
   },
   "contact": {
@@ -239,7 +284,7 @@
     "messageFor": "Hola, somos {name} y nos gustaría ver una demo de neoCRM."
   },
   "footer": {
-    "note": "neoCRM · CRM para pequeñas y medianas empresas",
+    "note": "neoCRM · CRM con vuestra marca",
     "back": "Volver a AJ Management"
   }
 }

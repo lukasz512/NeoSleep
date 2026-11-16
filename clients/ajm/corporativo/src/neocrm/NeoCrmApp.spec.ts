@@ -33,7 +33,7 @@ describe("neocrm page › role lens (CORE-215)", () => {
     expect(sectionIds(w)[1]).toBe("product");
     expect(w.find('[data-role="operaciones"]').attributes("aria-pressed")).toBe("true");
     expect(w.find('[data-role="all"]').attributes("aria-pressed")).toBe("false");
-    expect(w.find('[aria-live="polite"]').text()).toContain("operaciones");
+    expect(w.find(".lens__note").text()).toContain("operaciones");
     expect(window.location.search).toBe("?para=clinica-sol&rol=operaciones");
   });
   it("section numbers follow the order on screen", () => {
@@ -43,13 +43,17 @@ describe("neocrm page › role lens (CORE-215)", () => {
 });
 
 describe("neocrm page › every section is drawn, not only written", () => {
-  it("each drawn screen is one labelled image, so a screen reader hears one sentence instead of its parts", () => {
+  // the drawings can be tried since round 3, so each is a labelled group of real buttons, no longer one image
+  it("each drawn screen is one labelled group with at least one real button inside", () => {
     const w = page();
     for (const id of ["inicio", "product", "brand", "security", "access", "privacy"]) {
-      const figures = w.findAll(`#${id} [role="img"]`);
+      const figures = w.findAll(`#${id} [data-fig]`);
       expect(figures, id).toHaveLength(1);
+      expect(figures[0]?.attributes("role"), id).toBe("group");
       expect(figures[0]?.attributes("aria-label"), id).toBeTruthy();
+      expect(figures[0]?.findAll("button").length, id).toBeGreaterThan(0);
     }
+    expect(w.find('[role="img"]').exists()).toBe(false);
   });
   it("the hero says its screen is an illustration with example companies", () => {
     expect(page().find("#inicio .shot__note").text()).toContain("ilustrativa");
@@ -62,7 +66,8 @@ describe("neocrm page › every section is drawn, not only written", () => {
   it("onboarding is a numbered path of four steps", () => {
     const w = page();
     expect(w.findAll("#onboarding .path__num").map((n) => n.text())).toEqual(["1", "2", "3", "4"]);
-    expect(w.find("#onboarding h3").text()).toBe("Demo");
+    // the number sits inside the step's button since the steps can be picked
+    expect(w.find("#onboarding h3").text()).toBe("1 Demo");
   });
   it("every roadmap item carries its status as a pill, apart from its title", () => {
     const w = page();
@@ -78,6 +83,109 @@ describe("neocrm page › every section is drawn, not only written", () => {
       else expect(warm.length, id).toBeLessThanOrEqual(1);
     }
     expect(w.find("#demo a[href^='mailto:']").classes()).toContain("is-warm");
+  });
+});
+
+describe("neocrm page › every section can be tried, each in its own way", () => {
+  it("hero: picking a visit shows its next step", async () => {
+    const w = page();
+    expect(w.find("#inicio .toast").text()).toContain("Talleres Rivas");
+    await w.findAll("#inicio .visit")[2]?.trigger("click");
+    expect(w.find("#inicio .toast").text()).toContain("Bodegas Lera");
+    expect(w.findAll("#inicio .visit").map((v) => v.attributes("aria-pressed"))).toEqual(["false", "false", "true"]);
+  });
+  it("who: picking a sector adjusts the headline and the link; picking it again goes back", async () => {
+    const w = page();
+    await w.find('[data-sector="distribucion"]').trigger("click");
+    expect(w.find("h1").text()).toContain("distribuidoras");
+    expect(window.location.search).toBe("?sector=distribucion");
+    expect(w.find("#who .sec__note").text()).toContain("Distribuidoras y mayoristas");
+    // no card moves under the reader's finger
+    expect(w.find("#who h3").text()).toBe("Equipos comerciales");
+    await w.find('[data-sector="distribucion"]').trigger("click");
+    expect(window.location.search).toBe("");
+    expect(w.find('[data-sector="distribucion"]').attributes("aria-pressed")).toBe("false");
+  });
+  it("product: the report is saved with the next step picked", async () => {
+    const w = page();
+    expect(w.find("#product .card__saved").text()).toBe("");
+    await w.findAll("#product .chip")[2]?.trigger("click");
+    await w.find("#product .card__btn").trigger("click");
+    expect(w.find("#product .card__saved").text()).toBe("Informe guardado. Próximo paso: Segunda visita.");
+    // changing the step means it is not saved any more
+    await w.findAll("#product .chip")[0]?.trigger("click");
+    expect(w.find("#product .card__saved").text()).toBe("");
+  });
+  it("brand: the same screen takes the brand and the language picked", async () => {
+    const w = page();
+    expect(w.find("#brand .brand__hello").text()).toBe("Buenos días, Marta");
+    await w.find('#brand [data-brand="1"]').trigger("click");
+    await w.find('#brand [data-lang="2"]').trigger("click");
+    expect(w.find("#brand .brand__head").text()).toBe("Bodegas Lera");
+    expect(w.find("#brand .brand__hello").text()).toBe("Dzień dobry, Marta");
+    expect(w.find("#brand .brand__btn").text()).toBe("Nowa wizyta");
+  });
+  it("security: pressing a layer explains that layer", async () => {
+    const w = page();
+    const detail = () => w.find("#security .layers__detail").text();
+    const first = detail();
+    await w.findAll("#security .layer__label")[2]?.trigger("click");
+    expect(detail()).not.toBe(first);
+    expect(detail()).toBe(makeNeoCrmI18n("es").global.t("sections.security.items.2.body"));
+    expect(w.findAll("#security .layer--on")).toHaveLength(1);
+  });
+  it("access: the example screen changes theme and can hide its measures", async () => {
+    const w = page();
+    expect(w.find("#access .tone").classes()).toContain("ncrm-tone-light");
+    await w.find('#access [data-tone="dark"]').trigger("click");
+    expect(w.find("#access .tone").classes()).toContain("ncrm-tone-dark");
+    expect(w.find("#access .tone__measure").text()).toBe("44 px");
+    await w.find('#access [role="switch"]').trigger("click");
+    expect(w.find('#access [role="switch"]').attributes("aria-checked")).toBe("false");
+    expect(w.find("#access .tone__measure").exists()).toBe(false);
+  });
+  it("privacy: the consent record opens its access log", async () => {
+    const w = page();
+    const link = w.find("#privacy .card__link");
+    expect(link.attributes("aria-expanded")).toBe("false");
+    expect(w.find("#consent-log").isVisible()).toBe(false);
+    await link.trigger("click");
+    expect(link.attributes("aria-expanded")).toBe("true");
+    expect(w.find("#consent-log").isVisible()).toBe(true);
+    expect(w.findAll("#consent-log li")).toHaveLength(2);
+  });
+  it("onboarding: one step is explained at a time", async () => {
+    const w = page();
+    const t = makeNeoCrmI18n("es").global.t;
+    expect(w.find("#onboarding .steps__detail").text()).toBe(t("sections.onboarding.items.0.body"));
+    await w.findAll("#onboarding .path__btn")[2]?.trigger("click");
+    expect(w.find("#onboarding .steps__detail").text()).toBe(t("sections.onboarding.items.2.body"));
+    expect(w.findAll("#onboarding .path__btn").map((b) => b.attributes("aria-current"))).toEqual([undefined, undefined, "step", undefined]);
+  });
+  it("roadmap: the filter leaves only the status picked", async () => {
+    const w = page();
+    const visible = () => w.findAll("#roadmap .item").filter((i) => i.isVisible());
+    expect(visible()).toHaveLength(4);
+    await w.find('#roadmap [data-filter="planned"]').trigger("click");
+    expect(visible().map((i) => i.find(".pill").text())).toEqual(["planificado", "planificado"]);
+    await w.find('#roadmap [data-filter="all"]').trigger("click");
+    expect(visible()).toHaveLength(4);
+  });
+  it("faq: one answer is open at a time", async () => {
+    const w = page();
+    const open = () => w.findAll("#faq .faq__q").map((q) => q.attributes("aria-expanded"));
+    expect(open().filter((v) => v === "true")).toHaveLength(1);
+    expect(open()[0]).toBe("true");
+    await w.findAll("#faq .faq__q")[1]?.trigger("click");
+    expect(open().slice(0, 2)).toEqual(["false", "true"]);
+    expect(w.find("#faq-0").isVisible()).toBe(false);
+    expect(w.find("#faq-1").isVisible()).toBe(true);
+    await w.findAll("#faq .faq__q")[1]?.trigger("click");
+    expect(open().filter((v) => v === "true")).toHaveLength(0);
+  });
+  it("every control is a real button", () => {
+    const w = page();
+    for (const el of w.findAll("[aria-pressed], [aria-expanded], [role='switch'], [aria-current]")) expect(el.element.tagName).toBe("BUTTON");
   });
 });
 
