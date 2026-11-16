@@ -88,8 +88,10 @@ On the reference site `?para=<name>` (alias `for`) greets the prospect by name i
 ### Version 1 as built (2026-11-16)
 - Placement: a second page of the AJ Management site, `clients/ajm/corporativo/neocrm/index.html` + `src/neocrm/`, published at alfredjan.com/corporativo/neocrm/ by the existing deploy. It keeps its own copy and colours and imports nothing from neoCRM (CORE-47).
 - Languages: European Spanish (default) and English (`?lang=en`). Polish is not on the page.
-- Link parameters: `?para=<name>`, `?sector=clinicas|distribucion|equipos`, `?rol=direccion|it|operaciones` (English aliases accepted). The role reorders sections in the DOM, never hides one; personal links carry `noindex`.
-- Tests: `lens.spec.ts` (parsing, order, link), `claims.spec.ts` (no forbidden claim outside the roadmap, hosting country stated, ES/EN key parity), `NeoCrmApp.spec.ts` (order on the page, switch, greeting, sector).
+- Audience (Łukasz, chat, 2026-11-16): a general portfolio for small and mid-sized companies about growing their business, not a medical page. Four sectors, clinics last; medical words appear only under `clinicas`.
+- Link parameters: `?para=<name>`, `?sector=equipos|distribucion|servicios|clinicas`, `?rol=direccion|it|operaciones` (English aliases accepted). The role reorders sections in the DOM, never hides one; personal links carry `noindex`.
+- Look (decision form `core-215-visual-r1`: D1 product screens plus diagrams, D2 one warm element per section): the hero, product, brand, security, accessibility and privacy sections each carry one drawn screen or diagram (`role="img"` with a label, example companies, marked as illustrative); onboarding is a numbered path; roadmap items carry a status pill. Amber marks one element per section and its text contrast is tested. No gradients, no photos. The permissions matrix from the proposal was left out until its RBAC facts are verified.
+- Tests: `lens.spec.ts` (parsing, order, link), `claims.spec.ts` (no forbidden claim outside the roadmap, hosting country stated, ES/EN key parity), `NeoCrmApp.spec.ts` (order on the page, switch, greeting, sector, drawn sections, warm accent).
 
 ### Hand-off
 → `/perspective legal` on the claims ledger once the claim level is decided

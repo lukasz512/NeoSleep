@@ -14,6 +14,13 @@
   /* the demo band stays dark teal in both themes */
   --ncrm-band: #082a27;
   --ncrm-on-band: #f1f8f7;
+  /* the warm accent, one element per section; the same amber with dark text in both themes */
+  --ncrm-warm: #f2b84b;
+  --ncrm-warm-ink: #3d2a00;
+  /* the drawn phone's body, and the second example brand in "with your brand" */
+  --ncrm-frame: #10211f;
+  --ncrm-navy: #2b4a8b;
+  --ncrm-on-navy: #ffffff;
   --ncrm-gutter: clamp(16px, 5vw, 48px);
   --ncrm-font: "Montserrat Variable", "Montserrat", "Helvetica Neue", Arial, system-ui, sans-serif;
   color-scheme: light;
@@ -29,7 +36,25 @@
   --ncrm-primary-hover: #3cc7b9;
   --ncrm-on-primary: #04201d;
   --ncrm-band: #0f332e;
+  --ncrm-frame: #2f524d;
   color-scheme: dark;
+}
+/* "Accessibility" draws one screen in each theme, whatever the page's own theme is */
+.ncrm-tone-light {
+  --ncrm-surface: #ffffff;
+  --ncrm-ink: #10211f;
+  --ncrm-muted: #46605c;
+  --ncrm-line: #d3e0dd;
+  --ncrm-primary: #0b6b62;
+  --ncrm-on-primary: #ffffff;
+}
+.ncrm-tone-dark {
+  --ncrm-surface: #0c2925;
+  --ncrm-ink: #e8f2f0;
+  --ncrm-muted: #a6bcb8;
+  --ncrm-line: #1f423d;
+  --ncrm-primary: #17b5a5;
+  --ncrm-on-primary: #04201d;
 }
 
 *,
@@ -60,5 +85,6 @@ body {
   }
   * {
     transition: none !important;
+    animation: none !important;
   }
 }

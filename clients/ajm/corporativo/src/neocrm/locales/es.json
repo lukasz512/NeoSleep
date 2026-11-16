@@ -121,20 +121,21 @@
       "title": "Puesta en marcha",
       "lead": "Para una empresa pequeña, empezar no debería ser un proyecto.",
       "items": [
-        { "title": "1. Demo", "body": "Os enseñamos el producto con un caso parecido al vuestro." },
-        { "title": "2. Vuestro espacio", "body": "Creamos vuestro espacio con marca, idioma, roles y territorios." },
-        { "title": "3. Vuestro equipo", "body": "Dais de alta a las personas y empiezan a registrar visitas desde el móvil." },
-        { "title": "4. Ajustes", "body": "Revisamos juntos las primeras semanas y adaptamos textos y permisos." }
+        { "title": "Demo", "body": "Os enseñamos el producto con un caso parecido al vuestro." },
+        { "title": "Vuestro espacio", "body": "Creamos vuestro espacio con marca, idioma, roles y territorios." },
+        { "title": "Vuestro equipo", "body": "Dais de alta a las personas y empiezan a registrar visitas desde el móvil." },
+        { "title": "Ajustes", "body": "Revisamos juntos las primeras semanas y adaptamos textos y permisos." }
       ]
     },
     "roadmap": {
       "title": "En qué estamos trabajando",
       "lead": "Todavía no lo tenemos. Preferimos decirlo aquí antes que prometerlo en la portada. No damos fechas.",
+      "status": { "progress": "en curso", "planned": "planificado" },
       "items": [
-        { "title": "Accesibilidad WCAG 2.2 AA · en curso", "body": "Pruebas automáticas en cada cambio y una declaración de accesibilidad pública." },
-        { "title": "ISO 27001 · en curso", "body": "Hemos empezado el análisis interno de brechas. Todavía no hay certificación ni auditoría externa." },
-        { "title": "Verificación en dos pasos · planificado", "body": "Un segundo factor al iniciar sesión." },
-        { "title": "Alojamiento en la Unión Europea · planificado", "body": "Opción de tener el servicio y los datos en una región europea." }
+        { "title": "Accesibilidad WCAG 2.2 AA", "body": "Pruebas automáticas en cada cambio y una declaración de accesibilidad pública." },
+        { "title": "ISO 27001", "body": "Hemos empezado el análisis interno de brechas. Todavía no hay certificación ni auditoría externa." },
+        { "title": "Verificación en dos pasos", "body": "Un segundo factor al iniciar sesión." },
+        { "title": "Alojamiento en la Unión Europea", "body": "Opción de tener el servicio y los datos en una región europea." }
       ]
     },
     "faq": {
@@ -147,6 +148,83 @@
         { "title": "¿Tenéis sellos externos de seguridad?", "body": "Todavía no. Lo que está en marcha aparece en «En qué estamos trabajando»; lo que ya funciona, en «Seguridad»." },
         { "title": "¿Cuánto cuesta?", "body": "Depende del número de personas y de la configuración. Os damos una propuesta después de la demo." }
       ]
+    }
+  },
+  "visuals": {
+    "note": "Pantalla ilustrativa con empresas de ejemplo.",
+    "hero": {
+      "alt": "Pantalla del móvil con las tres visitas de hoy y el próximo paso apuntado",
+      "today": "Hoy",
+      "count": "martes · 3 visitas",
+      "visits": [
+        {
+          "time": "09:30",
+          "name": "Ferretería Olmos",
+          "note": "Informe pendiente"
+        },
+        {
+          "time": "12:00",
+          "name": "Talleres Rivas",
+          "note": "Enviar propuesta"
+        },
+        {
+          "time": "16:15",
+          "name": "Bodegas Lera",
+          "note": "Primera visita"
+        }
+      ],
+      "toast": "Informe guardado. Próximo paso: llamar el jueves."
+    },
+    "product": {
+      "alt": "Formulario de informe de visita con el cliente, lo acordado y el próximo paso",
+      "title": "Informe de visita",
+      "fields": [
+        {
+          "label": "Cliente",
+          "value": "Talleres Rivas"
+        },
+        {
+          "label": "Qué se acordó",
+          "value": "Propuesta para 12 puestos"
+        },
+        {
+          "label": "Próximo paso",
+          "value": "Llamar el jueves"
+        }
+      ],
+      "save": "Guardar"
+    },
+    "brand": {
+      "alt": "La misma pantalla con la marca de tres empresas distintas",
+      "names": [
+        "Talleres Rivas",
+        "Bodegas Lera",
+        "Ferretería Olmos"
+      ]
+    },
+    "security": {
+      "alt": "Capas de protección alrededor de vuestros datos",
+      "layers": [
+        "Vuestra empresa · esquema de datos propio",
+        "Rol y territorio · cada persona ve lo suyo",
+        "Registro de accesos · quién hizo qué"
+      ],
+      "core": "Vuestros clientes"
+    },
+    "access": {
+      "alt": "La misma pantalla en tema claro y en tema oscuro, con un botón de 44 píxeles de alto",
+      "light": "Claro",
+      "dark": "Oscuro",
+      "sample": "Próxima visita",
+      "button": "Guardar",
+      "measure": "44 px"
+    },
+    "privacy": {
+      "alt": "Ficha de consentimiento con su estado y su fecha",
+      "title": "Consentimiento",
+      "person": "Lucía Ferrer",
+      "state": "Aceptado",
+      "date": "12 de marzo"
     }
   },
   "contact": {

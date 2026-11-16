@@ -121,20 +121,21 @@
       "title": "Getting started",
       "lead": "For a small company, starting should not be a project.",
       "items": [
-        { "title": "1. Demo", "body": "We show you the product with a case close to yours." },
-        { "title": "2. Your space", "body": "We create your space with brand, language, roles and territories." },
-        { "title": "3. Your team", "body": "You add your people and they start logging visits from the phone." },
-        { "title": "4. Adjustments", "body": "We review the first weeks together and adapt wording and permissions." }
+        { "title": "Demo", "body": "We show you the product with a case close to yours." },
+        { "title": "Your space", "body": "We create your space with brand, language, roles and territories." },
+        { "title": "Your team", "body": "You add your people and they start logging visits from the phone." },
+        { "title": "Adjustments", "body": "We review the first weeks together and adapt wording and permissions." }
       ]
     },
     "roadmap": {
       "title": "What we are working on",
       "lead": "We do not have these yet. We would rather say so here than promise them on the cover. We give no dates.",
+      "status": { "progress": "in progress", "planned": "planned" },
       "items": [
-        { "title": "WCAG 2.2 AA accessibility · in progress", "body": "Automated tests on every change and a public accessibility statement." },
-        { "title": "ISO 27001 · in progress", "body": "We have started the internal gap analysis. There is no certification or external audit yet." },
-        { "title": "Two-step verification · planned", "body": "A second factor at sign-in." },
-        { "title": "Hosting in the European Union · planned", "body": "An option to keep the service and the data in a European region." }
+        { "title": "WCAG 2.2 AA accessibility", "body": "Automated tests on every change and a public accessibility statement." },
+        { "title": "ISO 27001", "body": "We have started the internal gap analysis. There is no certification or external audit yet." },
+        { "title": "Two-step verification", "body": "A second factor at sign-in." },
+        { "title": "Hosting in the European Union", "body": "An option to keep the service and the data in a European region." }
       ]
     },
     "faq": {
@@ -147,6 +148,83 @@
         { "title": "Do you hold external security seals?", "body": "Not yet. What is under way appears in \"What we are working on\"; what already works, in \"Security\"." },
         { "title": "How much does it cost?", "body": "It depends on the number of people and the configuration. We send a proposal after the demo." }
       ]
+    }
+  },
+  "visuals": {
+    "note": "Illustrative screen with example companies.",
+    "hero": {
+      "alt": "Phone screen with today's three visits and the next step noted",
+      "today": "Today",
+      "count": "Tuesday · 3 visits",
+      "visits": [
+        {
+          "time": "09:30",
+          "name": "Ferretería Olmos",
+          "note": "Report pending"
+        },
+        {
+          "time": "12:00",
+          "name": "Talleres Rivas",
+          "note": "Send proposal"
+        },
+        {
+          "time": "16:15",
+          "name": "Bodegas Lera",
+          "note": "First visit"
+        }
+      ],
+      "toast": "Report saved. Next step: call on Thursday."
+    },
+    "product": {
+      "alt": "Visit report form with the customer, what was agreed and the next step",
+      "title": "Visit report",
+      "fields": [
+        {
+          "label": "Customer",
+          "value": "Talleres Rivas"
+        },
+        {
+          "label": "What was agreed",
+          "value": "Proposal for 12 seats"
+        },
+        {
+          "label": "Next step",
+          "value": "Call on Thursday"
+        }
+      ],
+      "save": "Save"
+    },
+    "brand": {
+      "alt": "The same screen under the brand of three different companies",
+      "names": [
+        "Talleres Rivas",
+        "Bodegas Lera",
+        "Ferretería Olmos"
+      ]
+    },
+    "security": {
+      "alt": "Layers of protection around your data",
+      "layers": [
+        "Your company · its own data schema",
+        "Role and territory · each person sees their own",
+        "Access log · who did what"
+      ],
+      "core": "Your customers"
+    },
+    "access": {
+      "alt": "The same screen in the light and the dark theme, with a button 44 pixels tall",
+      "light": "Light",
+      "dark": "Dark",
+      "sample": "Next visit",
+      "button": "Save",
+      "measure": "44 px"
+    },
+    "privacy": {
+      "alt": "Consent record with its state and date",
+      "title": "Consent",
+      "person": "Lucía Ferrer",
+      "state": "Accepted",
+      "date": "12 March"
     }
   },
   "contact": {
