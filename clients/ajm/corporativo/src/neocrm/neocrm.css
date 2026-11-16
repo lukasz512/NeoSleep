@@ -1,0 +1,64 @@
+/* The neoCRM page's own look, apart from the AJ Management site (--ajm-* in ../style.css): neoCRM's
+   teal, copied here as plain values because client sites import nothing from neoCRM (CORE-47).
+   Every text/background pair below is at least 4.5:1. No gradients (style.spec.ts). */
+:root {
+  --ncrm-bg: #f6faf9;
+  --ncrm-surface: #ffffff;
+  --ncrm-ink: #10211f;
+  --ncrm-muted: #46605c;
+  --ncrm-line: #d3e0dd;
+  --ncrm-tint: #e3f1ef;
+  --ncrm-primary: #0b6b62;
+  --ncrm-primary-hover: #08534c;
+  --ncrm-on-primary: #ffffff;
+  /* the demo band stays dark teal in both themes */
+  --ncrm-band: #082a27;
+  --ncrm-on-band: #f1f8f7;
+  --ncrm-gutter: clamp(16px, 5vw, 48px);
+  --ncrm-font: "Montserrat Variable", "Montserrat", "Helvetica Neue", Arial, system-ui, sans-serif;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --ncrm-bg: #061a18;
+  --ncrm-surface: #0c2925;
+  --ncrm-ink: #e8f2f0;
+  --ncrm-muted: #a6bcb8;
+  --ncrm-line: #1f423d;
+  --ncrm-tint: #0f332e;
+  --ncrm-primary: #17b5a5;
+  --ncrm-primary-hover: #3cc7b9;
+  --ncrm-on-primary: #04201d;
+  --ncrm-band: #0f332e;
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  background: var(--ncrm-bg);
+  color: var(--ncrm-ink);
+  font-family: var(--ncrm-font);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+:focus-visible {
+  outline: 3px solid var(--ncrm-primary);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  * {
+    transition: none !important;
+  }
+}

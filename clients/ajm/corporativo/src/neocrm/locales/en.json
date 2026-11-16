@@ -1,0 +1,162 @@
+{
+  "meta": {
+    "title": "neoCRM · The CRM for field teams, secure and accessible",
+    "description": "neoCRM is a CRM for field teams under your own brand: data separated per client, permissions by role and territory, an access log and an interface built for everyone."
+  },
+  "nav": {
+    "skip": "Skip to content",
+    "demo": "Request a demo",
+    "language": "Español",
+    "themeToDark": "Switch to dark theme",
+    "themeToLight": "Switch to light theme"
+  },
+  "hero": {
+    "greeting": "Hello, {name}:",
+    "eyebrow": "CRM for field teams",
+    "titles": {
+      "default": "The CRM for your field team, secure and accessible",
+      "clinicas": "The CRM for clinics and healthcare networks, secure and accessible",
+      "distribucion": "The CRM for distributors and laboratories, secure and accessible",
+      "equipos": "The CRM for sales teams, secure and accessible"
+    },
+    "body": "Visits, accounts and follow-up in one place, under your brand and in your language. Each client's data is kept separate, each person sees only what they should, and every access is logged.",
+    "cta": "Request a demo",
+    "secondary": "See how we protect data"
+  },
+  "lens": {
+    "label": "View the page as",
+    "roles": {
+      "all": "Everything",
+      "direccion": "Management",
+      "it": "IT and security",
+      "operaciones": "Operations"
+    },
+    "notes": {
+      "all": "The usual order of the page.",
+      "direccion": "Order for management: who it is for and how it gets started come first.",
+      "it": "Order for IT and security: security, privacy and accessibility come first.",
+      "operaciones": "Order for operations: the product and the team's day-to-day come first."
+    }
+  },
+  "sections": {
+    "who": {
+      "title": "Who it is for",
+      "lead": "Small and mid-sized companies with people who work away from the office and need to know who they saw, what was said and what comes next.",
+      "items": {
+        "clinicas": {
+          "title": "Clinics and healthcare networks",
+          "body": "Follow-up of professionals and centres, with a record of who views health data and permissions fitted to each job."
+        },
+        "distribucion": {
+          "title": "Distributors and laboratories",
+          "body": "Reps with their territory, their calendar and a form after each visit; managers who see their team."
+        },
+        "equipos": {
+          "title": "Sales teams",
+          "body": "Accounts, contacts and next steps in order, without spreadsheets each person keeps their own way."
+        }
+      }
+    },
+    "product": {
+      "title": "What it does",
+      "lead": "What a field team uses every day, designed for the phone first.",
+      "items": [
+        { "title": "Accounts and contacts", "body": "Organisations and people on one record, with their visit history." },
+        { "title": "Visits with their report", "body": "A short form after each visit, so what was agreed does not depend on memory." },
+        { "title": "Territories and calendar", "body": "Each person works their area and keeps their visits in a calendar." },
+        { "title": "Team view", "body": "Whoever leads sees the team's activity; whoever visits sees their own." },
+        { "title": "On the phone, like an app", "body": "It opens in the browser and can be installed on the home screen, with no app store involved." }
+      ]
+    },
+    "brand": {
+      "title": "Under your brand and in your language",
+      "lead": "Your team opens its own tool, not a vendor's.",
+      "items": [
+        { "title": "Your name, logo and colours", "body": "The brand is configured per client, with no custom development." },
+        { "title": "Spanish, English and Polish", "body": "Each person uses the app in their language." },
+        { "title": "Your words", "body": "Menu and field names can be adapted to how you speak inside the company." }
+      ]
+    },
+    "security": {
+      "title": "Security",
+      "lead": "Measures that are in the product today. What we do not have yet is listed further down, without dates.",
+      "items": [
+        { "title": "Data separated per client", "body": "Each company has its own database schema; it shares no tables with others." },
+        { "title": "Permissions by role and territory", "body": "Six roles, from administration to rep, also limited by area. Each person sees only what they need." },
+        { "title": "Access log", "body": "Who did what, and who viewed health data, is written down." },
+        { "title": "Passwords and sessions", "body": "Passwords are stored hashed with bcrypt and sessions use short-lived credentials that are renewed." },
+        { "title": "Service protection", "body": "Attempt limits, security headers and an allow-list of origins on the API." },
+        { "title": "Backups", "body": "Every night, encrypted, with a check that they can be restored." },
+        { "title": "Continuous code review", "body": "Automatic security analysis and secret scanning on every change; dependencies updated weekly." },
+        { "title": "Keys locked away", "body": "Service credentials live in a managed secret store, never in the code or the browser." }
+      ]
+    },
+    "access": {
+      "title": "Accessibility",
+      "lead": "A work tool has to serve the whole team. This is what the interface already does.",
+      "items": [
+        { "title": "Text with enough contrast", "body": "Text and button colours are chosen to read well, in the dark theme too." },
+        { "title": "Buttons that fit a finger", "body": "Touch controls measure at least 44 pixels." },
+        { "title": "Less motion if you ask", "body": "The app respects the device setting that reduces animations." },
+        { "title": "Errors that are announced", "body": "Form errors are also communicated to screen readers." },
+        { "title": "Everything by keyboard", "body": "Dialogs open, can be walked through and close without a mouse." }
+      ]
+    },
+    "privacy": {
+      "title": "Privacy and data",
+      "lead": "Designed with the GDPR in mind. Here we prefer to be exact.",
+      "items": [
+        { "title": "Where the data is", "body": "Today the service and the database are hosted in the United States, with cloud providers. If you need another region, see \"What we are working on\"." },
+        { "title": "Consent on record", "body": "Each person's consent is stored with its date." },
+        { "title": "Who has seen what", "body": "The access log lets you answer when someone asks who viewed their data." },
+        { "title": "This page does not follow you", "body": "It uses no advertising or analytics cookies. A personal link only carries a name in the address; it is not stored or sent." }
+      ]
+    },
+    "onboarding": {
+      "title": "Getting started",
+      "lead": "For a small company, starting should not be a project.",
+      "items": [
+        { "title": "1. Demo", "body": "We show you the product with a case close to yours." },
+        { "title": "2. Your space", "body": "We create your space with brand, language, roles and territories." },
+        { "title": "3. Your team", "body": "You add your people and they start logging visits from the phone." },
+        { "title": "4. Adjustments", "body": "We review the first weeks together and adapt wording and permissions." }
+      ]
+    },
+    "roadmap": {
+      "title": "What we are working on",
+      "lead": "We do not have these yet. We would rather say so here than promise them on the cover. We give no dates.",
+      "items": [
+        { "title": "WCAG 2.2 AA accessibility · in progress", "body": "Automated tests on every change and a public accessibility statement." },
+        { "title": "ISO 27001 · planned", "body": "Preparing the information security management system." },
+        { "title": "Two-step verification · planned", "body": "A second factor at sign-in." },
+        { "title": "Hosting in the European Union · planned", "body": "An option to keep the service and the data in a European region." }
+      ]
+    },
+    "faq": {
+      "title": "Frequent questions",
+      "lead": "What people usually ask us before a demo.",
+      "items": [
+        { "title": "Does it suit a small company?", "body": "Yes. It is made for teams of a few people who need order without setting up an IT department." },
+        { "title": "Is there anything to install?", "body": "No. It runs in the browser on phone and computer, and can be added to the home screen." },
+        { "title": "Can we use our brand?", "body": "Yes: name, logo, colours and language are configured per client." },
+        { "title": "Do you hold external security seals?", "body": "Not yet. What is under way appears in \"What we are working on\"; what already works, in \"Security\"." },
+        { "title": "How much does it cost?", "body": "It depends on the number of people and the configuration. We send a proposal after the demo." }
+      ]
+    }
+  },
+  "contact": {
+    "title": "Request a demo",
+    "titleFor": "{name}, shall we show you?",
+    "body": "Half an hour, with a case close to yours and time for security questions.",
+    "email": "Write an email",
+    "whatsapp": "Write on WhatsApp",
+    "subject": "neoCRM demo",
+    "subjectFor": "neoCRM demo for {name}",
+    "message": "Hello, we would like to see a demo of neoCRM.",
+    "messageFor": "Hello, we are {name} and we would like to see a demo of neoCRM."
+  },
+  "footer": {
+    "note": "neoCRM · CRM for field teams",
+    "back": "Back to AJ Management"
+  }
+}
