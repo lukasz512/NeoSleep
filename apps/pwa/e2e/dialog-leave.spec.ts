@@ -54,16 +54,79 @@ test("opens with its content, no loader first", async ({ page }) => {
   expect(seen.every((frame) => frame.title === TITLE)).toBe(true);
 });
 
+interface Leave {
+  /** One per animation frame from the Escape until the dialog is gone. */
+  frames: Frame[];
+  /** The title in the dialog node at the moment it left the DOM. */
+  removedTitle: string | null;
+}
+
+declare global {
+  interface Window {
+    __leave?: Promise<Leave>;
+  }
+}
+
+/**
+ * Arms the leave recorder before the Escape is sent (an un-awaited evaluate can land
+ * after the key in WebKit). Sampling starts at the Escape, so no frame from before
+ * the close counts, and the removed node is read too, so the end of the fade is
+ * checked even when no frame lands there.
+ */
+async function armLeaveRecorder(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    window.__leave = new Promise<Leave>((resolve) => {
+      const frames: Frame[] = [];
+      let removedTitle: string | null | undefined;
+      const titleOf = (dialog: Element | null) =>
+        (dialog?.querySelector("[data-testid='work-item-title'] textarea") as HTMLTextAreaElement | null)?.value ?? null;
+      const finish = () => {
+        if (removedTitle !== undefined && frames.at(-1)?.dialog === false) resolve({ frames, removedTitle });
+      };
+      const observer = new MutationObserver((records) => {
+        for (const node of records.flatMap((record) => [...record.removedNodes])) {
+          if (!(node instanceof Element)) continue;
+          const dialog = node.matches("[data-testid='work-item-dialog']") ? node : node.querySelector("[data-testid='work-item-dialog']");
+          if (!dialog) continue;
+          observer.disconnect();
+          removedTitle = titleOf(dialog);
+          finish();
+          return;
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      const started = performance.now();
+      const tick = () => {
+        const dialog = document.querySelector("[data-testid='work-item-dialog']");
+        frames.push({ dialog: !!dialog, loader: false, title: titleOf(dialog) });
+        if (!dialog || performance.now() - started > 3000) {
+          if (dialog) resolve({ frames, removedTitle: removedTitle ?? null });
+          else finish();
+        } else requestAnimationFrame(tick);
+      };
+      document.addEventListener("keydown", (event) => event.key === "Escape" && requestAnimationFrame(tick), {
+        capture: true,
+        once: true,
+      });
+    });
+  });
+}
+
 test("keeps its content while it fades out", async ({ page }) => {
   await page.goto("/e2e/harness/work-item-dialog.html?delay=0");
   await page.getByTestId("board-card").click();
   await expect(page.getByTestId("work-item-events")).toBeVisible();
-  const frames = recordFrames(page, "gone");
+  await armLeaveRecorder(page);
   await page.keyboard.press("Escape");
-  const leaving = (await frames).filter((frame) => frame.dialog);
-  // More than one frame: the leave is animated, and every one of them still shows the item.
-  expect(leaving.length).toBeGreaterThan(1);
+  const { frames, removedTitle } = await page.evaluate(() => window.__leave ?? Promise.reject(new Error("leave recorder not armed")));
+  const leaving = frames.filter((frame) => frame.dialog);
+  // The leave is animated: the dialog is still there in the first frame after the Escape.
+  // Not "more than one frame": a loaded CI WebKit can take longer than the 180 ms fade
+  // to render a single frame (CORE-216).
+  expect(leaving.length).toBeGreaterThan(0);
+  // Every frame of the fade, and the node at the moment it is removed, still show the item.
   expect(leaving.every((frame) => frame.title === TITLE)).toBe(true);
+  expect(removedTitle).toBe(TITLE);
   await expect(page.getByTestId("work-item-dialog")).toHaveCount(0);
 
   // Reopening starts from the item again, not from the last state.
