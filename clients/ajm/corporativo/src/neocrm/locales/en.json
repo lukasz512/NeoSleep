@@ -11,6 +11,7 @@
     "themeToLight": "Switch to light theme"
   },
   "hero": {
+    "hello": "Hi, how is your day going?",
     "greeting": "Hello, {name}:",
     "eyebrow": "A CRM under your own brand",
     "titles": {
@@ -22,7 +23,14 @@
     },
     "body": "Customers, calendar, notifications and next steps in one place, so no opportunity is left without follow-up. Under your brand, in your language and on the phone.",
     "cta": "Request a demo",
-    "secondary": "See what is included"
+    "secondary": "See what is included",
+    "marks": {
+      "default": "grow",
+      "equipos": "grow",
+      "distribucion": "distributors",
+      "servicios": "service",
+      "comercios": "shops"
+    }
   },
   "lens": {
     "label": "View the page as",
@@ -280,25 +288,40 @@
     }
   },
   "visuals": {
-    "note": "Illustrative screen with example companies. Tap a visit.",
+    "note": "Illustrative screen with example companies. Tidy the day and tap a visit.",
     "hero": {
-      "alt": "Phone screen with today's three visits; picking one shows its next step",
+      "alt": "From loose notes to a tidy day on the phone: tidy the day and pick a visit to see its next step",
+      "notesLabel": "Today's loose notes",
+      "notes": [
+        "Call Rivas on Thursday!!",
+        "Olmos report… did I do it?",
+        "Lera: first visit, what time?",
+        "Rivas proposal → send NOW"
+      ],
+      "empty": "still on loose notes…",
+      "tidy": "Tidy my day",
+      "untidy": "Back to the notes",
+      "tipBefore": "press it and see what happens",
+      "tipAfter": "like this, and it reminds you by itself",
       "today": "Today",
       "count": "Tuesday · 3 visits",
       "visits": [
         {
+          "who": "MG",
           "time": "09:30",
           "name": "Ferretería Olmos",
           "note": "Report pending",
           "next": "Ferretería Olmos: complete the visit report."
         },
         {
+          "who": "IS",
           "time": "12:00",
           "name": "Talleres Rivas",
           "note": "Send proposal",
           "next": "Talleres Rivas: send the proposal and call on Thursday."
         },
         {
+          "who": "LF",
           "time": "16:15",
           "name": "Bodegas Lera",
           "note": "First visit",
@@ -398,6 +421,7 @@
     }
   },
   "contact": {
+    "hand": "Shall we talk?",
     "title": "Request a demo",
     "titleFor": "{name}, shall we show you?",
     "body": "Half an hour, with a case close to yours and time for security questions.",

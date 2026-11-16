@@ -5,6 +5,7 @@ import { isPersonalLink } from "./lens";
 import { resolveLocale } from "../lib/locale";
 import { applyTheme, initialTheme, readStoredTheme } from "../lib/theme";
 import "@fontsource-variable/montserrat/wght.css";
+import "@fontsource-variable/caveat/wght.css";
 import "./neocrm.css";
 
 // One address (/corporativo/neocrm/): Spanish unless the link says ?lang=en, like the main site.

@@ -11,6 +11,7 @@
     "themeToLight": "Cambiar a tema claro"
   },
   "hero": {
+    "hello": "Hola, ¿qué tal el día?",
     "greeting": "Hola, {name}:",
     "eyebrow": "CRM con vuestra marca",
     "titles": {
@@ -22,7 +23,14 @@
     },
     "body": "Clientes, calendario, avisos y próximos pasos en un solo sitio, para que ninguna oportunidad se quede sin seguimiento. Con vuestra marca, en vuestro idioma y en el móvil.",
     "cta": "Pedir una demo",
-    "secondary": "Ver qué incluye"
+    "secondary": "Ver qué incluye",
+    "marks": {
+      "default": "crecer",
+      "equipos": "crecer",
+      "distribucion": "distribuidoras",
+      "servicios": "servicios",
+      "comercios": "tiendas"
+    }
   },
   "lens": {
     "label": "Ver la página como",
@@ -280,25 +288,40 @@
     }
   },
   "visuals": {
-    "note": "Pantalla ilustrativa con empresas de ejemplo. Tocad una visita.",
+    "note": "Pantalla ilustrativa con empresas de ejemplo. Ordenad el día y tocad una visita.",
     "hero": {
-      "alt": "Pantalla del móvil con las tres visitas de hoy; al elegir una se ve su próximo paso",
+      "alt": "De las notas sueltas al día ordenado en el móvil: ordenad el día y elegid una visita para ver su próximo paso",
+      "notesLabel": "Notas sueltas de hoy",
+      "notes": [
+        "Llamar a Rivas ¡¡el jueves!!",
+        "Informe de Olmos… ¿lo hice?",
+        "Lera: primera visita, ¿a qué hora?",
+        "Propuesta Rivas → enviar YA"
+      ],
+      "empty": "todavía en notas sueltas…",
+      "tidy": "Ordenar mi día",
+      "untidy": "Volver a las notas",
+      "tipBefore": "pulsad y mirad qué pasa",
+      "tipAfter": "así queda, y os avisa solo",
       "today": "Hoy",
       "count": "martes · 3 visitas",
       "visits": [
         {
+          "who": "MG",
           "time": "09:30",
           "name": "Ferretería Olmos",
           "note": "Informe pendiente",
           "next": "Ferretería Olmos: completar el informe de la visita."
         },
         {
+          "who": "IS",
           "time": "12:00",
           "name": "Talleres Rivas",
           "note": "Enviar propuesta",
           "next": "Talleres Rivas: enviar la propuesta y llamar el jueves."
         },
         {
+          "who": "LF",
           "time": "16:15",
           "name": "Bodegas Lera",
           "note": "Primera visita",
@@ -398,6 +421,7 @@
     }
   },
   "contact": {
+    "hand": "¿Hablamos?",
     "title": "Pedid una demo",
     "titleFor": "{name}, ¿os lo enseñamos?",
     "body": "Media hora, con un caso parecido al vuestro y tiempo para preguntas de seguridad.",

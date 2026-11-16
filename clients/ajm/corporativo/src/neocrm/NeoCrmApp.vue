@@ -21,9 +21,14 @@
       <section id="inicio" class="hero">
         <div class="hero__grid">
           <div class="hero__text">
-            <p v-if="prospect" class="hero__greeting">{{ t("hero.greeting", { name: prospect.name }) }}</p>
+            <p v-if="prospect" class="hero__greeting hand">{{ t("hero.greeting", { name: prospect.name }) }}</p>
+            <p v-else class="hero__hello hand">{{ t("hero.hello") }}</p>
             <p class="hero__eyebrow">{{ t("hero.eyebrow") }}</p>
-            <h1 class="hero__title">{{ t(`hero.titles.${lens.sector ?? "default"}`) }}</h1>
+            <!-- one word underlined as if with a marker (hero.marks) -->
+            <h1 class="hero__title">
+              {{ title.before }}<span v-if="title.mark" class="mark">{{ title.mark }}<svg viewBox="0 0 300 20" preserveAspectRatio="none" aria-hidden="true"><path d="M4 12C60 2 120 18 180 9S280 6 296 12" /></svg></span
+              >{{ title.after }}
+            </h1>
             <p class="hero__body">{{ t("hero.body") }}</p>
             <p class="hero__actions">
               <a class="btn" href="#demo">{{ t("hero.cta") }}</a>
@@ -32,26 +37,43 @@
           </div>
           <!-- drawn screens can be tried: each is one labelled group (data-fig) of real buttons -->
           <div class="shot">
-            <div class="phone" role="group" data-fig :aria-label="t('visuals.hero.alt')">
-              <div class="phone__screen">
-                <p class="phone__head">
-                  <strong>{{ t("visuals.hero.today") }}</strong>
-                  <span>{{ t("visuals.hero.count") }}</span>
-                </p>
-                <button v-for="n in 3" :key="n" type="button" class="visit" :aria-pressed="visit === n - 1" @click="visit = n - 1">
-                  <span class="visit__time">{{ t(`visuals.hero.visits.${n - 1}.time`) }}</span>
-                  <span class="visit__name">{{ t(`visuals.hero.visits.${n - 1}.name`) }}</span>
-                  <span class="visit__note">{{ t(`visuals.hero.visits.${n - 1}.note`) }}</span>
-                </button>
-                <p class="toast is-warm" aria-live="polite">{{ t(`visuals.hero.visits.${visit}.next`) }}</p>
+            <!-- the day starts as loose notes stuck on the phone; one button files them as today's visits -->
+            <div class="stage" :class="{ 'is-tidy': tidy }" role="group" data-fig :aria-label="t('visuals.hero.alt')">
+              <ul class="notes" :aria-label="t('visuals.hero.notesLabel')" :aria-hidden="tidy">
+                <li v-for="n in 4" :key="n" class="note hand">{{ t(`visuals.hero.notes.${n - 1}`) }}</li>
+              </ul>
+              <div class="phone">
+                <div class="phone__screen">
+                  <p class="phone__head">
+                    <strong>{{ t("visuals.hero.today") }}</strong>
+                    <span>{{ t("visuals.hero.count") }}</span>
+                  </p>
+                  <p v-if="!tidy" class="phone__empty hand">{{ t("visuals.hero.empty") }}</p>
+                  <div class="phone__visits" :inert="!tidy || undefined">
+                    <button v-for="n in 3" :key="n" type="button" class="visit" :aria-pressed="visit === n - 1" @click="visit = n - 1">
+                      <span class="visit__who" :class="`visit__who--${n}`">{{ t(`visuals.hero.visits.${n - 1}.who`) }}</span>
+                      <span class="visit__name">{{ t(`visuals.hero.visits.${n - 1}.name`) }}</span>
+                      <span class="visit__time">{{ t(`visuals.hero.visits.${n - 1}.time`) }}</span>
+                      <span class="visit__note">{{ t(`visuals.hero.visits.${n - 1}.note`) }}</span>
+                    </button>
+                    <p class="toast" :class="{ 'is-warm': tidy }" aria-live="polite">{{ t(`visuals.hero.visits.${visit}.next`) }}</p>
+                  </div>
+                </div>
               </div>
+              <button type="button" class="tidy" :class="{ 'is-warm': !tidy }" :aria-pressed="tidy" @click="tidy = !tidy">
+                {{ tidy ? t("visuals.hero.untidy") : t("visuals.hero.tidy") }}
+              </button>
+              <p class="stage__tip hand" aria-live="polite">
+                <svg viewBox="0 0 44 34" aria-hidden="true"><path d="M40 30C30 30 14 26 8 8M2 16l6-9 8 6" /></svg>
+                {{ tidy ? t("visuals.hero.tipAfter") : t("visuals.hero.tipBefore") }}
+              </p>
             </div>
             <p class="shot__note">{{ t("visuals.note") }}</p>
           </div>
         </div>
 
         <div class="lens" role="group" aria-labelledby="lens-label">
-          <p id="lens-label" class="lens__label">{{ t("lens.label") }}</p>
+          <p id="lens-label" class="lens__label hand">{{ t("lens.label") }}</p>
           <div class="lens__options">
             <button
               v-for="option in ROLE_OPTIONS"
@@ -71,7 +93,7 @@
 
       <section v-for="(id, i) in order" :id="id" :key="id" class="sec" :class="`sec--${id}`" :aria-labelledby="`${id}-title`">
         <header class="sec__head">
-          <span class="sec__num" aria-hidden="true">{{ String(i + 1).padStart(2, "0") }}</span>
+          <span class="sec__num hand" aria-hidden="true">{{ String(i + 1).padStart(2, "0") }}</span>
           <h2 :id="`${id}-title`" class="sec__title">{{ t(`sections.${id}.title`) }}</h2>
           <p class="sec__lead">{{ t(`sections.${id}.lead`) }}</p>
         </header>
@@ -95,7 +117,7 @@
               <button type="button" class="card__btn" @click="saved = true">{{ t("visuals.product.save") }}</button>
               <p class="card__saved" aria-live="polite">{{ saved ? t("visuals.product.saved", { step: t(`visuals.product.options.${step}`) }) : "" }}</p>
             </div>
-            <p class="fig__hint">{{ t("visuals.product.hint") }}</p>
+            <p class="fig__hint hand">{{ t("visuals.product.hint") }}</p>
           </div>
           <div v-else-if="id === 'brand'" class="fig">
             <!-- one screen, re-skinned by the brand and language picked -->
@@ -118,7 +140,7 @@
                 <span class="brand__btn">{{ t(`visuals.brand.langs.${lang}.action`) }}</span>
               </div>
             </div>
-            <p class="fig__hint">{{ t("visuals.brand.hint") }}</p>
+            <p class="fig__hint hand">{{ t("visuals.brand.hint") }}</p>
           </div>
           <div v-else-if="id === 'security'" class="fig">
             <!-- each layer is a button; the line below explains the one pressed (the section's first three facts) -->
@@ -135,7 +157,7 @@
               </div>
               <p class="layers__detail" aria-live="polite">{{ t(`sections.security.items.${layer}.body`) }}</p>
             </div>
-            <p class="fig__hint">{{ t("visuals.security.hint") }}</p>
+            <p class="fig__hint hand">{{ t("visuals.security.hint") }}</p>
           </div>
           <div v-else-if="id === 'access'" class="fig">
             <!-- one screen with live settings: theme and the 44 px measure -->
@@ -157,7 +179,7 @@
                 </span>
               </div>
             </div>
-            <p class="fig__hint">{{ t("visuals.access.hint") }}</p>
+            <p class="fig__hint hand">{{ t("visuals.access.hint") }}</p>
           </div>
           <div v-else-if="id === 'privacy'" class="fig">
             <!-- a consent record that opens its own access log -->
@@ -253,6 +275,7 @@
       </section>
 
       <section id="demo" class="demo" aria-labelledby="demo-title">
+        <p class="demo__hand hand">{{ t("contact.hand") }}</p>
         <h2 id="demo-title" class="demo__title">{{ prospect ? t("contact.titleFor", { name: prospect.name }) : t("contact.title") }}</h2>
         <p class="demo__body">{{ t("contact.body") }}</p>
         <p class="demo__actions">
@@ -322,7 +345,17 @@ const ROADMAP_STATUS = ["progress", "progress", "planned", "planned"] as const;
 const FILTERS = ["all", "progress", "planned"] as const;
 const TONES = ["light", "dark"] as const;
 
+/** The headline around the word hero.marks underlines; a title without that word is shown plain. */
+const title = computed(() => {
+  const key = lens.sector ?? "default";
+  const full = t(`hero.titles.${key}`);
+  const mark = t(`hero.marks.${key}`);
+  const at = full.indexOf(mark);
+  return at < 0 ? { before: full, mark: "", after: "" } : { before: full.slice(0, at), mark, after: full.slice(at + mark.length) };
+});
+
 // what the reader has picked inside each drawn screen; none of it is stored or sent
+const tidy = ref(false);
 const visit = ref(1);
 const step = ref(0);
 const saved = ref(false);
@@ -511,14 +544,18 @@ function toggleTheme() {
   }
 }
 
-/* the drawn phone: today's visits and the next step */
+/* handwriting: greetings, margin notes, section numbers; never body copy */
+.hand {
+  font-family: var(--ncrm-hand);
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+/* the hero's drawing: loose notes stuck on a phone, filed as today's visits by one button */
 .shot {
   display: grid;
   justify-items: center;
   gap: 16px;
-  padding: clamp(24px, 4vw, 40px) 20px 20px;
-  border-radius: 32px;
-  background: var(--ncrm-tint);
 }
 .shot__note {
   margin: 0;
@@ -526,18 +563,143 @@ function toggleTheme() {
   color: var(--ncrm-muted);
   text-align: center;
 }
+.stage {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 20px;
+  width: min(100%, 460px);
+  padding-top: 12px;
+}
+.notes {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 1;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.note {
+  position: absolute;
+  width: clamp(112px, 32%, 144px);
+  min-height: 92px;
+  padding: 12px 12px 16px;
+  background: var(--ncrm-note-1);
+  color: var(--ncrm-note-ink);
+  font-size: 21px;
+  font-weight: 500;
+  box-shadow: 0 6px 14px var(--ncrm-note-shadow);
+  transition:
+    transform 0.6s cubic-bezier(0.5, 0, 0.2, 1),
+    opacity 0.45s ease 0.1s;
+}
+.note:nth-child(1) {
+  left: 0;
+  top: 104px;
+  transform: rotate(-5deg);
+}
+.note:nth-child(2) {
+  right: 0;
+  top: 152px;
+  background: var(--ncrm-note-2);
+  transform: rotate(4deg);
+  transition-delay: 0.07s, 0.17s;
+}
+.note:nth-child(3) {
+  left: 4%;
+  top: 258px;
+  background: var(--ncrm-note-3);
+  transform: rotate(3deg);
+  transition-delay: 0.14s, 0.24s;
+}
+.note:nth-child(4) {
+  right: 3%;
+  top: 306px;
+  transform: rotate(-3deg);
+  transition-delay: 0.21s, 0.31s;
+}
+/* tidied: every note flies into the middle of the screen and is gone */
+.is-tidy .note {
+  opacity: 0;
+  pointer-events: none;
+}
+.is-tidy .note:nth-child(odd) {
+  transform: translate(90%, 60px) scale(0.25);
+}
+.is-tidy .note:nth-child(even) {
+  transform: translate(-90%, 20px) scale(0.25);
+}
 .phone {
-  width: min(100%, 296px);
+  width: min(78%, 288px);
   padding: 10px;
   border-radius: 40px;
   background: var(--ncrm-frame);
+  transform: rotate(1.5deg);
 }
 .phone__screen {
+  position: relative;
   display: grid;
   gap: 10px;
   padding: 24px 14px 14px;
   border-radius: 30px;
-  background: var(--ncrm-bg);
+  background: var(--ncrm-surface);
+}
+.phone__empty {
+  position: absolute;
+  inset: 58px 12px auto;
+  font-size: 24px;
+  color: var(--ncrm-muted);
+  text-align: center;
+}
+.phone__visits {
+  display: grid;
+  gap: 10px;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition:
+    opacity 0.4s ease,
+    transform 0.4s ease;
+}
+.is-tidy .phone__visits {
+  opacity: 1;
+  transform: none;
+  transition-delay: 0.35s;
+}
+.tidy {
+  min-height: 48px;
+  padding: 0 24px;
+  border: 2px solid var(--ncrm-ink);
+  border-radius: 999px;
+  background: none;
+  color: var(--ncrm-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tidy.is-warm {
+  border-color: var(--ncrm-warm);
+  background: var(--ncrm-warm);
+  color: var(--ncrm-warm-ink);
+}
+.stage__tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  margin: -8px 0 0;
+  font-size: 24px;
+  color: var(--ncrm-primary);
+}
+.stage__tip svg {
+  flex: none;
+  width: 44px;
+  height: 34px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .phone__screen p {
   margin: 0;
@@ -559,8 +721,8 @@ function toggleTheme() {
 }
 .visit {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 0 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0 10px;
   padding: 12px;
   border: 1px solid var(--ncrm-line);
   border-radius: 16px;
@@ -577,6 +739,26 @@ function toggleTheme() {
 }
 .visit[aria-pressed="true"] {
   box-shadow: inset 0 0 0 1px var(--ncrm-primary);
+}
+/* people, not icons: the initials of whoever owns the visit, on the colour of their note */
+.visit__who {
+  grid-row: span 2;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--ncrm-note-1);
+  color: var(--ncrm-note-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+.visit__who--2 {
+  background: var(--ncrm-note-2);
+}
+.visit__who--3 {
+  background: var(--ncrm-note-3);
 }
 .visit__time {
   grid-row: span 2;
@@ -601,11 +783,38 @@ function toggleTheme() {
   font-weight: 600;
   line-height: 1.35;
 }
-.hero__greeting {
+.hero__greeting,
+.hero__hello {
   margin: 0 0 16px;
-  font-size: clamp(20px, 3vw, 28px);
-  font-weight: 600;
+  font-size: clamp(28px, 3.6vw, 38px);
   color: var(--ncrm-primary);
+  transform: rotate(-2deg);
+  transform-origin: left;
+}
+.mark {
+  position: relative;
+  white-space: nowrap;
+}
+.mark svg {
+  position: absolute;
+  left: -4%;
+  bottom: -0.2em;
+  width: 108%;
+  height: 0.34em;
+  overflow: visible;
+}
+.mark path {
+  fill: none;
+  stroke: var(--ncrm-warm);
+  stroke-width: 7;
+  stroke-linecap: round;
+  stroke-dasharray: 340;
+  animation: mark-draw 1s 0.4s ease-out backwards;
+}
+@keyframes mark-draw {
+  from {
+    stroke-dashoffset: 340;
+  }
 }
 .hero__eyebrow {
   margin: 0 0 12px;
@@ -647,9 +856,8 @@ function toggleTheme() {
 }
 .lens__label {
   margin: 0 0 12px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--ncrm-muted);
+  font-size: 24px;
+  color: var(--ncrm-primary);
 }
 .lens__options {
   display: flex;
@@ -710,12 +918,11 @@ function toggleTheme() {
   scroll-margin-top: 16px;
 }
 .sec__num {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  display: inline-block;
+  margin-bottom: 4px;
+  font-size: 44px;
   color: var(--ncrm-primary);
+  transform: rotate(-5deg);
 }
 .sec__title {
   margin: 0;
@@ -743,9 +950,20 @@ function toggleTheme() {
   margin: 0;
 }
 .fig__hint {
-  font-size: 13px;
-  color: var(--ncrm-muted);
+  font-size: 24px;
+  color: var(--ncrm-primary);
   text-align: center;
+  transform: rotate(-1.5deg);
+}
+/* drawings sit a little crooked, like paper laid on a desk, each section the other way */
+.fig > [data-fig] {
+  transform: rotate(-0.8deg);
+}
+.sec:nth-of-type(odd) .fig > [data-fig] {
+  transform: rotate(0.8deg);
+}
+.fig > .card {
+  box-shadow: 6px 8px 0 var(--ncrm-line);
 }
 .card {
   display: grid;
@@ -1337,6 +1555,13 @@ function toggleTheme() {
   background: var(--ncrm-band);
   color: var(--ncrm-on-band);
   scroll-margin-top: 16px;
+}
+.demo__hand {
+  margin: 0 0 8px;
+  font-size: 36px;
+  color: var(--ncrm-warm);
+  transform: rotate(-2deg);
+  transform-origin: left;
 }
 .demo__title {
   margin: 0;

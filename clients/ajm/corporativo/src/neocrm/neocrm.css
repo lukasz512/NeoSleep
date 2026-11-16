@@ -2,12 +2,21 @@
    teal, copied here as plain values because client sites import nothing from neoCRM (CORE-47).
    Every text/background pair below is at least 4.5:1. No gradients (style.spec.ts). */
 :root {
-  --ncrm-bg: #f6faf9;
-  --ncrm-surface: #ffffff;
+  /* warm paper with a dot grid, like a notebook page (round 5); the dots are an SVG tile, not a gradient */
+  --ncrm-bg: #f7f1e3;
+  --ncrm-dots: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Ccircle cx='1.5' cy='1.5' r='1' fill='%23dccfb2'/%3E%3C/svg%3E");
+  --ncrm-surface: #fffdf8;
   --ncrm-ink: #10211f;
   --ncrm-muted: #46605c;
-  --ncrm-line: #d3e0dd;
-  --ncrm-tint: #e3f1ef;
+  --ncrm-line: #dfd5bf;
+  --ncrm-tint: #efe6d0;
+  /* sticky notes and the initials of the people on them: the same paper colours in both themes */
+  --ncrm-note-1: #ffe58a;
+  --ncrm-note-2: #ffc9a8;
+  --ncrm-note-3: #bfe6d8;
+  --ncrm-note-ink: #2a2412;
+  --ncrm-note-shadow: rgba(60, 45, 10, 0.18);
+  --ncrm-hand: "Caveat Variable", "Caveat", "Bradley Hand", "Segoe Print", cursive;
   --ncrm-primary: #0b6b62;
   --ncrm-primary-hover: #08534c;
   --ncrm-on-primary: #ffffff;
@@ -27,6 +36,8 @@
 }
 :root[data-theme="dark"] {
   --ncrm-bg: #061a18;
+  --ncrm-dots: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Ccircle cx='1.5' cy='1.5' r='1' fill='%23173833'/%3E%3C/svg%3E");
+  --ncrm-note-shadow: rgba(0, 0, 0, 0.4);
   --ncrm-surface: #0c2925;
   --ncrm-ink: #e8f2f0;
   --ncrm-muted: #a6bcb8;
@@ -68,7 +79,7 @@ html {
 }
 body {
   margin: 0;
-  background: var(--ncrm-bg);
+  background: var(--ncrm-bg) var(--ncrm-dots);
   color: var(--ncrm-ink);
   font-family: var(--ncrm-font);
   font-size: 16px;

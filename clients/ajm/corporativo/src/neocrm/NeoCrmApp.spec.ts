@@ -89,6 +89,8 @@ describe("neocrm page › every section is drawn, not only written", () => {
 describe("neocrm page › every section can be tried, each in its own way", () => {
   it("hero: picking a visit shows its next step", async () => {
     const w = page();
+    // the visits appear once the loose notes are tidied (round 5)
+    await w.find("#inicio .tidy").trigger("click");
     expect(w.find("#inicio .toast").text()).toContain("Talleres Rivas");
     await w.findAll("#inicio .visit")[2]?.trigger("click");
     expect(w.find("#inicio .toast").text()).toContain("Bodegas Lera");
@@ -186,6 +188,60 @@ describe("neocrm page › every section can be tried, each in its own way", () =
   it("every control is a real button", () => {
     const w = page();
     for (const el of w.findAll("[aria-pressed], [aria-expanded], [role='switch'], [aria-current]")) expect(el.element.tagName).toBe("BUTTON");
+  });
+});
+
+// Round 5 (Łukasz 2026-11-16, hero A of three proposals): the page should look made by a person.
+describe("neocrm page › the hero goes from loose notes to a tidy day", () => {
+  it("starts as four handwritten notes and a phone that can't be used yet", () => {
+    const w = page();
+    expect(w.findAll("#inicio .note")).toHaveLength(4);
+    expect(w.find("#inicio .stage").classes()).not.toContain("is-tidy");
+    expect(w.find("#inicio .tidy").attributes("aria-pressed")).toBe("false");
+    expect(w.find("#inicio .phone__visits").attributes("inert")).toBeDefined();
+    expect(w.find("#inicio .phone__empty").exists()).toBe(true);
+  });
+  it("one button tidies the notes into today's visits, and back", async () => {
+    const w = page();
+    const button = w.find("#inicio .tidy");
+    const tip = w.find("#inicio .stage__tip").text();
+    await button.trigger("click");
+    expect(w.find("#inicio .stage").classes()).toContain("is-tidy");
+    expect(button.attributes("aria-pressed")).toBe("true");
+    expect(button.text()).toBe("Volver a las notas");
+    expect(w.find("#inicio .phone__visits").attributes("inert")).toBeUndefined();
+    expect(w.find("#inicio .stage__tip").text()).not.toBe(tip);
+    await button.trigger("click");
+    expect(button.text()).toBe("Ordenar mi día");
+    expect(w.find("#inicio .stage").classes()).not.toContain("is-tidy");
+  });
+  it("the warm accent moves from the button to the reminder, never both", async () => {
+    const w = page();
+    expect(w.find("#inicio .tidy").classes()).toContain("is-warm");
+    await w.find("#inicio .tidy").trigger("click");
+    expect(w.findAll("#inicio .is-warm").map((el) => el.classes("toast"))).toEqual([true]);
+  });
+  it("each visit shows who it belongs to, as initials", () => {
+    expect(page().findAll("#inicio .visit__who").map((el) => el.text())).toEqual(["MG", "IS", "LF"]);
+  });
+  it("one word of the headline is underlined by hand, whatever the sector", () => {
+    const w = page();
+    expect(w.find("h1").text()).toBe("El CRM para hacer crecer vuestra empresa");
+    expect(w.find("h1 .mark").text()).toBe("crecer");
+    expect(w.find("h1 .mark svg").attributes("aria-hidden")).toBe("true");
+    expect(page("?sector=distribucion").find("h1 .mark").text()).toBe("distribuidoras");
+  });
+  it("opens with a handwritten hello; a personal link greets the company instead", () => {
+    expect(page().find("#inicio .hero__hello").classes()).toContain("hand");
+    const named = page("?para=talleres-rivas");
+    expect(named.find("#inicio .hero__hello").exists()).toBe(false);
+    expect(named.find(".hero__greeting").classes()).toContain("hand");
+  });
+  it("handwriting also marks the section numbers, the hints and the closing line", () => {
+    const w = page();
+    expect(w.find("#product .sec__num").classes()).toContain("hand");
+    expect(w.find("#product .fig__hint").classes()).toContain("hand");
+    expect(w.find("#demo .demo__hand").classes()).toContain("hand");
   });
 });
 
