@@ -1,6 +1,10 @@
 <template>
+  <span v-if="dotOnly" class="work-label-dot" :class="`work-label--${tone}`" role="img" :title="name" :aria-label="name">
+    <span class="work-label__dot" aria-hidden="true" />
+  </span>
   <component
     :is="clickable ? 'button' : 'span'"
+    v-else
     :type="clickable ? 'button' : undefined"
     class="work-label"
     :class="[`work-label--${tone}`, { 'work-label--active': active, 'work-label--clickable': clickable, 'work-label--small': small }]"
@@ -21,9 +25,17 @@ import type { WorkLabelColor } from "../../types/workBoard";
  * One label (CORE-219): a dot in the catalog's colour on a tint of it, the name in the normal
  * text colour so it reads in both themes. `clickable` makes it a toggle button (the filter row,
  * a card's chips). Without `color` the colour comes from the board's catalog. `primary` is for
- * the chips that are not labels (the sessions filter), which bring their own icon.
+ * the chips that are not labels (the sessions filter), which bring their own icon. `dotOnly` is
+ * the compact card's version: the dot alone, the name as its accessible name.
  */
-const props = defineProps<{ name: string; color?: WorkLabelColor | "primary"; active?: boolean; clickable?: boolean; small?: boolean }>();
+const props = defineProps<{
+  name: string;
+  color?: WorkLabelColor | "primary";
+  active?: boolean;
+  clickable?: boolean;
+  small?: boolean;
+  dotOnly?: boolean;
+}>();
 const board = useWorkBoardContext();
 const tone = computed(() => props.color ?? board.colors.value[props.name.toLowerCase()] ?? "none");
 </script>
@@ -44,6 +56,11 @@ const tone = computed(() => props.color ?? board.colors.value[props.name.toLower
   background: rgba(var(--work-label), 0.12);
   border: 1px solid transparent;
   border-radius: 999px;
+}
+
+.work-label-dot {
+  --work-label: var(--v-theme-on-surface);
+  display: inline-flex;
 }
 
 .work-label--small {

@@ -26,6 +26,9 @@ export interface WorkLink {
 
 export type WorkLabelColor = "blue" | "teal" | "green" | "amber" | "orange" | "red" | "pink" | "purple";
 
+/** How the board is laid out: one priority-sorted board, or a lane per label. */
+export type WorkBoardSort = "priority" | "label";
+
 /** One label of the catalog (CORE-219). Items carry labels by name; the catalog gives the colour. */
 export interface WorkLabel {
   id: string;

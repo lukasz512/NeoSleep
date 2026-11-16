@@ -41,7 +41,30 @@
 - [ ] Session tokens (the `pnpm board` CLI) can still create, comment, link and move items; label catalog writes need a platform admin.
 - [ ] All new copy exists in `en.json`, `pl.json` and `mx.json`.
 
+### Round 2 (decision form core-219-r2, 2026-11-17): the top of the board and the phone
+
+Decisions, all in the expanded variant:
+- D1 One toolbar row (team, search, Filters, New item); the rest moves into a View menu that counts what is switched on.
+- D2 No permanent row of every label: "Claude sessions" stays on top with its count, labels are picked under Filters and show only as removable chips.
+- D3 Phone: sticky status tabs with counts, one status per screen, a sideways swipe moves to the next status.
+- D4 Phone: search and a Filters button that opens a bottom sheet; "New item" floats bottom-right.
+- D5 Phone: compact cards by default; label lanes start folded.
+
+Acceptance criteria (they replace the filter-row, key-button and density-switch criteria above where they differ):
+- [ ] On desktop the top is one row: team, search, Claude sessions with its count, Filters, View, New item. No catalog label is listed until it is picked.
+- [ ] Filters lists the catalog labels; a picked label shows as a chip under the row, a click on the chip removes it, Clear removes all of them.
+- [ ] View holds Out of step, Show canceled, the sort, Compact cards, Edit labels, Session tokens (with the active count) and the shortcut hint. Its button reads "View · n" while n of Out of step, Show canceled and sort by label are on.
+- [ ] On a phone the board shows one status at a time under a sticky tab bar with a count per tab; a status with no tickets has no tab.
+- [ ] A swipe left or right on the phone list moves to the next or previous tab; a mostly vertical move does not. Coming back to a tab restores how far it was scrolled.
+- [ ] On a phone the top is search, Claude sessions and a Filters button; the button opens a bottom sheet with team, labels and the View options, and counts the team, label and View filters that are on.
+- [ ] On a phone "New item" is a floating button bottom-right, above the bottom navigation.
+- [ ] A compact card shows the key, the title and one row: a dot per label, where the code is, on hold, days in the column, and the link icons (CI with its state).
+- [ ] On a phone cards are compact until switched off there (remembered apart from the desktop choice), and label lanes start folded.
+
 ### Decided by default — test proves it
+- A tab that was not visited yet opens at the top.
+- A filter that empties the open tab moves the board to the first tab that still has tickets.
+- Lanes unfolded on a phone are not remembered between visits.
 - Label names: trimmed, 1–40 characters, compared case-insensitively.
 - A new label gets the next palette colour not yet used, wrapping around.
 - Deleting a catalog label is out of scope for this ticket (rename and recolour only).

@@ -162,6 +162,8 @@ export function neighbourStatus(status: WorkStatus, step: -1 | 1): WorkStatus | 
 
 /** Label a Claude Code session puts on the tickets it creates (CORE-187). */
 export const SESSION_LABEL = "session";
+/** The team filter's "every team" value. */
+export const ALL_TEAMS = "all";
 
 /** Label that keeps a ticket in Needs Review when its code reaches prod (CORE-221). */
 export const HOLD_LABEL = "hold";

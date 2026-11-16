@@ -129,4 +129,31 @@ describe("WorkItemCard labels, session and footer (CORE-219)", () => {
     expect(has(wrapper, "work-card-footer")).toBe(false);
     expect(has(wrapper, "work-card-link-pr")).toBe(true);
   });
+
+  it("puts a compact card's marks on one row: a dot per label, where the code is, on hold, the days, the links (r2 D5)", () => {
+    const wrapper = card(
+      {
+        labels: ["session", "api", "ux", "hold"],
+        status: "needs_review",
+        git_state: "dev",
+        status_changed_at: ago(2 * DAY + 5),
+        links: [{ kind: "ci", url: "https://ci.test/1", state: "failed" }],
+      },
+      true,
+    );
+    const row = wrapper.get("[data-testid='work-card-compact']");
+    const dots = row.findAll("[data-testid='work-card-dots'] [role='img']");
+    expect(dots.map((dot) => dot.attributes("aria-label"))).toEqual(["api", "ux", "hold"]);
+    expect(dots[0].classes()).toContain("work-label--red");
+    expect(dots[0].text()).toBe("");
+    expect(row.find("[data-testid='work-card-git']").exists()).toBe(true);
+    expect(row.find("[data-testid='work-card-hold']").exists()).toBe(true);
+    expect(row.get("[data-testid='work-card-days']").text()).toBe("2 d");
+    expect(wrapper.get("[data-testid='work-card-link-ci']").classes()).toContain("work-card__link--failed");
+    expect(wrapper.get(".work-card__open").find("[data-testid='work-card-git']").exists()).toBe(false);
+  });
+
+  it("has no marks row on a compact card with nothing to mark", () => {
+    expect(has(card({}, true), "work-card-compact")).toBe(false);
+  });
 });

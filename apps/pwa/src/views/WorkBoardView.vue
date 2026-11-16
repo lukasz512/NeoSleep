@@ -9,68 +9,30 @@
       @refresh="load"
     />
     <template v-else>
-      <div class="work-board__toolbar" :class="{ 'work-board__toolbar--compact': compact }">
-        <AppChipTabs v-model="team" :options="teamOptions" class="work-board__teams" data-testid="work-board-teams" />
-        <AppButton
-          v-if="outOfStepCount || outOfStepOnly"
-          :variant="outOfStepOnly ? 'tonal' : 'outlined'"
-          :color="outOfStepOnly ? 'primary' : undefined"
-          :prepend-icon="outOfStepOnly ? 'mdi-check' : 'mdi-source-branch-remove'"
-          :aria-pressed="outOfStepOnly"
-          :title="t('workBoard.outOfStepHint')"
-          data-testid="work-board-out-of-step"
-          @click="outOfStepOnly = !outOfStepOnly"
-        >
-          {{ t("workBoard.outOfStep", { count: outOfStepCount }) }}
-        </AppButton>
-        <AppButton
-          v-if="canceledCount"
-          :variant="showCanceled ? 'tonal' : 'text'"
-          :color="showCanceled ? 'primary' : undefined"
-          :prepend-icon="showCanceled ? 'mdi-check' : 'mdi-cancel'"
-          :aria-pressed="showCanceled"
-          data-testid="work-board-canceled"
-          @click="showCanceled = !showCanceled"
-        >
-          {{ t("workBoard.showCanceled", { count: canceledCount }) }}
-        </AppButton>
-        <VTextField
-          ref="searchRef"
-          v-model="query"
-          :placeholder="t('workBoard.search')"
-          variant="outlined"
-          density="compact"
-          hide-details
-          clearable
-          class="work-board__search"
-          data-testid="work-board-search"
-        />
-        <AppButton
-          variant="text"
-          prepend-icon="mdi-key-variant"
-          class="work-board__tokens"
-          :aria-label="tokensText"
-          :title="tokensText"
-          data-testid="work-board-tokens"
-          @click="tokensOpen = true"
-        >
-          <span v-if="tokenCount !== null" data-testid="work-board-token-count">{{ tokenCount }}</span>
-        </AppButton>
-        <AppButton color="primary" variant="flat" data-testid="work-board-new" @click="creating = true">
-          {{ t("workBoard.new") }}
-        </AppButton>
-      </div>
-      <WorkBoardFilters
+      <WorkBoardToolbar
+        ref="toolbarRef"
+        v-model:team="team"
+        v-model:query="query"
         v-model:sessions-only="sessionsOnly"
         v-model:sort="sort"
-        v-model:dense="dense"
+        v-model:dense="cardsDense"
+        v-model:out-of-step-only="outOfStepOnly"
+        v-model:show-canceled="showCanceled"
+        :team-options="teamOptions"
         :labels="labels"
         :selected="selectedLabels"
         :session-count="sessionCount"
+        :out-of-step-count="outOfStepCount"
+        :canceled-count="canceledCount"
+        :token-count="tokenCount"
+        :tokens-text="tokensText"
+        :compact="compact"
         @toggle-label="toggleLabel"
+        @clear-labels="selectedLabels = []"
         @edit-labels="labelsOpen = true"
+        @tokens="tokensOpen = true"
+        @create="creating = true"
       />
-      <p v-if="!compact" class="work-board__hint">{{ t("workBoard.shortcuts") }}</p>
 
       <!-- By label: one lane per label, each with the same status columns; the lanes scroll sideways together. -->
       <div
@@ -109,7 +71,7 @@
       <WorkBoardColumns
         v-else
         :items="onBoard"
-        :layout="compact ? 'list' : 'columns'"
+        :layout="compact ? 'tabs' : 'columns'"
         :canceled="canceledColumn"
         @open="openItem"
         @move="moveBy"
@@ -123,7 +85,7 @@
       :creating="creating"
       :initial-item="openedItem"
       :teams="teams ?? []"
-      :default-team="team === ALL ? null : team"
+      :default-team="team === ALL_TEAMS ? null : team"
       :labels="labels"
       @close="closeDialog"
       @saved="onSaved"
@@ -138,13 +100,11 @@ import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from "vue";
 import { useRoute, useRouter, type LocationQuery } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useDisplay } from "vuetify";
-import { AppChipTabs } from "@ui";
-import AppButton from "../components/AppButton.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
 import AppEmptyState from "../components/AppEmptyState.vue";
 import AppErrorState from "../components/AppErrorState.vue";
 import WorkBoardColumns from "../components/workBoard/WorkBoardColumns.vue";
-import WorkBoardFilters, { type WorkBoardSort } from "../components/workBoard/WorkBoardFilters.vue";
+import WorkBoardToolbar from "../components/workBoard/WorkBoardToolbar.vue";
 import WorkItemDialog from "../components/workBoard/WorkItemDialog.vue";
 import WorkLabelChip from "../components/workBoard/WorkLabelChip.vue";
 import WorkLabelsDialog from "../components/workBoard/WorkLabelsDialog.vue";
@@ -152,6 +112,7 @@ import WorkSessionTokensDialog from "../components/workBoard/WorkSessionTokensDi
 import { WORK_BOARD_CONTEXT } from "../components/workBoard/workBoardContext";
 import { APP_STORAGE_KEYS } from "../config/storageKeys";
 import {
+  ALL_TEAMS,
   SESSION_LABEL,
   fetchSessionTokens,
   fetchWorkItems,
@@ -167,19 +128,18 @@ import {
   shownLabels,
   type WorkLabelLane,
 } from "../composables/useWorkBoard";
-import type { WorkItem, WorkLabel, WorkLabelColor, WorkStatus, WorkTeam } from "../types/workBoard";
+import type { WorkBoardSort, WorkItem, WorkLabel, WorkLabelColor, WorkStatus, WorkTeam } from "../types/workBoard";
 
 /**
  * Platform work board (CORE-177): every team's tickets (CORE + one key per client) as kanban
- * columns, a status-grouped list on phones. Platform admins only. ?item=CORE-12 opens a card.
+ * columns, one status per tab on phones. Platform admins only. ?item=CORE-12 opens a card.
  * Shortcuts: `/` search, `n` new item, `[` / `]` move the focused card, Esc closes the card.
  *
- * CORE-219: a filter row (Claude sessions, labels), label lanes instead of one priority-sorted
+ * CORE-219: filters (Claude sessions, labels), label lanes instead of one priority-sorted
  * board, compact cards, and a refresh every minute so a session's live dot appears and fades.
  * The filters live in the URL (?team, ?labels, ?sessions, ?sort); density and folded lanes are
- * this browser's own.
+ * this browser's own. A phone starts with compact cards and folded lanes.
  */
-const ALL = "all";
 const REFRESH_MS = 60_000;
 const { t } = useI18n();
 const route = useRoute();
@@ -192,6 +152,8 @@ function queryList(value: LocationQuery[string] | undefined): string[] {
 
 interface BoardPrefs {
   dense: boolean;
+  /** The phone's own choice: compact there until switched off. */
+  densePhone: boolean;
   /** Folded lanes: lower-cased label names, "" for the "No label" lane. */
   collapsed: string[];
 }
@@ -202,11 +164,12 @@ function readPrefs(): BoardPrefs {
     const saved = typeof raw === "object" && raw !== null ? (raw as Partial<Record<keyof BoardPrefs, unknown>>) : {};
     return {
       dense: saved.dense === true,
+      densePhone: saved.densePhone !== false,
       collapsed: Array.isArray(saved.collapsed) ? saved.collapsed.filter((v): v is string => typeof v === "string") : [],
     };
   } catch {
     // benign: storage is blocked or holds something else; the board starts with its defaults
-    return { dense: false, collapsed: [] };
+    return { dense: false, densePhone: true, collapsed: [] };
   }
 }
 
@@ -216,7 +179,7 @@ const loadFailure = ref<unknown>(null);
 const teams = ref<WorkTeam[] | null>([]);
 const items = ref<WorkItem[]>([]);
 const labels = ref<WorkLabel[]>([]);
-const team = ref<string>(queryList(route.query.team)[0] ?? ALL);
+const team = ref<string>(queryList(route.query.team)[0] ?? ALL_TEAMS);
 const query = ref<string | null>("");
 const creating = ref(false);
 /** Only tickets a Claude Code session created (label `session`, CORE-187). */
@@ -224,7 +187,10 @@ const sessionsOnly = ref(route.query.sessions === "1");
 const selectedLabels = ref<string[]>(queryList(route.query.labels));
 const sort = ref<WorkBoardSort>(route.query.sort === "label" ? "label" : "priority");
 const dense = ref(prefs.dense);
+const densePhone = ref(prefs.densePhone);
 const collapsed = ref<string[]>(prefs.collapsed);
+/** On a phone every lane starts folded; the ones opened stay open for this visit. */
+const openedPhone = ref<string[]>([]);
 /** Only Needs Review tickets git disagrees with (CORE-221). */
 const outOfStepOnly = ref(false);
 /** Canceled tickets get a column only when asked for (CORE-221). */
@@ -234,22 +200,30 @@ const labelsOpen = ref(false);
 /** Tokens that still work; null until the first answer (the key then shows no number). */
 const tokenCount = ref<number | null>(null);
 const now = ref(Date.now());
-const searchRef = ref<{ focus: () => void } | null>(null);
+const toolbarRef = ref<{ focusSearch: () => void } | null>(null);
 const compact = computed(() => smAndDown.value);
+/** Card density for the screen in hand: the phone and the desktop each keep their own. */
+const cardsDense = computed({
+  get: () => (compact.value ? densePhone.value : dense.value),
+  set: (value: boolean) => {
+    if (compact.value) densePhone.value = value;
+    else dense.value = value;
+  },
+});
 
 const colors = computed(() => {
   const map: Record<string, WorkLabelColor> = {};
   for (const label of labels.value) map[label.name.toLowerCase()] = label.color;
   return map;
 });
-provide(WORK_BOARD_CONTEXT, { colors, dense, now });
+provide(WORK_BOARD_CONTEXT, { colors, dense: cardsDense, now });
 
 const teamOptions = computed(() => [
-  { value: ALL, label: t("workBoard.allTeams") },
+  { value: ALL_TEAMS, label: t("workBoard.allTeams") },
   ...(teams.value ?? []).map((tm) => ({ value: tm.key, label: tm.key })),
 ]);
 
-const inTeam = computed(() => items.value.filter((item) => team.value === ALL || item.team_key === team.value));
+const inTeam = computed(() => items.value.filter((item) => team.value === ALL_TEAMS || item.team_key === team.value));
 const sessionCount = computed(() => inTeam.value.filter((item) => item.labels.includes(SESSION_LABEL)).length);
 const matching = computed(() =>
   inTeam.value.filter(
@@ -277,11 +251,12 @@ function laneName(lane: WorkLabelLane): string {
   return lane.label ?? t("workBoard.labels.none");
 }
 function isCollapsed(lane: WorkLabelLane): boolean {
-  return collapsed.value.includes(laneId(lane));
+  return compact.value ? !openedPhone.value.includes(laneId(lane)) : collapsed.value.includes(laneId(lane));
 }
 function toggleLane(lane: WorkLabelLane): void {
   const id = laneId(lane);
-  collapsed.value = isCollapsed(lane) ? collapsed.value.filter((x) => x !== id) : [...collapsed.value, id];
+  const list = compact.value ? openedPhone : collapsed;
+  list.value = list.value.includes(id) ? list.value.filter((x) => x !== id) : [...list.value, id];
 }
 
 function toggleLabel(name: string): void {
@@ -319,7 +294,7 @@ async function load(): Promise<void> {
   try {
     teams.value = await fetchWorkTeams();
     if (teams.value) {
-      if (team.value !== ALL && !teams.value.some((tm) => tm.key === team.value)) team.value = ALL;
+      if (team.value !== ALL_TEAMS && !teams.value.some((tm) => tm.key === team.value)) team.value = ALL_TEAMS;
       items.value = await fetchWorkItems();
       now.value = Date.now();
       void loadLabels();
@@ -376,7 +351,9 @@ function onLabelSaved(label: WorkLabel, previousName: string): void {
   const renamed = (name: string) => (name.toLowerCase() === was ? label.name : name);
   items.value = items.value.map((item) => (item.labels.some((l) => l.toLowerCase() === was) ? { ...item, labels: item.labels.map(renamed) } : item));
   selectedLabels.value = selectedLabels.value.map(renamed);
-  collapsed.value = collapsed.value.map((id) => (id === was ? label.name.toLowerCase() : id));
+  const moved = (id: string) => (id === was ? label.name.toLowerCase() : id);
+  collapsed.value = collapsed.value.map(moved);
+  openedPhone.value = openedPhone.value.map(moved);
 }
 
 async function moveTo(key: string, status: WorkStatus): Promise<void> {
@@ -404,7 +381,7 @@ watch([team, selectedLabels, sessionsOnly, sort], () => {
   void router.replace({
     query: {
       ...route.query,
-      team: team.value === ALL ? undefined : team.value,
+      team: team.value === ALL_TEAMS ? undefined : team.value,
       labels: selectedLabels.value.length ? selectedLabels.value : undefined,
       sessions: sessionsOnly.value ? "1" : undefined,
       sort: sort.value === "label" ? "label" : undefined,
@@ -412,9 +389,9 @@ watch([team, selectedLabels, sessionsOnly, sort], () => {
   });
 });
 
-watch([dense, collapsed], () => {
+watch([dense, densePhone, collapsed], () => {
   try {
-    const next: BoardPrefs = { dense: dense.value, collapsed: collapsed.value };
+    const next: BoardPrefs = { dense: dense.value, densePhone: densePhone.value, collapsed: collapsed.value };
     localStorage.setItem(APP_STORAGE_KEYS.workBoard, JSON.stringify(next));
   } catch {
     // benign: storage is blocked; the choice lasts for this visit
@@ -431,7 +408,7 @@ function onKeydown(event: KeyboardEvent): void {
   if (openKey.value || creating.value || tokensOpen.value || labelsOpen.value) return;
   if (event.key === "/") {
     event.preventDefault();
-    searchRef.value?.focus();
+    toolbarRef.value?.focusSearch();
   } else if (event.key === "n") {
     event.preventDefault();
     creating.value = true;
@@ -462,47 +439,6 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 12px;
   min-width: 0;
-}
-
-.work-board__toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-}
-
-/* The chips scroll inside their own row, so they report no width of their own: the floor
-   keeps the filters from squeezing them out, and a crowded toolbar wraps instead (CORE-221). */
-.work-board__teams {
-  flex: 1 1 auto;
-  min-width: min(100%, 224px);
-}
-
-.work-board__search {
-  flex: 1 1 160px;
-  min-width: 160px;
-  max-width: 240px;
-}
-
-.work-board__tokens {
-  font-variant-numeric: tabular-nums;
-}
-
-/* Phone: chips on their own row, then search + New sharing the next one. */
-.work-board__toolbar--compact .work-board__teams {
-  flex-basis: 100%;
-}
-
-.work-board__toolbar--compact .work-board__search {
-  flex: 1 1 140px;
-  min-width: 0;
-  max-width: none;
-}
-
-.work-board__hint {
-  margin: 0;
-  font-size: 0.75rem;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 
 .work-board__lanes {

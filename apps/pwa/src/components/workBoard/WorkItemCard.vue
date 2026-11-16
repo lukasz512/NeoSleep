@@ -1,7 +1,7 @@
 <template>
   <article
     class="work-card"
-    :class="{ 'work-card--dragging': dragging, 'work-card--dense': board.dense.value }"
+    :class="{ 'work-card--dragging': dragging, 'work-card--dense': dense }"
     :draggable="draggable"
     :data-testid="`work-card-${item.key}`"
     @dragstart="onDragStart"
@@ -37,7 +37,7 @@
       >
         <VIcon icon="mdi-checkbox-marked-outline" size="14" aria-hidden="true" />{{ progress.done }}/{{ progress.total }}
       </span>
-      <span v-if="git || held" class="work-card__marks">
+      <span v-if="!dense && (git || held)" class="work-card__marks">
         <span v-if="git" class="work-card__git" :class="{ 'work-card__git--alert': alert }" data-testid="work-card-git">
           <VIcon :icon="GIT_ICONS[git]" size="14" aria-hidden="true" />{{ t(`workBoard.git.${git}`) }}
         </span>
@@ -46,7 +46,7 @@
         </span>
       </span>
     </button>
-    <span v-if="!board.dense.value && labels.length" class="work-card__labels" data-testid="work-card-labels">
+    <span v-if="!dense && labels.length" class="work-card__labels" data-testid="work-card-labels">
       <WorkLabelChip
         v-for="label in labels.slice(0, MAX_CHIPS)"
         :key="label"
@@ -62,9 +62,20 @@
       </span>
     </span>
     <span v-if="showMeta || links.length" class="work-card__foot">
-      <span v-if="showMeta" class="work-card__meta" data-testid="work-card-footer">
+      <span v-if="showMeta" class="work-card__meta" :data-testid="dense ? 'work-card-compact' : 'work-card-footer'">
+        <template v-if="dense">
+          <span v-if="labels.length" class="work-card__dots" data-testid="work-card-dots">
+            <WorkLabelChip v-for="label in labels" :key="label" :name="label" dot-only />
+          </span>
+          <span v-if="git" class="work-card__git" :class="{ 'work-card__git--alert': alert }" data-testid="work-card-git">
+            <VIcon :icon="GIT_ICONS[git]" size="14" aria-hidden="true" />{{ t(`workBoard.git.${git}`) }}
+          </span>
+          <span v-if="held" class="work-card__git" data-testid="work-card-hold">
+            <VIcon icon="mdi-pause-circle-outline" size="14" aria-hidden="true" />{{ t("workBoard.hold.on") }}
+          </span>
+        </template>
         <span
-          v-if="item.assignee"
+          v-if="!dense && item.assignee"
           class="work-card__assignee"
           role="img"
           :title="item.assignee"
@@ -72,7 +83,7 @@
           data-testid="work-card-assignee"
         >{{ initialsOf(item.assignee) }}</span>
         <span
-          v-if="item.due_date"
+          v-if="!dense && item.due_date"
           class="work-card__due"
           :class="{ 'work-card__due--overdue': overdue }"
           :title="t(overdue ? 'workBoard.card.overdue' : 'workBoard.card.due', { date: dueText })"
@@ -132,7 +143,8 @@ import type { WorkItem, WorkLink, WorkLinkKind } from "../../types/workBoard";
  * One board card: KEY-n, priority, title, where the code is (CORE-221), its labels, and a footer
  * with the assignee, the due date, the days in this column and the spec/artifact/PR/CI links as
  * icons (CORE-219). A robot marks a ticket a Claude session created; the green dot means a session
- * touched it in the last 15 minutes. Compact density keeps only the top rows and the links.
+ * touched it in the last 15 minutes. Compact density keeps the key, the title and one row of
+ * marks: a dot per label, where the code is, on hold, the days and the links.
  * `[` / `]` on a focused card ask the board to move it one column left / right; clicking a label
  * asks it to filter by that label.
  */
@@ -140,6 +152,7 @@ const props = withDefaults(defineProps<{ item: WorkItem; draggable?: boolean }>(
 const emit = defineEmits<{ open: [key: string]; move: [key: string, step: -1 | 1]; label: [name: string] }>();
 const { t, locale } = useI18n();
 const board = useWorkBoardContext();
+const dense = computed(() => board.dense.value);
 /** Labels a card shows before "+n". */
 const MAX_CHIPS = 3;
 const dragging = ref(false);
@@ -169,7 +182,11 @@ const dueText = computed(() =>
     ? new Date(`${props.item.due_date}T00:00:00`).toLocaleDateString(locale.value === "mx" ? "es-MX" : locale.value, { day: "numeric", month: "short" })
     : "",
 );
-const showMeta = computed(() => !board.dense.value && (!!props.item.assignee || !!props.item.due_date || days.value !== null));
+const showMeta = computed(() =>
+  dense.value
+    ? labels.value.length > 0 || git.value !== null || held.value || days.value !== null
+    : !!props.item.assignee || !!props.item.due_date || days.value !== null,
+);
 
 const LINK_ICONS: Record<WorkLinkKind, string> = {
   spec: "mdi-file-document-outline",
@@ -363,6 +380,12 @@ function onKeydown(event: KeyboardEvent): void {
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.work-card__dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .work-card__assignee {

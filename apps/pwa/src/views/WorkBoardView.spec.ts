@@ -136,6 +136,21 @@ async function render(width = 1280, search = ""): Promise<{ wrapper: VueWrapper;
   return { wrapper, router };
 }
 
+/** Menus and the phone sheet render under the document body, outside the view. */
+const inDoc = (id: string) => document.querySelector<HTMLElement>(`[data-testid='${id}']`);
+async function press(id: string): Promise<void> {
+  inDoc(id)!.click();
+  await flushPromises();
+}
+async function openView(wrapper: VueWrapper): Promise<void> {
+  await wrapper.get("[data-testid='work-board-view']").trigger("click");
+  await flushPromises();
+}
+async function openFilters(wrapper: VueWrapper): Promise<void> {
+  await wrapper.get("[data-testid='work-board-filters-open']").trigger("click");
+  await flushPromises();
+}
+
 describe("WorkBoardView", () => {
   it("shows the eight columns in flow order with each item in its column", async () => {
     serve([item({ key: "CORE-1", status: "to_spec" }), item({ key: "NEO-7", status: "needs_review" })]);
@@ -184,8 +199,8 @@ describe("WorkBoardView", () => {
       return ok({ items: tokens });
     });
     const { wrapper } = await render();
-    await wrapper.get("[data-testid='work-board-tokens']").trigger("click");
-    await flushPromises();
+    await openView(wrapper);
+    await press("work-board-tokens");
     const dialog = () => document.querySelector("[data-testid='work-tokens-dialog']")!;
     const name = dialog().querySelector("[data-testid='work-token-name'] input") as HTMLInputElement;
     name.value = "Laptop";
@@ -207,8 +222,8 @@ describe("WorkBoardView", () => {
       path.includes("/session-tokens") ? ok({ items: [row("t1", "Laptop", null), row("t2", "Old Mac", "2026-10-08T10:00:00Z")] }) : base(path, init),
     );
     const { wrapper } = await render();
-    await wrapper.get("[data-testid='work-board-tokens']").trigger("click");
-    await flushPromises();
+    await openView(wrapper);
+    await press("work-board-tokens");
     const dialog = () => document.querySelector("[data-testid='work-tokens-dialog']")!;
     expect(dialog().querySelector("[data-testid='work-tokens-active']")?.textContent).toContain("Laptop");
     expect(dialog().querySelector("[data-testid='work-token-revoke-t1']")).not.toBeNull();
@@ -287,24 +302,25 @@ describe("WorkBoardView", () => {
   it("leaves empty statuses out of the phone list (CORE-221)", async () => {
     serve([item({ key: "CORE-1", status: "building" })]);
     const { wrapper } = await render(375);
-    const headings = wrapper.findAll(".work-columns__group h2").map((h) => h.text());
-    expect(headings).toEqual(["Building 1"]);
+    expect(wrapper.findAll("[role='tab']").map((tab) => tab.text())).toEqual(["Building 1"]);
   });
 
   it("keeps canceled tickets hidden until asked (CORE-221)", async () => {
     serve([item({ key: "CORE-1" }), item({ key: "CORE-2", status: "canceled" })]);
     const { wrapper } = await render();
     expect(wrapper.find("[data-testid='work-column-canceled']").exists()).toBe(false);
-    const toggle = wrapper.get("[data-testid='work-board-canceled']");
-    expect(toggle.text()).toBe("Show canceled (1)");
-    await toggle.trigger("click");
+    await openView(wrapper);
+    expect(inDoc("work-board-canceled")!.textContent!.trim()).toBe("Show canceled (1)");
+    await press("work-board-canceled");
     expect(wrapper.get("[data-testid='work-column-canceled']").text()).toContain("CORE-2");
   });
 
   it("offers no canceled toggle when nothing is canceled (CORE-221)", async () => {
     serve([item({ key: "CORE-1" })]);
     const { wrapper } = await render();
-    expect(wrapper.find("[data-testid='work-board-canceled']").exists()).toBe(false);
+    await openView(wrapper);
+    expect(inDoc("work-board-density")).not.toBeNull();
+    expect(inDoc("work-board-canceled")).toBeNull();
   });
 
   it("marks where the code is on open cards and never on Done (CORE-221)", async () => {
@@ -337,11 +353,11 @@ describe("WorkBoardView", () => {
       item({ key: "CORE-5", status: "building", git_state: "none" }),
     ]);
     const { wrapper } = await render();
-    const filter = wrapper.get("[data-testid='work-board-out-of-step']");
-    expect(filter.text()).toBe("Out of step · 2");
+    await openView(wrapper);
+    expect(inDoc("work-board-out-of-step")!.textContent!.trim()).toBe("Out of step · 2");
     expect(wrapper.get("[data-testid='work-card-CORE-1'] [data-testid='work-card-git']").classes()).toContain("work-card__git--alert");
     expect(wrapper.get("[data-testid='work-card-CORE-2'] [data-testid='work-card-git']").classes()).not.toContain("work-card__git--alert");
-    await filter.trigger("click");
+    await press("work-board-out-of-step");
     const cards = wrapper.findAll("[data-testid^='work-card-CORE']").map((c) => c.attributes("data-testid"));
     expect(cards).toEqual(["work-card-CORE-1", "work-card-CORE-3"]);
   });
@@ -375,12 +391,14 @@ describe("WorkBoardView labels and lanes (CORE-219)", () => {
     serve(board(), TEAMS, { labels: CATALOG });
     const { wrapper } = await render();
     expect(wrapper.get("[data-testid='work-board-session-count']").text()).toBe("2");
-    await wrapper.get("[data-testid='work-filter-label-api']").trigger("click");
+    await openFilters(wrapper);
+    await press("work-filter-option-api");
+    expect(inDoc("work-filter-option-api")!.getAttribute("aria-pressed")).toBe("true");
     expect(pressed(wrapper, "work-filter-label-api")).toBe("true");
     expect(has(wrapper, "work-card-CORE-1")).toBe(true);
     expect(has(wrapper, "work-card-NEO-5")).toBe(true);
     expect(has(wrapper, "work-card-CORE-2")).toBe(false);
-    await wrapper.get("[data-testid='work-filter-label-ux']").trigger("click");
+    await press("work-filter-option-ux");
     expect(has(wrapper, "work-card-CORE-1")).toBe(true);
     expect(has(wrapper, "work-card-NEO-5")).toBe(false);
     await wrapper.get("[data-testid='work-filter-label-api']").trigger("click");
@@ -404,7 +422,8 @@ describe("WorkBoardView labels and lanes (CORE-219)", () => {
     const { wrapper } = await render(1280, "?team=NEO&labels=api&sessions=1&sort=label");
     expect(pressed(wrapper, "work-board-session-filter")).toBe("true");
     expect(pressed(wrapper, "work-filter-label-api")).toBe("true");
-    expect(wrapper.get("[data-testid='work-board-sort-label']").attributes("aria-selected")).toBe("true");
+    await openView(wrapper);
+    expect(inDoc("work-board-sort-label")!.getAttribute("aria-selected")).toBe("true");
     expect(laneIds(wrapper)).toEqual(["work-lane-api"]);
     expect(wrapper.findAll("[data-testid^='work-card-']").filter((c) => c.element.tagName === "ARTICLE").map((c) => c.attributes("data-testid"))).toEqual(["work-card-NEO-5"]);
   });
@@ -420,7 +439,8 @@ describe("WorkBoardView labels and lanes (CORE-219)", () => {
     serve(board(), TEAMS, { labels: CATALOG });
     const { wrapper } = await render();
     expect(has(wrapper, "work-board-lanes")).toBe(false);
-    await wrapper.get("[data-testid='work-board-sort-label']").trigger("click");
+    await openView(wrapper);
+    await press("work-board-sort-label");
     expect(laneIds(wrapper)).toEqual(["work-lane-api", "work-lane-Billing", "work-lane-none"]);
     const api = wrapper.get("[data-testid='work-lane-api']");
     expect(api.find("[data-testid='work-card-CORE-1']").exists()).toBe(true);
@@ -446,11 +466,13 @@ describe("WorkBoardView labels and lanes (CORE-219)", () => {
     expect(moved.find("[data-testid='work-card-label-ux']").exists()).toBe(true);
   });
 
-  it("groups the phone list by label, then status", async () => {
+  it("groups the phone list by label, then status, with the lanes folded until opened", async () => {
     serve(board(), TEAMS, { labels: CATALOG });
     const { wrapper } = await render(375, "?sort=label");
     expect(has(wrapper, "work-board-columns")).toBe(false);
     expect(laneIds(wrapper)).toEqual(["work-lane-api", "work-lane-Billing", "work-lane-none"]);
+    expect(has(wrapper, "work-board-list")).toBe(false);
+    await wrapper.get("[data-testid='work-lane-toggle-Billing']").trigger("click");
     const billing = wrapper.get("[data-testid='work-lane-Billing'] [data-testid='work-board-list']");
     expect(billing.text()).toContain("CORE-2");
     expect(billing.text()).toContain("Building");
@@ -461,7 +483,8 @@ describe("WorkBoardView labels and lanes (CORE-219)", () => {
     serve(board(), TEAMS, { labels: CATALOG });
     const first = await render(1280, "?sort=label");
     await first.wrapper.get("[data-testid='work-lane-toggle-api']").trigger("click");
-    await first.wrapper.get("[data-testid='work-board-density']").trigger("click");
+    await openView(first.wrapper);
+    await press("work-board-density");
     expect(first.wrapper.get("[data-testid='work-lane-api']").find("[data-testid='work-board-columns']").exists()).toBe(false);
     expect(first.wrapper.get("[data-testid='work-card-CORE-2']").classes()).toContain("work-card--dense");
     first.wrapper.unmount();
@@ -470,23 +493,25 @@ describe("WorkBoardView labels and lanes (CORE-219)", () => {
     const { wrapper } = await render(1280, "?sort=label");
     expect(wrapper.get("[data-testid='work-lane-toggle-api']").attributes("aria-expanded")).toBe("false");
     expect(has(wrapper, "work-card-CORE-1")).toBe(false);
-    expect(pressed(wrapper, "work-board-density")).toBe("true");
+    await openView(wrapper);
+    expect(inDoc("work-board-density")!.getAttribute("aria-pressed")).toBe("true");
     expect(wrapper.get("[data-testid='work-card-CORE-2']").classes()).toContain("work-card--dense");
   });
 
   it("shows how many session tokens work on the key button", async () => {
     serve([], TEAMS, { tokens: [token("t1"), token("t2"), token("t3", { revoked_at: "2026-10-08T10:00:00Z" })] });
     const { wrapper } = await render();
-    expect(wrapper.get("[data-testid='work-board-token-count']").text()).toBe("2");
-    expect(wrapper.get("[data-testid='work-board-tokens']").attributes("aria-label")).toBe("Session tokens · 2 active");
+    await openView(wrapper);
+    expect(inDoc("work-board-token-count")!.textContent).toBe("2");
+    expect(inDoc("work-board-tokens")!.getAttribute("aria-label")).toBe("Session tokens · 2 active");
   });
 
   it("marks a token a session used in the last 15 minutes", async () => {
     const minutesAgo = (n: number) => new Date(Date.now() - n * 60_000).toISOString();
     serve([], TEAMS, { tokens: [token("t1", { last_used_at: minutesAgo(5) }), token("t2", { last_used_at: minutesAgo(50) })] });
     const { wrapper } = await render();
-    await wrapper.get("[data-testid='work-board-tokens']").trigger("click");
-    await flushPromises();
+    await openView(wrapper);
+    await press("work-board-tokens");
     expect(document.querySelector("[data-testid='work-token-live-t1']")).not.toBeNull();
     expect(document.querySelector("[data-testid='work-token-live-t2']")).toBeNull();
   });
@@ -512,8 +537,8 @@ describe("WorkBoardView labels and lanes (CORE-219)", () => {
   it("renames a label everywhere on the board", async () => {
     serve(board(), TEAMS, { labels: CATALOG });
     const { wrapper } = await render(1280, "?labels=api");
-    await wrapper.get("[data-testid='work-board-edit-labels']").trigger("click");
-    await flushPromises();
+    await openView(wrapper);
+    await press("work-board-edit-labels");
     const name = document.querySelector("[data-testid='work-label-name-l-api'] input") as HTMLInputElement;
     name.value = "backend";
     name.dispatchEvent(new Event("input"));
@@ -530,8 +555,8 @@ describe("WorkBoardView labels and lanes (CORE-219)", () => {
   it("says so when the new name is taken, and changes nothing", async () => {
     serve(board(), TEAMS, { labels: CATALOG, refusedNames: ["Billing"] });
     const { wrapper } = await render();
-    await wrapper.get("[data-testid='work-board-edit-labels']").trigger("click");
-    await flushPromises();
+    await openView(wrapper);
+    await press("work-board-edit-labels");
     const name = document.querySelector("[data-testid='work-label-name-l-api'] input") as HTMLInputElement;
     name.value = "Billing";
     name.dispatchEvent(new Event("input"));
@@ -539,7 +564,148 @@ describe("WorkBoardView labels and lanes (CORE-219)", () => {
     (document.querySelector("[data-testid='work-label-save-l-api']") as HTMLButtonElement).click();
     await flushPromises();
     expect(document.querySelector("[data-testid='work-label-row-l-api']")!.textContent).toContain("This name is taken or not allowed");
-    expect(has(wrapper, "work-filter-label-api")).toBe(true);
+    expect(wrapper.get("[data-testid='work-card-CORE-1']").find("[data-testid='work-card-label-api']").exists()).toBe(true);
+  });
+
+  it("keeps the top to one row and counts what the View menu has switched on (r2 D1)", async () => {
+    serve([item({ key: "CORE-1", status: "needs_review", git_state: "none" }), item({ key: "CORE-2", status: "canceled" })], TEAMS, { labels: CATALOG });
+    const { wrapper } = await render();
+    const view = wrapper.get("[data-testid='work-board-view']");
+    expect(view.text()).toBe("View");
+    for (const id of ["work-board-out-of-step", "work-board-canceled", "work-board-sort", "work-board-density", "work-board-edit-labels", "work-board-tokens"]) {
+      expect(has(wrapper, id)).toBe(false);
+    }
+    await openView(wrapper);
+    expect(inDoc("work-board-view-menu")!.textContent).toContain("move the focused card");
+    await press("work-board-canceled");
+    await press("work-board-out-of-step");
+    expect(view.text()).toBe("View · 2");
+    await press("work-board-sort-label");
+    await press("work-board-density");
+    expect(view.text()).toBe("View · 3");
+  });
+
+  it("lists no label until it is picked; picked ones are chips that come off one by one or all at once (r2 D2)", async () => {
+    serve(board(), TEAMS, { labels: CATALOG });
+    const { wrapper, router } = await render();
+    expect(wrapper.findAll("[data-testid^='work-filter-label-']")).toHaveLength(0);
+    expect(has(wrapper, "work-board-clear-filters")).toBe(false);
+    expect(wrapper.get("[data-testid='work-board-session-count']").text()).toBe("2");
+    await openFilters(wrapper);
+    expect(["api", "Billing", "ux", "zeta"].every((name) => inDoc(`work-filter-option-${name}`))).toBe(true);
+    await press("work-filter-option-api");
+    await press("work-filter-option-ux");
+    expect(wrapper.get("[data-testid='work-board-filters-open']").text()).toBe("Filters · 2");
+    expect(wrapper.findAll("[data-testid^='work-filter-label-']").map((chip) => chip.text())).toEqual(["api", "ux"]);
+    await wrapper.get("[data-testid='work-filter-label-ux']").trigger("click");
+    expect(has(wrapper, "work-card-NEO-5")).toBe(true);
+    await wrapper.get("[data-testid='work-board-clear-filters']").trigger("click");
+    await flushPromises();
+    expect(has(wrapper, "work-card-CORE-3")).toBe(true);
+    expect(router.currentRoute.value.query.labels).toBeUndefined();
+  });
+
+  it("shows one status per screen under tabs with counts on a phone (r2 D3)", async () => {
+    serve([item({ key: "CORE-1" }), item({ key: "CORE-2" }), item({ key: "CORE-3", status: "building" }), item({ key: "CORE-4", status: "done" })]);
+    const { wrapper } = await render(375);
+    const tabs = () => wrapper.findAll("[role='tab']");
+    const selected = () => tabs().find((tab) => tab.attributes("aria-selected") === "true")!.text();
+    expect(tabs().map((tab) => tab.text())).toEqual(["Backlog 2", "Building 1", "Done 1"]);
+    expect(selected()).toBe("Backlog 2");
+    expect(has(wrapper, "work-card-CORE-1")).toBe(true);
+    expect(has(wrapper, "work-card-CORE-3")).toBe(false);
+    await wrapper.get("[data-testid='work-tab-done']").trigger("click");
+    expect(has(wrapper, "work-card-CORE-4")).toBe(true);
+    expect(has(wrapper, "work-card-CORE-1")).toBe(false);
+  });
+
+  it("moves between the phone tabs with a sideways swipe and remembers each tab's scroll (r2 D3)", async () => {
+    serve([item({ key: "CORE-1" }), item({ key: "CORE-3", status: "building" }), item({ key: "CORE-4", status: "done" })]);
+    const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+    const { wrapper } = await render(375);
+    const list = wrapper.get("[data-testid='work-board-list']");
+    const swipe = async (dx: number, dy = 0) => {
+      await list.trigger("touchstart", { touches: [{ clientX: 200, clientY: 300 }] });
+      await list.trigger("touchend", { changedTouches: [{ clientX: 200 + dx, clientY: 300 + dy }] });
+      await flushPromises();
+    };
+    Object.defineProperty(window, "scrollY", { value: 420, configurable: true });
+    await swipe(-30);
+    await swipe(-90, 200);
+    expect(has(wrapper, "work-card-CORE-1")).toBe(true);
+    await swipe(-90, 10);
+    expect(has(wrapper, "work-card-CORE-3")).toBe(true);
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 0 });
+    Object.defineProperty(window, "scrollY", { value: 0, configurable: true });
+    await swipe(90);
+    expect(has(wrapper, "work-card-CORE-1")).toBe(true);
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 420 });
+    await swipe(90);
+    expect(has(wrapper, "work-card-CORE-1")).toBe(true);
+    scrollTo.mockRestore();
+  });
+
+  it("moves to the first tab that still has tickets when a filter empties the open one (r2 D3)", async () => {
+    serve([item({ key: "CORE-1" }), item({ key: "CORE-3", status: "building", labels: ["session"] })]);
+    const { wrapper } = await render(375);
+    expect(has(wrapper, "work-card-CORE-1")).toBe(true);
+    await wrapper.get("[data-testid='work-board-session-filter']").trigger("click");
+    expect(wrapper.findAll("[role='tab']").map((tab) => tab.text())).toEqual(["Building 1"]);
+    expect(has(wrapper, "work-card-CORE-3")).toBe(true);
+  });
+
+  it("keeps a phone's top to search, sessions and Filters; the sheet holds the rest (r2 D4)", async () => {
+    serve([...board(), item({ key: "CORE-9", status: "canceled" })], TEAMS, { labels: CATALOG });
+    const { wrapper } = await render(375);
+    expect(has(wrapper, "work-board-search")).toBe(true);
+    expect(has(wrapper, "work-board-session-filter")).toBe(true);
+    expect(has(wrapper, "work-board-teams")).toBe(false);
+    expect(has(wrapper, "work-board-view")).toBe(false);
+    await openFilters(wrapper);
+    const sheet = inDoc("work-board-sheet")!;
+    for (const id of ["work-board-teams", "work-filter-option-api", "work-board-sort", "work-board-density", "work-board-canceled", "work-board-tokens"]) {
+      expect(sheet.querySelector(`[data-testid='${id}']`), id).not.toBeNull();
+    }
+    expect(sheet.textContent).not.toContain("move the focused card");
+    await press("work-board-canceled");
+    await press("work-filter-option-api");
+    [...sheet.querySelectorAll<HTMLElement>("[data-testid='work-board-teams'] button")].find((b) => b.textContent!.trim() === "NEO")!.click();
+    await flushPromises();
+    expect(has(wrapper, "work-card-NEO-5")).toBe(true);
+    expect(has(wrapper, "work-card-CORE-1")).toBe(false);
+    expect(wrapper.get("[data-testid='work-board-filters-count']").text()).toBe("3");
+  });
+
+  it("opens a new item from the floating button on a phone (r2 D4)", async () => {
+    serve(board());
+    const { wrapper } = await render(375);
+    const fab = wrapper.get("[data-testid='work-board-new']");
+    expect(fab.classes()).toContain("work-toolbar__fab");
+    expect(fab.attributes("aria-label")).toBe("New item");
+    await fab.trigger("click");
+    await flushPromises();
+    expect(document.querySelector("[data-testid='work-item-dialog']")).not.toBeNull();
+  });
+
+  it("shows compact cards on a phone until switched off there, apart from the desktop choice (r2 D5)", async () => {
+    serve(board(), TEAMS, { labels: CATALOG });
+    const phone = await render(375);
+    expect(phone.wrapper.get("[data-testid='work-card-CORE-1']").classes()).toContain("work-card--dense");
+    await openFilters(phone.wrapper);
+    expect(inDoc("work-board-density")!.getAttribute("aria-pressed")).toBe("true");
+    await press("work-board-density");
+    expect(phone.wrapper.get("[data-testid='work-card-CORE-1']").classes()).not.toContain("work-card--dense");
+    phone.wrapper.unmount();
+    wrappers.length = 0;
+
+    const again = await render(375);
+    expect(again.wrapper.get("[data-testid='work-card-CORE-1']").classes()).not.toContain("work-card--dense");
+    again.wrapper.unmount();
+    wrappers.length = 0;
+    localStorage.clear();
+
+    const desktop = await render();
+    expect(desktop.wrapper.get("[data-testid='work-card-CORE-1']").classes()).not.toContain("work-card--dense");
   });
 
   it("recolours a label on the cards", async () => {
@@ -547,8 +713,8 @@ describe("WorkBoardView labels and lanes (CORE-219)", () => {
     const { wrapper } = await render();
     const chip = () => wrapper.get("[data-testid='work-card-CORE-1'] [data-testid='work-card-label-api']").classes();
     expect(chip()).toContain("work-label--blue");
-    await wrapper.get("[data-testid='work-board-edit-labels']").trigger("click");
-    await flushPromises();
+    await openView(wrapper);
+    await press("work-board-edit-labels");
     (document.querySelector("[data-testid='work-label-color-l-api']") as HTMLElement).click();
     await flushPromises();
     (document.querySelector("[data-testid='work-label-color-l-api-red']") as HTMLElement).click();
