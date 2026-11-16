@@ -3283,6 +3283,8 @@
   "workBoard.tokens.lastUsed": "Ostatnio użyty {when}",
   "workBoard.tokens.neverUsed": "Jeszcze nieużyty",
   "workBoard.tokens.empty": "Brak tokenów",
+  "workBoard.tokens.active": "Aktywne · {n}",
+  "workBoard.tokens.revokedGroup": "Odwołane ({n})",
   "workBoard.event.created": "Utworzone w: {status}",
   "workBoard.event.status": "{from} → {to}",
   "workBoard.event.edit": "Zmieniono: {fields}",

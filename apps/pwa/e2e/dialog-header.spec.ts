@@ -137,3 +137,30 @@ test("confirm dialog: M3 headline, supporting text and actions spacing", async (
   near(text.y - bottom(title), HEADER_GAP, "headline → supporting text");
   await expectActions(page, card, bottom(text));
 });
+
+// CORE-196: a dialog with no actions row ended flush against the card edge —
+// the body's bottom padding was left to the (missing) actions. The shell now
+// gives the body 24dp when it is the card's last child.
+for (const width of [1024, 390]) {
+  test(`dialog without actions at ${width}px: 24dp under the last element`, async ({ page }) => {
+    const row = (id: string, name: string, revoked: boolean) => ({
+      id,
+      name,
+      created_by: "u1",
+      created_at: "2026-11-01T10:00:00Z",
+      last_used_at: "2026-11-13T10:00:00Z",
+      revoked_at: revoked ? "2026-11-10T10:00:00Z" : null,
+    });
+    await page.route("**/api/v1/platform/work/session-tokens", (route) =>
+      route.fulfill({ json: { items: [row("t1", "VSC Claude Code", false), row("t2", "Chrome MacBook M5 Pro", true)] } }),
+    );
+    await settle(page, "tokens", width);
+    await expect(page.getByTestId("work-tokens-revoked-toggle")).toBeVisible();
+    await expect(page.locator(".v-dialog .v-card-actions")).toHaveCount(0);
+    const card = await box(page, ".v-dialog .v-card");
+    const last = await box(page, "[data-testid=work-tokens-revoked-toggle]");
+    // Phone sheets add the safe-area inset under the body (0 in a desktop browser).
+    const inset = await page.locator(".v-dialog .v-card").first().evaluate((el) => parseFloat(getComputedStyle(el).paddingBottom) || 0);
+    near(bottom(card) - inset - bottom(last), PAD, "last element → card bottom");
+  });
+}
