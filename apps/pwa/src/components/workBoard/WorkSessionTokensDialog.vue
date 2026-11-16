@@ -41,7 +41,17 @@
             <li v-for="token in active" :key="token.id" class="work-tokens__row">
               <VIcon class="work-tokens__icon" icon="mdi-key-variant" size="18" />
               <div class="work-tokens__meta">
-                <span class="work-tokens__name">{{ token.name }}</span>
+                <span class="work-tokens__name">
+                  {{ token.name }}
+                  <span
+                    v-if="isLive(token.last_used_at, now)"
+                    class="work-tokens__live"
+                    role="img"
+                    :title="t('workBoard.tokens.live')"
+                    :aria-label="t('workBoard.tokens.live')"
+                    :data-testid="`work-token-live-${token.id}`"
+                  />
+                </span>
                 <span class="work-tokens__used">{{ usedLabel(token) }}</span>
               </div>
               <AppButton variant="text" size="small" color="error" :data-testid="`work-token-revoke-${token.id}`" @click="revoke(token)">
@@ -90,7 +100,8 @@ import AppFormDialog from "../AppFormDialog.vue";
 import AppButton from "../AppButton.vue";
 import AppSkeletonLines from "../AppSkeletonLines.vue";
 import AppErrorState from "../AppErrorState.vue";
-import { fetchSessionTokens, issueSessionToken, revokeSessionToken } from "../../composables/useWorkBoard";
+import { fetchSessionTokens, isLive, issueSessionToken, revokeSessionToken } from "../../composables/useWorkBoard";
+import { useWorkBoardContext } from "./workBoardContext";
 import { formatRelativeTime } from "../../utils/relativeTime";
 import type { WorkSessionToken } from "../../types/workBoard";
 
@@ -99,8 +110,10 @@ import type { WorkSessionToken } from "../../types/workBoard";
  * token's plaintext is shown here once; the API keeps only its SHA-256. Revoking is immediate.
  */
 const props = defineProps<{ open: boolean }>();
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: []; active: [count: number] }>();
 const { t, locale } = useI18n();
+const board = useWorkBoardContext();
+const now = board.now;
 
 const tokens = ref<WorkSessionToken[]>([]);
 const loading = ref(false);
@@ -112,6 +125,8 @@ const copied = ref(false);
 const showRevoked = ref(false);
 const active = computed(() => tokens.value.filter((x) => !x.revoked_at));
 const revoked = computed(() => tokens.value.filter((x) => x.revoked_at));
+// The board's key icon carries this number (CORE-219); it follows every issue and revoke here.
+watch(active, (list) => emit("active", list.length));
 
 async function load(): Promise<void> {
   loading.value = true;
@@ -283,5 +298,16 @@ watch(
 .work-tokens__name {
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+/* A session used this token in the last 15 minutes. */
+.work-tokens__live {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 4px;
+  vertical-align: 1px;
+  border-radius: 50%;
+  background: rgb(var(--v-theme-success));
 }
 </style>

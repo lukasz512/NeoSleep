@@ -98,6 +98,8 @@
             <VListItem v-if="current?.branch" :title="current.branch" class="work-dialog__branch" />
           </VList>
         </VMenu>
+
+        <WorkLabelPicker v-model="form.labels" :labels="labels" />
       </div>
 
       <!-- CORE-195: screenshots pasted or dropped here show inline, where they were put. -->
@@ -321,6 +323,7 @@ import {
   fetchWorkPeople,
   patchWorkItem,
   asChecklist,
+  shownLabels,
   checklistLines,
   toggleChecklistLine,
   uploadWorkAttachment,
@@ -328,9 +331,10 @@ import {
 } from "../../composables/useWorkBoard";
 import { WORK_ATTACHMENT_ACCEPT, filesFromTransfer, isImage, usePendingAttachments, type PendingAttachment } from "../../composables/useWorkAttachments";
 import WorkMarkdownEditor from "./WorkMarkdownEditor.vue";
+import WorkLabelPicker from "./WorkLabelPicker.vue";
 import { attachmentRefs, rewriteAttachmentRefs } from "./workMarkdown";
 import { formatRelativeTime } from "../../utils/relativeTime";
-import type { WorkAttachment, WorkItem, WorkItemEvent, WorkItemPatch, WorkPerson, WorkStatus, WorkTeam } from "../../types/workBoard";
+import type { WorkAttachment, WorkItem, WorkItemEvent, WorkItemPatch, WorkLabel, WorkPerson, WorkStatus, WorkTeam } from "../../types/workBoard";
 
 /**
  * Work item detail (itemKey set) or a new item (creating), one column like Linear (CORE-192,
@@ -351,8 +355,10 @@ const props = withDefaults(
     defaultTeam: string | null;
     /** The board row for `itemKey`, shown until the full item arrives. */
     initialItem?: WorkItem | null;
+    /** The label catalog, for the picker's choices and colours (CORE-219). */
+    labels?: readonly WorkLabel[];
   }>(),
-  { initialItem: null },
+  { initialItem: null, labels: () => [] },
 );
 const emit = defineEmits<{ close: []; saved: [item: WorkItem] }>();
 const { t, locale } = useI18n();
@@ -408,6 +414,8 @@ interface Form {
   assignee: string | null;
   /** YYYY-MM-DD, or "" for none (what a date input gives). */
   due_date: string;
+  /** Without the technical `session` label, which nobody edits here. */
+  labels: string[];
 }
 const form = reactive<Form>(blankForm());
 
@@ -422,6 +430,7 @@ function blankForm(): Form {
     priority: 0,
     assignee: null,
     due_date: "",
+    labels: [],
   };
 }
 
@@ -436,6 +445,7 @@ function formFrom(item: WorkItem): Form {
     priority: item.priority,
     assignee: item.assignee,
     due_date: item.due_date ?? "",
+    labels: shownLabels(item),
   };
 }
 
@@ -528,6 +538,10 @@ const patch = computed<WorkItemPatch>(() => {
   if (form.priority !== before.priority) out.priority = form.priority;
   if (form.assignee !== before.assignee) out.assignee = form.assignee;
   if (form.due_date !== before.due_date) out.due_date = form.due_date || null;
+  if (!sameValue(form.labels, before.labels)) {
+    const hidden = current.value.labels.filter((label) => !before.labels.includes(label));
+    out.labels = [...hidden, ...form.labels];
+  }
   return out;
 });
 
@@ -546,10 +560,15 @@ function showItem(item: WorkItem): void {
   for (const name of SECTION_FIELDS) shown[name] = !!form[name];
 }
 
+function sameValue(a: Form[keyof Form], b: Form[keyof Form]): boolean {
+  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((value, index) => value === b[index]);
+  return a === b;
+}
+
 /** True while the form still says what the known item says, i.e. nothing was typed yet. */
 function untouched(): boolean {
   const base = current.value ? formFrom(current.value) : blankForm();
-  return (Object.keys(base) as (keyof Form)[]).every((name) => form[name] === base[name]);
+  return (Object.keys(base) as (keyof Form)[]).every((name) => sameValue(form[name], base[name]));
 }
 
 async function load(): Promise<void> {
@@ -756,6 +775,7 @@ async function save(): Promise<void> {
         priority: form.priority,
         assignee: form.assignee,
         due_date: form.due_date || null,
+        ...(form.labels.length ? { labels: form.labels } : {}),
       });
       const ids = await uploadQueued(item.key, [...itemQueue.pending.value]);
       const problem = rewriteAttachmentRefs(form.problem, ids).trim() || null;

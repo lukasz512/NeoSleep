@@ -4,13 +4,16 @@
  * the view only decides what to show. Platform admins only; the API answers 403 otherwise.
  */
 import { isApiError, reportCaught, reportFailedResponse } from "@api";
-import { apiFetch } from "./useApi";
+import { apiFetch, backgroundApiFetch } from "./useApi";
 import type {
   WorkAttachment,
   WorkItem,
   WorkItemDraft,
   WorkItemEvent,
   WorkItemPatch,
+  WorkLabel,
+  WorkLabelColor,
+  WorkLink,
   WorkLinkKind,
   WorkPerson,
   WorkSessionToken,
@@ -69,6 +72,19 @@ export async function fetchWorkTeams(): Promise<WorkTeam[] | null> {
 
 export async function fetchWorkItems(): Promise<WorkItem[]> {
   return (await request<{ items: WorkItem[] }>("useWorkBoard.items", `${BASE}/items`)).items;
+}
+
+/**
+ * The board's own refresh while it stays open (CORE-219): no global loader and no report, so
+ * nothing on screen reacts to it. null means this round failed and the board keeps what it shows.
+ */
+export async function refreshWorkItems(): Promise<WorkItem[] | null> {
+  try {
+    const res = await backgroundApiFetch(`${BASE}/items`, { handleErrors: false });
+    return res.ok ? ((await res.json()) as { items: WorkItem[] }).items : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface WorkItemDetail {
@@ -174,6 +190,104 @@ async function requestNoContent(where: string, path: string): Promise<void> {
 /** The first link of a kind, for the card's icons. */
 export function linkOf(item: WorkItem, kind: WorkLinkKind): string | null {
   return item.links.find((l) => l.kind === kind)?.url ?? null;
+}
+
+/** The links a card shows, one per kind, in CARD_LINK_KINDS order. */
+export function cardLinks(item: WorkItem): WorkLink[] {
+  return CARD_LINK_KINDS.flatMap((kind) => item.links.find((l) => l.kind === kind) ?? []);
+}
+
+/** Label colours, in the order the API hands them to new labels (CORE-219). */
+export const WORK_LABEL_COLORS: readonly WorkLabelColor[] = ["blue", "teal", "green", "amber", "orange", "red", "pink", "purple"];
+
+/** Most labels one item can carry; the API rejects more. */
+export const MAX_ITEM_LABELS = 10;
+export const MAX_LABEL_LENGTH = 40;
+
+export async function fetchWorkLabels(): Promise<WorkLabel[]> {
+  return (await request<{ items: WorkLabel[] }>("useWorkBoard.labels", `${BASE}/labels`)).items;
+}
+
+/** Renames or recolours a catalog label; a rename reaches every item that carries it. */
+export async function patchWorkLabel(id: string, patch: { name?: string; color?: WorkLabelColor }): Promise<WorkLabel> {
+  return (await request<{ item: WorkLabel }>("useWorkBoard.patchLabel", `${BASE}/labels/${encodeURIComponent(id)}`, jsonInit("PATCH", patch))).item;
+}
+
+const sameLabel = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+const byName = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: "base" });
+
+/** An item's labels as people see them: without the technical `session` one. */
+export function shownLabels(item: WorkItem): string[] {
+  return item.labels.filter((label) => !sameLabel(label, SESSION_LABEL));
+}
+
+/** True when the item carries every selected label; no selection matches everything. */
+export function matchesLabels(item: WorkItem, selected: readonly string[]): boolean {
+  return selected.every((wanted) => item.labels.some((label) => sameLabel(label, wanted)));
+}
+
+export interface WorkLabelLane {
+  /** null is the "No label" lane. */
+  label: string | null;
+  items: WorkItem[];
+}
+
+/**
+ * One lane per label, by name; an item with several labels sits in the lane of its first one
+ * by name. Items without a label come last. A label nobody carries gets no lane.
+ */
+export function groupByLabel(items: readonly WorkItem[]): WorkLabelLane[] {
+  const lanes = new Map<string, { label: string; items: WorkItem[] }>();
+  const none: WorkItem[] = [];
+  for (const item of items) {
+    const first = shownLabels(item).sort(byName)[0];
+    if (first === undefined) {
+      none.push(item);
+      continue;
+    }
+    const lane = lanes.get(first.toLowerCase()) ?? { label: first, items: [] };
+    lane.items.push(item);
+    lanes.set(first.toLowerCase(), lane);
+  }
+  const sorted: WorkLabelLane[] = [...lanes.values()].sort((a, b) => byName(a.label, b.label));
+  return none.length ? [...sorted, { label: null, items: none }] : sorted;
+}
+
+const DAY_MS = 86_400_000;
+
+/** Whole days since the item entered its column. */
+export function daysInColumn(item: WorkItem, now: number): number {
+  return Math.max(0, Math.floor((now - Date.parse(item.status_changed_at)) / DAY_MS));
+}
+
+/** Days after which a card waiting in a column is flagged; other columns never are. */
+const STALE_AFTER_DAYS: Partial<Record<WorkStatus, number>> = { needs_review: 3, building: 7 };
+
+export function isStale(item: WorkItem, now: number): boolean {
+  const limit = STALE_AFTER_DAYS[item.status];
+  return limit !== undefined && daysInColumn(item, now) > limit;
+}
+
+/** Past its due date and still open. `due_date` is a local calendar day. */
+export function isOverdue(item: WorkItem, now: number): boolean {
+  if (!item.due_date || item.status === "done" || item.status === "canceled") return false;
+  const today = new Date(now);
+  const ymd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  return item.due_date < ymd;
+}
+
+/** How long a session's last touch keeps the live dot on. */
+export const LIVE_WINDOW_MS = 15 * 60_000;
+
+export function isLive(at: string | null | undefined, now: number): boolean {
+  return !!at && now - Date.parse(at) < LIVE_WINDOW_MS;
+}
+
+/** Two letters for an assignee: from the name's words, or from the email's local part. */
+export function initialsOf(person: string): string {
+  const words = (person.includes("@") ? person.split("@")[0]! : person).split(/[\s._-]+/).filter(Boolean);
+  const letters = words.length > 1 ? words[0]![0]! + words[words.length - 1]![0]! : (words[0] ?? "").slice(0, 2);
+  return letters.toUpperCase();
 }
 
 /** A markdown task line: `- [ ] text` / `- [x] text` (`*` bullets and `[X]` too). */

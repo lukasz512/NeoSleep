@@ -442,3 +442,98 @@ describe("WorkItemDialog image size and preview (CORE-202)", () => {
     open.mockRestore();
   });
 });
+
+/** Labels in the dialog's chip row (CORE-219): pick from the catalog, create by typing, remove. */
+describe("WorkItemDialog labels (CORE-219)", () => {
+  const CATALOG = [
+    { id: "l-api", name: "api", color: "blue" as const, created_at: "2026-11-10T10:00:00Z" },
+    { id: "l-frontend", name: "Frontend", color: "green" as const, created_at: "2026-11-10T10:00:00Z" },
+  ];
+  const patches = () => calls.filter((c) => c.method === "PATCH").map((c) => JSON.parse(String(c.body)) as { labels?: string[] });
+
+  async function open(labels: string[]) {
+    serve(item({ labels }));
+    const wrapper = await render({ itemKey: "CORE-9", creating: false });
+    await wrapper.setProps({ labels: CATALOG });
+    return wrapper;
+  }
+
+  async function openMenu(): Promise<HTMLInputElement> {
+    (q("work-item-label-add") as HTMLElement).click();
+    await flushPromises();
+    return q("work-item-label-input")!.querySelector("input")!;
+  }
+
+  async function type(input: HTMLInputElement, value: string): Promise<void> {
+    input.value = value;
+    input.dispatchEvent(new Event("input"));
+    await flushPromises();
+  }
+
+  async function save(): Promise<void> {
+    (q("work-item-save") as HTMLButtonElement).click();
+    await flushPromises();
+  }
+
+  it("adds a catalog label and keeps the technical session label on save", async () => {
+    await open(["session", "api"]);
+    expect(q("work-item-labels")!.textContent).toContain("api");
+    expect(q("work-item-labels")!.textContent).not.toContain("session");
+    await openMenu();
+    expect(q("work-item-label-option-api")).toBeNull(); // already on the item
+    (q("work-item-label-option-Frontend") as HTMLElement).click();
+    await flushPromises();
+    await save();
+    expect(patches()).toEqual([{ labels: ["session", "api", "Frontend"] }]);
+  });
+
+  it("creates a label by typing a new name, and takes the catalog's spelling for a known one", async () => {
+    await open([]);
+    const input = await openMenu();
+    await type(input, "billing");
+    expect(q("work-item-label-create")!.textContent).toContain("billing");
+    (q("work-item-label-create") as HTMLElement).click();
+    await flushPromises();
+    await type(input, "frontend");
+    expect(q("work-item-label-create")).toBeNull();
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushPromises();
+    await save();
+    expect(patches()).toEqual([{ labels: ["billing", "Frontend"] }]);
+  });
+
+  it("never offers to create the reserved session label", async () => {
+    await open([]);
+    const input = await openMenu();
+    await type(input, "Session");
+    expect(q("work-item-label-create")).toBeNull();
+  });
+
+  it("removes a label", async () => {
+    await open(["api", "Frontend"]);
+    (q("work-item-label-remove-api") as HTMLButtonElement).click();
+    await flushPromises();
+    await save();
+    expect(patches()).toEqual([{ labels: ["Frontend"] }]);
+  });
+
+  it("stops at ten labels", async () => {
+    await open(Array.from({ length: 10 }, (_, i) => `label-${i}`));
+    expect(q("work-item-label-add")!.classList.contains("v-chip--disabled")).toBe(true);
+  });
+
+  it("sends labels with a new item", async () => {
+    serve(null);
+    const wrapper = await render({ itemKey: null, creating: true });
+    await wrapper.setProps({ labels: CATALOG });
+    const title = q("work-item-title")!.querySelector("textarea")!;
+    title.value = "Labelled";
+    title.dispatchEvent(new Event("input"));
+    await openMenu();
+    (q("work-item-label-option-api") as HTMLElement).click();
+    await flushPromises();
+    await save();
+    const created = calls.find((c) => c.method === "POST" && c.path.endsWith("/items"))!;
+    expect((JSON.parse(String(created.body)) as { labels?: string[] }).labels).toEqual(["api"]);
+  });
+});

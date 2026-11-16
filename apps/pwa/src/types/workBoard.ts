@@ -13,10 +13,25 @@ export type WorkStatus =
 
 export type WorkLinkKind = "artifact" | "spec" | "pr" | "ci" | "other";
 
+/** What a CI run ended with; a CI link without it is still running or was never reported (CORE-219). */
+export type WorkCiState = "passed" | "failed";
+
 export interface WorkLink {
   kind: WorkLinkKind;
   url: string;
   title?: string;
+  /** Only on a `ci` link. */
+  state?: WorkCiState;
+}
+
+export type WorkLabelColor = "blue" | "teal" | "green" | "amber" | "orange" | "red" | "pink" | "purple";
+
+/** One label of the catalog (CORE-219). Items carry labels by name; the catalog gives the colour. */
+export interface WorkLabel {
+  id: string;
+  name: string;
+  color: WorkLabelColor;
+  created_at: string;
 }
 
 export interface WorkTeam {
@@ -48,6 +63,8 @@ export interface WorkItem {
   updated_at: string;
   status_changed_at: string;
   completed_at: string | null;
+  /** The newest event a Claude session wrote on the item, for the live dot (CORE-219). */
+  session_active_at?: string | null;
 }
 
 export interface WorkItemEvent {
@@ -71,6 +88,7 @@ export interface WorkItemDraft {
   status?: WorkStatus;
   assignee?: string | null;
   due_date?: string | null;
+  labels?: string[];
 }
 
 export interface WorkItemPatch {
@@ -82,6 +100,7 @@ export interface WorkItemPatch {
   status?: WorkStatus;
   assignee?: string | null;
   due_date?: string | null;
+  labels?: string[];
 }
 
 /** An image or PDF on an item, or on one of its comments (`event_id`). The bytes stay private; ask for a signed URL. */

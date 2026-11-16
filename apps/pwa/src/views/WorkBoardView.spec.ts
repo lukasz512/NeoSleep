@@ -8,14 +8,27 @@ import * as vuetifyDirectives from "vuetify/directives";
 import { createRouter, createMemoryHistory, type Router } from "vue-router";
 import en from "@i18n/en.json";
 import WorkBoardView from "./WorkBoardView.vue";
-import { WORK_BOARD_COLUMNS, groupByStatus, matchesQuery, neighbourStatus } from "../composables/useWorkBoard";
-import type { WorkItem, WorkTeam } from "../types/workBoard";
+import {
+  WORK_BOARD_COLUMNS,
+  daysInColumn,
+  groupByLabel,
+  groupByStatus,
+  initialsOf,
+  isLive,
+  isOverdue,
+  isStale,
+  matchesLabels,
+  matchesQuery,
+  neighbourStatus,
+} from "../composables/useWorkBoard";
+import type { WorkItem, WorkLabel, WorkSessionToken, WorkTeam } from "../types/workBoard";
 
 /** Platform work board (CORE-177): columns, phone list, team filter, moves and shortcuts. */
 const apiFetch = vi.fn();
 vi.mock("../composables/useApi", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   apiFetch: (...args: unknown[]) => apiFetch(...args),
+  backgroundApiFetch: (...args: unknown[]) => apiFetch(...args),
 }));
 
 const TEAMS: WorkTeam[] = [
@@ -54,13 +67,39 @@ function ok(body: unknown): Response {
   return { ok: true, status: 200, json: async () => body } as Response;
 }
 
-function serve(items: WorkItem[], teams: WorkTeam[] | "forbidden" = TEAMS): void {
+function label(name: string, color: WorkLabel["color"] = "blue"): WorkLabel {
+  return { id: `l-${name.toLowerCase()}`, name, color, created_at: "2026-11-10T10:00:00Z" };
+}
+
+function token(id: string, overrides: Partial<WorkSessionToken> = {}): WorkSessionToken {
+  return { id, name: `Device ${id}`, created_by: "me", created_at: "2026-10-07T10:00:00Z", last_used_at: null, revoked_at: null, ...overrides };
+}
+
+function refused(status: number, error: string): Response {
+  return { ok: false, status, json: async () => ({ error }), headers: new Headers() } as Response;
+}
+
+interface Extra {
+  labels?: WorkLabel[];
+  tokens?: WorkSessionToken[];
+  /** Label names the catalog refuses on rename (taken or reserved). */
+  refusedNames?: string[];
+}
+
+function serve(items: WorkItem[], teams: WorkTeam[] | "forbidden" = TEAMS, extra: Extra = {}): void {
   apiFetch.mockImplementation(async (path: string, init?: RequestInit) => {
     if (path.endsWith("/platform/work/teams")) {
-      if (teams === "forbidden") return { ok: false, status: 403, json: async () => ({ error: "Platform admin only" }), headers: new Headers() } as Response;
+      if (teams === "forbidden") return refused(403, "Platform admin only");
       return ok({ items: teams });
     }
     if (path.endsWith("/platform/work/items")) return ok({ items });
+    if (path.endsWith("/platform/work/labels")) return ok({ items: extra.labels ?? [] });
+    if (path.includes("/platform/work/labels/")) {
+      const patch = JSON.parse(String(init!.body)) as Partial<WorkLabel>;
+      if (patch.name && extra.refusedNames?.includes(patch.name)) return refused(400, "Label name is taken");
+      return ok({ item: { ...(extra.labels ?? []).find((l) => l.id === path.split("/").pop())!, ...patch } });
+    }
+    if (path.endsWith("/session-tokens")) return ok({ items: extra.tokens ?? [] });
     if (init?.method === "PATCH") {
       const key = decodeURIComponent(path.split("/").pop()!);
       const patch = JSON.parse(String(init.body)) as Partial<WorkItem>;
@@ -75,12 +114,14 @@ const wrappers: VueWrapper[] = [];
 afterEach(() => {
   for (const w of wrappers.splice(0)) w.unmount();
   apiFetch.mockReset();
+  localStorage.clear();
+  vi.useRealTimers();
 });
 
-async function render(width = 1280): Promise<{ wrapper: VueWrapper; router: Router }> {
+async function render(width = 1280, search = ""): Promise<{ wrapper: VueWrapper; router: Router }> {
   window.innerWidth = width;
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/platform/board", component: WorkBoardView }] });
-  await router.push("/platform/board");
+  await router.push(`/platform/board${search}`);
   setActivePinia(createPinia());
   const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
   const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
@@ -229,6 +270,275 @@ describe("WorkBoardView", () => {
     const { wrapper } = await render();
     expect(wrapper.text()).toContain("Platform team only");
     expect(apiFetch.mock.calls.some(([path]) => String(path).endsWith("/items"))).toBe(false);
+  });
+});
+
+/** Labels, lanes, session and token indicators (CORE-219). */
+describe("WorkBoardView labels and lanes (CORE-219)", () => {
+  const CATALOG = [label("api"), label("Billing", "green"), label("ux", "pink"), label("zeta", "amber")];
+  const has = (wrapper: VueWrapper, id: string) => wrapper.find(`[data-testid='${id}']`).exists();
+  const pressed = (wrapper: VueWrapper, id: string) => wrapper.get(`[data-testid='${id}']`).attributes("aria-pressed");
+  const laneIds = (wrapper: VueWrapper) => wrapper.findAll(".work-board__lane").map((lane) => lane.attributes("data-testid"));
+
+  function board(): WorkItem[] {
+    return [
+      item({ key: "CORE-1", labels: ["ux", "api"] }),
+      item({ key: "CORE-2", labels: ["Billing"], status: "building" }),
+      item({ key: "CORE-3" }),
+      item({ key: "CORE-4", labels: ["session"] }),
+      item({ key: "NEO-5", labels: ["session", "api"] }),
+    ];
+  }
+
+  it("filters by every selected label at once and counts the session tickets", async () => {
+    serve(board(), TEAMS, { labels: CATALOG });
+    const { wrapper } = await render();
+    expect(wrapper.get("[data-testid='work-board-session-count']").text()).toBe("2");
+    await wrapper.get("[data-testid='work-filter-label-api']").trigger("click");
+    expect(pressed(wrapper, "work-filter-label-api")).toBe("true");
+    expect(has(wrapper, "work-card-CORE-1")).toBe(true);
+    expect(has(wrapper, "work-card-NEO-5")).toBe(true);
+    expect(has(wrapper, "work-card-CORE-2")).toBe(false);
+    await wrapper.get("[data-testid='work-filter-label-ux']").trigger("click");
+    expect(has(wrapper, "work-card-CORE-1")).toBe(true);
+    expect(has(wrapper, "work-card-NEO-5")).toBe(false);
+    await wrapper.get("[data-testid='work-filter-label-api']").trigger("click");
+    await wrapper.get("[data-testid='work-filter-label-ux']").trigger("click");
+    expect(has(wrapper, "work-card-CORE-3")).toBe(true);
+  });
+
+  it("filters by a label clicked on a card and writes it to the URL", async () => {
+    serve(board(), TEAMS, { labels: CATALOG });
+    const { wrapper, router } = await render();
+    await wrapper.get("[data-testid='work-card-CORE-2'] [data-testid='work-card-label-Billing']").trigger("click");
+    await flushPromises();
+    expect(pressed(wrapper, "work-filter-label-Billing")).toBe("true");
+    expect(has(wrapper, "work-card-CORE-1")).toBe(false);
+    expect(router.currentRoute.value.fullPath).toContain("labels=Billing");
+    expect(router.currentRoute.value.query.item).toBeUndefined();
+  });
+
+  it("restores team, labels, sessions and sort from the URL", async () => {
+    serve(board(), TEAMS, { labels: CATALOG });
+    const { wrapper } = await render(1280, "?team=NEO&labels=api&sessions=1&sort=label");
+    expect(pressed(wrapper, "work-board-session-filter")).toBe("true");
+    expect(pressed(wrapper, "work-filter-label-api")).toBe("true");
+    expect(wrapper.get("[data-testid='work-board-sort-label']").attributes("aria-selected")).toBe("true");
+    expect(laneIds(wrapper)).toEqual(["work-lane-api"]);
+    expect(wrapper.findAll("[data-testid^='work-card-']").filter((c) => c.element.tagName === "ARTICLE").map((c) => c.attributes("data-testid"))).toEqual(["work-card-NEO-5"]);
+  });
+
+  it("falls back to all teams for a team the URL names but the board does not have", async () => {
+    serve(board(), TEAMS, { labels: CATALOG });
+    const { wrapper } = await render(1280, "?team=GONE");
+    expect(has(wrapper, "work-card-CORE-1")).toBe(true);
+    expect(has(wrapper, "work-card-NEO-5")).toBe(true);
+  });
+
+  it("sorts by label into lanes: by name, first label wins, no lane for an unused label, No label last", async () => {
+    serve(board(), TEAMS, { labels: CATALOG });
+    const { wrapper } = await render();
+    expect(has(wrapper, "work-board-lanes")).toBe(false);
+    await wrapper.get("[data-testid='work-board-sort-label']").trigger("click");
+    expect(laneIds(wrapper)).toEqual(["work-lane-api", "work-lane-Billing", "work-lane-none"]);
+    const api = wrapper.get("[data-testid='work-lane-api']");
+    expect(api.find("[data-testid='work-card-CORE-1']").exists()).toBe(true);
+    expect(api.find("[data-testid='work-card-NEO-5']").exists()).toBe(true);
+    expect(api.findAll("[data-testid^='work-column-']")).toHaveLength(WORK_BOARD_COLUMNS.length);
+    const none = wrapper.get("[data-testid='work-lane-none']");
+    expect(none.text()).toContain("No label");
+    expect(none.find("[data-testid='work-card-CORE-3']").exists()).toBe(true);
+    expect(none.find("[data-testid='work-card-CORE-4']").exists()).toBe(true);
+  });
+
+  it("changes only the status when a card is dropped inside a lane", async () => {
+    serve(board(), TEAMS, { labels: CATALOG });
+    const { wrapper } = await render(1280, "?sort=label");
+    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, "dataTransfer", { value: { getData: () => "CORE-1" } });
+    wrapper.get("[data-testid='work-lane-api'] [data-testid='work-column-building']").element.dispatchEvent(drop);
+    await flushPromises();
+    const patch = apiFetch.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PATCH")!;
+    expect(patch[0]).toBe("/api/v1/platform/work/items/CORE-1");
+    expect(JSON.parse(String((patch[1] as RequestInit).body))).toEqual({ status: "building" });
+    const moved = wrapper.get("[data-testid='work-lane-api'] [data-testid='work-column-building'] [data-testid='work-card-CORE-1']");
+    expect(moved.find("[data-testid='work-card-label-ux']").exists()).toBe(true);
+  });
+
+  it("groups the phone list by label, then status", async () => {
+    serve(board(), TEAMS, { labels: CATALOG });
+    const { wrapper } = await render(375, "?sort=label");
+    expect(has(wrapper, "work-board-columns")).toBe(false);
+    expect(laneIds(wrapper)).toEqual(["work-lane-api", "work-lane-Billing", "work-lane-none"]);
+    const billing = wrapper.get("[data-testid='work-lane-Billing'] [data-testid='work-board-list']");
+    expect(billing.text()).toContain("CORE-2");
+    expect(billing.text()).toContain("Building");
+    expect(billing.text()).not.toContain("Backlog");
+  });
+
+  it("remembers a folded lane and the compact cards in this browser", async () => {
+    serve(board(), TEAMS, { labels: CATALOG });
+    const first = await render(1280, "?sort=label");
+    await first.wrapper.get("[data-testid='work-lane-toggle-api']").trigger("click");
+    await first.wrapper.get("[data-testid='work-board-density']").trigger("click");
+    expect(first.wrapper.get("[data-testid='work-lane-api']").find("[data-testid='work-board-columns']").exists()).toBe(false);
+    expect(first.wrapper.get("[data-testid='work-card-CORE-2']").classes()).toContain("work-card--dense");
+    first.wrapper.unmount();
+    wrappers.length = 0;
+
+    const { wrapper } = await render(1280, "?sort=label");
+    expect(wrapper.get("[data-testid='work-lane-toggle-api']").attributes("aria-expanded")).toBe("false");
+    expect(has(wrapper, "work-card-CORE-1")).toBe(false);
+    expect(pressed(wrapper, "work-board-density")).toBe("true");
+    expect(wrapper.get("[data-testid='work-card-CORE-2']").classes()).toContain("work-card--dense");
+  });
+
+  it("shows how many session tokens work on the key button", async () => {
+    serve([], TEAMS, { tokens: [token("t1"), token("t2"), token("t3", { revoked_at: "2026-10-08T10:00:00Z" })] });
+    const { wrapper } = await render();
+    expect(wrapper.get("[data-testid='work-board-token-count']").text()).toBe("2");
+    expect(wrapper.get("[data-testid='work-board-tokens']").attributes("aria-label")).toBe("Session tokens · 2 active");
+  });
+
+  it("marks a token a session used in the last 15 minutes", async () => {
+    const minutesAgo = (n: number) => new Date(Date.now() - n * 60_000).toISOString();
+    serve([], TEAMS, { tokens: [token("t1", { last_used_at: minutesAgo(5) }), token("t2", { last_used_at: minutesAgo(50) })] });
+    const { wrapper } = await render();
+    await wrapper.get("[data-testid='work-board-tokens']").trigger("click");
+    await flushPromises();
+    expect(document.querySelector("[data-testid='work-token-live-t1']")).not.toBeNull();
+    expect(document.querySelector("[data-testid='work-token-live-t2']")).toBeNull();
+  });
+
+  it("refreshes every minute so a session's live dot appears and fades", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
+    vi.setSystemTime(new Date("2026-11-16T12:00:00Z"));
+    serve([item({ key: "CORE-1" })]);
+    const { wrapper } = await render();
+    expect(has(wrapper, "work-card-live")).toBe(false);
+
+    serve([item({ key: "CORE-1", session_active_at: "2026-11-16T12:00:30Z" })]);
+    vi.advanceTimersByTime(60_000);
+    await flushPromises();
+    expect(has(wrapper, "work-card-live")).toBe(true);
+
+    vi.advanceTimersByTime(16 * 60_000);
+    await flushPromises();
+    expect(has(wrapper, "work-card-live")).toBe(false);
+    expect(has(wrapper, "work-card-session")).toBe(false);
+  });
+
+  it("renames a label everywhere on the board", async () => {
+    serve(board(), TEAMS, { labels: CATALOG });
+    const { wrapper } = await render(1280, "?labels=api");
+    await wrapper.get("[data-testid='work-board-edit-labels']").trigger("click");
+    await flushPromises();
+    const name = document.querySelector("[data-testid='work-label-name-l-api'] input") as HTMLInputElement;
+    name.value = "backend";
+    name.dispatchEvent(new Event("input"));
+    await flushPromises();
+    (document.querySelector("[data-testid='work-label-save-l-api']") as HTMLButtonElement).click();
+    await flushPromises();
+    const patch = apiFetch.mock.calls.find(([path]) => String(path).endsWith("/labels/l-api"))!;
+    expect(JSON.parse(String((patch[1] as RequestInit).body))).toEqual({ name: "backend" });
+    expect(has(wrapper, "work-filter-label-api")).toBe(false);
+    expect(pressed(wrapper, "work-filter-label-backend")).toBe("true");
+    expect(wrapper.get("[data-testid='work-card-CORE-1']").find("[data-testid='work-card-label-backend']").exists()).toBe(true);
+  });
+
+  it("says so when the new name is taken, and changes nothing", async () => {
+    serve(board(), TEAMS, { labels: CATALOG, refusedNames: ["Billing"] });
+    const { wrapper } = await render();
+    await wrapper.get("[data-testid='work-board-edit-labels']").trigger("click");
+    await flushPromises();
+    const name = document.querySelector("[data-testid='work-label-name-l-api'] input") as HTMLInputElement;
+    name.value = "Billing";
+    name.dispatchEvent(new Event("input"));
+    await flushPromises();
+    (document.querySelector("[data-testid='work-label-save-l-api']") as HTMLButtonElement).click();
+    await flushPromises();
+    expect(document.querySelector("[data-testid='work-label-row-l-api']")!.textContent).toContain("This name is taken or not allowed");
+    expect(has(wrapper, "work-filter-label-api")).toBe(true);
+  });
+
+  it("recolours a label on the cards", async () => {
+    serve(board(), TEAMS, { labels: CATALOG });
+    const { wrapper } = await render();
+    const chip = () => wrapper.get("[data-testid='work-card-CORE-1'] [data-testid='work-card-label-api']").classes();
+    expect(chip()).toContain("work-label--blue");
+    await wrapper.get("[data-testid='work-board-edit-labels']").trigger("click");
+    await flushPromises();
+    (document.querySelector("[data-testid='work-label-color-l-api']") as HTMLElement).click();
+    await flushPromises();
+    (document.querySelector("[data-testid='work-label-color-l-api-red']") as HTMLElement).click();
+    await flushPromises();
+    const patch = apiFetch.mock.calls.find(([path]) => String(path).endsWith("/labels/l-api"))!;
+    expect(JSON.parse(String((patch[1] as RequestInit).body))).toEqual({ color: "red" });
+    expect(chip()).toContain("work-label--red");
+  });
+});
+
+describe("useWorkBoard label and card helpers (CORE-219)", () => {
+  const NOW = Date.parse("2026-11-16T12:00:00Z");
+  const DAY = 86_400_000;
+  const at = (ms: number) => new Date(NOW - ms).toISOString();
+
+  it("matches items that carry every selected label, whatever the case", () => {
+    const it1 = item({ labels: ["API", "ux"] });
+    expect(matchesLabels(it1, [])).toBe(true);
+    expect(matchesLabels(it1, ["api"])).toBe(true);
+    expect(matchesLabels(it1, ["api", "UX"])).toBe(true);
+    expect(matchesLabels(it1, ["api", "billing"])).toBe(false);
+  });
+
+  it("puts each item in one lane: its first label by name, session never counts", () => {
+    const lanes = groupByLabel([
+      item({ key: "CORE-1", labels: ["ux", "API"] }),
+      item({ key: "CORE-2", labels: ["session"] }),
+      item({ key: "CORE-3", labels: ["api"] }),
+      item({ key: "CORE-4", labels: ["Billing"] }),
+    ]);
+    expect(lanes.map((lane) => [lane.label, lane.items.map((i) => i.key)])).toEqual([
+      ["API", ["CORE-1", "CORE-3"]],
+      ["Billing", ["CORE-4"]],
+      [null, ["CORE-2"]],
+    ]);
+    expect(groupByLabel([item({ labels: ["api"] })]).map((lane) => lane.label)).toEqual(["api"]);
+  });
+
+  it("counts whole days in the column and flags only long waits in Needs Review and Building", () => {
+    expect(daysInColumn(item({ status_changed_at: at(DAY - 1) }), NOW)).toBe(0);
+    expect(daysInColumn(item({ status_changed_at: at(2 * DAY) }), NOW)).toBe(2);
+    expect(daysInColumn(item({ status_changed_at: at(-DAY) }), NOW)).toBe(0);
+    expect(isStale(item({ status: "needs_review", status_changed_at: at(3 * DAY) }), NOW)).toBe(false);
+    expect(isStale(item({ status: "needs_review", status_changed_at: at(4 * DAY) }), NOW)).toBe(true);
+    expect(isStale(item({ status: "building", status_changed_at: at(7 * DAY) }), NOW)).toBe(false);
+    expect(isStale(item({ status: "building", status_changed_at: at(8 * DAY) }), NOW)).toBe(true);
+    expect(isStale(item({ status: "backlog", status_changed_at: at(90 * DAY) }), NOW)).toBe(false);
+  });
+
+  it("calls an open item overdue from the day after its due date", () => {
+    const today = new Date(NOW);
+    const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const yesterday = ymd(new Date(NOW - DAY));
+    expect(isOverdue(item({ due_date: ymd(today) }), NOW)).toBe(false);
+    expect(isOverdue(item({ due_date: yesterday }), NOW)).toBe(true);
+    expect(isOverdue(item({ due_date: yesterday, status: "done" }), NOW)).toBe(false);
+    expect(isOverdue(item({ due_date: yesterday, status: "canceled" }), NOW)).toBe(false);
+    expect(isOverdue(item({ due_date: null }), NOW)).toBe(false);
+  });
+
+  it("keeps the live dot for 15 minutes after a session's touch", () => {
+    expect(isLive(at(14 * 60_000 + 59_000), NOW)).toBe(true);
+    expect(isLive(at(15 * 60_000), NOW)).toBe(false);
+    expect(isLive(null, NOW)).toBe(false);
+    expect(isLive(undefined, NOW)).toBe(false);
+  });
+
+  it("shortens an assignee to two letters", () => {
+    expect(initialsOf("lukasz.ostrowski@neosleepcare.com")).toBe("LO");
+    expect(initialsOf("Ana María López")).toBe("AL");
+    expect(initialsOf("qa@neosleepcare.com")).toBe("QA");
   });
 });
 
