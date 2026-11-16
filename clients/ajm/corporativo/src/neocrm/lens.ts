@@ -8,7 +8,8 @@
 export const ROLES = ["direccion", "it", "operaciones"] as const;
 export type Role = (typeof ROLES)[number];
 
-export const SECTORS = ["clinicas", "distribucion", "equipos"] as const;
+/** General business first: the page sells to any small or mid-sized company, clinics are one case of four. */
+export const SECTORS = ["equipos", "distribucion", "servicios", "clinicas"] as const;
 export type Sector = (typeof SECTORS)[number];
 
 /** Sections between the hero (always first) and the demo request (always last), in the normal order. */
@@ -23,7 +24,7 @@ const ORDER: Record<Role, readonly SectionId[]> = {
 
 /** English links work too: ?role=management */
 const ROLE_ALIASES: Record<string, Role> = { management: "direccion", security: "it", operations: "operaciones" };
-const SECTOR_ALIASES: Record<string, Sector> = { clinics: "clinicas", distribution: "distribucion", teams: "equipos" };
+const SECTOR_ALIASES: Record<string, Sector> = { clinics: "clinicas", distribution: "distribucion", teams: "equipos", services: "servicios" };
 
 export interface Lens {
   role: Role | null;

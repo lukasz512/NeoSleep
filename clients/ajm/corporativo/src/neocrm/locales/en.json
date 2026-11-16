@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "neoCRM · The CRM for field teams, secure and accessible",
-    "description": "neoCRM is a CRM for field teams under your own brand: data separated per client, permissions by role and territory, an access log and an interface built for everyone."
+    "title": "neoCRM · The CRM to grow your company, secure and accessible",
+    "description": "neoCRM is a CRM for small and mid-sized companies under your own brand: customers, visits and next steps in one place, permissions by role and area, an access log and an interface built for everyone."
   },
   "nav": {
     "skip": "Skip to content",
@@ -12,14 +12,15 @@
   },
   "hero": {
     "greeting": "Hello, {name}:",
-    "eyebrow": "CRM for field teams",
+    "eyebrow": "CRM for small and mid-sized companies",
     "titles": {
-      "default": "The CRM for your field team, secure and accessible",
-      "clinicas": "The CRM for clinics and healthcare networks, secure and accessible",
-      "distribucion": "The CRM for distributors and laboratories, secure and accessible",
-      "equipos": "The CRM for sales teams, secure and accessible"
+      "default": "The CRM to grow your company, secure and accessible",
+      "equipos": "The CRM for sales teams that want to grow, secure and accessible",
+      "distribucion": "The CRM for distributors and wholesalers, secure and accessible",
+      "servicios": "The CRM for service companies, secure and accessible",
+      "clinicas": "The CRM for clinics and healthcare centres, secure and accessible"
     },
-    "body": "Visits, accounts and follow-up in one place, under your brand and in your language. Each client's data is kept separate, each person sees only what they should, and every access is logged.",
+    "body": "Customers, visits and next steps in one place, so no opportunity is left without follow-up. Under your brand and in your language: each person sees only what they should, and every access is logged.",
     "cta": "Request a demo",
     "secondary": "See how we protect data"
   },
@@ -41,27 +42,31 @@
   "sections": {
     "who": {
       "title": "Who it is for",
-      "lead": "Small and mid-sized companies with people who work away from the office and need to know who they saw, what was said and what comes next.",
+      "lead": "Small and mid-sized companies that want to grow without losing the thread: knowing who was seen, what was said and what comes next, even when the team works away from the office.",
       "items": {
-        "clinicas": {
-          "title": "Clinics and healthcare networks",
-          "body": "Follow-up of professionals and centres, with a record of who views health data and permissions fitted to each job."
-        },
-        "distribucion": {
-          "title": "Distributors and laboratories",
-          "body": "Reps with their territory, their calendar and a form after each visit; managers who see their team."
-        },
         "equipos": {
           "title": "Sales teams",
-          "body": "Accounts, contacts and next steps in order, without spreadsheets each person keeps their own way."
+          "body": "Customers, contacts and next steps in order, without spreadsheets each person keeps their own way."
+        },
+        "distribucion": {
+          "title": "Distributors and wholesalers",
+          "body": "Sales reps with their area, their calendar and a report after each visit; managers who see their team."
+        },
+        "servicios": {
+          "title": "Service companies",
+          "body": "Installation, maintenance or consulting: each customer with their history and the next appointment noted."
+        },
+        "clinicas": {
+          "title": "Clinics and healthcare centres",
+          "body": "Follow-up of professionals and centres, with a record of who views health data and permissions fitted to each job."
         }
       }
     },
     "product": {
-      "title": "What it does",
-      "lead": "What a field team uses every day, designed for the phone first.",
+      "title": "What it does for your business",
+      "lead": "What the team uses every day so no customer is left without follow-up, designed for the phone first.",
       "items": [
-        { "title": "Accounts and contacts", "body": "Organisations and people on one record, with their visit history." },
+        { "title": "Customers and contacts", "body": "Companies and people on one record, with their visit history." },
         { "title": "Visits with their report", "body": "A short form after each visit, so what was agreed does not depend on memory." },
         { "title": "Territories and calendar", "body": "Each person works their area and keeps their visits in a calendar." },
         { "title": "Team view", "body": "Whoever leads sees the team's activity; whoever visits sees their own." },
@@ -82,8 +87,8 @@
       "lead": "Measures that are in the product today. What we do not have yet is listed further down, without dates.",
       "items": [
         { "title": "Data separated per client", "body": "Each company has its own database schema; it shares no tables with others." },
-        { "title": "Permissions by role and territory", "body": "Six roles, from administration to rep, also limited by area. Each person sees only what they need." },
-        { "title": "Access log", "body": "Who did what, and who viewed health data, is written down." },
+        { "title": "Permissions by role and territory", "body": "Six roles, from administration to sales rep, also limited by area. Each person sees only what they need." },
+        { "title": "Access log", "body": "Who did what, and who viewed sensitive data, is written down." },
         { "title": "Passwords and sessions", "body": "Passwords are stored hashed with bcrypt and sessions use short-lived credentials that are renewed." },
         { "title": "Service protection", "body": "Attempt limits, security headers and an allow-list of origins on the API." },
         { "title": "Backups", "body": "Every night, encrypted, with a check that they can be restored." },
@@ -108,7 +113,7 @@
       "items": [
         { "title": "Where the data is", "body": "Today the service and the database are hosted in the United States, with cloud providers. If you need another region, see \"What we are working on\"." },
         { "title": "Consent on record", "body": "Each person's consent is stored with its date." },
-        { "title": "Who has seen what", "body": "The access log lets you answer when someone asks who viewed their data." },
+        { "title": "Who has seen what", "body": "When sensitive data is stored, who viewed it is written down, so you can answer if someone asks." },
         { "title": "This page does not follow you", "body": "It uses no advertising or analytics cookies. A personal link only carries a name in the address; it is not stored or sent." }
       ]
     },
@@ -156,7 +161,7 @@
     "messageFor": "Hello, we are {name} and we would like to see a demo of neoCRM."
   },
   "footer": {
-    "note": "neoCRM · CRM for field teams",
+    "note": "neoCRM · CRM for small and mid-sized companies",
     "back": "Back to AJ Management"
   }
 }

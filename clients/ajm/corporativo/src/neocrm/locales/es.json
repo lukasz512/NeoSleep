@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "neoCRM · El CRM para equipos de campo, seguro y accesible",
-    "description": "neoCRM es un CRM para equipos de campo con vuestra marca: datos separados por cliente, permisos por rol y territorio, registro de accesos y una interfaz pensada para todas las personas."
+    "title": "neoCRM · El CRM para hacer crecer vuestra empresa, seguro y accesible",
+    "description": "neoCRM es un CRM para pequeñas y medianas empresas con vuestra marca: clientes, visitas y próximos pasos en un solo sitio, permisos por rol y zona, registro de accesos y una interfaz pensada para todas las personas."
   },
   "nav": {
     "skip": "Saltar al contenido",
@@ -12,14 +12,15 @@
   },
   "hero": {
     "greeting": "Hola, {name}:",
-    "eyebrow": "CRM para equipos de campo",
+    "eyebrow": "CRM para pequeñas y medianas empresas",
     "titles": {
-      "default": "El CRM de vuestro equipo de campo, seguro y accesible",
-      "clinicas": "El CRM para clínicas y redes sanitarias, seguro y accesible",
-      "distribucion": "El CRM para distribuidoras y laboratorios, seguro y accesible",
-      "equipos": "El CRM para equipos comerciales, seguro y accesible"
+      "default": "El CRM para hacer crecer vuestra empresa, seguro y accesible",
+      "equipos": "El CRM para equipos comerciales que quieren crecer, seguro y accesible",
+      "distribucion": "El CRM para distribuidoras y mayoristas, seguro y accesible",
+      "servicios": "El CRM para empresas de servicios, seguro y accesible",
+      "clinicas": "El CRM para clínicas y centros sanitarios, seguro y accesible"
     },
-    "body": "Visitas, cuentas y seguimiento en un solo sitio, con vuestra marca y en vuestro idioma. Cada cliente tiene sus datos separados, cada persona ve solo lo que le corresponde y todo acceso queda registrado.",
+    "body": "Clientes, visitas y próximos pasos en un solo sitio, para que ninguna oportunidad se quede sin seguimiento. Con vuestra marca y en vuestro idioma: cada persona ve solo lo que le corresponde y todo acceso queda registrado.",
     "cta": "Pedir una demo",
     "secondary": "Ver cómo protegemos los datos"
   },
@@ -41,27 +42,31 @@
   "sections": {
     "who": {
       "title": "Para quién es",
-      "lead": "Empresas pequeñas y medianas con personas que trabajan fuera de la oficina y necesitan saber a quién han visto, qué se habló y qué toca después.",
+      "lead": "Empresas pequeñas y medianas que quieren crecer sin perder el hilo: saber a quién se ha visto, qué se habló y qué toca después, aunque el equipo trabaje fuera de la oficina.",
       "items": {
-        "clinicas": {
-          "title": "Clínicas y redes sanitarias",
-          "body": "Seguimiento de profesionales y centros, con registro de quién consulta datos de salud y permisos ajustados a cada puesto."
-        },
-        "distribucion": {
-          "title": "Distribuidoras y laboratorios",
-          "body": "Delegados con su territorio, su calendario y un formulario después de cada visita; responsables que ven a su equipo."
-        },
         "equipos": {
           "title": "Equipos comerciales",
-          "body": "Cuentas, contactos y próximos pasos ordenados, sin hojas de cálculo que cada persona guarda a su manera."
+          "body": "Clientes, contactos y próximos pasos ordenados, sin hojas de cálculo que cada persona guarda a su manera."
+        },
+        "distribucion": {
+          "title": "Distribuidoras y mayoristas",
+          "body": "Comerciales con su zona, su calendario y un informe después de cada visita; responsables que ven a su equipo."
+        },
+        "servicios": {
+          "title": "Empresas de servicios",
+          "body": "Instalación, mantenimiento o consultoría: cada cliente con su historial y la próxima cita apuntada."
+        },
+        "clinicas": {
+          "title": "Clínicas y centros sanitarios",
+          "body": "Seguimiento de profesionales y centros, con registro de quién consulta datos de salud y permisos ajustados a cada puesto."
         }
       }
     },
     "product": {
-      "title": "Qué hace",
-      "lead": "Lo que un equipo de campo usa cada día, pensado primero para el móvil.",
+      "title": "Qué hace por vuestro negocio",
+      "lead": "Lo que el equipo usa cada día para que ningún cliente se quede sin seguimiento, pensado primero para el móvil.",
       "items": [
-        { "title": "Cuentas y contactos", "body": "Organizaciones y personas en una sola ficha, con su historial de visitas." },
+        { "title": "Clientes y contactos", "body": "Empresas y personas en una sola ficha, con su historial de visitas." },
         { "title": "Visitas con su informe", "body": "Un formulario breve después de cada visita, para que lo acordado no dependa de la memoria." },
         { "title": "Territorios y calendario", "body": "Cada persona trabaja su zona y tiene sus visitas en un calendario." },
         { "title": "Vista de equipo", "body": "Quien dirige ve la actividad del equipo; quien visita ve lo suyo." },
@@ -82,8 +87,8 @@
       "lead": "Medidas que están en el producto hoy. Lo que aún no tenemos lo decimos más abajo, sin fechas.",
       "items": [
         { "title": "Datos separados por cliente", "body": "Cada empresa tiene su propio esquema de base de datos; no comparte tablas con otras." },
-        { "title": "Permisos por rol y territorio", "body": "Seis roles, de administración a delegado, limitados además por zona. Cada persona ve solo lo que necesita." },
-        { "title": "Registro de accesos", "body": "Queda anotado quién hizo qué y quién consultó datos de salud." },
+        { "title": "Permisos por rol y territorio", "body": "Seis roles, de administración a comercial, limitados además por zona. Cada persona ve solo lo que necesita." },
+        { "title": "Registro de accesos", "body": "Queda anotado quién hizo qué y quién consultó datos sensibles." },
         { "title": "Contraseñas y sesiones", "body": "Las contraseñas se guardan cifradas con bcrypt y las sesiones usan credenciales de corta duración que se renuevan." },
         { "title": "Protección del servicio", "body": "Límite de intentos, cabeceras de seguridad y lista de orígenes permitidos en la API." },
         { "title": "Copias de seguridad", "body": "Cada noche, cifradas, con una comprobación de que se pueden restaurar." },
@@ -108,7 +113,7 @@
       "items": [
         { "title": "Dónde están los datos", "body": "Hoy el servicio y la base de datos se alojan en Estados Unidos, en proveedores de nube. Si necesitáis otra región, mirad «En qué estamos trabajando»." },
         { "title": "Consentimientos registrados", "body": "El consentimiento de cada persona queda guardado con su fecha." },
-        { "title": "Quién ha visto qué", "body": "El registro de accesos permite responder cuando alguien pregunta quién consultó sus datos." },
+        { "title": "Quién ha visto qué", "body": "Cuando se guardan datos sensibles, queda anotado quién los consultó, para poder responder si alguien lo pregunta." },
         { "title": "Esta página no os sigue", "body": "No usa cookies de publicidad ni analítica. Un enlace personal solo lleva un nombre en la dirección; no se guarda ni se envía." }
       ]
     },
@@ -156,7 +161,7 @@
     "messageFor": "Hola, somos {name} y nos gustaría ver una demo de neoCRM."
   },
   "footer": {
-    "note": "neoCRM · CRM para equipos de campo",
+    "note": "neoCRM · CRM para pequeñas y medianas empresas",
     "back": "Volver a AJ Management"
   }
 }

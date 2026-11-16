@@ -57,7 +57,12 @@ describe("neocrm page › greeting and sector", () => {
   it("the sector changes the headline and lists its own use case first", () => {
     const w = page("?sector=distribucion");
     expect(w.find("h1").text()).toContain("distribuidoras");
-    expect(w.find("#who h3").text()).toBe("Distribuidoras y laboratorios");
-    expect(w.findAll("#who h3")).toHaveLength(3);
+    expect(w.find("#who h3").text()).toBe("Distribuidoras y mayoristas");
+    expect(w.findAll("#who h3")).toHaveLength(4);
+  });
+  it("without a sector the page opens with general business, clinics come last", () => {
+    const titles = page().findAll("#who h3").map((h) => h.text());
+    expect(titles[0]).toBe("Equipos comerciales");
+    expect(titles.at(-1)).toBe("Clínicas y centros sanitarios");
   });
 });

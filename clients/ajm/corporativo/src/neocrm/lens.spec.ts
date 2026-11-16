@@ -8,6 +8,7 @@ describe("neocrm lens › who is reading (CORE-215)", () => {
   });
   it("English links work too", () => {
     expect(lensFrom("?role=operations&sector=clinics")).toEqual({ role: "operaciones", sector: "clinicas" });
+    expect(lensFrom("?sector=services")).toEqual({ role: null, sector: "servicios" });
   });
   it("anything unknown means the normal page", () => {
     expect(lensFrom("")).toEqual({ role: null, sector: null });
