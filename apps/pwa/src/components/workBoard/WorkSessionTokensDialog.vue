@@ -5,6 +5,7 @@
     max-width="560"
     @update:model-value="(v: boolean) => !v && emit('close')"
     @close="emit('close')"
+    @after-leave="plaintext = null"
   >
     <div class="work-tokens" data-testid="work-tokens-dialog">
       <p class="work-tokens__hint">{{ t("workBoard.tokens.hint") }}</p>
@@ -30,7 +31,7 @@
         <AppButton variant="text" size="small" @click="copy">{{ copied ? t("workBoard.tokens.copied") : t("workBoard.tokens.copy") }}</AppButton>
       </div>
 
-      <AppLoadingState v-if="loading" />
+      <AppSkeletonLines v-if="loading && !tokens.length" :lines="2" />
       <AppErrorState v-else-if="failure" :error="failure" :refresh-label="t('app.errorState.refresh')" @refresh="load" />
       <p v-else-if="!tokens.length" class="work-tokens__empty">{{ t("workBoard.tokens.empty") }}</p>
       <ul v-else class="work-tokens__list">
@@ -54,7 +55,7 @@ import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import AppFormDialog from "../AppFormDialog.vue";
 import AppButton from "../AppButton.vue";
-import AppLoadingState from "../AppLoadingState.vue";
+import AppSkeletonLines from "../AppSkeletonLines.vue";
 import AppErrorState from "../AppErrorState.vue";
 import { fetchSessionTokens, issueSessionToken, revokeSessionToken } from "../../composables/useWorkBoard";
 import { formatRelativeTime } from "../../utils/relativeTime";
@@ -129,11 +130,14 @@ function usedLabel(token: WorkSessionToken): string {
     : t("workBoard.tokens.neverUsed");
 }
 
+// The one-time plaintext goes after the leave (CORE-195), so the dialog doesn't redraw while it fades;
+// the list refreshes under the rows already shown.
 watch(
   () => props.open,
   (open) => {
+    if (!open) return;
     plaintext.value = null;
-    if (open) void load();
+    void load();
   },
   { immediate: true },
 );

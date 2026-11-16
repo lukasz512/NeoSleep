@@ -98,6 +98,12 @@ afterEach(() => {
 beforeAll(() => {
   URL.createObjectURL = vi.fn(() => "blob:preview");
   URL.revokeObjectURL = vi.fn();
+  // jsdom has no layout; the description editor (ProseMirror) measures the caret to scroll to it.
+  const noRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList;
+  for (const proto of [Range.prototype, Text.prototype] as { getClientRects?: () => DOMRectList; getBoundingClientRect?: () => DOMRect }[]) {
+    proto.getClientRects ??= noRects;
+    proto.getBoundingClientRect ??= () => new DOMRect();
+  }
 });
 
 async function render(props: { itemKey: string | null; creating: boolean }) {
@@ -122,14 +128,14 @@ function png(name = "image.png"): File {
 
 async function paste(target: Element, files: File[]): Promise<void> {
   const event = new Event("paste", { bubbles: true, cancelable: true });
-  Object.defineProperty(event, "clipboardData", { value: { files, items: [] } });
+  Object.defineProperty(event, "clipboardData", { value: { files, items: [], types: [], getData: () => "" } });
   target.dispatchEvent(event);
   await flushPromises();
 }
 
 async function drop(target: Element, files: File[]): Promise<void> {
   const event = new Event("drop", { bubbles: true, cancelable: true });
-  Object.defineProperty(event, "dataTransfer", { value: { files, items: [] } });
+  Object.defineProperty(event, "dataTransfer", { value: { files, items: [], types: [], getData: () => "" } });
   target.dispatchEvent(event);
   await flushPromises();
 }
@@ -154,7 +160,7 @@ describe("WorkItemDialog (CORE-192)", () => {
   it("queues a pasted screenshot on a new item and uploads it right after Create", async () => {
     serve(null);
     const wrapper = await render({ itemKey: null, creating: true });
-    await paste(q("work-item-problem")!.querySelector("textarea")!, [png()]);
+    await paste(q("work-item-title")!.querySelector("textarea")!, [png()]); // outside the description: to the strip
     expect(document.querySelectorAll("[data-testid='work-item-pending']")).toHaveLength(1);
     expect(uploads()).toHaveLength(0);
 
@@ -249,5 +255,146 @@ describe("WorkItemDialog (CORE-192)", () => {
     await flushPromises();
     const patch = calls.find((c) => c.method === "PATCH")!;
     expect(JSON.parse(String(patch.body))).toEqual({ assignee: ME.email });
+  });
+});
+
+describe("WorkItemDialog open/close (CORE-195)", () => {
+  /** The item fetch never answers: what shows is only what the board row gave. */
+  function serveSlow(): void {
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path.endsWith("/people")) return ok({ items: [ME] });
+      return new Promise<Response>(() => {});
+    });
+  }
+
+  const titleValue = () => (q("work-item-title")?.querySelector("textarea") as HTMLTextAreaElement | null)?.value;
+
+  async function renderWith(props: Record<string, unknown>) {
+    setActivePinia(createPinia());
+    const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
+    const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
+    const wrapper = mount(WorkItemDialog, {
+      props: { itemKey: null, creating: false, teams: TEAMS, defaultTeam: "CORE", ...props },
+      global: { plugins: [i18n, vuetify] },
+      attachTo: document.body,
+    });
+    wrappers.push(wrapper);
+    await flushPromises();
+    return wrapper;
+  }
+
+  it("opens with the board row, no loader; only the history waits", async () => {
+    serveSlow();
+    await renderWith({ itemKey: "CORE-9", initialItem: item() });
+    expect(document.querySelector(".app-loading-state")).toBeNull();
+    expect(titleValue()).toBe("Paste does not work");
+    expect(q("work-item-history-skeleton")).not.toBeNull();
+  });
+
+  it("keeps its content while it closes and resets only after the leave", async () => {
+    serve(item());
+    const wrapper = await renderWith({ itemKey: "CORE-9", initialItem: item() });
+    expect(titleValue()).toBe("Paste does not work");
+    await wrapper.setProps({ itemKey: null });
+    await flushPromises();
+    expect(titleValue()).toBe("Paste does not work");
+    expect(document.querySelector(".pwa-form-dialog__card")?.textContent).toContain("CORE-9");
+
+    wrapper.findComponent({ name: "AppFormDialog" }).vm.$emit("after-leave");
+    await wrapper.setProps({ creating: true });
+    await flushPromises();
+    expect(titleValue()).toBe("");
+  });
+
+  it("keeps what was typed before the full item arrived", async () => {
+    let answer: (r: Response) => void = () => {};
+    apiFetch.mockImplementation(async (path: string) => {
+      if (path.endsWith("/people")) return ok({ items: [ME] });
+      return new Promise<Response>((resolve) => (answer = resolve));
+    });
+    await renderWith({ itemKey: "CORE-9", initialItem: item() });
+    const title = q("work-item-title")!.querySelector("textarea")!;
+    title.value = "Typed while loading";
+    title.dispatchEvent(new Event("input"));
+    await flushPromises();
+    answer(ok({ item: item(), events: [], attachments: [] }));
+    await flushPromises();
+    expect(titleValue()).toBe("Typed while loading");
+    expect(q("work-item-history-skeleton")).toBeNull();
+  });
+});
+
+describe("WorkItemDialog Done-when checklist (CORE-195)", () => {
+  const boxes = () => Array.from(document.querySelectorAll("[data-testid='work-item-check'] input[type='checkbox']")) as HTMLInputElement[];
+
+  it("shows Done when as checkboxes and saves a tick", async () => {
+    serve(item({ done_when: "- [ ] Report delivered\n- [x] Legal written" }));
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(boxes().map((b) => b.checked)).toEqual([false, true]);
+    expect(q("work-item-checklist")?.textContent).toContain("Report delivered");
+    boxes()[0]!.click();
+    await flushPromises();
+    (q("work-item-save") as HTMLButtonElement).click();
+    await flushPromises();
+    const patch = calls.find((c) => c.method === "PATCH")!;
+    expect(JSON.parse(String(patch.body))).toEqual({ done_when: "- [x] Report delivered\n- [x] Legal written" });
+  });
+
+  it("edits the list as text and turns typed lines into tasks", async () => {
+    serve(item({ done_when: "- [x] Legal written" }));
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(q("work-item-done_when")).toBeNull();
+    (q("work-item-checklist-edit") as HTMLButtonElement).click();
+    await flushPromises();
+    const text = q("work-item-done_when")!.querySelector("textarea")!;
+    text.value = "- [x] Legal written\nReport delivered";
+    text.dispatchEvent(new Event("input"));
+    text.dispatchEvent(new Event("blur"));
+    await flushPromises();
+    expect(q("work-item-done_when")).toBeNull();
+    expect(boxes().map((b) => b.checked)).toEqual([true, false]);
+  });
+});
+
+describe("WorkItemDialog inline images (CORE-195)", () => {
+  const editor = () => q("work-item-problem")!.querySelector(".ProseMirror")!;
+  const problemOf = (body: unknown) => JSON.parse(String(body)).problem as string;
+
+  it("shows the description's images inline and keeps them out of the attachment strip", async () => {
+    serve(item({ problem: "Before\n![bug.png](attachment:att-1)\nAfter" }), [attachment(), attachment({ id: "att-2", filename: "log.pdf", mime_type: "application/pdf" })]);
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(editor().querySelector("img")?.getAttribute("src")).toBe("https://signed.test/att-1");
+    expect(editor().textContent).toContain("Before");
+    const tiles = Array.from(document.querySelectorAll("[data-testid='work-item-attachment']"));
+    expect(tiles.map((tile) => tile.textContent)).toEqual([expect.stringContaining("log.pdf")]);
+  });
+
+  it("puts a screenshot pasted into the description inline and saves it as markdown", async () => {
+    serve(item({ problem: "Nothing happens" }));
+    await render({ itemKey: "CORE-9", creating: false });
+    await paste(editor(), [png("bug.png")]);
+    expect(uploads()).toHaveLength(1);
+    expect(editor().querySelector("img")?.getAttribute("src")).toBe("https://signed.test/new-1");
+    expect(document.querySelectorAll("[data-testid='work-item-attachment']")).toHaveLength(0);
+    (q("work-item-save") as HTMLButtonElement).click();
+    await flushPromises();
+    expect(problemOf(calls.find((c) => c.method === "PATCH")!.body)).toContain("![bug.png](attachment:new-1)");
+  });
+
+  it("on a new item, shows the pasted screenshot at once and links it after Create", async () => {
+    serve(null);
+    await render({ itemKey: null, creating: true });
+    const title = q("work-item-title")!.querySelector("textarea")!;
+    title.value = "Inline";
+    title.dispatchEvent(new Event("input"));
+    await paste(editor(), [png("bug.png")]);
+    expect(editor().querySelector("img")?.getAttribute("src")).toBe("blob:preview");
+    expect(uploads()).toHaveLength(0);
+    (q("work-item-save") as HTMLButtonElement).click();
+    await flushPromises();
+    const create = calls.find((c) => c.method === "POST" && c.path.endsWith("/items"))!;
+    expect(problemOf(create.body)).toMatch(/attachment:pending-\d+/);
+    expect(uploads()).toHaveLength(1);
+    expect(problemOf(calls.find((c) => c.method === "PATCH")!.body)).toBe("![bug.png](attachment:new-1)");
   });
 });

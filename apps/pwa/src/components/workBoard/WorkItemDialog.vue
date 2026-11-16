@@ -1,15 +1,16 @@
 <template>
   <AppFormDialog
     :model-value="open"
-    :title="creating ? t('workBoard.dialog.newTitle') : (loaded?.item.key ?? itemKey ?? '')"
+    :title="session.creating ? t('workBoard.dialog.newTitle') : (session.key ?? '')"
     max-width="760"
     fill
     @update:model-value="(v: boolean) => !v && emit('close')"
     @close="emit('close')"
+    @after-leave="onAfterLeave"
   >
-    <AppLoadingState v-if="loading" />
+    <AppSkeletonLines v-if="!session.creating && !current && !loadFailure" :lines="5" />
     <AppErrorState
-      v-else-if="loadFailure"
+      v-else-if="!session.creating && !current"
       :error="loadFailure"
       :refresh-label="t('app.errorState.refresh')"
       @refresh="load"
@@ -22,7 +23,7 @@
       @paste="onPaste"
       @dragover.prevent="dragging = true"
       @dragleave="onDragLeave"
-      @drop.prevent="onDrop"
+      @drop="onDrop"
     >
       <VTextarea
         v-model="form.title"
@@ -86,7 +87,7 @@
           </template>
           <VList density="compact">
             <VListItem
-              v-for="link in loaded?.item.links ?? []"
+              v-for="link in current?.links ?? []"
               :key="link.url"
               :href="link.url"
               target="_blank"
@@ -94,34 +95,54 @@
               :title="link.title || t(`workBoard.link.${link.kind}`)"
               :subtitle="t(`workBoard.link.${link.kind}`)"
             />
-            <VListItem v-if="loaded?.item.branch" :title="loaded.item.branch" class="work-dialog__branch" />
+            <VListItem v-if="current?.branch" :title="current.branch" class="work-dialog__branch" />
           </VList>
         </VMenu>
       </div>
 
-      <VTextarea
+      <!-- CORE-195: screenshots pasted or dropped here show inline, where they were put. -->
+      <WorkMarkdownEditor
+        ref="problemEditor"
         v-model="form.problem"
+        :images="inlineImages"
         :placeholder="t('workBoard.dialog.descriptionPlaceholder')"
         :aria-label="t('workBoard.field.problem')"
-        :maxlength="BODY_MAX"
-        variant="outlined"
-        rows="4"
-        auto-grow
-        hide-details
         data-testid="work-item-problem"
+        @files="onEditorFiles"
       />
 
       <div v-for="name in SECTION_FIELDS" v-show="shown[name]" :key="name" class="work-dialog__section">
         <span class="work-dialog__label">{{ t(`workBoard.field.${name}`) }}</span>
+        <!-- CORE-195: Done when is a task list, ticked here and counted on the card. -->
+        <div v-if="name === 'done_when' && showChecklist" class="work-dialog__checklist" data-testid="work-item-checklist">
+          <VCheckbox
+            v-for="task in checklist"
+            :key="task.line"
+            :model-value="task.done"
+            :label="task.text"
+            density="compact"
+            hide-details
+            data-testid="work-item-check"
+            @update:model-value="form.done_when = toggleChecklistLine(form.done_when, task.line)"
+          />
+          <AppButton variant="text" size="small" prepend-icon="mdi-pencil-outline" data-testid="work-item-checklist-edit" @click="editingChecklist = true">
+            {{ t("workBoard.dialog.editChecklist") }}
+          </AppButton>
+        </div>
         <VTextarea
+          v-else
           v-model="form[name]"
+          :placeholder="name === 'done_when' ? t('workBoard.dialog.checklistPlaceholder') : undefined"
           :aria-label="t(`workBoard.field.${name}`)"
+          :autofocus="name === 'done_when' && editingChecklist"
           :maxlength="BODY_MAX"
           variant="outlined"
           rows="2"
           auto-grow
           hide-details
           :data-testid="`work-item-${name}`"
+          @focus="name === 'done_when' && (checklistBefore = form.done_when)"
+          @blur="name === 'done_when' && finishChecklist()"
         />
       </div>
 
@@ -152,7 +173,7 @@
         />
       </div>
 
-      <ul v-if="itemAttachments.length || itemQueue.pending.value.length" class="work-dialog__files" data-testid="work-item-attachments">
+      <ul v-if="itemAttachments.length || stripQueue.length" class="work-dialog__files" data-testid="work-item-attachments">
         <li v-for="file in itemAttachments" :key="file.id" class="work-dialog__file" data-testid="work-item-attachment">
           <button type="button" class="work-dialog__thumb" :aria-label="file.filename" @click="openAttachment(file)">
             <img v-if="isImage(file.mime_type) && urls[file.id]" :src="urls[file.id]" :alt="file.filename" />
@@ -168,7 +189,7 @@
             <VIcon icon="mdi-close" size="16" />
           </button>
         </li>
-        <li v-for="file in itemQueue.pending.value" :key="`p${file.id}`" class="work-dialog__file work-dialog__file--pending" data-testid="work-item-pending">
+        <li v-for="file in stripQueue" :key="`p${file.id}`" class="work-dialog__file work-dialog__file--pending" data-testid="work-item-pending">
           <span class="work-dialog__thumb">
             <img v-if="file.preview" :src="file.preview" :alt="file.file.name" />
             <VIcon v-else icon="mdi-file-pdf-box" size="28" />
@@ -188,9 +209,10 @@
       <p v-if="rejectionText" class="work-dialog__rejected" role="alert" data-testid="work-item-rejected">{{ rejectionText }}</p>
       <p v-else class="work-dialog__hint">{{ t(dragging ? "workBoard.dialog.dropHere" : "workBoard.dialog.attachHint") }}</p>
 
-      <template v-if="loaded">
-        <div class="work-dialog__section">
-          <span class="work-dialog__label">{{ t("workBoard.dialog.history") }}</span>
+      <div v-if="!session.creating" class="work-dialog__section">
+        <span class="work-dialog__label">{{ t("workBoard.dialog.history") }}</span>
+        <AppSkeletonLines v-if="!loaded" :lines="2" data-testid="work-item-history-skeleton" />
+        <template v-else>
           <ol class="work-dialog__events" data-testid="work-item-events">
             <li v-for="event in loaded.events" :key="event.id" class="work-dialog__event">
               <span class="work-dialog__event-meta">
@@ -259,14 +281,14 @@
               </button>
             </li>
           </ul>
-        </div>
-      </template>
+        </template>
+      </div>
     </div>
     <template #actions>
       <VSpacer />
       <AppButton variant="text" @click="emit('close')">{{ t("app.common.close") }}</AppButton>
       <AppButton color="primary" variant="flat" :loading="saving" :disabled="!canSave" data-testid="work-item-save" @click="save">
-        {{ creating ? t("workBoard.dialog.create") : t("workBoard.dialog.save") }}
+        {{ session.creating ? t("workBoard.dialog.create") : t("workBoard.dialog.save") }}
       </AppButton>
     </template>
   </AppFormDialog>
@@ -278,7 +300,7 @@ import { useI18n } from "vue-i18n";
 import AppFormDialog from "../AppFormDialog.vue";
 import AppButton from "../AppButton.vue";
 import AppSpinner from "../AppSpinner.vue";
-import AppLoadingState from "../AppLoadingState.vue";
+import AppSkeletonLines from "../AppSkeletonLines.vue";
 import AppErrorState from "../AppErrorState.vue";
 import {
   WORK_PRIORITIES,
@@ -290,10 +312,15 @@ import {
   fetchWorkItem,
   fetchWorkPeople,
   patchWorkItem,
+  asChecklist,
+  checklistLines,
+  toggleChecklistLine,
   uploadWorkAttachment,
   type WorkItemDetail,
 } from "../../composables/useWorkBoard";
 import { WORK_ATTACHMENT_ACCEPT, filesFromTransfer, isImage, usePendingAttachments, type PendingAttachment } from "../../composables/useWorkAttachments";
+import WorkMarkdownEditor from "./WorkMarkdownEditor.vue";
+import { attachmentRefs, rewriteAttachmentRefs } from "./workMarkdown";
 import { formatRelativeTime } from "../../utils/relativeTime";
 import type { WorkAttachment, WorkItem, WorkItemEvent, WorkItemPatch, WorkPerson, WorkStatus, WorkTeam } from "../../types/workBoard";
 
@@ -303,13 +330,22 @@ import type { WorkAttachment, WorkItem, WorkItemEvent, WorkItemPatch, WorkPerson
  * properties, the description (the `problem` field), and Change / Done when as sections added
  * on demand. Screenshots go in by paste, drop or the picker (camera on phones); on a new item
  * they wait and upload right after Create. The history is the API's append-only event trail.
+ *
+ * Open/close (CORE-195): the board passes the row it already has (`initialItem`), so the form
+ * shows at once and only the history waits under a skeleton. Closing changes nothing on screen;
+ * the form resets after the dialog has faded out (`after-leave`).
  */
-const props = defineProps<{
-  itemKey: string | null;
-  creating: boolean;
-  teams: readonly WorkTeam[];
-  defaultTeam: string | null;
-}>();
+const props = withDefaults(
+  defineProps<{
+    itemKey: string | null;
+    creating: boolean;
+    teams: readonly WorkTeam[];
+    defaultTeam: string | null;
+    /** The board row for `itemKey`, shown until the full item arrives. */
+    initialItem?: WorkItem | null;
+  }>(),
+  { initialItem: null },
+);
 const emit = defineEmits<{ close: []; saved: [item: WorkItem] }>();
 const { t, locale } = useI18n();
 
@@ -320,14 +356,30 @@ const SECTION_FIELDS = ["change", "done_when"] as const;
 type SectionField = (typeof SECTION_FIELDS)[number];
 
 const open = computed(() => props.creating || props.itemKey !== null);
-const loading = ref(false);
+/** What the dialog is showing; kept through the leave so nothing redraws while it fades. */
+const session = reactive<{ key: string | null; creating: boolean }>({ key: null, creating: false });
 const loadFailure = ref<unknown>(null);
+const seed = ref<WorkItem | null>(null);
+const problemEditor = ref<InstanceType<typeof WorkMarkdownEditor> | null>(null);
 const loaded = ref<WorkItemDetail | null>(null);
+/** The item as far as it is known: the full fetch, else the board row. */
+const current = computed(() => loaded.value?.item ?? seed.value);
 const saving = ref(false);
 const comment = ref("");
 const commenting = ref(false);
 const people = ref<WorkPerson[]>([]);
 const shown = reactive<Record<SectionField, boolean>>({ change: false, done_when: false });
+/** Done when as checkboxes (CORE-195); the text box only while editing it, or while it has no task line yet. */
+const editingChecklist = ref(false);
+const checklistBefore = ref("");
+const checklist = computed(() => checklistLines(form.done_when));
+const showChecklist = computed(() => !editingChecklist.value && checklist.value.length > 0);
+
+/** Leaving the text box turns what was typed into tasks; untouched text (e.g. old prose) stays as it was. */
+function finishChecklist(): void {
+  if (form.done_when !== checklistBefore.value) form.done_when = asChecklist(form.done_when);
+  editingChecklist.value = false;
+}
 
 const itemQueue = usePendingAttachments();
 const commentQueue = usePendingAttachments();
@@ -394,7 +446,7 @@ function personLabel(email: string): string {
 
 const listChips = computed<ListChip[]>(() => {
   const chips: ListChip[] = [];
-  if (props.creating) {
+  if (session.creating) {
     chips.push({
       name: "team",
       icon: "mdi-account-group-outline",
@@ -434,8 +486,20 @@ const listChips = computed<ListChip[]>(() => {
 });
 
 const hiddenSections = computed(() => SECTION_FIELDS.filter((name) => !shown[name]));
-const developmentCount = computed(() => (loaded.value ? loaded.value.item.links.length + (loaded.value.item.branch ? 1 : 0) : 0));
-const itemAttachments = computed(() => loaded.value?.attachments.filter((a) => a.event_id === null) ?? []);
+const developmentCount = computed(() => (current.value ? current.value.links.length + (current.value.branch ? 1 : 0) : 0));
+/** What the description shows inline stays out of the attachment strip (CORE-195). */
+const inlineRefs = computed(() => attachmentRefs(form.problem));
+const itemAttachments = computed(() => loaded.value?.attachments.filter((a) => a.event_id === null && !inlineRefs.value.has(a.id)) ?? []);
+const stripQueue = computed(() => itemQueue.pending.value.filter((entry) => !inlineRefs.value.has(pendingRef(entry))));
+const inlineImages = computed<Record<string, string>>(() => {
+  const images: Record<string, string> = { ...urls };
+  for (const entry of itemQueue.pending.value) if (entry.preview) images[pendingRef(entry)] = entry.preview;
+  return images;
+});
+
+function pendingRef(entry: PendingAttachment): string {
+  return `pending-${entry.id}`;
+}
 
 function attachmentsOf(eventId: string): WorkAttachment[] {
   return loaded.value?.attachments.filter((a) => a.event_id !== null && String(a.event_id) === String(eventId)) ?? [];
@@ -447,8 +511,8 @@ const rejectionText = computed(() => {
 });
 
 const patch = computed<WorkItemPatch>(() => {
-  if (!loaded.value) return {};
-  const before = formFrom(loaded.value.item);
+  if (!current.value) return {};
+  const before = formFrom(current.value);
   const out: WorkItemPatch = {};
   if (form.title.trim() !== before.title) out.title = form.title.trim();
   for (const name of BODY_FIELDS) if (form[name].trim() !== before[name]) out[name] = form[name].trim() || null;
@@ -461,7 +525,7 @@ const patch = computed<WorkItemPatch>(() => {
 
 const canSave = computed(() => {
   if (!form.title.trim()) return false;
-  return props.creating ? !!form.team : Object.keys(patch.value).length > 0;
+  return session.creating ? !!form.team : Object.keys(patch.value).length > 0;
 });
 const canComment = computed(() => !!comment.value.trim() || commentQueue.pending.value.length > 0);
 
@@ -469,19 +533,30 @@ function formatDueDate(value: string): string {
   return new Date(`${value}T00:00:00`).toLocaleDateString(locale.value === "mx" ? "es-MX" : locale.value, { day: "numeric", month: "short" });
 }
 
+function showItem(item: WorkItem): void {
+  Object.assign(form, formFrom(item));
+  for (const name of SECTION_FIELDS) shown[name] = !!form[name];
+}
+
+/** True while the form still says what the known item says, i.e. nothing was typed yet. */
+function untouched(): boolean {
+  const base = current.value ? formFrom(current.value) : blankForm();
+  return (Object.keys(base) as (keyof Form)[]).every((name) => form[name] === base[name]);
+}
+
 async function load(): Promise<void> {
-  if (!props.itemKey) return;
-  loading.value = true;
+  const key = session.key;
+  if (!key) return;
   loadFailure.value = null;
   try {
-    loaded.value = await fetchWorkItem(props.itemKey);
-    Object.assign(form, formFrom(loaded.value.item));
-    for (const name of SECTION_FIELDS) shown[name] = !!form[name];
-    void signImages(loaded.value.item.key, loaded.value.attachments);
+    const detail = await fetchWorkItem(key);
+    if (session.key !== key) return;
+    const keepEdits = !untouched();
+    loaded.value = detail;
+    if (!keepEdits) showItem(detail.item);
+    void signImages(detail.item.key, detail.attachments);
   } catch (err) {
-    loadFailure.value = err;
-  } finally {
-    loading.value = false;
+    if (session.key === key) loadFailure.value = err;
   }
 }
 
@@ -508,21 +583,43 @@ async function signImages(key: string, files: readonly WorkAttachment[]): Promis
   );
 }
 
+function reset(): void {
+  seed.value = null;
+  loaded.value = null;
+  loadFailure.value = null;
+  comment.value = "";
+  Object.assign(form, blankForm());
+  shown.change = false;
+  shown.done_when = false;
+  editingChecklist.value = false;
+  itemQueue.clear();
+  commentQueue.clear();
+}
+
+// Opening (or switching to another item) starts fresh; closing touches nothing until after-leave.
 watch(
   () => [props.itemKey, props.creating] as const,
-  () => {
-    loaded.value = null;
-    comment.value = "";
-    Object.assign(form, blankForm());
-    shown.change = false;
-    shown.done_when = false;
-    itemQueue.clear();
-    commentQueue.clear();
-    if (open.value && !people.value.length) void loadPeople();
+  ([key, creating]) => {
+    if (!key && !creating) return;
+    reset();
+    session.key = creating ? null : key;
+    session.creating = creating;
+    if (!creating && props.initialItem?.key === key) {
+      seed.value = props.initialItem;
+      showItem(props.initialItem);
+    }
+    if (!people.value.length) void loadPeople();
     void load();
   },
   { immediate: true },
 );
+
+function onAfterLeave(): void {
+  if (open.value) return;
+  reset();
+  session.key = null;
+  session.creating = false;
+}
 
 function route(files: File[], target: "item" | "comment"): void {
   if (!files.length) return;
@@ -534,14 +631,27 @@ function route(files: File[], target: "item" | "comment"): void {
   if (loaded.value) void uploadQueued(loaded.value.item.key, added);
 }
 
-/** Uploads queued item files one by one; each leaves the queue once it is stored. */
-async function uploadQueued(key: string, entries: readonly PendingAttachment[]): Promise<void> {
+/** Files pasted or dropped into the description: images go inline at the caret, the rest to the strip. */
+function onEditorFiles(files: File[]): void {
+  const added = itemQueue.add(files);
+  problemEditor.value?.insertImages(added.filter((entry) => entry.preview).map((entry) => ({ ref: pendingRef(entry), alt: entry.file.name })));
+  if (loaded.value) void uploadQueued(loaded.value.item.key, added);
+}
+
+/**
+ * Uploads queued item files one by one; each leaves the queue once it is stored. Returns the
+ * `pending-<n>` → attachment id map, so a new item's description can be re-pointed after Create.
+ */
+async function uploadQueued(key: string, entries: readonly PendingAttachment[]): Promise<Record<string, string>> {
+  const ids: Record<string, string> = {};
   for (const entry of entries) {
     uploading.add(entry.id);
     try {
       const attachment = await uploadWorkAttachment(key, entry.file);
+      ids[pendingRef(entry)] = attachment.id;
       if (loaded.value?.item.key === key) {
         loaded.value.attachments.push(attachment);
+        form.problem = rewriteAttachmentRefs(form.problem, { [pendingRef(entry)]: attachment.id });
         void signImages(key, [attachment]);
       }
       itemQueue.remove(entry.id);
@@ -551,9 +661,12 @@ async function uploadQueued(key: string, entries: readonly PendingAttachment[]):
       uploading.delete(entry.id);
     }
   }
+  return ids;
 }
 
+// The description editor handles its own paste and drop (and prevents the default).
 function onPaste(event: ClipboardEvent): void {
+  if (event.defaultPrevented) return;
   const files = filesFromTransfer(event.clipboardData);
   if (!files.length) return;
   event.preventDefault();
@@ -563,6 +676,8 @@ function onPaste(event: ClipboardEvent): void {
 
 function onDrop(event: DragEvent): void {
   dragging.value = false;
+  if (event.defaultPrevented) return;
+  event.preventDefault();
   const inComment = event.target instanceof Element && event.target.closest("[data-comment-box]") !== null;
   route(filesFromTransfer(event.dataTransfer), inComment ? "comment" : "item");
 }
@@ -606,7 +721,7 @@ async function removeAttachment(file: WorkAttachment): Promise<void> {
 async function save(): Promise<void> {
   saving.value = true;
   try {
-    if (props.creating) {
+    if (session.creating) {
       const item = await createWorkItem({
         team: form.team,
         title: form.title.trim(),
@@ -618,12 +733,16 @@ async function save(): Promise<void> {
         assignee: form.assignee,
         due_date: form.due_date || null,
       });
-      await uploadQueued(item.key, [...itemQueue.pending.value]);
-      emit("saved", item);
+      const ids = await uploadQueued(item.key, [...itemQueue.pending.value]);
+      const problem = rewriteAttachmentRefs(form.problem, ids).trim() || null;
+      emit("saved", problem === item.problem ? item : await patchWorkItem(item.key, { problem }));
       return;
     }
-    if (!loaded.value) return;
-    const item = await patchWorkItem(loaded.value.item.key, patch.value);
+    if (!current.value) return;
+    const item = await patchWorkItem(current.value.key, patch.value);
+    if (loaded.value) loaded.value.item = item;
+    else seed.value = item;
+    showItem(item);
     emit("saved", item);
     await load();
   } catch {
@@ -738,8 +857,23 @@ function eventText(event: WorkItemEvent): string {
   gap: 4px;
 }
 
+.work-dialog__checklist {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+
+/* Visually hidden, not display:none: some browsers ignore .click() on an undisplayed file input. */
 .work-dialog__picker {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .work-dialog__files {

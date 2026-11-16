@@ -8,6 +8,7 @@
     content-class="pwa-form-dialog__content"
     :transition="asSheet ? sheetDialogTransition : originDialogTransition"
     @update:model-value="(v: boolean) => emit('update:modelValue', v)"
+    @after-leave="emit('after-leave')"
   >
     <VCard
       class="pwa-form-dialog__card"
@@ -70,6 +71,10 @@
  * Guarded by AppFormDialog.spec.ts (no raw VDialog outside the shells) and
  * e2e/dialog-scroll.spec.ts (real-browser scrolling, all engines).
  *
+ * Lifecycle rule (CORE-195): a caller keeps its content unchanged until
+ * `after-leave` and resets there (or on the next open), and opens with the
+ * data it already has instead of a loader. e2e/dialog-leave.spec.ts guards it.
+ *
  * On phone widths it is a bottom sheet (sheetDialogTransition, theme.scss
  * `.pwa-form-dialog--sheet`); elsewhere it grows from the tapped element.
  *
@@ -126,6 +131,12 @@ const emit = defineEmits<{
   close: [];
   /** The body scrolled or resized — the folder's section index follows it. */
   "body-scroll": [el: HTMLElement];
+  /**
+   * The leave transition has finished and the dialog is gone (CORE-195).
+   * Reset form state here, never on close: a reset on close redraws the
+   * content in front of the user while it fades out.
+   */
+  "after-leave": [];
 }>();
 
 // Phones (< 600px, Vuetify xs): an M3 bottom sheet sliding up from the screen

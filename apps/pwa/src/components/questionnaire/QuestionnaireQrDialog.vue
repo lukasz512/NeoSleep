@@ -10,10 +10,9 @@
       <p class="qr-dialog__kind">{{ title || " " }}</p>
 
       <img v-if="url && qrDataUrl" :src="qrDataUrl" :alt="t('app.clinical.qr.title')" class="qr-dialog__code" width="264" height="264" />
-      <!-- NEO-235: open from the first tap — a loader in the code's place until the link exists. -->
-      <div v-else class="qr-dialog__loading" role="status" :aria-label="t('app.clinical.qr.loading')">
-        <VProgressCircular indeterminate color="primary" size="48" width="4" />
-      </div>
+      <!-- NEO-235: open from the first tap — a placeholder the code's size until the link exists
+           (CORE-195: a breathing tile like the other skeletons, not a spinner). -->
+      <div v-else class="qr-dialog__loading" role="status" :aria-label="t('app.clinical.qr.loading')" />
       <p class="qr-dialog__instructions">{{ t("app.clinical.qr.instructions") }}</p>
     </div>
 
@@ -100,9 +99,23 @@ async function copyLink() {
   width: 264px;
   height: 264px;
   max-width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  border-radius: 12px;
+  background: rgba(var(--v-theme-on-surface), 0.07);
+  animation: qr-dialog-breathe 1.6s ease-in-out infinite;
+}
+@keyframes qr-dialog-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .qr-dialog__loading {
+    animation: none;
+  }
 }
 .qr-dialog__instructions {
   margin: 0;
