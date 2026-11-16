@@ -311,14 +311,17 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
   gap: 12px;
 }
 
+/* The chips scroll inside their own row, so they report no width of their own: the floor
+   keeps the filters from squeezing them out, and a crowded toolbar wraps instead (CORE-221). */
 .work-board__teams {
   flex: 1 1 auto;
-  min-width: 0;
+  min-width: min(100%, 224px);
 }
 
 .work-board__search {
-  flex: 0 1 240px;
+  flex: 1 1 160px;
   min-width: 160px;
+  max-width: 240px;
 }
 
 /* Phone: chips on their own row, then search + New sharing the next one. */
@@ -329,6 +332,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
 .work-board__toolbar--compact .work-board__search {
   flex: 1 1 140px;
   min-width: 0;
+  max-width: none;
 }
 
 .work-board__hint {
