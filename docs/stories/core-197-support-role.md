@@ -26,7 +26,7 @@ content without access to patients, HCPs, leads, users or territories.
 - migration 065 adds `support` to `user_roles_role_check` in every tenant and in
   `create_tenant_schema()` (CI parity check)
 
-## Creating the account (by hand)
-1. PWA → Users → New user, role **Support**, scope = the country it should see.
-2. Supabase SQL (platform-wide, once per person):
-   `INSERT INTO platform.users (email, name, role) VALUES ('<email>', '<name>', 'support');`
+## Creating the account
+PWA → Users → New user (or edit), role **Support**, scope = the country it should see.
+When a platform admin saves it, Errors and the work board open too (CORE-209,
+docs/stories/core-209-support-platform-sync.md). No SQL by hand.
