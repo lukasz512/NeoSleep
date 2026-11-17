@@ -77,6 +77,8 @@ describe("PatientAppointmentView (CORE-25)", () => {
     const wrapper = await mountView("?r=confirm");
     const details = wrapper.find("[data-testid='appointment-details']").text();
     expect(details).toContain("09:00"); // 15:00 UTC in Mexico City
+    expect(details).toContain("(GMT-6)"); // CORE-244: the zone is named next to the time
+    expect(details).toMatch(/Mexico City time|hora de Ciudad de México|czas miasta Meksyk/);
     expect(details).toContain("Clínica Sonrisa");
     expect(details).toContain("Dra. Ana López");
     expect(wrapper.find("a[href='tel:+525512345678']").exists()).toBe(true);
