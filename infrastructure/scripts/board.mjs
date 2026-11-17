@@ -9,7 +9,7 @@
 //                     nobody is building yet in Backlog instead of Building, CORE-223)
 //   pnpm board get CORE-12                      → the item + its history as JSON
 //   pnpm board comment CORE-12 "text"
-//   pnpm board link CORE-12 --kind artifact|spec|pr|ci|other --url https://… [--title "…"]
+//   pnpm board link CORE-12 --kind artifact|spec|pr|ci|other --url https://… [--title "…"] [--state passed|failed] (state: ci only)
 //   pnpm board branch CORE-12 worktree-core-12-slug
 //   pnpm board move CORE-12 building|needs_review
 //   pnpm board teams [--write]                  → team keys; --write refreshes .claude/ticket-teams
@@ -167,6 +167,7 @@ export async function run(argv, { config = loadConfig(), fetchImpl = fetch, log 
     case "link": {
       const link = { kind: need(flags.kind, "--kind"), url: need(flags.url, "--url") };
       if (typeof flags.title === "string") link.title = flags.title;
+      if (typeof flags.state === "string") link.state = flags.state;
       const { item } = await call(config, "PATCH", `/items/${need(key, "the ticket key")}`, { add_links: [link] }, fetchImpl);
       log(`linked ${link.kind} on ${item.key}`);
       return item;
