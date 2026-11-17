@@ -6,6 +6,8 @@
  * git markers of every kind in Building and Needs Review, one ticket on hold, two canceled.
  * Needs Review holds both groups (CORE-233): tickets that wait for a merge, one of them with
  * no artifact link, and two that are merged and close by themselves.
+ * Backlog holds two tickets set aside as `later` (CORE-234), and none of its tickets has a
+ * done-when yet, so a move to Approved shows the rule.
  * Every ticket opens with the same three-line history.
  *
  * The board's own query works here too: `?sort=label` · `?labels=api` · `?sessions=1` · `?team=NEO`
@@ -46,6 +48,7 @@ const LABELS: WorkLabel[] = [
   { id: "l4", name: "frontend", color: "green", created_at: ago(30 * DAY) },
   { id: "l5", name: "security", color: "red", created_at: ago(30 * DAY) },
   { id: "l6", name: "hold", color: "teal", created_at: ago(30 * DAY) },
+  { id: "l7", name: "later", color: "amber", created_at: ago(30 * DAY) },
 ];
 
 const TOKENS: WorkSessionToken[] = [
@@ -98,6 +101,8 @@ let items: WorkItem[] = [
   item("CORE-231", "Doctor cannot reopen a closed visit", "backlog", { priority: 2 }),
   item("NEO-164", "Invoice PDF shows the wrong tax id", "backlog", { labels: ["billing"], priority: 3, assignee: "ana.lopez@example.com" }),
   item("CORE-228", "Rate-limit the public questionnaire endpoint", "backlog", { labels: ["security", "api"], priority: 2, due_date: day(5) }),
+  item("CORE-141", "Bulk import of clinics from a spreadsheet", "backlog", { labels: ["later", "api"], updated_at: ago(75 * DAY) }),
+  item("NEO-120", "Dark mode for printed reports", "backlog", { labels: ["later"], priority: 4, updated_at: ago(90 * DAY) }),
   item("CORE-226", "Patient list filter by referring doctor", "spec_ready", { labels: ["frontend"], links: [spec], assignee: "Marta Nowak" }),
   item("NEO-160", "Monthly statement export for clinics", "approved", { labels: ["billing", "api"], priority: 1, due_date: day(-2), assignee: "jan.kowalski@example.com" }),
   item("CORE-219", "Work board: labels, lanes and session indicators", "building", {

@@ -14,7 +14,11 @@
 //   pnpm board move CORE-12 building|needs_review
 //   pnpm board waiting [--remind]               → Needs Review tickets that wait for Łukasz, the longest wait
 //                     first; --remind prints one line only when too many are old (session start, CORE-233)
-//   pnpm board teams [--write]                  → team keys; --write refreshes .claude/ticket-teams
+//   pnpm board picks [--remind]                 → Backlog tickets ready for Approved, the most urgent first;
+//                     --remind prints one line only on a Monday when Approved runs low (session start, CORE-234)
+//   pnpm board review --form <form id> CORE-12=keep NEO-3=later CORE-9=cancel NEO-7=shipped
+//                     → applies Łukasz's backlog-review answers (shipped closes only what is on prod)
+//   pnpm board teams [--write]                 → team keys; --write refreshes .claude/ticket-teams
 //   pnpm board url CORE-12                      → the card's link (no network)
 //
 // Config: .claude/local/board.json { "apiUrl": "https://…", "token": "nbs_…", "boardUrl"?: "…" }
@@ -93,6 +97,42 @@ export function reviewReminder(items, now = Date.now()) {
   if (old.length <= REVIEW_LIMIT) return null;
   const list = old.map((item) => `${item.key} (${item.days} d)`).join(", ");
   return `${old.length} tickets have waited for Łukasz's review for more than ${REVIEW_DAYS} days: ${list}. Tell him in one line before creating a new ticket.`;
+}
+
+/** The Monday reminder fires while Approved holds fewer tickets than this, and offers up to PICKS_OFFERED (CORE-234). */
+export const APPROVED_LOW = 3;
+export const PICKS_OFFERED = 5;
+/** Labels that keep a Backlog ticket out of the picks: set aside, parked, or waiting on something else. */
+const NOT_A_PICK = ["later", HOLD_LABEL, "blocked"];
+const REVIEW_DECISIONS = ["keep", "later", "cancel", "shipped"];
+
+/** Backlog tickets ready for Approved (a priority and a Done when, not set aside): the most urgent first, then the oldest. */
+export function backlogPicks(items) {
+  return items
+    .filter((item) => item.status === "backlog" && item.priority > 0 && (item.done_when ?? "").trim())
+    .filter((item) => !(item.labels ?? []).some((label) => NOT_A_PICK.includes(label.toLowerCase())))
+    .sort((a, b) => a.priority - b.priority || Date.parse(a.created_at) - Date.parse(b.created_at));
+}
+
+/** One line for the session start, on a Monday with fewer than APPROVED_LOW tickets in Approved; else null. */
+export function picksReminder(items, now = Date.now()) {
+  if (new Date(now).getDay() !== 1) return null;
+  const approved = items.filter((item) => item.status === "approved").length;
+  const picks = backlogPicks(items).slice(0, PICKS_OFFERED);
+  if (approved >= APPROVED_LOW || !picks.length) return null;
+  const list = picks.map((item) => `${item.key} (P${item.priority})`).join(", ");
+  return `Approved holds ${approved} ticket${approved === 1 ? "" : "s"}. Offer Łukasz these Backlog picks as one decision form before other work: ${list}.`;
+}
+
+/** "CORE-1=keep" pairs → the body of a backlog review. */
+export function parseReviewAnswers(pairs) {
+  return pairs.map((pair) => {
+    const [key, decision, ...more] = pair.split("=");
+    if (!/^[A-Za-z]+-\d+$/.test(key ?? "") || !REVIEW_DECISIONS.includes(decision) || more.length) {
+      throw new Error(`"${pair}" is not KEY=${REVIEW_DECISIONS.join("|")}`);
+    }
+    return { key: key.toUpperCase(), decision };
+  });
 }
 
 /** --flag value pairs and positionals. */
@@ -218,6 +258,25 @@ export async function run(argv, { config = loadConfig(), fetchImpl = fetch, log 
       for (const item of waiting) log(`${item.key}\t${item.days} d\t${item.title}`);
       return waiting;
     }
+    case "picks": {
+      const { items } = await call(config, "GET", "/items?status=backlog,approved", null, fetchImpl);
+      if (flags.remind) {
+        const line = picksReminder(items, now);
+        if (line) log(line);
+        return line;
+      }
+      const picks = backlogPicks(items);
+      for (const item of picks) log(`${item.key}\tP${item.priority}\t${item.title}`);
+      return picks;
+    }
+    case "review": {
+      const decisions = parseReviewAnswers(positional);
+      if (!decisions.length) throw new Error("missing the answers (KEY=keep|later|cancel|shipped …)");
+      const result = await call(config, "POST", "/backlog-review", { form: need(flags.form, "--form (the decision form's id)"), decisions }, fetchImpl);
+      for (const { key: applied, decision } of result.applied) log(`${applied}\t${decision}`);
+      for (const { key: skipped, reason } of result.skipped) log(`${skipped}\tskipped: ${reason}`);
+      return result;
+    }
     case "teams": {
       const { items } = await call(config, "GET", "/teams", null, fetchImpl);
       const keys = items.map((t) => t.key);
@@ -231,7 +290,7 @@ export async function run(argv, { config = loadConfig(), fetchImpl = fetch, log 
       return url;
     }
     default:
-      throw new Error("usage: board create|get|comment|link|branch|move|waiting|teams|url … (see the header of infrastructure/scripts/board.mjs)");
+      throw new Error("usage: board create|get|comment|link|branch|move|waiting|picks|review|teams|url … (see the header of infrastructure/scripts/board.mjs)");
   }
 }
 

@@ -1,6 +1,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { REVIEW_LIMIT, cardUrl, parseArgs, parseTicketBody, reviewReminder, run, teamsFileWith, ticketProblems, waitingForReview } from "./board.mjs";
+import {
+  REVIEW_LIMIT,
+  backlogPicks,
+  cardUrl,
+  parseArgs,
+  parseReviewAnswers,
+  parseTicketBody,
+  picksReminder,
+  reviewReminder,
+  run,
+  teamsFileWith,
+  ticketProblems,
+  waitingForReview,
+} from "./board.mjs";
 
 const GOOD = "## Problem\nThe board is stale.\n\n## Change\n- Sessions write here\n\n## Done when\n- A test proves it";
 const CONFIG = { apiUrl: "https://api.test", token: "nbs_x", boardUrl: "https://pwa.test/platform/board" };
@@ -153,4 +166,98 @@ test("waiting lists the group; --remind prints the reminder or nothing", async (
   const quiet = [];
   await run(["waiting", "--remind"], { config: CONFIG, fetchImpl: fakeFetch({ items: old(2) }).impl, log: (l) => quiet.push(l), now: NOW });
   assert.deepEqual(quiet, []);
+});
+
+// Monday picks and the backlog review (CORE-234). NOW is a Tuesday.
+const MONDAY = NOW - 86_400_000;
+const backlog = (key, priority, extra = {}) => ({
+  key,
+  title: `Title of ${key}`,
+  status: "backlog",
+  priority,
+  done_when: "- It works",
+  labels: [],
+  created_at: "2026-10-01T00:00:00Z",
+  ...extra,
+});
+const approved = (count) => Array.from({ length: count }, (_, i) => backlog(`NEO-${i + 1}`, 2, { status: "approved" }));
+
+test("picks = Backlog with a priority and a Done when, not set aside; urgent first, then the oldest", () => {
+  const items = [
+    backlog("CORE-1", 3),
+    backlog("CORE-2", 1, { created_at: "2026-10-05T00:00:00Z" }),
+    backlog("CORE-3", 1, { created_at: "2026-10-02T00:00:00Z" }),
+    backlog("CORE-4", 0),
+    backlog("CORE-5", 2, { done_when: " " }),
+    backlog("CORE-6", 2, { done_when: null }),
+    backlog("CORE-7", 1, { labels: ["Later"] }),
+    backlog("CORE-8", 1, { labels: ["hold"] }),
+    backlog("CORE-9", 1, { labels: ["ux", "blocked"] }),
+    backlog("CORE-10", 1, { status: "approved" }),
+  ];
+  assert.deepEqual(backlogPicks(items).map((i) => i.key), ["CORE-3", "CORE-2", "CORE-1"]);
+});
+
+test("the picks reminder fires on a Monday with fewer than 3 in Approved and offers at most five", () => {
+  const ready = Array.from({ length: 7 }, (_, i) => backlog(`CORE-${i + 1}`, i < 2 ? 1 : 2, { created_at: `2026-10-0${i + 1}T00:00:00Z` }));
+  const line = picksReminder([...approved(2), ...ready], MONDAY);
+  assert.match(line, /^Approved holds 2 tickets\./);
+  assert.match(line, /CORE-1 \(P1\), CORE-2 \(P1\), CORE-3 \(P2\), CORE-4 \(P2\), CORE-5 \(P2\)\.$/);
+  assert.match(line, /decision form/);
+  assert.match(picksReminder(ready, MONDAY), /^Approved holds 0 tickets\./);
+  assert.match(picksReminder([...approved(1), ...ready], MONDAY), /^Approved holds 1 ticket\./);
+});
+
+test("the picks reminder stays silent on other days, with enough in Approved, or with nothing to offer", () => {
+  const ready = [backlog("CORE-1", 1)];
+  assert.equal(picksReminder([...approved(2), ...ready], NOW), null);
+  assert.equal(picksReminder([...approved(3), ...ready], MONDAY), null);
+  assert.equal(picksReminder([...approved(1), backlog("CORE-2", 0)], MONDAY), null);
+});
+
+test("picks lists the candidates; --remind prints the reminder or nothing", async () => {
+  const board = fakeFetch({ items: [backlog("CORE-1", 2), backlog("CORE-2", 1), backlog("CORE-3", 0)] });
+  const lines = [];
+  await run(["picks"], { config: CONFIG, fetchImpl: board.impl, log: (l) => lines.push(l), now: NOW });
+  assert.match(board.calls[0].url, /\/items\?status=backlog,approved$/);
+  assert.deepEqual(lines, ["CORE-2\tP1\tTitle of CORE-2", "CORE-1\tP2\tTitle of CORE-1"]);
+
+  const reminded = [];
+  await run(["picks", "--remind"], { config: CONFIG, fetchImpl: board.impl, log: (l) => reminded.push(l), now: MONDAY });
+  assert.equal(reminded.length, 1);
+  assert.match(reminded[0], /^Approved holds 0 tickets/);
+
+  const quiet = [];
+  await run(["picks", "--remind"], { config: CONFIG, fetchImpl: board.impl, log: (l) => quiet.push(l), now: NOW });
+  assert.deepEqual(quiet, []);
+});
+
+test("review answers are KEY=decision pairs", () => {
+  assert.deepEqual(parseReviewAnswers(["core-1=keep", "NEO-2=shipped"]), [
+    { key: "CORE-1", decision: "keep" },
+    { key: "NEO-2", decision: "shipped" },
+  ]);
+  for (const bad of ["CORE-1", "CORE-1=done", "CORE=keep", "CORE-1=keep=later"]) {
+    assert.throws(() => parseReviewAnswers([bad]), /is not KEY=keep\|later\|cancel\|shipped/);
+  }
+});
+
+test("review sends the form's answers and prints what was applied and skipped", async () => {
+  const board = fakeFetch({ applied: [{ key: "CORE-1", decision: "cancel" }], skipped: [{ key: "NEO-2", reason: "not on prod" }] });
+  const lines = [];
+  await run(["review", "--form", "board-upkeep-r1", "CORE-1=cancel", "neo-2=shipped"], { config: CONFIG, fetchImpl: board.impl, log: (l) => lines.push(l) });
+  assert.match(board.calls[0].url, /\/backlog-review$/);
+  assert.equal(board.calls[0].init.method, "POST");
+  assert.deepEqual(JSON.parse(board.calls[0].init.body), {
+    form: "board-upkeep-r1",
+    decisions: [{ key: "CORE-1", decision: "cancel" }, { key: "NEO-2", decision: "shipped" }],
+  });
+  assert.deepEqual(lines, ["CORE-1\tcancel", "NEO-2\tskipped: not on prod"]);
+});
+
+test("review refuses to run without a form id or without answers", async () => {
+  const board = fakeFetch();
+  await assert.rejects(run(["review", "CORE-1=keep"], { config: CONFIG, fetchImpl: board.impl, log: () => {} }), /--form/);
+  await assert.rejects(run(["review", "--form", "r1"], { config: CONFIG, fetchImpl: board.impl, log: () => {} }), /missing the answers/);
+  assert.equal(board.calls.length, 0);
 });

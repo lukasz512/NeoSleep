@@ -130,7 +130,7 @@ describe("platform work board", () => {
     });
 
     it("may write the spec and run the build, logged as the agent", async () => {
-      const { key } = (await create({ title: "Nightly work", status: "to_spec" })).body.item;
+      const { key } = (await create({ title: "Nightly work", status: "to_spec", priority: 2, done_when: "- It is built" })).body.item;
       const spec = await asAgent(request(app).patch(`${BASE}/items/${key}`)).send({
         status: "spec_ready",
         add_links: [{ kind: "spec", url: "https://claude.ai/artifact/spec" }],
@@ -289,7 +289,7 @@ describe("platform work board", () => {
       const key = await inReview("On dev");
       const res = await reportGit({ items: [{ key, state: "dev", sha: SHA }, { key: `${TEAM}-99999`, state: "prod", sha: SHA }] });
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ updated: 1, closed: [], tidied: { to_review: [], to_backlog: [] } });
+      expect(res.body).toEqual({ updated: 1, closed: [], tidied: { to_review: [], to_backlog: [], to_later: [] } });
       const { item, events } = await read(key);
       expect(item).toMatchObject({ git_state: "dev", git_sha: SHA, status: "needs_review" });
       expect(item.git_checked_at).not.toBeNull();
@@ -420,7 +420,7 @@ describe("platform work board", () => {
 
       it("without tidy nothing in Building moves; a session cannot tidy; bad input names the field", async () => {
         const idle = await building("Idle, no tidy asked", 10);
-        expect((await reportGit({ items: [] })).body.tidied).toEqual({ to_review: [], to_backlog: [] });
+        expect((await reportGit({ items: [] })).body.tidied).toEqual({ to_review: [], to_backlog: [], to_later: [] });
         expect((await read(idle)).item.status).toBe("building");
 
         const issued = await request(app).post(`${BASE}/session-tokens`).set("Authorization", platformAdmin.auth).send({ name: `Tidy ${SUFFIX}` });
@@ -434,6 +434,53 @@ describe("platform work board", () => {
       });
     });
 
+    describe("tidy: an untouched Backlog ticket is set aside (CORE-234)", () => {
+      async function untouched(title: string, days: number, extra: Record<string, unknown> = {}): Promise<string> {
+        const key = (await create({ title, ...extra })).body.item.key as string;
+        await getDb().query(
+          `UPDATE platform.work_item SET updated_at = now() - make_interval(days => $2::int) WHERE team_key || '-' || number = $1`,
+          [key, days]
+        );
+        return key;
+      }
+
+      it("labels a Backlog item nobody touched for 60 days as later, with an edit event and a comment", async () => {
+        const old = await untouched("Forgotten", 61);
+        const fresh = await untouched("Touched last month", 59);
+        const held = await untouched("Forgotten, on hold", 200, { labels: ["hold"] });
+        const elsewhere = await untouched("Old, but not in Backlog", 200, { status: "to_spec" });
+        const res = await reportGit({ items: [], tidy: { branches: [] } });
+        expect(res.status).toBe(200);
+        expect(res.body.tidied.to_later).toContain(old);
+        for (const key of [fresh, held, elsewhere]) expect(res.body.tidied.to_later).not.toContain(key);
+
+        const { item, events } = await read(old);
+        expect(item.status).toBe("backlog");
+        expect(item.labels).toContain("later");
+        expect(events.map((e: { kind: string }) => e.kind)).toEqual(["created", "edit", "comment"]);
+        expect(events[2].body).toContain("60 days");
+        expect((await read(fresh)).item.labels).not.toContain("later");
+        expect((await read(held)).item.labels).toEqual(["hold"]);
+      });
+
+      it("does not count its own label as a touch, and labels a ticket once", async () => {
+        const old = await untouched("Forgotten once", 90);
+        await reportGit({ items: [], tidy: { branches: [] } });
+        const again = await reportGit({ items: [], tidy: { branches: [] } });
+        expect(again.body.tidied.to_later).not.toContain(old);
+        const { item, events } = await read(old);
+        expect(item.labels.filter((l: string) => l === "later")).toHaveLength(1);
+        expect(Date.now() - Date.parse(item.updated_at)).toBeGreaterThan(89 * 86_400_000);
+        expect(events.filter((e: { kind: string }) => e.kind === "comment")).toHaveLength(1);
+      });
+
+      it("without tidy an old Backlog item keeps its labels", async () => {
+        const old = await untouched("Forgotten, no tidy asked", 90);
+        await reportGit({ items: [] });
+        expect((await read(old)).item.labels).toEqual([]);
+      });
+    });
+
     it("403 for a tenant admin, 400 with the field for bad input", async () => {
       const key = await inReview("Validation");
       const tenant = await request(app).post(`${BASE}/git-state`).set("Authorization", tenantAdmin.auth).send({ items: [] });
@@ -443,6 +490,174 @@ describe("platform work board", () => {
       expect((await reportGit({ items: [{ key, state: "dev", sha: "not a sha" }] })).body.field).toBe("items");
       expect((await reportGit({ items: [{ key: "nope", state: "dev", sha: SHA }] })).body.field).toBe("items");
       expect((await reportGit({ items: [], close: { smoke_url: "http://insecure" } })).body.field).toBe("close");
+    });
+  });
+
+  describe("Approved needs a priority and a Done when (CORE-234)", () => {
+    const READY = { priority: 2, done_when: "- A test proves it" };
+    async function patch(key: string, body: Record<string, unknown>) {
+      return request(app).patch(`${BASE}/items/${key}`).set("Authorization", platformAdmin.auth).send(body);
+    }
+
+    it("refuses a move to Approved without a priority or without a Done when, naming the field", async () => {
+      const bare = (await create({ title: "Bare" })).body.item.key as string;
+      const noPriority = await patch(bare, { status: "approved" });
+      expect(noPriority.status).toBe(400);
+      expect(noPriority.body.field).toBe("priority");
+
+      const noDoneWhen = (await create({ title: "No done when", priority: 1 })).body.item.key as string;
+      const refused = await patch(noDoneWhen, { status: "approved" });
+      expect(refused.status).toBe(400);
+      expect(refused.body.field).toBe("done_when");
+      expect((await patch(noDoneWhen, { status: "approved", done_when: "  " })).body.field).toBe("done_when");
+    });
+
+    it("accepts the move when both are there, also when the same request sets them", async () => {
+      const ready = (await create({ title: "Ready", ...READY })).body.item.key as string;
+      expect((await patch(ready, { status: "approved" })).body.item.status).toBe("approved");
+      const bare = (await create({ title: "Completed on the way" })).body.item.key as string;
+      const moved = await patch(bare, { status: "approved", ...READY });
+      expect(moved.status).toBe(200);
+      expect(moved.body.item).toMatchObject({ status: "approved", ...READY });
+    });
+
+    it("applies to a ticket created straight in Approved", async () => {
+      expect((await create({ title: "Straight in", status: "approved" })).body.field).toBe("priority");
+      expect((await create({ title: "Straight in", status: "approved", priority: 3 })).body.field).toBe("done_when");
+      expect((await create({ title: "Straight in", status: "approved", ...READY })).status).toBe(201);
+    });
+
+    it("lets the worker give a ticket back from Building, and still answers 403 before 400 for the agent", async () => {
+      const legacy = (await create({ title: "Approved before the rule", status: "building" })).body.item.key as string;
+      expect((await asAgent(request(app).patch(`${BASE}/items/${legacy}`)).send({ status: "approved" })).status).toBe(200);
+      const spec = (await create({ title: "Spec, not ready", status: "spec_ready" })).body.item.key as string;
+      expect((await asAgent(request(app).patch(`${BASE}/items/${spec}`)).send({ status: "approved" })).status).toBe(403);
+    });
+  });
+
+  describe("backlog review (CORE-234)", () => {
+    const SHA = "b".repeat(40);
+    let token: string;
+    let tokenId: string;
+
+    function review(body: Record<string, unknown>, as: "session" | "human" | "agent" = "session") {
+      const req = request(app).post(`${BASE}/backlog-review`);
+      if (as === "agent") return asAgent(req).send(body);
+      return (as === "session" ? req.set("X-Session-Token", token) : req.set("Authorization", platformAdmin.auth)).send(body);
+    }
+    async function read(key: string) {
+      return (await request(app).get(`${BASE}/items/${key}`).set("Authorization", platformAdmin.auth)).body;
+    }
+    async function backlog(title: string, extra: Record<string, unknown> = {}): Promise<string> {
+      return (await create({ title, ...extra })).body.item.key as string;
+    }
+
+    beforeAll(async () => {
+      const issued = await request(app).post(`${BASE}/session-tokens`).set("Authorization", platformAdmin.auth).send({ name: `Review ${SUFFIX}` });
+      token = issued.body.token;
+      tokenId = issued.body.item.id;
+    });
+
+    afterAll(async () => {
+      await getDb().query("DELETE FROM platform.work_session_token WHERE id = $1", [tokenId]);
+    });
+
+    it("applies keep, later, cancel and shipped to Backlog tickets, each with a comment naming the form", async () => {
+      const keep = await backlog("Keep me", { labels: ["later", "ux"] });
+      const later = await backlog("Later");
+      const cancel = await backlog("Cancel me");
+      const shipped = await backlog("Shipped long ago");
+      await asAgent(request(app).post(`${BASE}/git-state`)).send({ items: [{ key: shipped, state: "prod", sha: SHA }] });
+
+      const res = await review({
+        form: "qa-review-r1",
+        decisions: [
+          { key: keep, decision: "keep" },
+          { key: later, decision: "later" },
+          { key: cancel, decision: "cancel" },
+          { key: shipped, decision: "shipped" },
+        ],
+      });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        applied: [
+          { key: keep, decision: "keep" },
+          { key: later, decision: "later" },
+          { key: cancel, decision: "cancel" },
+          { key: shipped, decision: "shipped" },
+        ],
+        skipped: [],
+      });
+
+      const kept = await read(keep);
+      expect(kept.item).toMatchObject({ status: "backlog", labels: ["ux"] });
+      expect((await read(later)).item).toMatchObject({ status: "backlog", labels: ["later"] });
+      const canceled = await read(cancel);
+      expect(canceled.item.status).toBe("canceled");
+      expect(canceled.item.completed_at).not.toBeNull();
+      expect(canceled.events.find((e: { kind: string }) => e.kind === "status")).toMatchObject({
+        from_status: "backlog",
+        to_status: "canceled",
+        actor_kind: "session",
+        actor: `session:Review ${SUFFIX}`,
+      });
+      const done = await read(shipped);
+      expect(done.item.status).toBe("done");
+      expect(done.events.at(-1).body).toContain("bbbbbbb");
+      for (const detail of [kept, canceled, done]) {
+        expect(detail.events.at(-1)).toMatchObject({ kind: "comment", actor_kind: "session" });
+        expect(detail.events.at(-1).body).toContain("Backlog review qa-review-r1");
+      }
+    });
+
+    it("skips what is not in Backlog and a shipped ticket that is not on prod, and says why", async () => {
+      const notOnProd = await backlog("Not shipped");
+      const building = await backlog("Being built", { status: "building" });
+      const triage = await backlog("Untriaged", { status: "triage" });
+      const fine = await backlog("Fine");
+      const res = await review({
+        form: "qa-review-r2",
+        decisions: [
+          { key: notOnProd, decision: "shipped" },
+          { key: building, decision: "cancel" },
+          { key: triage, decision: "cancel" },
+          { key: `${TEAM}-99999`, decision: "cancel" },
+          { key: fine, decision: "later" },
+        ],
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.applied).toEqual([{ key: fine, decision: "later" }]);
+      expect(res.body.skipped).toEqual([
+        { key: notOnProd, reason: "not on prod" },
+        { key: building, reason: "not in Backlog" },
+        { key: triage, reason: "not in Backlog" },
+        { key: `${TEAM}-99999`, reason: "not in Backlog" },
+      ]);
+      expect((await read(notOnProd)).item.status).toBe("backlog");
+      expect((await read(building)).item.status).toBe("building");
+      expect((await read(triage)).item.status).toBe("triage");
+    });
+
+    it("is for people and sessions, not for the agent or a tenant admin", async () => {
+      const key = await backlog("Human answer");
+      const body = { form: "qa-review-r3", decisions: [{ key, decision: "cancel" }] };
+      expect((await review(body, "agent")).status).toBe(403);
+      expect((await request(app).post(`${BASE}/backlog-review`).set("Authorization", tenantAdmin.auth).send(body)).status).toBe(403);
+      expect((await read(key)).item.status).toBe("backlog");
+      expect((await review(body, "human")).body.applied).toEqual([{ key, decision: "cancel" }]);
+    });
+
+    it("answers 400 with the field for bad input, and changes nothing", async () => {
+      const key = await backlog("Validation");
+      const decisions = [{ key, decision: "cancel" }];
+      expect((await review({ decisions })).body.field).toBe("form");
+      expect((await review({ form: "has spaces", decisions })).body.field).toBe("form");
+      expect((await review({ form: "ok" })).body.field).toBe("decisions");
+      expect((await review({ form: "ok", decisions: [] })).body.field).toBe("decisions");
+      expect((await review({ form: "ok", decisions: [{ key, decision: "delete" }] })).body.field).toBe("decisions");
+      expect((await review({ form: "ok", decisions: [{ key: "nope", decision: "keep" }] })).body.field).toBe("decisions");
+      expect((await review({ form: "ok", decisions: [...decisions, { key, decision: "keep" }] })).body.field).toBe("decisions");
+      expect((await read(key)).item.status).toBe("backlog");
     });
   });
 

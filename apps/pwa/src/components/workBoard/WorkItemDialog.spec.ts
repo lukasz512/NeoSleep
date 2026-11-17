@@ -327,6 +327,44 @@ describe("WorkItemDialog open/close (CORE-195)", () => {
   });
 });
 
+describe("WorkItemDialog Approved rule (CORE-234)", () => {
+  async function pick(chip: "status" | "priority", text: string): Promise<void> {
+    (q(`work-item-${chip}`) as HTMLElement).click();
+    await flushPromises();
+    const option = Array.from(document.querySelectorAll(`[data-testid='work-item-${chip}-menu'] .v-list-item`)).find((el) => el.textContent?.includes(text));
+    (option as HTMLElement).click();
+    await flushPromises();
+  }
+
+  it("says what is missing and keeps Save off until the ticket may enter Approved", async () => {
+    serve(item({ status: "backlog", priority: 0, done_when: "- It works" }));
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(q("work-item-approved-blocker")).toBeNull();
+    await pick("status", "Approved");
+    expect(q("work-item-approved-blocker")?.textContent).toBe("Approved takes a ticket only with a priority.");
+    expect(q("work-item-approved-blocker")?.getAttribute("role")).toBe("alert");
+    expect((q("work-item-save") as HTMLButtonElement).disabled).toBe(true);
+    await pick("priority", "High");
+    expect(q("work-item-approved-blocker")).toBeNull();
+    (q("work-item-save") as HTMLButtonElement).click();
+    await flushPromises();
+    expect(JSON.parse(String(calls.find((c) => c.method === "PATCH")!.body))).toEqual({ status: "approved", priority: 2 });
+  });
+
+  it("asks for a Done when once the priority is there", async () => {
+    serve(item({ status: "backlog", priority: 2, done_when: null }));
+    await render({ itemKey: "CORE-9", creating: false });
+    await pick("status", "Approved");
+    expect(q("work-item-approved-blocker")?.textContent).toBe("Approved takes a ticket only with a Done when.");
+  });
+
+  it("leaves a ticket that is already in Approved alone", async () => {
+    serve(item({ status: "approved", priority: 0, done_when: null }));
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(q("work-item-approved-blocker")).toBeNull();
+  });
+});
+
 describe("WorkItemDialog git state and hold (CORE-221)", () => {
   it("shows where the code is and saves Hold as a label", async () => {
     serve(item({ status: "needs_review", git_state: "prod", git_sha: "0123456789abcdef", labels: ["session"] }));

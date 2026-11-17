@@ -204,6 +204,28 @@ export function reviewGroups(items: readonly WorkItem[]): { waiting: WorkItem[];
   return { waiting, merged: items.filter(closesByItself) };
 }
 
+/** Label that sets a Backlog ticket aside; the tidy run adds it after 60 untouched days (CORE-234). */
+export const LATER_LABEL = "later";
+
+/** Backlog in two groups (CORE-234): what is still meant to be done, and what was set aside. */
+export function backlogGroups(items: readonly WorkItem[]): { current: WorkItem[]; later: WorkItem[] } {
+  const isLater = (item: WorkItem) => item.labels.some((label) => label.toLowerCase() === LATER_LABEL);
+  return { current: items.filter((item) => !isLater(item)), later: items.filter(isLater) };
+}
+
+/**
+ * What a ticket still lacks to enter Approved (CORE-234), the same rule the API enforces: a
+ * priority and a Done when. A build given back from Building already passed it.
+ */
+export function approvedBlocker(
+  item: Pick<WorkItem, "status" | "priority" | "done_when">,
+  target: WorkStatus
+): "priority" | "done_when" | null {
+  if (target !== "approved" || item.status === "approved" || item.status === "building") return null;
+  if (!item.priority) return "priority";
+  return item.done_when?.trim() ? null : "done_when";
+}
+
 /** Handed over for review with no artifact to read (CORE-233). */
 export function missingArtifact(item: WorkItem): boolean {
   return item.status === "needs_review" && !item.links.some((link) => link.kind === "artifact");
