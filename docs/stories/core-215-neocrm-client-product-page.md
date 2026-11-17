@@ -98,7 +98,7 @@ On the reference site `?para=<name>` (alias `for`) greets the prospect by name i
 
 ### Rounds 7 and 8, decided but not built yet (Łukasz, 2026-11-17)
 Answers recorded as clicked; the prototype he judged is the round 8 Artifact (three.js, version 2).
-- Round 7, form `core-215-r7-paper` (living dot paper and smooth packing), all "more":
+- Round 7, form `core-215-r7-background` (living dot paper and smooth packing), all "more":
   - D1 dots under the cursor: they move away and a wave stays behind the cursor.
   - D2 ambient wave: a wave runs through the dots while scrolling.
   - D3 parcel and dots: the wave and the dots part around the parcel.
