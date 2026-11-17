@@ -4,7 +4,6 @@ import { makeNeoCrmI18n } from "./i18n";
 import { isPersonalLink } from "./lens";
 import { resolveLocale } from "../lib/locale";
 import { applyTheme, initialTheme, readStoredTheme } from "../lib/theme";
-import "@fontsource-variable/montserrat/wght.css";
 import "@fontsource-variable/caveat/wght.css";
 import "./neocrm.css";
 

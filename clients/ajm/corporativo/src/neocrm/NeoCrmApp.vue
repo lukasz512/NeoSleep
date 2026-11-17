@@ -279,7 +279,7 @@
         <h2 id="demo-title" class="demo__title">{{ prospect ? t("contact.titleFor", { name: prospect.name }) : t("contact.title") }}</h2>
         <p class="demo__body">{{ t("contact.body") }}</p>
         <p class="demo__actions">
-          <a class="btn btn--warm is-warm" :href="mailLink">{{ t("contact.email") }}</a>
+          <a class="btn btn--warm is-warm" :class="{ 'is-got': landed }" :href="mailLink">{{ t("contact.email") }}</a>
           <a class="btn btn--outline" :href="whatsappLink(message)" target="_blank" rel="noopener">{{ t("contact.whatsapp") }}</a>
         </p>
       </section>
@@ -289,7 +289,7 @@
       <p>{{ t("footer.note") }}</p>
       <a :href="homeLink">{{ t("footer.back") }}</a>
     </footer>
-    <ScrollTrail />
+    <LivePaper @land="landed = $event" />
   </div>
 </template>
 
@@ -297,7 +297,7 @@
 import { computed, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import es from "./locales/es.json";
-import ScrollTrail from "./ScrollTrail.vue";
+import LivePaper from "./LivePaper.vue";
 import { ROLES, SECTORS, lensFrom, lensQuery, sectionOrder, type Role, type SectionId, type Sector } from "./lens";
 import { CONTACT, whatsappLink } from "../content/contact";
 import { switchLocalePath, type Locale } from "../lib/locale";
@@ -374,6 +374,8 @@ const logOpen = ref(false);
 const stage = ref(0);
 const filter = ref<(typeof FILTERS)[number]>("all");
 const answer = ref(0);
+// the paper plane has reached the demo request (LivePaper.vue)
+const landed = ref(false);
 
 /** One line icon per sector, drawn as a single 24 px path. */
 const SECTOR_ICONS: Record<Sector, string> = {
@@ -418,12 +420,35 @@ function toggleTheme() {
   left: 16px;
 }
 
+/* glass (round 9): the paper shows through, blurred; a light edge on top, a soft shadow below.
+   Only a section's outer tiles blur what is behind them; what sits inside a tile is see-through, unblurred. */
+.top,
+.lens,
+.item,
+.fig,
+.steps__detail {
+  border: 1px solid var(--ncrm-glass-edge);
+  background: var(--ncrm-glass);
+  -webkit-backdrop-filter: blur(14px) saturate(1.8);
+  backdrop-filter: blur(14px) saturate(1.8);
+  box-shadow:
+    inset 0 1px 0 var(--ncrm-glass-hi),
+    inset 0 -1px 0 var(--ncrm-glass-lo),
+    0 12px 32px -14px var(--ncrm-glass-shadow);
+}
+
+/* the bar floats over the page as one glass capsule */
 .top {
+  position: sticky;
+  top: 12px;
+  z-index: 4;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 0;
+  margin-top: 12px;
+  padding: 6px 8px 6px 20px;
+  border-radius: 999px;
 }
 .top__mark {
   font-size: 20px;
@@ -479,6 +504,9 @@ function toggleTheme() {
   color: var(--ncrm-on-primary);
   font-weight: 600;
   text-decoration: none;
+  box-shadow:
+    inset 0 1px 0 var(--ncrm-glass-hi),
+    0 8px 20px -10px var(--ncrm-glass-shadow);
   transition: background-color 0.15s ease;
 }
 .btn:hover {
@@ -496,12 +524,16 @@ function toggleTheme() {
     display: none;
   }
 }
+/* the second choice is a glass capsule */
 .btn--quiet {
-  background: none;
+  border: 1px solid var(--ncrm-glass-edge);
+  background: var(--ncrm-glass);
+  -webkit-backdrop-filter: blur(14px) saturate(1.8);
+  backdrop-filter: blur(14px) saturate(1.8);
   color: var(--ncrm-primary);
 }
 .btn--quiet:hover {
-  background: var(--ncrm-tint);
+  background: var(--ncrm-glass-inner);
   border-color: var(--ncrm-primary);
 }
 /* the warm accent: one element per section (NeoCrmApp.spec.ts) */
@@ -517,6 +549,18 @@ function toggleTheme() {
 }
 .btn--warm:hover {
   opacity: 0.9;
+}
+/* the paper plane has landed on it: one ring goes out */
+.btn--warm.is-got {
+  animation: got 1.1s ease-out;
+}
+@keyframes got {
+  from {
+    box-shadow: 0 0 0 0 var(--ncrm-warm);
+  }
+  to {
+    box-shadow: 0 0 0 18px transparent;
+  }
 }
 .btn--outline {
   background: none;
@@ -853,9 +897,7 @@ function toggleTheme() {
 .lens {
   margin-top: clamp(40px, 6vw, 64px);
   padding: 20px;
-  border: 1px solid var(--ncrm-line);
-  border-radius: 16px;
-  background: var(--ncrm-surface);
+  border-radius: 22px;
 }
 .lens__label {
   margin: 0 0 12px;
@@ -880,7 +922,7 @@ function toggleTheme() {
   padding: 0 16px;
   border: 1px solid var(--ncrm-line);
   border-radius: 999px;
-  background: var(--ncrm-surface);
+  background: var(--ncrm-glass-inner);
   color: var(--ncrm-ink);
   font: inherit;
   font-size: 15px;
@@ -918,7 +960,8 @@ function toggleTheme() {
   gap: 24px;
   padding: clamp(40px, 7vw, 80px) 0;
   border-top: 1px solid var(--ncrm-line);
-  scroll-margin-top: 16px;
+  /* clear of the floating bar */
+  scroll-margin-top: 88px;
 }
 .sec__num {
   display: inline-block;
@@ -940,14 +983,13 @@ function toggleTheme() {
   min-width: 0;
 }
 
-/* a section's drawing sits on a tinted panel above its list */
+/* a section's drawing sits on a glass panel above its list */
 .fig {
   display: grid;
   justify-items: center;
   gap: 16px;
   padding: clamp(20px, 4vw, 40px);
   border-radius: 24px;
-  background: var(--ncrm-tint);
 }
 .fig p {
   margin: 0;
@@ -965,17 +1007,17 @@ function toggleTheme() {
 .sec:nth-of-type(odd) .fig > [data-fig] {
   transform: rotate(0.8deg);
 }
-.fig > .card {
-  box-shadow: 6px 8px 0 var(--ncrm-line);
-}
 .card {
   display: grid;
   gap: 12px;
   width: min(100%, 400px);
   padding: 20px;
-  border: 1px solid var(--ncrm-line);
+  border: 1px solid var(--ncrm-glass-edge);
   border-radius: 20px;
-  background: var(--ncrm-surface);
+  background: var(--ncrm-glass-inner);
+  box-shadow:
+    inset 0 1px 0 var(--ncrm-glass-hi),
+    0 10px 24px -14px var(--ncrm-glass-shadow);
 }
 .card__title {
   font-size: 18px;
@@ -1215,7 +1257,7 @@ function toggleTheme() {
 .layers__detail {
   padding: 14px 16px;
   border-radius: 12px;
-  background: var(--ncrm-surface);
+  background: var(--ncrm-glass-inner);
   font-size: 15px;
 }
 
@@ -1312,9 +1354,7 @@ function toggleTheme() {
 }
 .item {
   padding: 20px;
-  border: 1px solid var(--ncrm-line);
-  border-radius: 12px;
-  background: var(--ncrm-surface);
+  border-radius: 20px;
 }
 .item__title {
   margin: 0;
@@ -1371,7 +1411,7 @@ function toggleTheme() {
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 12px;
+  border-radius: 20px;
 }
 .item__pick:focus-visible {
   outline: none;
@@ -1397,6 +1437,9 @@ function toggleTheme() {
   border-left: 3px solid var(--ncrm-primary);
   border-radius: 0;
   background: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
 }
 
 /* onboarding: four numbered stops joined by a dotted line; the one picked is explained below */
@@ -1448,8 +1491,7 @@ function toggleTheme() {
 .steps__detail {
   margin: 0;
   padding: 20px 24px;
-  border-radius: 16px;
-  background: var(--ncrm-tint);
+  border-radius: 20px;
   font-size: clamp(17px, 2vw, 20px);
   text-wrap: balance;
 }
@@ -1520,8 +1562,11 @@ function toggleTheme() {
 
 /* work in progress reads as unfinished: dashed, no fill */
 .sec--roadmap .item {
-  border-style: dashed;
+  border: 1px dashed var(--ncrm-muted);
   background: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
 }
 .pill {
   display: inline-block;
@@ -1546,7 +1591,7 @@ function toggleTheme() {
   }
   .sec__head {
     position: sticky;
-    top: 24px;
+    top: 92px;
     align-self: start;
   }
 }
@@ -1554,10 +1599,14 @@ function toggleTheme() {
 .demo {
   margin: clamp(24px, 5vw, 56px) 0;
   padding: clamp(32px, 6vw, 72px);
-  border-radius: 24px;
-  background: var(--ncrm-band);
+  border: 1px solid var(--ncrm-glass-edge);
+  border-radius: 28px;
+  background: var(--ncrm-band-glass);
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  backdrop-filter: blur(16px) saturate(1.6);
+  box-shadow: 0 24px 48px -24px var(--ncrm-glass-shadow);
   color: var(--ncrm-on-band);
-  scroll-margin-top: 16px;
+  scroll-margin-top: 88px;
 }
 .demo__hand {
   margin: 0 0 8px;

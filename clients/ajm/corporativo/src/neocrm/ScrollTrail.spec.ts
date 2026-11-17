@@ -3,7 +3,7 @@ import { mount } from "@vue/test-utils";
 import ScrollTrail from "./ScrollTrail.vue";
 import NeoCrmApp from "./NeoCrmApp.vue";
 import { makeNeoCrmI18n } from "./i18n";
-import { TRAIL_STAGES, trailPath, trailStage, trailX } from "./trail";
+import { TRAIL_STAGES, trailStage, trailX } from "./trail";
 
 /** Pretends the reader is `y` px down a page whose scroll range is 4000 px. */
 function scrollTo(y: number) {
@@ -32,15 +32,18 @@ describe("neocrm page › scroll trail, the thing that travels with the reader (
     expect(trailStage(7)).toEqual({ stage: 5, p: 1 });
     expect(trailStage(Number.NaN)).toEqual({ stage: 0, p: 0 });
   });
-  it("the thread never leaves its margin, however narrow", () => {
+  it("the object never leaves its margin, however narrow", () => {
     for (const width of [16, 20, 48]) {
       for (let y = 0; y < 2000; y += 37) {
         expect(trailX(y, width)).toBeGreaterThanOrEqual(2);
         expect(trailX(y, width)).toBeLessThanOrEqual(width - 2);
       }
     }
-    expect(trailPath(300, 48).startsWith("M")).toBe(true);
-    expect(trailPath(0, 48)).toBe("");
+  });
+  it("its route is not drawn: no line, only the object (round 10)", () => {
+    const w = mount(ScrollTrail, { attachTo: document.body });
+    expect(w.findAll(".trail svg")).toHaveLength(1);
+    expect(w.find(".trail__line").exists()).toBe(false);
   });
 
   it("starts as a loose note and is hidden from screen readers and the keyboard", () => {

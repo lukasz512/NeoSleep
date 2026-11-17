@@ -96,7 +96,7 @@ On the reference site `?para=<name>` (alias `for`) greets the prospect by name i
 - Round 6, something that travels with the reader (Łukasz, 2026-11-17: of three proposals he picked A, the thread, and asked for an object that is put together, packed and sent, ending at the contact request; no signature pad): a hand-drawn thread runs down the left margin with one object at its tip (`ScrollTrail.vue`, `trail.ts`). Scrolling turns it from a loose note into a stack, an open box, a sealed box, a labelled parcel and a paper plane that lands on the demo request. Decoration only: `aria-hidden`, nothing focusable, moved by scrolling alone, not rendered under reduced motion, paper colours and ink only (no warm accent, so "one per section" holds). Per-open analytics for client links is a later step (CORE-236).
 - Tests: `ScrollTrail.spec.ts` (six shapes, clamping, thread stays in its margin, hidden from assistive tech, scroll packs and lands it, reduced motion, one trail outside the sections), `lens.spec.ts` (parsing, order, link), `claims.spec.ts` (no forbidden claim outside the roadmap, hosting country stated, no size words, ES/EN key parity), `NeoCrmApp.spec.ts` (order on the page, switch, greeting, sector, drawn sections, one test per interaction, warm accent).
 
-### Rounds 7 and 8, decided but not built yet (Łukasz, 2026-11-17)
+### Rounds 7 and 8, decided (Łukasz, 2026-11-17), built with round 10
 Answers recorded as clicked; the prototype he judged is the round 8 Artifact (three.js, version 2).
 - Round 7, form `core-215-r7-background` (living dot paper and smooth packing), all "more":
   - D1 dots under the cursor: they move away and a wave stays behind the cursor.
@@ -111,12 +111,25 @@ Answers recorded as clicked; the prototype he judged is the round 8 Artifact (th
   - Notes: the animation must scale better, the balloons must not be attached to the parcel, the route must work better with scrolling. Fixed in the prototype: one unit drives every size and the margin grows with the width; balloons wait at their own place on the page, drop their note when the parcel arrives and fly off alone; the tip follows scrolling with half the delay and slows down inside loops.
 - Constraints carried into the build: decoration only (`aria-hidden`, nothing focusable), static under reduced motion, three.js loaded after first paint, no gradients, no warm accent as decoration.
 
-### Round 9, feedback on the round 8 route (Łukasz, 2026-11-17), answers pending
+### Round 9, feedback on the round 8 route (Łukasz, 2026-11-17), answered
+- Answers as clicked on form `core-215-r9-glass`, all "more", no notes: F1 ribbon on desktop, margin route on phones; F2 pale ahead, filling with colour behind the parcel; F3 glass buttons and bar plus the system typeface (handwritten accents stay).
 - His words: the route is still "weird", he does not like the curls at all, the route should be part of the background, the tiles must be liquid glass, and the page should look like a native Mac.
 - This replaces E3 (detours and loops) and the pins and pinwheels of E2: the route has no loops anywhere.
 - Prototype with form `core-215-r9-glass`: the route is a ribbon painted on the dot paper under the content, tiles are translucent glass that blurs what passes below, the parcel travels under the glass and only the plane rises above it to land on the demo request.
 - Open, asked as three buttons: F1 where the ribbon runs (whole page, left margin only, or ribbon on desktop and margin on phones), F2 how it looks (coloured throughout, thin pencil line, or pale ahead and filling with colour behind the parcel), F3 how far the Mac look goes (glass buttons and bar with our typeface, glass tiles only, or the same plus the system typeface).
 - Constraint: glass is built without gradients, so the style guard stays as it is.
+
+### Round 10, feedback on the round 9 prototype (Łukasz, 2026-11-17), built
+- His words: the route should not be visible at all; the notes a bit bigger; it looks poor in places and when he scrolls himself; the plane must fly slower; the second balloon cannot be seen and the balloons should come earlier and higher; maybe the animation could move the tiles a little.
+- This replaces the visible part of F1 and F2: no ribbon and no line anywhere, in 3D or in the flat fallback. Only the object, its shadow and the dots that part around it show where it goes.
+- As built (`LivePaper.vue`, `paper.ts`, `parcel3d.ts`, `trail.ts`):
+  - Three modes: live (dot paper on a canvas plus the 3D parcel), flat (round 6 object, for no WebGL or a data saver), still (reduced motion: nothing moves, the printed dot grid stays). three.js loads after first paint; if it fails, the flat object takes over.
+  - Dots move away from the cursor and the parcel, a wave follows the cursor and scrolling; full strength in the hero, 45 % under text.
+  - Packing is eased so a wheel step no longer jerks it; the change into a plane and the flight run on time (about three seconds), not on scroll, and rewind when the reader goes back up. The landing sends one ring out of the demo request button.
+  - Two balloons bring notes early on the page, come from above in the free margin, and flee the cursor; the second has its own colour so it shows on the paper in both themes.
+  - Tiles make at most 4 px of room for the parcel, less under text, never on phones.
+  - Glass: the bar is a floating capsule, section tiles and the secondary button blur the paper behind them, inner cards are see-through without blur; the demo band is dark glass. System typeface for text, Caveat for handwriting.
+- Tests: `trail.spec.ts` (modes, bounds at every width, launch and timeline, flight time, dots, paper strength, tile nudge), `LivePaper.spec.ts` (mode per browser, fallback on failure, landing, cleanup), `ScrollTrail.spec.ts` (no line drawn).
 
 ### Hand-off
 → `/perspective legal` on the claims ledger once the claim level is decided

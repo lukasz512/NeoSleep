@@ -31,7 +31,21 @@
   --ncrm-navy: #2b4a8b;
   --ncrm-on-navy: #ffffff;
   --ncrm-gutter: clamp(16px, 5vw, 48px);
-  --ncrm-font: "Montserrat Variable", "Montserrat", "Helvetica Neue", Arial, system-ui, sans-serif;
+  /* the reader's own system typeface, so the page reads like a native app (round 9); handwriting stays Caveat */
+  --ncrm-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  /* the living paper (paper.ts): the same dot grid drawn on a canvas, the parcel's shadow, the second balloon */
+  --ncrm-dot: #dccfb2;
+  --ncrm-dot-strong: #b39c68;
+  --ncrm-shade: #3c2d0a;
+  --ncrm-balloon: #2b4a8b;
+  /* glass tiles (round 9): a see-through fill over the blurred paper, a light edge, a soft shadow */
+  --ncrm-glass: rgba(255, 253, 248, 0.52);
+  --ncrm-glass-inner: rgba(255, 253, 248, 0.6);
+  --ncrm-glass-edge: rgba(255, 255, 255, 0.78);
+  --ncrm-glass-hi: rgba(255, 255, 255, 0.95);
+  --ncrm-glass-lo: rgba(60, 45, 10, 0.08);
+  --ncrm-glass-shadow: rgba(60, 45, 10, 0.24);
+  --ncrm-band-glass: rgba(8, 42, 39, 0.92);
   color-scheme: light;
 }
 :root[data-theme="dark"] {
@@ -48,6 +62,17 @@
   --ncrm-on-primary: #04201d;
   --ncrm-band: #0f332e;
   --ncrm-frame: #2f524d;
+  --ncrm-dot: #173833;
+  --ncrm-dot-strong: #2f7269;
+  --ncrm-shade: #000000;
+  --ncrm-balloon: #ffc9a8;
+  --ncrm-glass: rgba(18, 58, 52, 0.5);
+  --ncrm-glass-inner: rgba(12, 41, 37, 0.6);
+  --ncrm-glass-edge: rgba(255, 255, 255, 0.13);
+  --ncrm-glass-hi: rgba(255, 255, 255, 0.22);
+  --ncrm-glass-lo: rgba(0, 0, 0, 0.3);
+  --ncrm-glass-shadow: rgba(0, 0, 0, 0.6);
+  --ncrm-band-glass: rgba(15, 51, 46, 0.68);
   color-scheme: dark;
 }
 /* "Accessibility" draws one screen in each theme, whatever the page's own theme is */
@@ -85,6 +110,15 @@ body {
   font-size: 16px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+}
+/* the canvas draws the dots while the paper is alive (LivePaper.vue) */
+html.ncrm-live body {
+  background-image: none;
+}
+h1,
+h2,
+h3 {
+  letter-spacing: -0.022em;
 }
 :focus-visible {
   outline: 3px solid var(--ncrm-primary);

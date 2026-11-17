@@ -1,13 +1,10 @@
-<!-- The thing that travels with the reader (CORE-215 round 6): a hand-drawn thread down the left margin
-     with one object at its tip. Scrolling puts the object together: a loose note, a stack, a box, the box
-     sealed, a parcel, and a paper plane that lands on the demo request. Decoration only: hidden from
-     screen readers, nothing to focus, moved by scrolling alone, and not drawn under reduced motion. -->
+<!-- The thing that travels with the reader (CORE-215 round 6), flat: one object going down the left margin.
+     Scrolling puts it together: a loose note, a stack, a box, the box sealed, a parcel, and a paper plane
+     that lands on the demo request. Its route is never drawn (round 10). This is what a browser without
+     WebGL, or a reader on a data saver, gets instead of the 3D parcel (LivePaper.vue). Decoration only:
+     hidden from screen readers, nothing to focus, moved by scrolling alone, not drawn under reduced motion. -->
 <template>
   <div v-if="!still" ref="root" class="trail" :class="{ 'is-landed': landed }" :data-stage="TRAIL_STAGES[stage]" :style="{ '--p': p }" aria-hidden="true">
-    <svg class="trail__line" :width="width" :height="end" :viewBox="`0 0 ${width} ${end}`">
-      <path class="trail__track" :d="path" />
-      <path class="trail__ink" :d="path" :style="{ clipPath: `inset(0 0 ${Math.max(0, end - y)}px 0)` }" />
-    </svg>
     <div class="trail__obj" :style="{ transform: `translate(${x}px, ${y}px) rotate(${tilt}deg)` }">
       <svg class="trail__art" viewBox="0 0 48 48">
         <g class="shape shape--note">
@@ -57,7 +54,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { TRAIL_STAGES, trailPath, trailStage, trailTilt, trailX } from "./trail";
+import { TRAIL_STAGES, trailStage, trailTilt, trailX } from "./trail";
 
 // asked once: a reader who wants less motion gets no trail at all
 const still = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -67,10 +64,8 @@ const stage = ref(0);
 const p = ref(0);
 const landed = ref(false);
 const width = ref(48);
-const end = ref(0);
 const y = ref(0);
 
-const path = computed(() => trailPath(end.value, width.value));
 const x = computed(() => trailX(y.value, width.value));
 const tilt = computed(() => trailTilt(y.value));
 
@@ -85,8 +80,8 @@ function update() {
   const demo = document.getElementById("demo");
   const at = trailStage(progress);
   width.value = rect.width || 48;
-  end.value = Math.max(start, demo ? demo.getBoundingClientRect().top - rect.top + 56 : rect.height);
-  y.value = start + Math.min(1, Math.max(0, progress)) * (end.value - start);
+  const end = Math.max(start, demo ? demo.getBoundingClientRect().top - rect.top + 56 : rect.height);
+  y.value = start + Math.min(1, Math.max(0, progress)) * (end - start);
   stage.value = at.stage;
   p.value = at.p;
   landed.value = progress >= 0.995;
@@ -119,32 +114,13 @@ onBeforeUnmount(() => {
     --size: 48px;
   }
 }
-/* room beside the page: the thread moves out of the text's way */
+/* room beside the page: the object moves out of the text's way */
 @media (min-width: 1240px) {
   .trail {
     --size: 64px;
     --land: 92px 34px;
     left: -32px;
   }
-}
-.trail__line {
-  position: absolute;
-  inset: 0 auto auto 0;
-  overflow: visible;
-}
-.trail__line path {
-  fill: none;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.trail__track {
-  stroke: var(--ncrm-line);
-  stroke-width: 2;
-  stroke-dasharray: 2 8;
-}
-.trail__ink {
-  stroke: var(--ncrm-primary);
-  stroke-width: 3;
 }
 .trail__obj {
   position: absolute;
