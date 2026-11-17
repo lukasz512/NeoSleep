@@ -60,7 +60,7 @@ export async function assertTerritoryAccess(
   if (allowedPaths === null) return; // global
 
   if (allowedPaths.length === 0 || !recordCountryCode) {
-    throw new ForbiddenError("This record is outside your assigned region", "outside_scope");
+    throw new ForbiddenError("This record is outside your assigned region", "OUTSIDE_TERRITORY");
   }
 
   const { rows } = await ctx.client.query<{ ok: boolean }>(
@@ -68,7 +68,7 @@ export async function assertTerritoryAccess(
     [recordCountryCode, allowedPaths]
   );
   if (!rows[0]?.ok) {
-    throw new ForbiddenError("This record is outside your assigned region", "outside_scope");
+    throw new ForbiddenError("This record is outside your assigned region", "OUTSIDE_TERRITORY");
   }
 }
 
@@ -91,7 +91,7 @@ export async function assertTerritoryAccessByTerritoryId(
   if (!recordTerritoryId) return; // unassigned — rollout-safety fallback
 
   if (allowedPaths.length === 0) {
-    throw new ForbiddenError("This record is outside your assigned region", "outside_scope");
+    throw new ForbiddenError("This record is outside your assigned region", "OUTSIDE_TERRITORY");
   }
 
   const { rows } = await ctx.client.query<{ ok: boolean }>(
@@ -99,7 +99,7 @@ export async function assertTerritoryAccessByTerritoryId(
     [recordTerritoryId, allowedPaths]
   );
   if (!rows[0]?.ok) {
-    throw new ForbiddenError("This record is outside your assigned region", "outside_scope");
+    throw new ForbiddenError("This record is outside your assigned region", "OUTSIDE_TERRITORY");
   }
 }
 

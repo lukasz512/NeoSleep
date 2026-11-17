@@ -147,8 +147,8 @@ import {
   useAppointments,
   APPOINTMENT_DURATIONS,
   DEFAULT_APPOINTMENT_DURATION,
+  forbiddenMessageKey,
   type Appointment,
-  type AppointmentRefusalReason,
   type AppointmentWriteResult,
 } from "../composables/useAppointments";
 import {
@@ -481,19 +481,9 @@ function close() {
   emit("update:modelValue", false);
 }
 
-/** Each 403 reason has its own message (CORE-226); a refusal the API didn't name gets the generic one. */
-const REFUSAL_MESSAGE_KEYS: Record<AppointmentRefusalReason, string> = {
-  outside_scope: "user.appointments.form.outsideScope",
-  not_own_patient: "user.appointments.form.onlyOwnPatients",
-  other_doctor: "user.appointments.form.otherDoctor",
-  not_booker: "user.appointments.form.notBooker",
-  clinical_only: "user.appointments.form.clinicalOnly",
-  close_not_allowed: "user.appointments.form.closeNotAllowed",
-};
-
 function explain(result: AppointmentWriteResult): string {
   if (result.conflict) return t("user.appointments.form.slotTaken");
-  if (result.forbidden) return t(result.refusalReason ? REFUSAL_MESSAGE_KEYS[result.refusalReason] : "user.appointments.form.notAllowed");
+  if (result.forbidden) return t(forbiddenMessageKey(result.forbiddenReason));
   return t("user.appointments.form.errorSave");
 }
 

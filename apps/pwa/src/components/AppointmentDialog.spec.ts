@@ -124,25 +124,37 @@ describe("AppointmentDialog (NEO-34)", () => {
     expect(wrapper.emitted("update:modelValue")).toBeUndefined();
   });
 
+  // CORE-224: every 403 used to read "This patient is outside your region", whatever the API refused.
   it.each([
-    ["outside_scope", "outside your region"],
-    ["not_own_patient", "only your own patients"],
-    ["other_doctor", "another doctor"],
-    ["not_booker", "Only the person who booked"],
-    ["clinical_only", "only by clinical staff"],
-    ["close_not_allowed", "completed or no-show"],
-    [undefined, "don't have permission"],
-  ])("a 403 says why it was refused: %s (CORE-226)", async (reason, message) => {
+    ["OUTSIDE_TERRITORY", "This patient is outside your region."],
+    ["NOT_BOOKER", "Only the person who booked this appointment can change it."],
+    ["CLINICAL_FIELDS", "Only the doctor or clinic staff can add notes to an appointment."],
+    ["CANNOT_CLOSE", "Only the doctor or clinic staff can mark an appointment as completed or no-show."],
+    ["OTHER_DOCTOR", "You can book and change only your own appointments."],
+    ["NOT_OWN_PATIENT", "You can book only your own patients."],
+    ["ROLE_NOT_ALLOWED", "Your account is not allowed to do this."],
+  ])("a 403 with reason %s says exactly that (CORE-224)", async (reason, message) => {
     apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
-    // A rep, so the old "every 403 is outside your region / not your patient" guess would be wrong for most rows.
     const wrapper = await open("rep");
-    const body = { error: "Forbidden", code: "FORBIDDEN", ...(reason ? { reason } : {}) };
-    apiFetch.mockResolvedValueOnce({ ...jsonResponse(false, 403, body), clone: () => jsonResponse(false, 403, body) } as Response);
+    apiFetch.mockResolvedValueOnce(jsonResponse(false, 403, { error: "Forbidden", code: "FORBIDDEN", reason }));
     byTestId("appointment-submit")!.click();
     await flushPromises();
 
-    expect(byTestId("appointment-problem")?.textContent).toContain(message);
-    expect(wrapper.emitted("saved")).toBeUndefined();
+    expect(byTestId("appointment-problem")?.textContent?.trim()).toBe(message);
+    expect(wrapper.emitted("update:modelValue")).toBeUndefined();
+  });
+
+  it.each([
+    ["no reason", { error: "Forbidden", code: "FORBIDDEN" }],
+    ["a reason this build doesn't know", { error: "Forbidden", code: "FORBIDDEN", reason: "SOMETHING_NEW" }],
+  ])("a 403 with %s is never blamed on the region (CORE-224)", async (_label, body) => {
+    apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
+    await open("doctor");
+    apiFetch.mockResolvedValueOnce(jsonResponse(false, 403, body));
+    byTestId("appointment-submit")!.click();
+    await flushPromises();
+
+    expect(byTestId("appointment-problem")?.textContent?.trim()).toBe("Your account is not allowed to do this.");
   });
 
   it("a 400 naming a field marks that field and the summary — no toast, no problem box (NEO-109)", async () => {

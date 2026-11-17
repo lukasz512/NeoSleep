@@ -5,7 +5,8 @@
 // (/platform/board → Session tokens), one per device.
 //
 //   pnpm board create --team CORE --title "…" --body "## Problem\n…\n## Change\n…\n## Done when\n…" [--priority 2]
-//                     (or --body-file <path.md> instead of --body)
+//                     (or --body-file <path.md> instead of --body; --later puts a side ticket
+//                     nobody is building yet in Backlog instead of Building, CORE-223)
 //   pnpm board get CORE-12                      → the item + its history as JSON
 //   pnpm board comment CORE-12 "text"
 //   pnpm board link CORE-12 --kind artifact|spec|pr|ci|other --url https://… [--title "…"]
@@ -143,8 +144,11 @@ export async function run(argv, { config = loadConfig(), fetchImpl = fetch, log 
       if (problems.length) throw new Error(`ticket rejected (NEO-84 format): ${problems.join("; ")}`);
       const payload = { team: need(flags.team, "--team").toUpperCase(), title: need(flags.title, "--title"), ...parseTicketBody(body) };
       if (flags.priority !== undefined) payload.priority = Number(flags.priority);
+      if (flags.later) payload.status = "backlog";
       const { item } = await call(config, "POST", "/items", payload, fetchImpl);
       log(`${item.key} ${cardUrl(item.key, config)}`);
+      // A ticket for later is not this session's work: the tab keeps its title.
+      if (flags.later) return item;
       // Replaces the old Linear PostToolUse reminder: the session tab should lead with the key.
       log(`New ticket ${item.key}: tell Łukasz to run /rename so the tab title leads with [${item.key}], and prefix your next reply with [${item.key}].`);
       return item;

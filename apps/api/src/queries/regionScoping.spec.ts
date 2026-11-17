@@ -186,7 +186,7 @@ describe("Row-level region scoping (ADR: requireScope applied to patient/practit
  * on GET could still PATCH or DELETE the same record.
  */
 describe("Row-level region scoping on writes (CORE-226)", () => {
-  const outsideScope = { statusCode: 403, reason: "outside_scope" };
+  const outsideScope = { statusCode: 403, reason: "OUTSIDE_TERRITORY" };
 
   async function setup(client: Client) {
     const globalId = await getGlobalTerritoryId(client);

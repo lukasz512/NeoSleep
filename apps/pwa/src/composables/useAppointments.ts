@@ -63,18 +63,38 @@ export const APPOINTMENT_STATUS_COLOR: Record<AppointmentStatus, string> = {
   no_show: "warning",
 };
 
-/** Why the API refused a write with 403 — mirrors ForbiddenReason in apps/api/src/errors.ts (CORE-226). */
-export const APPOINTMENT_REFUSAL_REASONS = ["outside_scope", "not_own_patient", "other_doctor", "not_booker", "clinical_only", "close_not_allowed"] as const;
-export type AppointmentRefusalReason = (typeof APPOINTMENT_REFUSAL_REASONS)[number];
+/** Why the API refused (403 `reason`, apps/api/src/errors.ts ForbiddenReason) — one message each, see FORBIDDEN_MESSAGE_KEYS. */
+export type AppointmentForbiddenReason =
+  | "OUTSIDE_TERRITORY"
+  | "NOT_BOOKER"
+  | "CLINICAL_FIELDS"
+  | "CANNOT_CLOSE"
+  | "OTHER_DOCTOR"
+  | "NOT_OWN_PATIENT"
+  | "ROLE_NOT_ALLOWED";
 
-/** The `reason` of a 403 body, or null when the API named none (or one this client doesn't know yet). */
-async function refusalReasonFromResponse(res: { status: number; clone?: () => { json: () => Promise<unknown> } }): Promise<AppointmentRefusalReason | null> {
-  if (res.status !== 403 || !res.clone) return null;
+/** i18n key per refusal (CORE-224): "outside your region" only when the territory check said so. */
+export const FORBIDDEN_MESSAGE_KEYS: Record<AppointmentForbiddenReason, string> = {
+  OUTSIDE_TERRITORY: "user.appointments.form.outsideScope",
+  NOT_BOOKER: "user.appointments.form.notBooker",
+  CLINICAL_FIELDS: "user.appointments.form.clinicalStaffOnly",
+  CANNOT_CLOSE: "user.appointments.form.cannotClose",
+  OTHER_DOCTOR: "user.appointments.form.otherDoctor",
+  NOT_OWN_PATIENT: "user.appointments.form.onlyOwnPatients",
+  ROLE_NOT_ALLOWED: "user.appointments.form.notAllowed",
+};
+
+/** The message for a 403: its own when the API named a known reason, the neutral one otherwise. */
+export function forbiddenMessageKey(reason: string | null): string {
+  return (reason && FORBIDDEN_MESSAGE_KEYS[reason as AppointmentForbiddenReason]) || "user.appointments.form.notAllowed";
+}
+
+async function forbiddenReasonFromResponse(res: Response): Promise<string | null> {
   try {
-    const { reason } = (await res.clone().json()) as { reason?: unknown };
-    return APPOINTMENT_REFUSAL_REASONS.find((r) => r === reason) ?? null;
+    const body = (await res.json()) as { reason?: unknown };
+    return typeof body.reason === "string" ? body.reason : null;
   } catch {
-    // benign: a non-JSON 403 names no reason — the caller shows the generic message.
+    // benign: a 403 without a JSON body names no reason — the neutral message covers it.
     return null;
   }
 }
@@ -84,8 +104,8 @@ export interface AppointmentWriteResult {
   ok: boolean;
   conflict: boolean;
   forbidden: boolean;
-  /** Which rule refused a 403 (CORE-226); null = unnamed, show the generic message. */
-  refusalReason: AppointmentRefusalReason | null;
+  /** The API's reason for a 403, null when it gave none. */
+  forbiddenReason: string | null;
   appointment: Appointment | null;
   /** A 400 naming a payload key (e.g. `duration_minutes`) — the form marks that field (NEO-109). */
   fieldErrors: FieldErrors | null;
@@ -100,8 +120,9 @@ async function write(path: string, method: "POST" | "PATCH", body: Record<string
   });
   const appointment = res.ok ? ((await res.json()) as Appointment) : null;
   const fieldErrors = res.ok ? null : await fieldErrorsFromResponse(res);
-  const refusalReason = res.ok ? null : await refusalReasonFromResponse(res);
-  return { ok: res.ok, conflict: res.status === 409, forbidden: res.status === 403, refusalReason, appointment, fieldErrors };
+  const forbidden = res.status === 403;
+  const forbiddenReason = forbidden ? await forbiddenReasonFromResponse(res) : null;
+  return { ok: res.ok, conflict: res.status === 409, forbidden, forbiddenReason, appointment, fieldErrors };
 }
 
 /**
@@ -115,9 +136,12 @@ export function useAppointments() {
   /** rep / KAM / MSL: book and cancel their own bookings, never see notes or close visits. */
   const isFieldForce = computed(() => role.value === "rep" || role.value === "kam" || role.value === "msl");
   const isDoctor = computed(() => role.value === "doctor");
-  const canClose = computed(() => !!role.value && !isFieldForce.value);
+  /** NeoCRM support reads the calendar and writes nothing (API: middleware/supportAllowlist.ts). */
+  const canBook = computed(() => role.value !== "support");
+  const canClose = computed(() => !!role.value && canBook.value && !isFieldForce.value);
 
   function canChange(appointment: Appointment): boolean {
+    if (!canBook.value) return false;
     return !isFieldForce.value || appointment.created_by_user_id === authStore.user?.id;
   }
 
@@ -139,5 +163,5 @@ export function useAppointments() {
     return write(`/api/v1/appointments/${id}`, "PATCH", body);
   }
 
-  return { isFieldForce, isDoctor, canClose, canChange, create, update };
+  return { isFieldForce, isDoctor, canBook, canClose, canChange, create, update };
 }

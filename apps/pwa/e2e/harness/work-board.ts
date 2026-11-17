@@ -2,7 +2,8 @@
  * DB-free harness for the platform work board (CORE-221) — served only by the Vite dev
  * server, never part of `vite build`. Mounts the real WorkBoardView and answers the work
  * board API from fixtures: three statuses with no tickets, git markers of every kind in
- * Building and Needs Review, one ticket on hold and two canceled ones.
+ * Building and Needs Review, one ticket on hold and two canceled ones. Every ticket opens
+ * with the same three-line history.
  *
  * `?theme=dark` · `?lang=pl|mx`
  */
@@ -15,7 +16,7 @@ import { i18n } from "../../src/plugins/i18n";
 import "../../src/styles/theme.scss";
 import "../../src/styles/app-responsive.scss";
 import WorkBoardView from "../../src/views/WorkBoardView.vue";
-import type { WorkItem, WorkTeam } from "../../src/types/workBoard";
+import type { WorkItem, WorkItemEvent, WorkTeam } from "../../src/types/workBoard";
 
 const params = new URLSearchParams(location.search);
 const theme = params.get("theme") === "dark" ? darkTheme : lightTheme;
@@ -77,6 +78,14 @@ const ITEMS: WorkItem[] = [
   item("NEO-77", "Fax export for referrals", "canceled", { git_state: "none", ...checked }),
 ];
 
+/** The same short history on every ticket: created, then two moves (CORE-225). */
+const who = { body: null, actor: "lukasz@example.com", actor_kind: "human" } as const;
+const HISTORY: WorkItemEvent[] = [
+  { id: "1", kind: "created", from_status: null, to_status: "backlog", created_at: "2026-11-10T10:00:00Z", ...who },
+  { id: "2", kind: "status", from_status: "backlog", to_status: "approved", created_at: "2026-11-12T09:00:00Z", ...who },
+  { id: "3", kind: "status", from_status: "approved", to_status: "building", created_at: "2026-11-14T15:30:00Z", ...who },
+];
+
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
@@ -92,7 +101,7 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
   const index = ITEMS.findIndex((i) => i.key === key);
   if (index < 0) return json({ error: "Not found" }, 404);
   if (method === "PATCH") ITEMS[index] = { ...ITEMS[index]!, ...(JSON.parse(String(init?.body)) as Partial<WorkItem>) };
-  return json({ item: ITEMS[index], events: [], attachments: [] });
+  return json({ item: ITEMS[index], events: HISTORY, attachments: [] });
 };
 
 const router = createRouter({

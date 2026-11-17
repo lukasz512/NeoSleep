@@ -144,6 +144,7 @@
         <!-- CORE-153: on wide screens "+" sits in the page header, where the lists keep theirs. -->
         <Teleport :to="pageHeader.to" defer :disabled="headerAddOff">
           <button
+            v-if="canBook"
             type="button"
             class="cal__add"
             :class="{ 'cal__add--header': !headerAddOff }"
@@ -230,7 +231,7 @@ const AppointmentDetailDialog = defineAsyncComponent(() => import("../components
 
 const { t, locale } = useI18n();
 const { smAndUp } = useDisplay();
-const { isDoctor } = useAppointments();
+const { isDoctor, canBook } = useAppointments();
 
 const lang = computed(() => intlLocale(locale.value));
 
@@ -649,6 +650,7 @@ function onSlot(dayKey: string, minutes: number) {
 // The Cita/Evento choice (CORE-117) comes back when events are needed again.
 // prefillWall is the clicked slot as wall time — a booking keeps it in the clinic's zone (CORE-120).
 function openAdd(prefillStartIso?: string, prefillWall?: string) {
+  if (!canBook.value) return;
   openBooking({ start: prefillStartIso, startLocal: prefillWall ?? null });
 }
 

@@ -40,3 +40,10 @@ test("a doctor already on the team: no notice", async ({ page }) => {
   await open(page, "?doctor=team");
   await expect(page.getByTestId("appointment-grant")).toHaveCount(0);
 });
+
+test("CORE-224: a booking refused by a booking rule names that rule, not the region", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await open(page, "?doctor=team&refuse=NOT_BOOKER&lang=mx");
+  await page.getByTestId("appointment-submit").click();
+  await expect(page.getByTestId("appointment-problem")).toContainText("Solo quien agendó esta cita puede cambiarla.");
+  await expect(page.getByTestId("appointment-problem")).not.toContainText("fuera de su región");});

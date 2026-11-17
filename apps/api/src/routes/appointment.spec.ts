@@ -139,7 +139,7 @@ describe("/api/v1/appointments", () => {
       .send({ patient_id: own, practitioner_id: other.practitionerId, start_at: futureSlot() });
     expect([ok.status, foreignPatient.status, otherDoctor.status]).toEqual([201, 403, 403]);
     // CORE-226: every refusal names its reason, so the PWA can say what is actually wrong.
-    expect([foreignPatient.body.reason, otherDoctor.body.reason]).toEqual(["not_own_patient", "other_doctor"]);
+    expect([foreignPatient.body.reason, otherDoctor.body.reason]).toEqual(["NOT_OWN_PATIENT", "OTHER_DOCTOR"]);
 
     const admin = await staff("admin");
     const othersAppointment = await request(app).post("/api/v1/appointments").set("Authorization", admin.auth).send({ patient_id: foreign, start_at: futureSlot() });
@@ -150,7 +150,7 @@ describe("/api/v1/appointments", () => {
     expect(ids).not.toContain(othersAppointment.body.id);
     const peek = await request(app).get(`/api/v1/appointments/${othersAppointment.body.id}`).set("Authorization", auth);
     expect(peek.status).toBe(403);
-    expect(peek.body.reason).toBe("other_doctor");
+    expect(peek.body.reason).toBe("OTHER_DOCTOR");
   });
 
   it("a doctor booking for themselves doesn't notify themselves", async () => {
@@ -175,7 +175,7 @@ describe("/api/v1/appointments", () => {
       .set("Authorization", actor.auth)
       .send({ patient_id: plPatient, start_at: futureSlot(), notes: "clinical" });
     expect([booked.status, outside.status, withNotes.status]).toEqual([201, 403, 403]);
-    expect([outside.body.reason, withNotes.body.reason]).toEqual(["outside_scope", "clinical_only"]);
+    expect([outside.body.reason, withNotes.body.reason]).toEqual(["OUTSIDE_TERRITORY", "CLINICAL_FIELDS"]);
 
     const clinical = await request(app)
       .post("/api/v1/appointments")
@@ -199,12 +199,12 @@ describe("/api/v1/appointments", () => {
     const reschedule = await request(app).patch(`/api/v1/appointments/${own.body.id}`).set("Authorization", rep.auth).send({ start_at: futureSlot() });
     const cancel = await request(app).patch(`/api/v1/appointments/${own.body.id}`).set("Authorization", rep.auth).send({ status: "cancelled" });
     expect([complete.status, reschedule.status, cancel.status]).toEqual([403, 200, 200]);
-    expect(complete.body.reason).toBe("close_not_allowed");
+    expect(complete.body.reason).toBe("CANNOT_CLOSE");
 
     const adminBooked = await request(app).post("/api/v1/appointments").set("Authorization", admin.auth).send({ patient_id: plPatient, start_at: futureSlot() });
     const foreignCancel = await request(app).patch(`/api/v1/appointments/${adminBooked.body.id}`).set("Authorization", rep.auth).send({ status: "cancelled" });
     expect(foreignCancel.status).toBe(403);
-    expect(foreignCancel.body.reason).toBe("not_booker");
+    expect(foreignCancel.body.reason).toBe("NOT_BOOKER");
   });
 
   it("manager and the appointment's doctor close appointments; reschedule keeps the length and notifies the doctor", async () => {
@@ -286,5 +286,36 @@ describe("/api/v1/appointments", () => {
       .set("Authorization", admin.auth);
     expect(inWindow.body.items.map((a: { id: string }) => a.id)).toEqual([created.body.id]);
     expect(before.body.items).toEqual([]);
+  });
+
+  it("each 403 carries its own reason, so the app never calls a booking rule a region problem (CORE-224)", async () => {
+    const rep = await staff("rep", "PL");
+    const admin = await staff("admin");
+    const doc = await doctor();
+    const other = await doctor();
+    const plPatient = await patient(doc.practitionerId, "PL");
+    const mxPatient = await patient(doc.practitionerId, "MX");
+    const foreign = await patient(other.practitionerId);
+    const post = (auth: string, body: Record<string, unknown>) => request(app).post("/api/v1/appointments").set("Authorization", auth).send({ start_at: futureSlot(), ...body });
+    const patch = (auth: string, id: string, body: Record<string, unknown>) => request(app).patch(`/api/v1/appointments/${id}`).set("Authorization", auth).send(body);
+
+    const own = await post(rep.auth, { patient_id: plPatient });
+    const adminBooked = await post(admin.auth, { patient_id: plPatient });
+    const othersAppointment = await post(admin.auth, { patient_id: foreign });
+    expect([own.status, adminBooked.status, othersAppointment.status]).toEqual([201, 201, 201]);
+
+    const refusals = {
+      OUTSIDE_TERRITORY: await post(rep.auth, { patient_id: mxPatient }),
+      CLINICAL_FIELDS: await post(rep.auth, { patient_id: plPatient, notes: "clinical" }),
+      NOT_BOOKER: await patch(rep.auth, adminBooked.body.id, { start_at: futureSlot() }),
+      CANNOT_CLOSE: await patch(rep.auth, own.body.id, { status: "completed" }),
+      NOT_OWN_PATIENT: await post(doc.login!.auth, { patient_id: foreign }),
+      OTHER_DOCTOR: await patch(doc.login!.auth, othersAppointment.body.id, { start_at: futureSlot() }),
+    };
+    for (const [reason, res] of Object.entries(refusals)) {
+      expect([reason, res.status, res.body.code, res.body.reason]).toEqual([reason, 403, "FORBIDDEN", reason]);
+    }
+    const clinicalOnUpdate = await patch(rep.auth, own.body.id, { notes: "clinical" });
+    expect(clinicalOnUpdate.body.reason).toBe("CLINICAL_FIELDS");
   });
 });
