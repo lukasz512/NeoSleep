@@ -274,6 +274,7 @@ describe("sendAppointmentPatientEmail (CORE-25 / CORE-26)", () => {
     const args = sendMock.mock.calls[0]![0];
     expect(args.subject).toContain("Clínica Sonrisa");
     expect(args.html).toContain("09:00"); // 15:00 UTC = 09:00 in Mexico City
+    expect(args.html).toContain("hora de Ciudad de México (GMT-6)"); // CORE-244: the zone is named, not just "clinic time"
     expect(args.html).toContain("tel:+525512345678");
     expect(args.html).toContain("mailto:hola@sonrisa.mx");
     expect(args.html).toContain("Confirmo mi asistencia");

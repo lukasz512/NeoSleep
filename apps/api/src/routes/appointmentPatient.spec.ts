@@ -97,6 +97,11 @@ describe("appointment emails to the patient (CORE-25)", () => {
     expect(appointment.ics.method).toBe("REQUEST");
     expect(appointment.ics.content).toContain(`UID:appointment-${res.body.id}@neosleepcare.com`);
     expect(JSON.stringify(appointment)).not.toContain("Ajuste de dispositivo");
+    // CORE-244: the calendar entry keeps the clinic's zone and its title states the clinic's hour with the zone name.
+    expect(appointment.ics.content).toContain("DTSTART;TZID=America/Mexico_City:");
+    const google = new URL(appointment.links.google!);
+    expect(google.searchParams.get("ctz")).toBe("America/Mexico_City");
+    expect(google.searchParams.get("text")).toMatch(/\d{2}:\d{2}.* hora de Ciudad de México \(GMT-6\)$/);
 
     await withTenant(TENANT_SLUG, async (client) => {
       const sends = await client.query(`SELECT kind, appointment_id FROM patient_email_send WHERE patient_id = $1`, [s.patientId]);

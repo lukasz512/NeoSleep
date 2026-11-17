@@ -12,6 +12,7 @@ import {
   type EmailIconName,
 } from "@neo/email";
 import { maskEmail } from "./utils/maskEmail.js";
+import { utcOffsetLabel } from "./utils/timezones.js";
 import { AppError } from "./errors.js";
 import { RESEND_API_KEY, RESEND_FROM_EMAIL, RESEND_NOTIFY_TO, PARTNER_DOCS_CC_EMAIL, RESEND_WEBHOOK_SECRET } from "./env.js";
 
@@ -668,6 +669,24 @@ export function formatAppointmentWhen(startAt: string, endAt: string, timezone: 
   return { date, time: `${clock.format(new Date(startAt))} – ${clock.format(new Date(endAt))}` };
 }
 
+/**
+ * CORE-244: "Mexico City time (GMT-6)" — names the clinic's zone next to every
+ * time the patient reads, so a calendar app showing the viewer's own hour
+ * can't be mistaken for a different appointment. A zone without a name in
+ * i18n reads "clinic time (GMT+9)".
+ */
+export function clinicZoneLabel(startAt: string, timezone: string, locale: string | null | undefined): string {
+  const key = `timezoneName.${timezone.replaceAll("/", "_")}`;
+  const name = emailT(locale, key);
+  return `${name === key ? emailT(locale, "email.appointment.clinicTime") : name} (${utcOffsetLabel(startAt, timezone)})`;
+}
+
+/** "11:00 AM" — the start as the clinic's clock shows it, in the patient's language. */
+export function formatAppointmentStart(startAt: string, timezone: string, locale: string | null | undefined): string {
+  const intlLocale = INTL_LOCALE[locale ?? "en"] ?? INTL_LOCALE.en;
+  return new Intl.DateTimeFormat(intlLocale, { timeZone: timezone, hour: "2-digit", minute: "2-digit" }).format(new Date(startAt));
+}
+
 /** The pieces of the calendar-page date tile: "OCT 2031", "15", "WEDNESDAY", plus the start time on its own. */
 function dateTileParts(startAt: string, timezone: string, locale: string | null | undefined): { monthYear: string; day: string; weekday: string; start: string } {
   const intlLocale = INTL_LOCALE[locale ?? "en"] ?? INTL_LOCALE.en;
@@ -740,7 +759,7 @@ export async function sendAppointmentPatientEmail(to: string, recipient: EmailRe
         <tr><td style="font-size:11px;color:${APPT.muted};padding:0 0 6px;">${escapeHtml(tile.weekday)}</td></tr>
       </table></td>
       <td valign="middle" style="padding-left:16px;"><div style="font-size:26px;font-weight:bold;color:${APPT.ink};${strike}">${escapeHtml(tile.start)}</div>
-      <div style="font-size:13px;color:${APPT.muted};">${escapeHtml(t("clinicTime"))} · ${escapeHtml(t("minutes", { n: String(minutes) }))}</div></td>
+      <div style="font-size:13px;color:${APPT.muted};">${escapeHtml(clinicZoneLabel(appointment.startAt, appointment.timezone, locale))} ·${escapeHtml(t("minutes", { n: String(minutes) }))}</div></td>
     </tr></table>`;
 
   const row = (icon: EmailIconName, label: string, valueHtml: string): string => `
