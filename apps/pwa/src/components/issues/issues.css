@@ -12,6 +12,89 @@
   list-style: none;
 }
 
+.issues-panel__hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+/* A row plus what sits beside it: the state chip, the ticket and its links. */
+.issues-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 12px;
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.issues-item .issues-row {
+  flex: 1 1 320px;
+  width: auto;
+  min-width: 0;
+  border-bottom: 0;
+}
+
+.issues-item__side {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px;
+}
+
+.issues-item__ticket {
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  color: rgb(var(--v-theme-primary));
+  text-decoration: none;
+}
+
+.issues-item__ticket:hover {
+  text-decoration: underline;
+}
+
+.issues-item__blocked {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 0 4px 12px 24px;
+  font-size: 0.8125rem;
+  color: rgb(var(--v-theme-warning));
+  overflow-wrap: anywhere;
+}
+
+.issues-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: rgb(var(--v-theme-primary));
+  text-decoration: none;
+  border-radius: 999px;
+  background: rgba(var(--v-theme-primary), 0.08);
+}
+
+.issues-action:hover {
+  background: rgba(var(--v-theme-primary), 0.16);
+}
+
+.issues-action--primary {
+  color: rgb(var(--v-theme-on-primary));
+  background: rgb(var(--v-theme-primary));
+}
+
+.issues-action--primary:hover {
+  background: rgba(var(--v-theme-primary), 0.88);
+}
+
+.issues-action:focus-visible,
+.issues-item__ticket:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  outline-offset: 2px;
+}
+
 .issues-row {
   display: flex;
   align-items: flex-start;

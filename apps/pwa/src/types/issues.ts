@@ -34,7 +34,31 @@ export interface ProblemReport {
   resolved_at: string | null;
   created_at: string;
   updated_at: string;
+  /** State of the error this report is linked to by request id; only the list endpoint sends it. */
+  linked_error?: LinkedErrorState | null;
 }
+
+export interface LinkedErrorState {
+  status: DiagnosticStatus;
+  ticket_status: string | null;
+  blocked: boolean;
+}
+
+/** The board ticket that tracks the fix of an error kind. */
+export interface DiagnosticTicket {
+  key: string;
+  status: string;
+  branch: string | null;
+  status_changed_at: string;
+  artifact_url: string | null;
+  /** The pull request or the pre-filled compare page, once the branch is pushed. */
+  pr_url: string | null;
+  /** First line of the worker's "Blocked:" comment while the ticket waits in Building. */
+  blocked_reason: string | null;
+}
+
+/** prod and dev are what the API writes today; archive is the legacy "production" label, view only. */
+export type DiagnosticEnv = "prod" | "dev" | "archive";
 
 export interface DiagnosticGroup {
   id: string;
@@ -52,6 +76,7 @@ export interface DiagnosticGroup {
   status: DiagnosticStatus;
   metadata: Record<string, unknown> | null;
   linked_reports: { id: string; number: number }[];
+  ticket: DiagnosticTicket | null;
 }
 
 export interface ProblemReportPatch {
