@@ -111,6 +111,13 @@ Answers recorded as clicked; the prototype he judged is the round 8 Artifact (th
   - Notes: the animation must scale better, the balloons must not be attached to the parcel, the route must work better with scrolling. Fixed in the prototype: one unit drives every size and the margin grows with the width; balloons wait at their own place on the page, drop their note when the parcel arrives and fly off alone; the tip follows scrolling with half the delay and slows down inside loops.
 - Constraints carried into the build: decoration only (`aria-hidden`, nothing focusable), static under reduced motion, three.js loaded after first paint, no gradients, no warm accent as decoration.
 
+### Round 9, feedback on the round 8 route (Łukasz, 2026-11-17), answers pending
+- His words: the route is still "weird", he does not like the curls at all, the route should be part of the background, the tiles must be liquid glass, and the page should look like a native Mac.
+- This replaces E3 (detours and loops) and the pins and pinwheels of E2: the route has no loops anywhere.
+- Prototype with form `core-215-r9-glass`: the route is a ribbon painted on the dot paper under the content, tiles are translucent glass that blurs what passes below, the parcel travels under the glass and only the plane rises above it to land on the demo request.
+- Open, asked as three buttons: F1 where the ribbon runs (whole page, left margin only, or ribbon on desktop and margin on phones), F2 how it looks (coloured throughout, thin pencil line, or pale ahead and filling with colour behind the parcel), F3 how far the Mac look goes (glass buttons and bar with our typeface, glass tiles only, or the same plus the system typeface).
+- Constraint: glass is built without gradients, so the style guard stays as it is.
+
 ### Hand-off
 → `/perspective legal` on the claims ledger once the claim level is decided
 → `/perspective marketing` + `/ux` for copy and layout
