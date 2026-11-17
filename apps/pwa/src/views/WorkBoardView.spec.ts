@@ -248,6 +248,17 @@ describe("WorkBoardView", () => {
     expect(headings).toEqual(["Building 1"]);
   });
 
+  it("draws each status next to its heading, in the columns and in the phone list (CORE-225)", async () => {
+    serve([item({ key: "CORE-1", status: "building" })]);
+    const desktop = (await render()).wrapper;
+    for (const status of WORK_BOARD_COLUMNS) {
+      expect(desktop.get(`[data-testid='work-column-${status}'] h2 svg`).attributes("data-status")).toBe(status);
+    }
+    const glyph = (await render(375)).wrapper.get(".work-board__group h2 svg");
+    expect(glyph.attributes("data-status")).toBe("building");
+    expect(glyph.attributes("aria-hidden")).toBe("true");
+  });
+
   it("keeps canceled tickets hidden until asked (CORE-221)", async () => {
     serve([item({ key: "CORE-1" }), item({ key: "CORE-2", status: "canceled" })]);
     const { wrapper } = await render();

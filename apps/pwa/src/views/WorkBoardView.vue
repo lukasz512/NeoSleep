@@ -68,7 +68,7 @@
       <div v-if="compact" class="work-board__list" data-testid="work-board-list">
         <section v-for="status in filledColumns" :key="status" class="work-board__group">
           <h2 class="work-board__heading">
-            {{ t(`workBoard.status.${status}`) }} <span class="work-board__count">{{ grouped[status].length }}</span>
+            <WorkStatusGlyph :status="status" />{{ t(`workBoard.status.${status}`) }} <span class="work-board__count">{{ grouped[status].length }}</span>
           </h2>
           <WorkItemCard v-for="item in shown(status)" :key="item.id" :item="item" :draggable="false" @open="openItem" @move="moveBy" />
           <button v-if="hiddenCount(status)" type="button" class="work-board__more" @click="showAllDone = true">
@@ -91,7 +91,7 @@
           @drop.prevent="onDrop($event, status)"
         >
           <h2 class="work-board__heading">
-            {{ t(`workBoard.status.${status}`) }} <span class="work-board__count">{{ grouped[status].length }}</span>
+            <WorkStatusGlyph :status="status" />{{ t(`workBoard.status.${status}`) }} <span class="work-board__count">{{ grouped[status].length }}</span>
           </h2>
           <div class="work-board__cards">
             <WorkItemCard v-for="item in shown(status)" :key="item.id" :item="item" @open="openItem" @move="moveBy" />
@@ -128,6 +128,7 @@ import AppEmptyState from "../components/AppEmptyState.vue";
 import AppErrorState from "../components/AppErrorState.vue";
 import WorkItemCard from "../components/workBoard/WorkItemCard.vue";
 import WorkItemDialog from "../components/workBoard/WorkItemDialog.vue";
+import WorkStatusGlyph from "../components/workBoard/WorkStatusGlyph.vue";
 import WorkSessionTokensDialog from "../components/workBoard/WorkSessionTokensDialog.vue";
 import {
   SESSION_LABEL,
@@ -390,7 +391,7 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));
 
 .work-board__heading {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   margin: 0;
   padding: 4px;
