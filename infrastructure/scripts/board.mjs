@@ -11,13 +11,15 @@
 //   pnpm board comment CORE-12 "text"
 //   pnpm board link CORE-12 --kind artifact|spec|pr|ci|other --url https://… [--title "…"] [--state passed|failed] (state: ci only)
 //   pnpm board branch CORE-12 worktree-core-12-slug
-//   pnpm board move CORE-12 building|needs_review
+//   pnpm board move CORE-12 building|needs_review|approved
+//                     (approved: only a Backlog pick Łukasz clicked, 3 a week at most, CORE-234)
 //   pnpm board waiting [--remind]               → Needs Review tickets that wait for Łukasz, the longest wait
 //                     first; --remind prints one line only when too many are old (session start, CORE-233)
 //   pnpm board picks [--remind]                 → Backlog tickets ready for Approved, the most urgent first;
 //                     --remind prints one line only on a Monday when Approved runs low (session start, CORE-234)
-//   pnpm board review --form <form id> CORE-12=keep NEO-3=later CORE-9=cancel NEO-7=shipped
-//                     → applies Łukasz's backlog-review answers (shipped closes only what is on prod)
+//   pnpm board review --form <form id> [--confirm <second form id>] CORE-12=keep NEO-3=later CORE-9=cancel NEO-7=shipped
+//                     → applies Łukasz's backlog-review answers (shipped closes only what is on prod;
+//                     a cancel is skipped until --confirm names the form in which he repeated it)
 //   pnpm board teams [--write]                 → team keys; --write refreshes .claude/ticket-teams
 //   pnpm board url CORE-12                      → the card's link (no network)
 //
@@ -272,7 +274,8 @@ export async function run(argv, { config = loadConfig(), fetchImpl = fetch, log 
     case "review": {
       const decisions = parseReviewAnswers(positional);
       if (!decisions.length) throw new Error("missing the answers (KEY=keep|later|cancel|shipped …)");
-      const result = await call(config, "POST", "/backlog-review", { form: need(flags.form, "--form (the decision form's id)"), decisions }, fetchImpl);
+      const body = { form: need(flags.form, "--form (the decision form's id)"), ...(flags.confirm ? { confirm: flags.confirm } : {}), decisions };
+      const result = await call(config, "POST", "/backlog-review", body, fetchImpl);
       for (const { key: applied, decision } of result.applied) log(`${applied}\t${decision}`);
       for (const { key: skipped, reason } of result.skipped) log(`${skipped}\tskipped: ${reason}`);
       return result;

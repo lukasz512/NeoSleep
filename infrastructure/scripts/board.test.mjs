@@ -255,6 +255,12 @@ test("review sends the form's answers and prints what was applied and skipped", 
   assert.deepEqual(lines, ["CORE-1\tcancel", "NEO-2\tskipped: not on prod"]);
 });
 
+test("review --confirm names the second form that repeated the cancels", async () => {
+  const board = fakeFetch({ applied: [{ key: "CORE-1", decision: "cancel" }], skipped: [] });
+  await run(["review", "--form", "r1", "--confirm", "r1-cancels", "CORE-1=cancel"], { config: CONFIG, fetchImpl: board.impl, log: () => {} });
+  assert.deepEqual(JSON.parse(board.calls[0].init.body), { form: "r1", confirm: "r1-cancels", decisions: [{ key: "CORE-1", decision: "cancel" }] });
+});
+
 test("review refuses to run without a form id or without answers", async () => {
   const board = fakeFetch();
   await assert.rejects(run(["review", "CORE-1=keep"], { config: CONFIG, fetchImpl: board.impl, log: () => {} }), /--form/);

@@ -23,10 +23,12 @@
 - [ ] The board says why when a card dropped on Approved snaps back, and the ticket dialog says it on save.
 - [ ] `POST /platform/work/backlog-review` applies `keep | later | cancel | shipped` to Backlog tickets only, in one transaction, each with a comment naming the form; `shipped` closes only a ticket git sees on prod; anything else is skipped with a reason; the agent gets 403.
 - [ ] `pnpm board review --form <id> KEY=decision …` sends those answers; `pnpm board picks` lists Backlog tickets that are ready for Approved; `pnpm board picks --remind` prints one line only on a Monday with fewer than 3 tickets in Approved, and the session start shows it.
+- [ ] A session's `cancel` is skipped ("cancel waits for a confirmation form") until the call carries `confirm`, the id of a second form; the comment then names both forms. `keep`, `later` and `shipped` apply at once, and a person cancels at once (D1).
+- [ ] A session may move a prepared ticket from Backlog to Approved, and from no other status; sessions together move at most 3 in 7 days, the next one answers 403. A person's moves do not count (D2).
 
-### Open Questions
-- [ ] D1: may a session apply Łukasz's form answers to Backlog tickets (cancel, close shipped), or does he click them on the board himself?
-- [ ] D2: may a session also move his Monday picks to Approved?
+### Open Questions — resolved 2026-11-17 (form core-234-decisions)
+- [x] D1: a session applies Łukasz's form answers; a cancel needs a second click (a confirmation form).
+- [x] D2: a session moves his Monday picks to Approved, at most 3 per week. The Monday offer stays at up to five.
 
 ### Hand-off
-→ `/dev feat backlog-review-standing-rules` — scope is clear; the two open questions ship as decisions in the Artifact.
+→ `/dev feat backlog-review-standing-rules` — scope is clear; the two open questions shipped as decisions in the Artifact and are answered above.

@@ -13,6 +13,8 @@ import {
   WORK_REVIEW_DECISIONS,
   addWorkItemComment,
   applyBacklogReview,
+  countSessionApprovals,
+  SESSION_APPROVED_PER_WEEK,
   applyWorkGitStates,
   createWorkItem,
   deleteWorkAttachment,
@@ -60,8 +62,9 @@ import { platformAuditActor, routeParam } from "./utils.js";
  *  - a Claude Code session, with `X-Session-Token` (one per device, issued and revoked on the
  *    board, CORE-187): creates its own ticket straight into Building with the `session` label,
  *    comments, links, sets the branch and hands over to Needs Review. Never closes, never
- *    edits the text, never sees Triage. One exception: it may carry Łukasz's backlog-review
- *    answers to Backlog tickets (CORE-234).
+ *    edits the text, never sees Triage. Two exceptions (CORE-234): it may carry Łukasz's
+ *    backlog-review answers to Backlog tickets (a cancel only once a second form confirmed it),
+ *    and move the picks he clicked from Backlog to Approved, three a week at most.
  * A ticket enters Approved only with a priority and a Done when, whoever moves it.
  * Tenant users get 403; the board holds no tenant or patient data.
  */
@@ -81,7 +84,10 @@ export const AGENT_MOVES: Readonly<Partial<Record<WorkStatus, readonly WorkStatu
 
 const AGENT_FIELDS = new Set(["status", "add_links", "branch"]);
 
-/** A session picks work up (Building) and hands it over (Needs Review); closed work stays closed. */
+/**
+ * A session picks work up (Building) and hands it over (Needs Review); closed work stays closed.
+ * It may also move a pick from Backlog to Approved, SESSION_APPROVED_PER_WEEK at most (D2).
+ */
 const SESSION_TARGETS: readonly WorkStatus[] = ["building", "needs_review"];
 const SESSION_CLOSED: readonly WorkStatus[] = ["done", "canceled"];
 /** Same limit the old Linear ticket-format hook enforced (NEO-84). */
@@ -438,10 +444,11 @@ workBoardRouter.post(
   })
 );
 
-// POST /api/v1/platform/work/backlog-review { form, decisions: [{ key, decision }] } — the answers
+// POST /api/v1/platform/work/backlog-review { form, confirm?, decisions: [{ key, decision }] } — the answers
 // Łukasz clicked in a backlog-review decision form (board-upkeep-r1 P3, CORE-234), applied to
 // Backlog tickets only: keep | later | cancel | shipped (closes only what git sees on prod).
-// For people and sessions; a session carries his answers, it does not decide. Not for the agent.
+// For people and sessions; a session carries his answers, it does not decide, and its cancels
+// apply only with `confirm`, the id of a second form that repeated them (D1). Not for the agent.
 workBoardRouter.post(
   "/platform/work/backlog-review",
   asyncHandler(async (req, res) => {
@@ -451,7 +458,11 @@ workBoardRouter.post(
     if (typeof form !== "string" || !REVIEW_FORM_RE.test(form)) {
       throw new ValidationError("form is the id of the decision form the answers came from", "form");
     }
-    res.json(await applyBacklogReview(form, reviewAnswersValue(field(req.body, "decisions")), actor));
+    const confirm = field(req.body, "confirm");
+    if (confirm !== undefined && (typeof confirm !== "string" || !REVIEW_FORM_RE.test(confirm) || confirm === form)) {
+      throw new ValidationError("confirm is the id of the second form that repeated the cancels", "confirm");
+    }
+    res.json(await applyBacklogReview(form, reviewAnswersValue(field(req.body, "decisions")), actor, confirm));
   })
 );
 
@@ -492,14 +503,15 @@ workBoardRouter.patch(
     }
 
     const key = `${team}-${number}`;
-    const item = await updateWorkItem(team, number, patch, actor, (current) => {
+    const item = await updateWorkItem(team, number, patch, actor, async (current, client) => {
       if (actor.kind !== "human") hideTriageFromMachines(actor, current, key);
       if (patch.status === undefined || patch.status === current.status) return;
       if (actor.kind !== "human") {
+        const pick = actor.kind === "session" && current.status === "backlog" && patch.status === "approved";
         const allowed =
           actor.kind === "agent"
             ? AGENT_MOVES[current.status]?.includes(patch.status)
-            : SESSION_TARGETS.includes(patch.status) && !SESSION_CLOSED.includes(current.status);
+            : pick || (SESSION_TARGETS.includes(patch.status) && !SESSION_CLOSED.includes(current.status));
         if (!allowed) throw new ForbiddenError(`The ${actor.kind} cannot move ${current.status} to ${patch.status}`);
       }
       // The worker giving a build back returns a ticket that already passed the rule.
@@ -507,6 +519,11 @@ workBoardRouter.patch(
         requireReadyForApproved(
           patch.priority ?? current.priority,
           patch.done_when !== undefined ? patch.done_when : current.done_when
+        );
+      }
+      if (actor.kind === "session" && patch.status === "approved" && (await countSessionApprovals(client)) >= SESSION_APPROVED_PER_WEEK) {
+        throw new ForbiddenError(
+          `Sessions already moved ${SESSION_APPROVED_PER_WEEK} tickets to Approved in the last 7 days; a person moves the next one`
         );
       }
     });

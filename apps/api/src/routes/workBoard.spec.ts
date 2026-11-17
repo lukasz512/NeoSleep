@@ -571,6 +571,7 @@ describe("platform work board", () => {
 
       const res = await review({
         form: "qa-review-r1",
+        confirm: "qa-review-r1-cancels",
         decisions: [
           { key: keep, decision: "keep" },
           { key: later, decision: "later" },
@@ -657,7 +658,103 @@ describe("platform work board", () => {
       expect((await review({ form: "ok", decisions: [{ key, decision: "delete" }] })).body.field).toBe("decisions");
       expect((await review({ form: "ok", decisions: [{ key: "nope", decision: "keep" }] })).body.field).toBe("decisions");
       expect((await review({ form: "ok", decisions: [...decisions, { key, decision: "keep" }] })).body.field).toBe("decisions");
+      expect((await review({ form: "ok", confirm: "has spaces", decisions })).body.field).toBe("confirm");
+      expect((await review({ form: "ok", confirm: "ok", decisions })).body.field).toBe("confirm");
       expect((await read(key)).item.status).toBe("backlog");
+    });
+
+    it("holds a session's cancel until a second form confirms it; a person cancels at once (D1)", async () => {
+      const cancel = await backlog("Cancel after a second click");
+      const later = await backlog("Later at once");
+      const decisions = [
+        { key: cancel, decision: "cancel" },
+        { key: later, decision: "later" },
+      ];
+      const first = await review({ form: "qa-review-r4", decisions });
+      expect(first.body.applied).toEqual([{ key: later, decision: "later" }]);
+      expect(first.body.skipped).toEqual([{ key: cancel, reason: "cancel waits for a confirmation form" }]);
+      expect((await read(cancel)).item.status).toBe("backlog");
+
+      const second = await review({ form: "qa-review-r4", confirm: "qa-review-r4-confirm", decisions: [decisions[0]] });
+      expect(second.body).toEqual({ applied: [{ key: cancel, decision: "cancel" }], skipped: [] });
+      const canceled = await read(cancel);
+      expect(canceled.item.status).toBe("canceled");
+      expect(canceled.events.at(-1).body).toBe("Backlog review qa-review-r4, confirmed in qa-review-r4-confirm: canceled.");
+    });
+  });
+
+  describe("a session moves picks to Approved (CORE-234 D2)", () => {
+    let token: string;
+    let tokenId: string;
+
+    const move = (key: string, status: string) => request(app).patch(`${BASE}/items/${key}`).set("X-Session-Token", token).send({ status });
+    async function ready(title: string, extra: Record<string, unknown> = {}): Promise<string> {
+      return (await create({ title, priority: 2, done_when: "It works.", ...extra })).body.item.key as string;
+    }
+
+    beforeAll(async () => {
+      const issued = await request(app).post(`${BASE}/session-tokens`).set("Authorization", platformAdmin.auth).send({ name: `Picks ${SUFFIX}` });
+      token = issued.body.token;
+      tokenId = issued.body.item.id;
+      // The cap counts every session's moves; what an earlier run left in the test DB must not use it up.
+      await getDb().query(
+        `DELETE FROM platform.work_item_event
+          WHERE kind = 'status' AND to_status = 'approved' AND actor_kind = 'session' AND created_at > now() - interval '7 days'`
+      );
+    });
+
+    afterAll(async () => {
+      await getDb().query("DELETE FROM platform.work_session_token WHERE id = $1", [tokenId]);
+    });
+
+    it("moves a prepared Backlog ticket, and only from Backlog", async () => {
+      const unprepared = (await create({ title: "No priority" })).body.item.key as string;
+      const refused = await move(unprepared, "approved");
+      expect(refused.status).toBe(400);
+      expect(refused.body.field).toBe("priority");
+
+      const spec = await ready("Spec waits for a person", { status: "spec_ready" });
+      expect((await move(spec, "approved")).status).toBe(403);
+      const closed = await ready("Closed stays closed", { status: "done" });
+      expect((await move(closed, "approved")).status).toBe(403);
+
+      const pick = await ready("Monday pick");
+      const moved = await move(pick, "approved");
+      expect(moved.status).toBe(200);
+      expect(moved.body.item.status).toBe("approved");
+    });
+
+    it("stops at 3 moves in 7 days; a person's moves do not count and an old move frees a place", async () => {
+      // One move was made by the test above.
+      const byHuman = await ready("Approved by a person");
+      await request(app).patch(`${BASE}/items/${byHuman}`).set("Authorization", platformAdmin.auth).send({ status: "approved" });
+      const second = await ready("Second pick");
+      const third = await ready("Third pick");
+      const fourth = await ready("Fourth pick");
+      expect((await move(second, "approved")).status).toBe(200);
+      expect((await move(third, "approved")).status).toBe(200);
+
+      const over = await move(fourth, "approved");
+      expect(over.status).toBe(403);
+      expect(over.body.error).toMatch(/3 tickets to Approved in the last 7 days/);
+      expect((await request(app).get(`${BASE}/items/${fourth}`).set("Authorization", platformAdmin.auth)).body.item.status).toBe("backlog");
+      // The cap is on Approved only.
+      expect((await move(fourth, "building")).status).toBe(200);
+
+      // The trail is append-only, so the move is aged by a copy dated 8 days back.
+      const aged = await getDb().query(
+        `DELETE FROM platform.work_item_event
+          WHERE item_id = (SELECT id FROM platform.work_item WHERE team_key = $1 AND number = $2) AND to_status = 'approved'
+          RETURNING item_id, actor`,
+        [TEAM, Number(second.split("-")[1])]
+      );
+      await getDb().query(
+        `INSERT INTO platform.work_item_event (item_id, kind, from_status, to_status, actor, actor_kind, created_at)
+         VALUES ($1, 'status', 'backlog', 'approved', $2, 'session', now() - interval '8 days')`,
+        [aged.rows[0].item_id, aged.rows[0].actor]
+      );
+      const fifth = await ready("Fifth pick");
+      expect((await move(fifth, "approved")).status).toBe(200);
     });
   });
 

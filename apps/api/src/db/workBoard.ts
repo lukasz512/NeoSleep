@@ -72,6 +72,9 @@ export const LATER_LABEL = "later";
 /** Days a Backlog ticket may go untouched before the tidy labels it `later` (CORE-234). */
 export const BACKLOG_UNTOUCHED_DAYS = 60;
 
+/** Tickets all sessions together may move from Backlog to Approved per 7 days (core-234-decisions D2). */
+export const SESSION_APPROVED_PER_WEEK = 3;
+
 /** What a backlog review may decide about one ticket (CORE-234). */
 export const WORK_REVIEW_DECISIONS = ["keep", "later", "cancel", "shipped"] as const;
 export type WorkReviewDecision = (typeof WORK_REVIEW_DECISIONS)[number];
@@ -361,7 +364,7 @@ export async function updateWorkItem(
   number: number,
   patch: WorkItemPatch,
   actor: WorkActor,
-  check?: (current: WorkItemRow) => void
+  check?: (current: WorkItemRow, client: PoolClient) => void | Promise<void>
 ): Promise<WorkItemRow | null> {
   return inPlatformTransaction(async (client) => {
     const current = (
@@ -371,7 +374,7 @@ export async function updateWorkItem(
       )
     ).rows[0];
     if (!current) return null;
-    check?.(current);
+    await check?.(current, client);
 
     if (patch.labels) patch = { ...patch, labels: await ensureWorkLabels(client, patch.labels) };
     const changed = EDITABLE_FIELDS.filter(
@@ -600,18 +603,21 @@ export interface WorkReviewAnswer {
 /**
  * Applies one round of backlog-review answers (board-upkeep-r1 P3, CORE-234), all or nothing.
  * Only a ticket that is in Backlog right now is touched; `shipped` closes it only when git
- * sees its code on prod. Everything else comes back in `skipped` with the reason. Each applied
+ * sees its code on prod. A session's `cancel` waits until a second form (`confirm`) repeats it
+ * (core-234-decisions D1). Everything else comes back in `skipped` with the reason. Each applied
  * answer leaves a comment naming the form it came from.
  */
 export async function applyBacklogReview(
   form: string,
   answers: readonly WorkReviewAnswer[],
-  actor: WorkActor
+  actor: WorkActor,
+  confirm?: string
 ): Promise<{ applied: { key: string; decision: WorkReviewDecision }[]; skipped: { key: string; reason: string }[] }> {
   return inPlatformTransaction(async (client) => {
     const applied: { key: string; decision: WorkReviewDecision }[] = [];
     const skipped: { key: string; reason: string }[] = [];
     const later = (await ensureWorkLabels(client, [LATER_LABEL]))[0]!;
+    const source = confirm ? `${form}, confirmed in ${confirm}` : form;
     for (const { team, number, decision } of answers) {
       const key = `${team}-${number}`;
       const current = (
@@ -626,6 +632,10 @@ export async function applyBacklogReview(
       }
       if (decision === "shipped" && current.git_state !== "prod") {
         skipped.push({ key, reason: "not on prod" });
+        continue;
+      }
+      if (decision === "cancel" && actor.kind === "session" && !confirm) {
+        skipped.push({ key, reason: "cancel waits for a confirmation form" });
         continue;
       }
       let comment: string;
@@ -644,11 +654,24 @@ export async function applyBacklogReview(
         if (JSON.stringify(labels) !== JSON.stringify(current.labels)) await insertEvent(client, current.id, actor, { kind: "edit", body: "labels" });
         comment = decision === "later" ? `set aside as "${later}".` : "stays in Backlog.";
       }
-      await insertEvent(client, current.id, actor, { kind: "comment", body: `Backlog review ${form}: ${comment}` });
+      await insertEvent(client, current.id, actor, { kind: "comment", body: `Backlog review ${source}: ${comment}` });
       applied.push({ key, decision });
     }
     return { applied, skipped };
   });
+}
+
+/**
+ * How many tickets sessions moved to Approved in the last 7 days. Call it inside the
+ * transaction of the next move: it takes a lock, so two moves at once cannot both fit under the cap.
+ */
+export async function countSessionApprovals(client: PoolClient): Promise<number> {
+  await client.query("SELECT pg_advisory_xact_lock(hashtext('platform.work_item:session_approved'))");
+  const { rows } = await client.query<{ count: number }>(
+    `SELECT count(*)::int AS count FROM platform.work_item_event
+      WHERE kind = 'status' AND to_status = 'approved' AND actor_kind = 'session' AND created_at > now() - interval '7 days'`
+  );
+  return rows[0]!.count;
 }
 
 export const WORK_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
