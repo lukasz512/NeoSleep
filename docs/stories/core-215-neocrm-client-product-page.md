@@ -96,6 +96,21 @@ On the reference site `?para=<name>` (alias `for`) greets the prospect by name i
 - Round 6, something that travels with the reader (Łukasz, 2026-11-17: of three proposals he picked A, the thread, and asked for an object that is put together, packed and sent, ending at the contact request; no signature pad): a hand-drawn thread runs down the left margin with one object at its tip (`ScrollTrail.vue`, `trail.ts`). Scrolling turns it from a loose note into a stack, an open box, a sealed box, a labelled parcel and a paper plane that lands on the demo request. Decoration only: `aria-hidden`, nothing focusable, moved by scrolling alone, not rendered under reduced motion, paper colours and ink only (no warm accent, so "one per section" holds). Per-open analytics for client links is a later step (CORE-236).
 - Tests: `ScrollTrail.spec.ts` (six shapes, clamping, thread stays in its margin, hidden from assistive tech, scroll packs and lands it, reduced motion, one trail outside the sections), `lens.spec.ts` (parsing, order, link), `claims.spec.ts` (no forbidden claim outside the roadmap, hosting country stated, no size words, ES/EN key parity), `NeoCrmApp.spec.ts` (order on the page, switch, greeting, sector, drawn sections, one test per interaction, warm accent).
 
+### Rounds 7 and 8, decided but not built yet (Łukasz, 2026-11-17)
+Answers recorded as clicked; the prototype he judged is the round 8 Artifact (three.js, version 2).
+- Round 7, form `core-215-r7-paper` (living dot paper and smooth packing), all "more":
+  - D1 dots under the cursor: they move away and a wave stays behind the cursor.
+  - D2 ambient wave: a wave runs through the dots while scrolling.
+  - D3 parcel and dots: the wave and the dots part around the parcel.
+  - D4 strength: clear in the hero, calmer under text.
+  - D5 packing: smooth, and the plane leaves a flight trail. Comment: he wants more life on the route (a balloon with the notes, more elements), a more varied path that curls, and more 3D (WebGL, three.js).
+- Round 8, form `core-215-r8-3d` (the route in 3D), all "more":
+  - E1 engine: 3D, with the flat round 6 trail as the fallback (no WebGL or data saver).
+  - E2 life on the route: everything from the preview, and it plays with the cursor (balloons flee, pinwheels spin).
+  - E3 route shape: wide detours on desktop, loops only on phones.
+  - Notes: the animation must scale better, the balloons must not be attached to the parcel, the route must work better with scrolling. Fixed in the prototype: one unit drives every size and the margin grows with the width; balloons wait at their own place on the page, drop their note when the parcel arrives and fly off alone; the tip follows scrolling with half the delay and slows down inside loops.
+- Constraints carried into the build: decoration only (`aria-hidden`, nothing focusable), static under reduced motion, three.js loaded after first paint, no gradients, no warm accent as decoration.
+
 ### Hand-off
 → `/perspective legal` on the claims ledger once the claim level is decided
 → `/perspective marketing` + `/ux` for copy and layout
