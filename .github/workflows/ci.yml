@@ -48,7 +48,8 @@ jobs:
     # CORE-208: pinned, not ubuntu-latest. On ubuntu-26.04 Playwright's WebKit barely
     # renders frames (2 animation frames in 670 ms, wheel scroll never lands), so the
     # same WebKit e2e specs failed on every dev run; on 24.04 the same build is green.
-    # Move to 26.04 only after a manual run of this workflow passes there.
+    # e2e-flake-hunt.yml measures both images every night; move to ubuntu-latest once
+    # ci-health.yml reports 3 green nights there on CORE-242 (CORE-58).
     runs-on: ubuntu-24.04
     # CORE-151: a hung e2e used to hold the job (and the session waiting on it) for up
     # to an hour; the default limit is 6 h. The nightly 3-engine e2e alone takes ~23 min

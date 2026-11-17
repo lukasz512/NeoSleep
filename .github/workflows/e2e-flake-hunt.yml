@@ -1,0 +1,142 @@
+# e2e flake hunt (CORE-58). Runs Playwright specs several times with no retries, on the
+# runner image CI is pinned to and on the newer one, so that:
+#   - a flaky test fails here before it reaches dev (CI retries once and hides it);
+#   - we know when the CI test job can leave the ubuntu-24.04 pin (CORE-208, CORE-242).
+#
+# - Nightly on dev: the whole suite on WebKit, 3× (WebKit is the engine that differs
+#   between the images).
+# - Push to a work branch that touches apps/pwa/e2e/ or the Playwright config: the spec
+#   files changed vs dev, 20× on all three engines (whole suite on WebKit 2× when no
+#   spec file changed).
+# - Manual (Actions → e2e flake hunt → Run workflow): any spec list, repeat count, engines.
+#
+# The ubuntu-latest leg never fails the run: it is a measurement. ci-health.yml reads it
+# every night and tells CORE-242 once it has been green 3 nights in a row.
+# A flaky test only shows up under CI load; a fast laptop passes, so this runs here.
+# What a run tests is decided by infrastructure/scripts/flake-hunt-plan.mjs.
+
+name: e2e flake hunt
+
+on:
+  # push, not pull_request: branches are pushed well before Łukasz opens the PR.
+  push:
+    branches-ignore: [dev, prod]
+    paths:
+      - "apps/pwa/e2e/**"
+      - "apps/pwa/playwright.config.ts"
+      - ".github/workflows/e2e-flake-hunt.yml"
+  # 03:00 UTC = 21:00 in Mexico City, 5 h before the nightly CI run.
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      specs:
+        description: "Spec files, space separated, e.g. e2e/auth.spec.ts (empty = whole suite)"
+        required: false
+        default: ""
+      repeat:
+        description: "Repeats per test (1-50)"
+        required: false
+        default: "20"
+      browsers:
+        description: "Engines, space separated: chromium firefox webkit"
+        required: false
+        default: "webkit"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-flake-hunt-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hunt:
+    name: hunt (${{ matrix.image }})
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [ubuntu-24.04, ubuntu-latest]
+    runs-on: ${{ matrix.image }}
+    continue-on-error: ${{ matrix.image == 'ubuntu-latest' }}
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      DEFAULT_TENANT_SLUG: neosleep
+      # Fixed test-only value, not a real secret (same as ci.yml).
+      SESSION_SECRET: ci-test-session-secret-not-for-production-use
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # flake-hunt-plan.mjs diffs a work branch against origin/dev
+
+      - name: Pick specs, repeat count and engines
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_SPECS: ${{ github.event.inputs.specs }}
+          INPUT_REPEAT: ${{ github.event.inputs.repeat }}
+          INPUT_BROWSERS: ${{ github.event.inputs.browsers }}
+        shell: bash # with pipefail: refused inputs stop the run here
+        run: node infrastructure/scripts/flake-hunt-plan.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+      # Same order as ci.yml: the API needs these packages built before it starts.
+      - run: pnpm --filter @neo/email build
+      - run: pnpm --filter @neo/documents build
+      - run: pnpm --filter @neo/device-order build
+      - run: pnpm --filter @neo/api migrate
+      - run: pnpm --filter @neo/api sync-test-schema
+
+      - name: Install Playwright browsers
+        env:
+          BROWSERS: ${{ steps.plan.outputs.browsers }}
+        run: pnpm --filter @neo/pwa exec playwright install --with-deps $BROWSERS
+
+      - name: Write .env for the e2e dev servers
+        run: |
+          cat > .env <<EOF
+          DATABASE_URL=${DATABASE_URL}
+          DEFAULT_TENANT_SLUG=${DEFAULT_TENANT_SLUG}
+          SESSION_SECRET=${SESSION_SECRET}
+          EOF
+
+      - name: Run ${{ steps.plan.outputs.repeat }}× with no retries
+        env:
+          BROWSERS: ${{ steps.plan.outputs.browsers }}
+          SPECS: ${{ steps.plan.outputs.specs }}
+          REPEAT: ${{ steps.plan.outputs.repeat }}
+          PLAYWRIGHT_JSON_OUTPUT_NAME: flake-hunt.json
+        run: pnpm --filter @neo/pwa test:e2e --repeat-each="$REPEAT" --retries=0 --reporter=github,json $(for b in $BROWSERS; do printf -- '--project=%s ' "$b"; done) $SPECS
+
+      - name: Failure rate per test
+        if: always()
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: node infrastructure/scripts/flake-report.mjs apps/pwa/flake-hunt.json "$IMAGE (${ImageOS:-?})" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: flake-hunt-results-${{ matrix.image }}
+          path: apps/pwa/test-results/
+          retention-days: 7
