@@ -39,7 +39,7 @@ export function redactForViewer(viewer: AppointmentViewer, appointment: Appointm
 export async function assertCanSeeAppointment(ctx: TenantContext, viewer: AppointmentViewer, appointment: Appointment): Promise<void> {
   if (viewer.kind === "admin") return;
   if (viewer.kind === "doctor") {
-    if (appointment.practitioner_id !== viewer.practitionerId) throw new ForbiddenError("This appointment belongs to another doctor");
+    if (appointment.practitioner_id !== viewer.practitionerId) throw new ForbiddenError("This appointment belongs to another doctor", "OTHER_DOCTOR");
     return;
   }
   await assertTerritoryAccessByTerritoryId(ctx, appointment.territory_id);

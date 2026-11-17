@@ -51,6 +51,14 @@ test("create sends the sections with the session token and prints key + link", a
   assert.equal(out[0], "CORE-9 https://pwa.test/platform/board?item=CORE-9");
 });
 
+test("create --later asks for Backlog and skips the rename hint (CORE-223)", async () => {
+  const { calls, impl } = fakeFetch({ item: { key: "CORE-9", status: "backlog", branch: null } });
+  const out = [];
+  await run(["create", "--team", "CORE", "--title", "For later", "--body", GOOD, "--later"], { config: CONFIG, fetchImpl: impl, log: (l) => out.push(l) });
+  assert.equal(calls[0].body.status, "backlog");
+  assert.deepEqual(out, ["CORE-9 https://pwa.test/platform/board?item=CORE-9"]);
+});
+
 test("create refuses a bad ticket before calling the API", async () => {
   const { calls, impl } = fakeFetch();
   await assert.rejects(run(["create", "--team", "CORE", "--title", "x", "--body", "## Problem\nx"], { config: CONFIG, fetchImpl: impl, log: () => {} }), /NEO-84/);

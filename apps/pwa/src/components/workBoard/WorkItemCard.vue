@@ -1,7 +1,7 @@
 <template>
   <article
     class="work-card"
-    :class="{ 'work-card--dragging': dragging, 'work-card--dense': dense }"
+    :class="{ 'work-card--dragging': dragging, 'work-card--dense': dense, 'work-card--urgent': item.priority === 1 }"
     :draggable="draggable"
     :data-testid="`work-card-${item.key}`"
     @dragstart="onDragStart"
@@ -23,8 +23,8 @@
             <span v-if="live" class="work-card__live" data-testid="work-card-live" />
           </span>
         </span>
-        <span v-if="item.priority" class="work-card__priority" :class="`work-card__priority--p${item.priority}`" :title="t(`workBoard.priority.p${item.priority}`)">
-          {{ t(`workBoard.priority.short.p${item.priority}`) }}
+        <span v-if="item.priority" class="work-card__priority" :title="t(`workBoard.priority.p${item.priority}`)" data-testid="work-card-priority">
+          <WorkPriorityMark :priority="item.priority" :label="t(`workBoard.priority.p${item.priority}`)" />
         </span>
       </span>
       <span class="work-card__title">{{ item.title }}</span>
@@ -136,7 +136,9 @@ import {
   shownLabels,
 } from "../../composables/useWorkBoard";
 import WorkLabelChip from "./WorkLabelChip.vue";
+import WorkPriorityMark from "./WorkPriorityMark.vue";
 import { useWorkBoardContext } from "./workBoardContext";
+import { WORK_URGENT_COLOR } from "./workGlyphs";
 import type { WorkItem, WorkLink, WorkLinkKind } from "../../types/workBoard";
 
 /**
@@ -272,21 +274,13 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 .work-card__priority {
-  padding: 0 8px;
-  font-size: 0.75rem;
-  line-height: 20px;
-  border-radius: 4px;
-  background: rgba(var(--v-theme-on-surface), 0.08);
+  display: inline-flex;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
 }
 
-.work-card__priority--p1 {
-  color: rgb(var(--v-theme-on-error));
-  background: rgb(var(--v-theme-error));
-}
-
-.work-card__priority--p2 {
-  color: rgb(var(--v-theme-warning));
-  background: rgba(var(--v-theme-warning), 0.12);
+/* Urgent is the one priority that marks the whole card (CORE-225). */
+.work-card--urgent {
+  box-shadow: inset 3px 0 0 v-bind(WORK_URGENT_COLOR);
 }
 
 .work-card__progress {

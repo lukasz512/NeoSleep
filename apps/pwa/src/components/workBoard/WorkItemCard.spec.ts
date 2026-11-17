@@ -157,3 +157,28 @@ describe("WorkItemCard labels, session and footer (CORE-219)", () => {
     expect(has(card({}, true), "work-card-compact")).toBe(false);
   });
 });
+
+/** The card draws its priority instead of spelling it (CORE-225). */
+describe("WorkItemCard priority mark (CORE-225)", () => {
+  function renderPriority(priority: number) {
+    const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
+    const vuetify = createVuetify({ components: vuetifyComponents });
+    return mount(WorkItemCard, { props: { item: { ...item(null), priority } }, global: { plugins: [i18n, vuetify] } });
+  }
+
+  it("names the mark, since no text stands next to it", () => {
+    const mark = renderPriority(2).get("[data-testid='work-card-priority'] svg");
+    expect(mark.attributes("role")).toBe("img");
+    expect(mark.attributes("aria-label")).toBe("High");
+    expect(mark.findAll("[data-lit='true']")).toHaveLength(3);
+  });
+
+  it("shows no mark without a priority", () => {
+    expect(renderPriority(0).find("[data-testid='work-card-priority']").exists()).toBe(false);
+  });
+
+  it("gives only an urgent card the leading edge", () => {
+    expect(renderPriority(1).classes()).toContain("work-card--urgent");
+    expect(renderPriority(2).classes()).not.toContain("work-card--urgent");
+  });
+});

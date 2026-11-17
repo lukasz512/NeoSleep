@@ -14,7 +14,7 @@
         :data-testid="`work-tab-${status}`"
         @click="selectTab(status)"
       >
-        {{ t(`workBoard.status.${status}`) }} <span class="work-columns__count">{{ grouped[status].length }}</span>
+        <WorkStatusGlyph :status="status" />{{ t(`workBoard.status.${status}`) }} <span class="work-columns__count">{{ grouped[status].length }}</span>
       </button>
     </div>
     <div class="work-columns__group work-columns__panel" role="tabpanel" data-testid="work-board-list" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
@@ -39,7 +39,7 @@
   <div v-else-if="layout === 'list'" class="work-columns__list" data-testid="work-board-list">
     <section v-for="status in filledColumns" :key="status" class="work-columns__group">
       <h2 class="work-columns__heading">
-        {{ t(`workBoard.status.${status}`) }} <span class="work-columns__count">{{ grouped[status].length }}</span>
+        <WorkStatusGlyph :status="status" />{{ t(`workBoard.status.${status}`) }} <span class="work-columns__count">{{ grouped[status].length }}</span>
       </h2>
       <WorkItemCard
         v-for="item in shown(status)"
@@ -70,7 +70,7 @@
       @drop.prevent="onDrop($event, status)"
     >
       <h2 class="work-columns__heading">
-        {{ t(`workBoard.status.${status}`) }} <span class="work-columns__count">{{ grouped[status].length }}</span>
+        <WorkStatusGlyph :status="status" />{{ t(`workBoard.status.${status}`) }} <span class="work-columns__count">{{ grouped[status].length }}</span>
       </h2>
       <div class="work-columns__cards">
         <WorkItemCard
@@ -93,6 +93,7 @@
 import { computed, nextTick, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import WorkItemCard from "./WorkItemCard.vue";
+import WorkStatusGlyph from "./WorkStatusGlyph.vue";
 import { WORK_BOARD_COLUMNS, groupByStatus } from "../../composables/useWorkBoard";
 import type { WorkItem, WorkStatus } from "../../types/workBoard";
 
@@ -228,7 +229,7 @@ function onDrop(event: DragEvent, status: WorkStatus): void {
 
 .work-columns__heading {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   margin: 0;
   padding: 4px;
@@ -275,7 +276,7 @@ function onDrop(event: DragEvent, status: WorkStatus): void {
 .work-columns__tab {
   display: inline-flex;
   flex: none;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
   min-height: 44px;
   padding: 0 12px;
