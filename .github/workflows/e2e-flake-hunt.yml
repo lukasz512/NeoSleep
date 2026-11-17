@@ -110,7 +110,8 @@ jobs:
       - name: Install Playwright browsers
         env:
           BROWSERS: ${{ steps.plan.outputs.browsers }}
-        run: pnpm --filter @neo/pwa exec playwright install --with-deps $BROWSERS
+        # chromium always: e2e/global-setup.ts signs in with it, whatever engines the run tests.
+        run: pnpm --filter @neo/pwa exec playwright install --with-deps chromium $BROWSERS
 
       - name: Write .env for the e2e dev servers
         run: |
