@@ -41,13 +41,13 @@ transcript() {  # transcript <file> <context tokens of the last assistant turn>
   jq -cn --argjson t "$2" '{type:"assistant",message:{usage:{input_tokens:10,cache_creation_input_tokens:0,cache_read_input_tokens:($t-10),output_tokens:5}}}' > "$1"
 }
 transcript "$TMP/small.jsonl" 80000
-ok "below 120k: silent" "$(kind "$GUARD" "$(jq -cn --arg p "$TMP/small.jsonl" '{session_id:"g1",transcript_path:$p}')")" none
-transcript "$TMP/big.jsonl" 130000
+ok "below 90k: silent" "$(kind "$GUARD" "$(jq -cn --arg p "$TMP/small.jsonl" '{session_id:"g1",transcript_path:$p}')")" none
+transcript "$TMP/big.jsonl" 95000
 IN="$(jq -cn --arg p "$TMP/big.jsonl" '{session_id:"g1",transcript_path:$p}')"
-ok "above 120k: fires"            "$(kind "$GUARD" "$IN")" guard
-ok "above 120k again: fires once" "$(kind "$GUARD" "$IN")" none
-transcript "$TMP/huge.jsonl" 170000
-ok "above 160k: fires a second, last time" "$(kind "$GUARD" "$(jq -cn --arg p "$TMP/huge.jsonl" '{session_id:"g1",transcript_path:$p}')")" guard
+ok "above 90k: fires"            "$(kind "$GUARD" "$IN")" guard
+ok "above 90k again: fires once" "$(kind "$GUARD" "$IN")" none
+transcript "$TMP/huge.jsonl" 112000
+ok "above 110k: fires a second, last time" "$(kind "$GUARD" "$(jq -cn --arg p "$TMP/huge.jsonl" '{session_id:"g1",transcript_path:$p}')")" guard
 ok "no transcript: silent" "$(kind "$GUARD" '{"session_id":"g2","transcript_path":"/nope.jsonl"}')" none
 
 [ "$FAILS" -eq 0 ] && echo "all checks passed" || { echo "$FAILS check(s) failed"; exit 1; }
