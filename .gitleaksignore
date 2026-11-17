@@ -17,3 +17,5 @@
 # CORE-198: WORK_BOARD_AGENT_TOKEN_SHA256 is the SHA-256 of a random token (the token itself
 # is the GitHub secret BOARD_AGENT_TOKEN). A hash of a high-entropy token can't be reversed.
 7597cb76805553ad87e9f460b807c48ac53d9253:infrastructure/cloud-run/dev.env.yaml:generic-api-key:42
+# CORE-190: the prod copy of the same kind of hash (nightly worker routine token).
+b7c06ac6f6035c2eef5983c5b1e80f1685df3c4e:infrastructure/cloud-run/prod.env.yaml:generic-api-key:38
