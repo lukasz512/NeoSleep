@@ -12,6 +12,8 @@
 //   pnpm board link CORE-12 --kind artifact|spec|pr|ci|other --url https://… [--title "…"] [--state passed|failed] (state: ci only)
 //   pnpm board branch CORE-12 worktree-core-12-slug
 //   pnpm board move CORE-12 building|needs_review
+//   pnpm board waiting [--remind]               → Needs Review tickets that wait for Łukasz, the longest wait
+//                     first; --remind prints one line only when too many are old (session start, CORE-233)
 //   pnpm board teams [--write]                  → team keys; --write refreshes .claude/ticket-teams
 //   pnpm board url CORE-12                      → the card's link (no network)
 //
@@ -68,6 +70,29 @@ export function ticketProblems(markdown) {
   const length = parsed.problem.length + parsed.change.length + parsed.done_when.length;
   if (length > MAX_TICKET) problems.push(`it is ${length} characters (max ${MAX_TICKET})`);
   return problems;
+}
+
+/** The session-start reminder fires above this many tickets waiting longer than REVIEW_DAYS (CORE-233). */
+export const REVIEW_LIMIT = 5;
+export const REVIEW_DAYS = 7;
+/** Same label the board uses to keep a merged ticket in Needs Review (CORE-221). */
+const HOLD_LABEL = "hold";
+
+/** The board's "Waiting for you" group: Needs Review, not merged or on hold; the longest wait first, with whole days. */
+export function waitingForReview(items, now = Date.now()) {
+  return items
+    .filter((item) => item.status === "needs_review")
+    .filter((item) => !["dev", "prod"].includes(item.git_state) || (item.labels ?? []).includes(HOLD_LABEL))
+    .map((item) => ({ ...item, days: Math.max(0, Math.floor((now - Date.parse(item.status_changed_at)) / 86_400_000)) }))
+    .sort((a, b) => b.days - a.days);
+}
+
+/** One line for the session start when more than REVIEW_LIMIT tickets have waited over REVIEW_DAYS days; else null. */
+export function reviewReminder(items, now = Date.now()) {
+  const old = waitingForReview(items, now).filter((item) => item.days > REVIEW_DAYS);
+  if (old.length <= REVIEW_LIMIT) return null;
+  const list = old.map((item) => `${item.key} (${item.days} d)`).join(", ");
+  return `${old.length} tickets have waited for Łukasz's review for more than ${REVIEW_DAYS} days: ${list}. Tell him in one line before creating a new ticket.`;
 }
 
 /** --flag value pairs and positionals. */
@@ -132,7 +157,7 @@ function need(value, what) {
   return String(value);
 }
 
-export async function run(argv, { config = loadConfig(), fetchImpl = fetch, log = console.log } = {}) {
+export async function run(argv, { config = loadConfig(), fetchImpl = fetch, log = console.log, now = Date.now() } = {}) {
   const [command, ...rest] = argv;
   const { flags, positional } = parseArgs(rest);
   const key = positional[0]?.toUpperCase();
@@ -182,6 +207,17 @@ export async function run(argv, { config = loadConfig(), fetchImpl = fetch, log 
       log(`${item.key} → ${item.status}`);
       return item;
     }
+    case "waiting": {
+      const { items } = await call(config, "GET", "/items?status=needs_review", null, fetchImpl);
+      if (flags.remind) {
+        const line = reviewReminder(items, now);
+        if (line) log(line);
+        return line;
+      }
+      const waiting = waitingForReview(items, now);
+      for (const item of waiting) log(`${item.key}\t${item.days} d\t${item.title}`);
+      return waiting;
+    }
     case "teams": {
       const { items } = await call(config, "GET", "/teams", null, fetchImpl);
       const keys = items.map((t) => t.key);
@@ -195,7 +231,7 @@ export async function run(argv, { config = loadConfig(), fetchImpl = fetch, log 
       return url;
     }
     default:
-      throw new Error("usage: board create|get|comment|link|branch|move|teams|url … (see the header of infrastructure/scripts/board.mjs)");
+      throw new Error("usage: board create|get|comment|link|branch|move|waiting|teams|url … (see the header of infrastructure/scripts/board.mjs)");
   }
 }
 

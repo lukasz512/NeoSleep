@@ -4,6 +4,8 @@
  * work board API from fixtures, so the board can be looked at (and screenshot) in a real
  * browser without an API or a database: labels and sessions, two statuses with no tickets,
  * git markers of every kind in Building and Needs Review, one ticket on hold, two canceled.
+ * Needs Review holds both groups (CORE-233): tickets that wait for a merge, one of them with
+ * no artifact link, and two that are merged and close by themselves.
  * Every ticket opens with the same three-line history.
  *
  * The board's own query works here too: `?sort=label` · `?labels=api` · `?sessions=1` · `?team=NEO`
@@ -55,6 +57,7 @@ const TOKENS: WorkSessionToken[] = [
 const pr = (n: number): WorkLink => ({ kind: "pr", url: `https://github.com/example/repo/pull/${n}` });
 const ci = (state?: "passed" | "failed"): WorkLink => ({ kind: "ci", url: "https://github.com/example/repo/actions/runs/1", ...(state ? { state } : {}) });
 const spec: WorkLink = { kind: "spec", url: "https://claude.ai/artifact/example" };
+const artifact: WorkLink = { kind: "artifact", url: "https://claude.ai/artifact/example-change" };
 
 const checked = { git_checked_at: ago(60 * MINUTE) };
 const onDev = (sha: string) => ({ git_state: "dev" as const, git_sha: sha, ...checked });
@@ -112,21 +115,33 @@ let items: WorkItem[] = [
     status_changed_at: ago(9 * DAY),
     ...onDev("4be1a9c0d2"),
   }),
+  item("CORE-229", "Export the audit log as CSV", "needs_review", {
+    labels: ["session", "api"],
+    links: [artifact, ci("passed")],
+    status_changed_at: ago(9 * DAY),
+  }),
+  item("NEO-170", "Appointment reminders by WhatsApp", "needs_review", { labels: ["session"], links: [ci("passed")], status_changed_at: ago(2 * DAY) }),
+  item("CORE-232", "Remember the patient list filters", "needs_review", {
+    labels: ["frontend"],
+    priority: 2,
+    links: [artifact],
+    status_changed_at: ago(5 * 60 * MINUTE),
+  }),
   item("CORE-214", "Webhook retries keep the original signature", "needs_review", {
     labels: ["session", "api", "security", "ci", "billing"],
-    links: [pr(527), ci("passed")],
+    links: [artifact, pr(527), ci("passed")],
     status_changed_at: ago(4 * DAY),
     ...onDev("9a31f07b55"),
   }),
   item("NEO-158", "Consent form: second signature for minors", "needs_review", {
     labels: ["frontend"],
-    links: [spec, pr(525), ci("passed")],
+    links: [spec, artifact, pr(525), ci("passed")],
     assignee: "Marta Nowak",
     due_date: day(1),
     status_changed_at: ago(DAY),
     ...onProd("c500f14e21"),
   }),
-  item("CORE-25", "Calendar sync with Google", "needs_review", { labels: ["hold", "api"], links: [pr(520)], status_changed_at: ago(6 * DAY), ...onProd("b768deb3aa") }),
+  item("CORE-25", "Calendar sync with Google", "needs_review", { labels: ["hold", "api"], links: [artifact, pr(520)], status_changed_at: ago(6 * DAY), ...onProd("b768deb3aa") }),
   item("CORE-208", "Pin the CI runner image", "done", {
     labels: ["session", "ci"],
     links: [pr(526), ci("passed")],

@@ -344,6 +344,8 @@ describe("WorkBoardView", () => {
       item({ key: "CORE-6", status: "needs_review", git_state: "prod", labels: ["hold"] }),
     ]);
     const { wrapper } = await render();
+    // Merged Needs Review tickets sit in a folded group (CORE-233).
+    await wrapper.get("[data-testid='work-review-merged-toggle']").trigger("click");
     const marker = (key: string) => wrapper.get(`[data-testid='work-card-${key}']`).find("[data-testid='work-card-git']");
     expect(marker("CORE-1").text()).toBe("Not merged");
     expect(marker("CORE-2").text()).toBe("On dev");
@@ -364,6 +366,7 @@ describe("WorkBoardView", () => {
       item({ key: "CORE-5", status: "building", git_state: "none" }),
     ]);
     const { wrapper } = await render();
+    await wrapper.get("[data-testid='work-review-merged-toggle']").trigger("click");
     await openView(wrapper);
     expect(inDoc("work-board-out-of-step")!.textContent!.trim()).toBe("Out of step · 2");
     expect(wrapper.get("[data-testid='work-card-CORE-1'] [data-testid='work-card-git']").classes()).toContain("work-card__git--alert");

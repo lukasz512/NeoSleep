@@ -190,6 +190,25 @@ export function outOfStep(item: WorkItem): boolean {
   return item.git_state === "none" || (item.git_state === "prod" && !item.labels.includes(HOLD_LABEL));
 }
 
+/** Merged and not on hold: the board closes it by itself once the code is on prod (CORE-221). */
+export function closesByItself(item: WorkItem): boolean {
+  return (item.git_state === "dev" || item.git_state === "prod") && !item.labels.includes(HOLD_LABEL);
+}
+
+/**
+ * Needs Review in two groups (CORE-233): what waits for a person, the longest wait first, and
+ * what is merged and closes by itself, in the order the column had.
+ */
+export function reviewGroups(items: readonly WorkItem[]): { waiting: WorkItem[]; merged: WorkItem[] } {
+  const waiting = items.filter((item) => !closesByItself(item)).sort((a, b) => a.status_changed_at.localeCompare(b.status_changed_at));
+  return { waiting, merged: items.filter(closesByItself) };
+}
+
+/** Handed over for review with no artifact to read (CORE-233). */
+export function missingArtifact(item: WorkItem): boolean {
+  return item.status === "needs_review" && !item.links.some((link) => link.kind === "artifact");
+}
+
 export async function fetchSessionTokens(): Promise<WorkSessionToken[]> {
   return (await request<{ items: WorkSessionToken[] }>("useWorkBoard.tokens", `${BASE}/session-tokens`)).items;
 }
