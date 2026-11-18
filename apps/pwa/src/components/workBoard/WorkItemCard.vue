@@ -37,12 +37,15 @@
       >
         <VIcon icon="mdi-checkbox-marked-outline" size="14" aria-hidden="true" />{{ progress.done }}/{{ progress.total }}
       </span>
-      <span v-if="!dense && (git || held)" class="work-card__marks">
+      <span v-if="!dense && (git || held || noArtifact)" class="work-card__marks">
         <span v-if="git" class="work-card__git" :class="{ 'work-card__git--alert': alert }" data-testid="work-card-git">
           <VIcon :icon="GIT_ICONS[git]" size="14" aria-hidden="true" />{{ t(`workBoard.git.${git}`) }}
         </span>
         <span v-if="held" class="work-card__git" data-testid="work-card-hold">
           <VIcon icon="mdi-pause-circle-outline" size="14" aria-hidden="true" />{{ t("workBoard.hold.on") }}
+        </span>
+        <span v-if="noArtifact" class="work-card__git work-card__git--alert" data-testid="work-card-no-artifact">
+          <VIcon icon="mdi-shape-outline" size="14" aria-hidden="true" />{{ t("workBoard.card.noArtifact") }}
         </span>
       </span>
     </button>
@@ -72,6 +75,9 @@
           </span>
           <span v-if="held" class="work-card__git" data-testid="work-card-hold">
             <VIcon icon="mdi-pause-circle-outline" size="14" aria-hidden="true" />{{ t("workBoard.hold.on") }}
+          </span>
+          <span v-if="noArtifact" class="work-card__git work-card__git--alert" data-testid="work-card-no-artifact">
+            <VIcon icon="mdi-shape-outline" size="14" aria-hidden="true" />{{ t("workBoard.card.noArtifact") }}
           </span>
         </template>
         <span
@@ -132,6 +138,7 @@ import {
   isLive,
   isOverdue,
   isStale,
+  missingArtifact,
   outOfStep,
   shownLabels,
 } from "../../composables/useWorkBoard";
@@ -146,7 +153,8 @@ import type { WorkItem, WorkLink, WorkLinkKind } from "../../types/workBoard";
  * with the assignee, the due date, the days in this column and the spec/artifact/PR/CI links as
  * icons (CORE-219). A robot marks a ticket a Claude session created; the green dot means a session
  * touched it in the last 15 minutes. Compact density keeps the key, the title and one row of
- * marks: a dot per label, where the code is, on hold, the days and the links.
+ * marks: a dot per label, where the code is, on hold, the days and the links. A Needs Review
+ * card with no artifact link says so (CORE-233).
  * `[` / `]` on a focused card ask the board to move it one column left / right; clicking a label
  * asks it to filter by that label.
  */
@@ -164,6 +172,8 @@ const git = computed(() => gitMarker(props.item));
 /** Status and git disagree; the marker turns into a warning. */
 const alert = computed(() => outOfStep(props.item));
 const held = computed(() => props.item.status === "needs_review" && props.item.labels.includes(HOLD_LABEL));
+/** In Needs Review with nothing to read (CORE-233). */
+const noArtifact = computed(() => missingArtifact(props.item));
 
 const links = computed(() => cardLinks(props.item));
 const labels = computed(() => shownLabels(props.item));
@@ -186,7 +196,7 @@ const dueText = computed(() =>
 );
 const showMeta = computed(() =>
   dense.value
-    ? labels.value.length > 0 || git.value !== null || held.value || days.value !== null
+    ? labels.value.length > 0 || git.value !== null || held.value || noArtifact.value || days.value !== null
     : !!props.item.assignee || !!props.item.due_date || days.value !== null,
 );
 

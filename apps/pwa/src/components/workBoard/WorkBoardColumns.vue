@@ -19,18 +19,14 @@
     </div>
     <div class="work-columns__group work-columns__panel" role="tabpanel" data-testid="work-board-list" @touchstart.passive="onTouchStart" @touchend.passive="onTouchEnd">
       <template v-if="activeTab">
-        <WorkItemCard
-          v-for="item in shown(activeTab)"
-          :key="item.id"
-          :item="item"
+        <WorkColumnCards
+          :status="activeTab"
+          :items="grouped[activeTab]"
           :draggable="false"
           @open="(key) => emit('open', key)"
           @move="(key, step) => emit('move', key, step)"
           @label="(name) => emit('label', name)"
         />
-        <button v-if="hiddenCount(activeTab)" type="button" class="work-columns__more" @click="showAllDone = true">
-          {{ t("workBoard.showMore", { count: hiddenCount(activeTab) }) }}
-        </button>
       </template>
     </div>
   </div>
@@ -41,18 +37,14 @@
       <h2 class="work-columns__heading">
         <WorkStatusGlyph :status="status" />{{ t(`workBoard.status.${status}`) }} <span class="work-columns__count">{{ grouped[status].length }}</span>
       </h2>
-      <WorkItemCard
-        v-for="item in shown(status)"
-        :key="item.id"
-        :item="item"
+      <WorkColumnCards
+        :status="status"
+        :items="grouped[status]"
         :draggable="false"
         @open="(key) => emit('open', key)"
         @move="(key, step) => emit('move', key, step)"
         @label="(name) => emit('label', name)"
       />
-      <button v-if="hiddenCount(status)" type="button" class="work-columns__more" @click="showAllDone = true">
-        {{ t("workBoard.showMore", { count: hiddenCount(status) }) }}
-      </button>
     </section>
   </div>
 
@@ -73,17 +65,13 @@
         <WorkStatusGlyph :status="status" />{{ t(`workBoard.status.${status}`) }} <span class="work-columns__count">{{ grouped[status].length }}</span>
       </h2>
       <div class="work-columns__cards">
-        <WorkItemCard
-          v-for="item in shown(status)"
-          :key="item.id"
-          :item="item"
+        <WorkColumnCards
+          :status="status"
+          :items="grouped[status]"
           @open="(key) => emit('open', key)"
           @move="(key, step) => emit('move', key, step)"
           @label="(name) => emit('label', name)"
         />
-        <button v-if="hiddenCount(status)" type="button" class="work-columns__more" data-testid="work-board-more" @click="showAllDone = true">
-          {{ t("workBoard.showMore", { count: hiddenCount(status) }) }}
-        </button>
       </div>
     </section>
   </div>
@@ -92,7 +80,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import WorkItemCard from "./WorkItemCard.vue";
+import WorkColumnCards from "./WorkColumnCards.vue";
 import WorkStatusGlyph from "./WorkStatusGlyph.vue";
 import { WORK_BOARD_COLUMNS, groupByStatus } from "../../composables/useWorkBoard";
 import type { WorkItem, WorkStatus } from "../../types/workBoard";
@@ -102,7 +90,8 @@ import type { WorkItem, WorkStatus } from "../../types/workBoard";
  * label's lane (`lane`) in Label order. A lane leaves the sideways scroll to the board, keeps
  * its columns short and never folds an empty one, so the lanes' columns line up. `canceled` adds
  * the Canceled column (CORE-221). A drop only ever asks for a status change. On a phone the
- * board is `tabs` (one status at a time) and a lane is a `list` grouped by status.
+ * board is `tabs` (one status at a time) and a lane is a `list` grouped by status. The cards
+ * of one status are WorkColumnCards.
  */
 const props = defineProps<{ items: readonly WorkItem[]; layout: "columns" | "list" | "tabs"; lane?: boolean; canceled?: boolean }>();
 const emit = defineEmits<{
@@ -117,17 +106,6 @@ const grouped = computed(() => groupByStatus(props.items));
 const columns = computed<readonly WorkStatus[]>(() => (props.canceled ? [...WORK_BOARD_COLUMNS, "canceled"] : WORK_BOARD_COLUMNS));
 const filledColumns = computed(() => columns.value.filter((status) => grouped.value[status].length));
 const dropTarget = ref<WorkStatus | null>(null);
-
-/** Done keeps growing (all of Linear's history lands there), so it shows the newest few until asked. */
-const DONE_PREVIEW = 20;
-const showAllDone = ref(false);
-function shown(status: WorkStatus): WorkItem[] {
-  const list = grouped.value[status];
-  return status === "done" && !showAllDone.value ? list.slice(0, DONE_PREVIEW) : list;
-}
-function hiddenCount(status: WorkStatus): number {
-  return grouped.value[status].length - shown(status).length;
-}
 
 /** The tab the phone shows; one a filter has emptied gives way to the first that still has tickets. */
 const chosenTab = ref<WorkStatus | null>(null);
@@ -242,16 +220,6 @@ function onDrop(event: DragEvent, status: WorkStatus): void {
   font-weight: 400;
   font-variant-numeric: tabular-nums;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-}
-
-.work-columns__more {
-  padding: 8px;
-  font: inherit;
-  font-size: 0.8125rem;
-  color: rgb(var(--v-theme-primary));
-  background: none;
-  border: 0;
-  cursor: pointer;
 }
 
 .work-columns__tabbed {
