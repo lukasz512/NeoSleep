@@ -1718,6 +1718,8 @@
   "app.clinical.openFileError": "Could not open the file",
   "app.clinical.upload.title": "Add study",
   "app.clinical.upload.file": "File (PDF, JPG or PNG)",
+  "app.clinical.upload.chooseFile": "Choose file",
+  "app.clinical.upload.changeFile": "Change file",
   "app.clinical.upload.fileRequired": "Choose a file",
   "app.clinical.upload.titleField": "Title",
   "app.clinical.upload.titleRequired": "Give it a title",
