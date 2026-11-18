@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { mount } from "@vue/test-utils";
@@ -293,5 +293,86 @@ describe("neocrm page › greeting and sector", () => {
   });
   it("the hero's second button leads to what the CRM includes", () => {
     expect(page().find("#inicio .btn--quiet").attributes("href")).toBe("#product");
+  });
+});
+
+// Round 11: scrolling walks through the launch steps; the page is where the reader's window says it is.
+describe("neocrm page › the launch steps follow the scroll (CORE-215 round 11)", () => {
+  function browser(env: { wide?: boolean; reduced?: boolean }) {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("min-width") ? !!env.wide && !env.reduced : query.includes("reduce") && !!env.reduced,
+      addEventListener() {},
+      removeEventListener() {},
+    }));
+  }
+  /** Puts the launch section and its steps where the test says they are in the window, then scrolls. */
+  function scrollTo(at: { section: number; steps: number }) {
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      const top = this.id === "onboarding" ? at.section : this.classList.contains("steps") ? at.steps : 0;
+      const height = this.id === "onboarding" ? 1800 : 0;
+      return { top, height, left: 0, right: 0, bottom: top + height, width: 0, x: 0, y: top, toJSON: () => ({}) };
+    });
+    window.dispatchEvent(new Event("scroll"));
+  }
+  const lit = (w: ReturnType<typeof page>) => w.findAll("#onboarding .path__btn").findIndex((b) => b.attributes("aria-current") === "step");
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("on a phone each step lights up as the steps cross the window, and goes dark on the way back", async () => {
+    browser({});
+    const w = page();
+    for (const [top, step] of [
+      [700, 0],
+      [350, 2],
+      [100, 3],
+      [500, 0],
+    ] as const) {
+      scrollTo({ section: top - 200, steps: top });
+      await w.vm.$nextTick();
+      expect(lit(w)).toBe(step);
+      // steps left behind are ticked off, and the handwritten count says where the reader is
+      expect(w.findAll("#onboarding .path__num.is-done")).toHaveLength(step);
+      expect(w.find("#onboarding .steps__count").text()).toBe(`${step + 1}/4`);
+      expect(w.find("#onboarding .steps__detail").text()).toBe(makeNeoCrmI18n("es").global.t(`sections.onboarding.items.${step}.body`));
+    }
+    // the count is decoration: the lit step is already announced
+    expect(w.find("#onboarding .steps__count").attributes("aria-hidden")).toBe("true");
+    expect(w.findAll("#onboarding .path__num").map((n) => n.text())).toEqual(["1", "2", "3", "4"]);
+  });
+  it("on a computer the pinned section walks through the steps while it scrolls by", async () => {
+    browser({ wide: true });
+    const w = page();
+    scrollTo({ section: 92, steps: 0 });
+    await w.vm.$nextTick();
+    expect(lit(w)).toBe(0);
+    scrollTo({ section: -900, steps: 0 });
+    await w.vm.$nextTick();
+    expect(lit(w)).toBe(2);
+    scrollTo({ section: -1800, steps: 0 });
+    await w.vm.$nextTick();
+    expect(lit(w)).toBe(3);
+  });
+  it("a step picked by hand stays until the scroll reaches another one", async () => {
+    browser({});
+    const w = page();
+    scrollTo({ section: 150, steps: 350 });
+    await w.findAll("#onboarding .path__btn")[0]?.trigger("click");
+    expect(lit(w)).toBe(0);
+    scrollTo({ section: 140, steps: 340 });
+    await w.vm.$nextTick();
+    expect(lit(w)).toBe(0);
+    scrollTo({ section: -100, steps: 100 });
+    await w.vm.$nextTick();
+    expect(lit(w)).toBe(3);
+  });
+  it("with reduced motion the scroll changes nothing: the steps are picked by hand", async () => {
+    browser({ reduced: true });
+    const w = page();
+    scrollTo({ section: -100, steps: 100 });
+    await w.vm.$nextTick();
+    expect(lit(w)).toBe(0);
+    expect(w.find("#onboarding .steps__count").text()).toBe("1/4");
   });
 });

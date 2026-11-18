@@ -28,12 +28,13 @@ afterEach(() => {
   paper.stopped = 0;
 });
 
-describe("neocrm page › living paper and the 3D parcel (CORE-215 rounds 7 to 10)", () => {
+describe("neocrm page › living paper and the 3D parcel (CORE-215 rounds 7 to 11)", () => {
   it("a browser with WebGL gets the canvases: decoration only, nothing to focus", () => {
     browser({ webgl: true });
     const w = mount(LivePaper, { attachTo: document.body });
     expect(w.find(".paper").attributes("aria-hidden")).toBe("true");
-    expect(w.findAll(".paper canvas")).toHaveLength(2);
+    // the dots, the parcel, and the stars and counter that are always in front
+    expect(w.findAll(".paper canvas")).toHaveLength(3);
     expect(w.findAll("a, button, input, [tabindex]")).toHaveLength(0);
     expect(w.find(".trail").exists()).toBe(false);
     expect(paper.started).toHaveLength(1);
@@ -80,6 +81,34 @@ describe("neocrm page › living paper and the 3D parcel (CORE-215 rounds 7 to 1
     await w.vm.$nextTick();
     expect(w.find(".paper").classes()).toContain("is-over");
     expect(w.emitted("land")).toEqual([[true]]);
+  });
+  it("the travelling note starts from a hero note, open or tidy", () => {
+    browser({ webgl: true });
+    const w = mount(LivePaper, { attachTo: document.body });
+    // the page around the paper: its siblings, as in NeoCrmApp
+    const host = w.element.parentElement ?? document.body;
+    host.insertAdjacentHTML(
+      "beforeend",
+      '<div class="stage"><div class="notes"><span class="note">a</span><span class="note">b</span></div>' +
+        '<div class="phone__visits"><button class="visit">1</button><button class="visit">2</button><button class="visit">3</button></div></div>' +
+        '<section id="onboarding"><button aria-current="false"><span class="path__num">1</span></button><button aria-current="step"><span class="path__num">2</span></button></section>',
+    );
+    const o = paper.started[0];
+    // loose notes: the first of them leaves, and its place in the hero is left empty
+    expect(o?.source()).toEqual({ el: host.querySelector(".note"), keep: false });
+    // after "tidy my day" the notes are gone: the note comes off the day's last visit, which stays
+    host.querySelector(".stage")?.classList.add("is-tidy");
+    expect(o?.source()).toEqual({ el: host.querySelectorAll(".visit")[2], keep: true });
+    // and it knows which launch step is lit, so the parcel can hop onto it
+    expect(o?.step()).toEqual({ el: host.querySelectorAll(".path__num")[1], n: 1, of: 2 });
+    expect(o?.packing).toBe("#product, #security");
+    expect(o?.launch).toBe("#onboarding");
+  });
+  it("a page without a hero or launch steps still gets its parcel", () => {
+    browser({ webgl: true });
+    mount(LivePaper, { attachTo: document.body });
+    expect(paper.started[0]?.source()).toBeNull();
+    expect(paper.started[0]?.step()).toBeNull();
   });
   it("stops drawing when the page goes away", () => {
     browser({ webgl: true });

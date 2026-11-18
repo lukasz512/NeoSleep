@@ -222,19 +222,25 @@
             </ul>
             <p class="sec__note" aria-live="polite">{{ lens.sector ? t("sections.who.picked", { sector: t(`sections.who.items.${lens.sector}.title`) }) : t("sections.who.pick") }}</p>
           </template>
-          <!-- onboarding: four numbered stops, one explained at a time -->
+          <!-- onboarding: four numbered stops, one explained at a time; scrolling walks through them (round 11) -->
           <div v-else-if="id === 'onboarding'" class="steps">
             <ol class="path">
-              <li v-for="(key, n) in itemKeys(id)" :key="key" class="path__step">
+              <li v-for="(key, n) in itemKeys(id)" :key="key" class="path__step" :class="{ 'is-past': n < stage }">
                 <h3 class="item__title">
                   <button type="button" class="path__btn" :aria-current="stage === n ? 'step' : undefined" @click="stage = n">
-                    <span class="path__num" :class="{ 'is-warm': stage === n }">{{ n + 1 }}</span>
+                    <!-- prettier-ignore -->
+                    <span class="path__num" :class="{ 'is-warm': stage === n, 'is-done': n < stage }">{{ n + 1 }}<svg class="path__tick" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
                     {{ t(`${key}.title`) }}
                   </button>
                 </h3>
               </li>
             </ol>
-            <p class="steps__detail" aria-live="polite">{{ t(`sections.onboarding.items.${stage}.body`) }}</p>
+            <div class="steps__card">
+              <p class="steps__detail" aria-live="polite">
+                <span :key="stage" class="steps__text">{{ t(`sections.onboarding.items.${stage}.body`) }}</span>
+              </p>
+              <p class="steps__count hand" aria-hidden="true">{{ stage + 1 }}/{{ itemKeys(id).length }}</p>
+            </div>
           </div>
           <!-- roadmap: filter by status -->
           <template v-else-if="id === 'roadmap'">
@@ -294,11 +300,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import es from "./locales/es.json";
 import LivePaper from "./LivePaper.vue";
 import { ROLES, SECTORS, lensFrom, lensQuery, sectionOrder, type Role, type SectionId, type Sector } from "./lens";
+import { launchStep, passProgress, pinProgress } from "./trail";
 import { CONTACT, whatsappLink } from "../content/contact";
 import { switchLocalePath, type Locale } from "../lib/locale";
 import { prospectFrom } from "../lib/prospect";
@@ -376,6 +383,43 @@ const filter = ref<(typeof FILTERS)[number]>("all");
 const answer = ref(0);
 // the paper plane has reached the demo request (LivePaper.vue)
 const landed = ref(false);
+
+// The launch steps light up one by one with the scroll, and go dark again on the way back (round 11).
+// On a computer the section is pinned meanwhile (the CSS below); on a phone the steps just pass by.
+const media = (query: string) => typeof window.matchMedia === "function" && window.matchMedia(query).matches;
+/** The step the scroll last asked for: a step picked by hand stays until the scroll reaches another one. */
+let scrolledTo = -1;
+function followSteps() {
+  const sec = document.getElementById("onboarding");
+  const steps = sec?.querySelector<HTMLElement>(".steps");
+  const body = sec?.querySelector<HTMLElement>(".sec__body");
+  if (!sec || !steps || !body) return;
+  const r = sec.getBoundingClientRect();
+  if (!r.height) return;
+  let progress: number;
+  if (media("(min-width: 900px) and (prefers-reduced-motion: no-preference)")) {
+    const cs = getComputedStyle(sec);
+    const above = parseFloat(cs.paddingTop) || 0;
+    const below = parseFloat(cs.paddingBottom) || 0;
+    progress = pinProgress(r.top + above, r.height - above - below, body.offsetHeight, parseFloat(getComputedStyle(body).top) || 92);
+  } else {
+    progress = passProgress(steps.getBoundingClientRect().top, window.innerHeight);
+  }
+  const n = launchStep(progress, es.sections.onboarding.items.length);
+  if (n === scrolledTo) return;
+  scrolledTo = n;
+  stage.value = n;
+}
+onMounted(() => {
+  // a reader who asked for less motion picks the steps by hand
+  if (media("(prefers-reduced-motion: reduce)")) return;
+  window.addEventListener("scroll", followSteps, { passive: true });
+  window.addEventListener("resize", followSteps);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener("scroll", followSteps);
+  window.removeEventListener("resize", followSteps);
+});
 
 /** One line icon per sector, drawn as a single 24 px path. */
 const SECTOR_ICONS: Record<Sector, string> = {
@@ -1473,6 +1517,7 @@ function toggleTheme() {
   cursor: pointer;
 }
 .path__num {
+  position: relative;
   flex: none;
   display: grid;
   place-items: center;
@@ -1483,10 +1528,47 @@ function toggleTheme() {
   color: var(--ncrm-on-primary);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  transition:
+    background-color 0.3s ease,
+    color 0.2s ease;
 }
 .path__num.is-warm {
   background: var(--ncrm-warm);
   color: var(--ncrm-warm-ink);
+  animation: step-pop 0.5s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+/* a step left behind gets a tick drawn by hand over its number */
+.path__num.is-done {
+  color: transparent;
+}
+.path__tick {
+  position: absolute;
+  inset: 10px;
+  fill: none;
+  stroke: var(--ncrm-on-primary);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  transition: stroke-dashoffset 0.35s ease 0.1s;
+}
+.is-done .path__tick {
+  stroke-dashoffset: 0;
+}
+@keyframes step-pop {
+  0% {
+    transform: scale(0.8) rotate(-10deg);
+  }
+  60% {
+    transform: scale(1.16) rotate(5deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+.steps__card {
+  position: relative;
 }
 .steps__detail {
   margin: 0;
@@ -1494,6 +1576,28 @@ function toggleTheme() {
   border-radius: 20px;
   font-size: clamp(17px, 2vw, 20px);
   text-wrap: balance;
+}
+.steps__text {
+  display: block;
+  animation: step-text 0.35s ease;
+}
+@keyframes step-text {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+/* the same handwritten count the box got with each note */
+.steps__count {
+  position: absolute;
+  right: 12px;
+  top: -22px;
+  margin: 0;
+  font-size: 30px;
+  line-height: 1;
+  color: var(--ncrm-primary);
+  transform: rotate(-4deg);
+  pointer-events: none;
 }
 @media (min-width: 640px) {
   .path {
@@ -1512,6 +1616,22 @@ function toggleTheme() {
     top: 25px;
     border-top: 2px dotted var(--ncrm-muted);
     pointer-events: none;
+  }
+  /* the dotted line fills in behind the steps already taken */
+  .path__step:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    left: 52px;
+    right: -12px;
+    top: 25px;
+    border-top: 2px solid var(--ncrm-primary);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.45s ease;
+    pointer-events: none;
+  }
+  .path__step.is-past:not(:last-child)::after {
+    transform: scaleX(1);
   }
 }
 
@@ -1592,6 +1712,19 @@ function toggleTheme() {
   .sec__head {
     position: sticky;
     top: 92px;
+    align-self: start;
+  }
+}
+/* on a computer the launch section stays in the window while the scroll walks through its four steps;
+   it sticks lower than the other headings, so the parcel has room to hop onto the numbers */
+@media (min-width: 900px) and (prefers-reduced-motion: no-preference) {
+  .sec--onboarding {
+    min-height: 220vh;
+  }
+  .sec--onboarding .sec__head,
+  .sec--onboarding .sec__body {
+    position: sticky;
+    top: clamp(140px, 30vh, 300px);
     align-self: start;
   }
 }

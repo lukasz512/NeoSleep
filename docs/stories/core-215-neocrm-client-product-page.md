@@ -131,6 +131,24 @@ Answers recorded as clicked; the prototype he judged is the round 8 Artifact (th
   - Glass: the bar is a floating capsule, section tiles and the secondary button blur the paper behind them, inner cards are see-through without blur; the demo band is dark glass. System typeface for text, Caveat for handwriting.
 - Tests: `trail.spec.ts` (modes, bounds at every width, launch and timeline, flight time, dots, paper strength, tile nudge), `LivePaper.spec.ts` (mode per browser, fallback on failure, landing, cleanup), `ScrollTrail.spec.ts` (no line drawn).
 
+### Round 11, the route comes from the page (Łukasz, 2026-11-17), built
+- His words: the box should fly in from below or the side on a parabola and grab the notes, like Mario collecting things, with stars; the starting note must be one of the hero's notes, in both hero states (loose notes, tidy day); the parcel's path is always the same zigzag and should instead follow from how the page is built, with obstacles that move the parcel (a fan from the left, notes flying off); the launch section should go through each step while scrolling, very smooth, a little funny, and tied to the note.
+- Answers as clicked on form `core-215-r11-obstacles`, all "more":
+  - D1 parallel project: a new landing page on a shared engine (AJM-2, its own session; not built here).
+  - D2 obstacles: three big events (fan, stamp, spring) and small reactions between them.
+  - D3 stars: stars plus a handwritten counter, 1/4 to 4/4, that returns at the launch steps.
+  - D4 launch steps: the section is pinned on computers only; on phones the steps light up in normal scrolling.
+- This replaces the round 10 swing between the margins: the parcel falls straight and only an event moves it sideways.
+- As built:
+  - The travelling note leaves the hero's first note (or the tidy list); the hero note fades while it is away and is back when the reader returns to the top.
+  - The box flies in on a parabola from outside the window and collects four notes one by one; each one throws stars and a handwritten count.
+  - Packing is tied to the page, not to its length: the fan stands at the first of the product and security sections and finds the box open (the notes fly out and come back), the stamp falls in the second and seals it. On computers the fan blows the parcel to the right margin and the stamp's bounce sends it back to the left; on phones only the catch moves it, into the left margin.
+  - In the accessibility section the parcel bounces at tile edges; the tiles still make at most 4 px of room.
+  - Launch steps follow the scroll, forward and back; done steps get a handwritten tick, the counter shows the step and its label gets a line per step. On computers the parcel hops onto the current step. A click on a step still works.
+  - At the end a spring throws the parcel up; it folds into the plane and lands on the e-mail button as before.
+  - Reduced motion: nothing moves, the launch section is not pinned and does not follow the scroll. Without WebGL the flat object stays, with no obstacles.
+- Decided by default, proven by tests: `trail.spec.ts` (straight between events, route from the page at every width, parabola and one-by-one pickups, packing anchored to sections, launch steps forward and back, the note waits until it is in the window), `LivePaper.spec.ts` (the source note, open or tidy), `NeoCrmApp.spec.ts` (steps follow the scroll, ticks and counter, not under reduced motion).
+
 ### Hand-off
 → `/perspective legal` on the claims ledger once the claim level is decided
 → `/perspective marketing` + `/ux` for copy and layout

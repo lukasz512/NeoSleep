@@ -1,5 +1,6 @@
-// The 3D parcel (CORE-215 rounds 8 to 10): loose notes that two balloons complete, a box that folds shut,
-// tape, string, a label and a postmark, and a paper plane that flies to the demo request. World units are
+// The 3D parcel (CORE-215 rounds 8 to 11): a hero note, a box that flies in for it, three more notes that
+// balloons bring, a fan that blows them about, tape, string, a label and a postmark, and a spring that sends
+// the parcel off as a paper plane to the demo request. World units are
 // page pixels, so the thing sits on the page like a drawing. Loaded on demand by paper.ts: a browser
 // without WebGL never downloads three.
 import {
@@ -21,6 +22,7 @@ import {
   MeshBasicMaterial,
   MeshLambertMaterial,
   PerspectiveCamera,
+  Quaternion,
   Scene,
   SphereGeometry,
   TorusGeometry,
@@ -28,10 +30,10 @@ import {
   WebGLRenderer,
 } from "three";
 import type { Material, Object3D } from "three";
-import { clamp, lerp, routeX, tipS } from "./trail";
-import type { RouteShape } from "./trail";
+import { STORY, arc, clamp, eventX, fractionAt, lerp } from "./trail";
+import type { Plan } from "./trail";
 
-export type Layout = {
+export type Layout = Plan & {
   width: number;
   height: number;
   /** the parcel's size in px (parcelSize) */
@@ -39,7 +41,8 @@ export type Layout = {
   gutter: number;
   start: number;
   end: number;
-  shape: RouteShape;
+  /** the hero note the story starts from: its size and lean, and whether it stays in the hero */
+  note: { w: number; h: number; tilt: number; keep: boolean };
   /** where the plane lands, in page px */
   landX: number;
   landY: number;
@@ -48,15 +51,22 @@ export type Layout = {
 };
 export type Shadow = { x: number; y: number; rx: number; ry: number; a: number };
 export type Pose = {
-  /** the packing timeline, 0 to LAUNCH */
-  q: number;
+  /** the packing story, 0 to STORY.sealed (trail.ts) */
+  g: number;
+  /** how far down its route the parcel is; at 0 the note is still the hero's */
+  f: number;
   /** parcel into plane, 0 to 1, on time */
   morph: number;
   /** the flight, 0 to 1, on time */
   fly: number;
-  /** the parcel on the page */
+  /** the parcel on the page, and how high it hops right now */
   x: number;
   y: number;
+  lift: number;
+  /** how hard the fan blows, 0 to 1 */
+  gust: number;
+  /** launch steps done so far: lines on the parcel's label */
+  steps: number;
   top: number;
   sway: number;
   ptr: { x: number; y: number; on: number };
@@ -104,6 +114,7 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
     n3: lam(),
     primary: lam(),
     balloon: lam(),
+    warm: lam(),
     paper: new MeshBasicMaterial(),
     ink: new MeshBasicMaterial(),
     hull: new MeshBasicMaterial({ side: BackSide }),
@@ -118,6 +129,7 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
     set(mat.n3, "--ncrm-note-3", "#bfe6d8");
     set(mat.primary, "--ncrm-primary", "#0b6b62");
     set(mat.balloon, "--ncrm-balloon", "#2b4a8b");
+    set(mat.warm, "--ncrm-warm", "#f2b84b");
     set(mat.dashA, "--ncrm-primary", "#0b6b62");
     set(mat.dashB, "--ncrm-note-3", "#bfe6d8");
     set(mat.paper, "--ncrm-bg", "#f7f1e3");
@@ -204,7 +216,9 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
   const n1 = note(mat.n1);
   const n2 = note(mat.n2);
   const n3 = note(mat.n3);
-  const stack = group(n1, n2, n3);
+  const n4 = note(mat.n1);
+  const notes = [n1, n2, n3, n4];
+  const stack = group(...notes);
   rig.add(stack);
 
   const box = new Group();
@@ -227,7 +241,9 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
   const sF = at(group(at(new Mesh(new BoxGeometry(1.5, 19.5, 0.7), mat.primary), 0, 9.75, 0)), -7, 0, 11.4);
   const sT = at(group(at(new Mesh(new BoxGeometry(1.5, 0.7, 22.8), mat.primary), 0, 0, -11.4)), -7, 20.3, 11.4);
   const knot = at(new Mesh(new SphereGeometry(1.9, 10, 8), mat.primary), -7, 20.8, 0);
-  const label = group(slab(11, 7.5, 0.5, mat.n1, 0.75), stick([-3, 0, 0.5], [3, 0, 0.5], 0.6));
+  // the label gets a line for every launch step done
+  const lines = [2.4, 0.8, -0.8, -2.4].map((y, i) => stick([-3.6, y, 0.5], [i % 2 ? 2 : 3.6, y, 0.5], 0.45));
+  const label = group(slab(11, 7.5, 0.5, mat.n1, 0.75), ...lines);
   const mark = at(group(new Mesh(new TorusGeometry(3.2, 0.6, 6, 22), mat.ink), stick([4.5, 1.2, 0], [8, 1.2, 0], 0.5), stick([4.5, -1.2, 0], [8, -1.2, 0], 0.5)), -9, 6.5, 11.3);
   box.add(tapeTop, tapeL, tapeR, sF, sT, knot, label, mark);
 
@@ -249,11 +265,36 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
   }
   /** Balloons are drawn a little bigger than the notes they carry (round 10: the second one was lost on the paper). */
   const BALLOON = 1.3;
+  /** A balloon's note takes this much of the story to fall into the box. */
+  const HAND = 0.02;
   const carriers = [
-    { n: n2, bal: balloon(mat.primary), cn: note(mat.n2), t0: 0, t1: 0.1, dx: 18, dy: -74, z0: 110, x: 2, y: 0.9, z: 1.5, yaw: 0.14, D: { x: 0, y: 0 }, sg: 1 },
-    { n: n3, bal: balloon(mat.balloon), cn: note(mat.n3), t0: 0.1, t1: 0.2, dx: 22, dy: -86, z0: 125, x: -2.5, y: 1.8, z: -1.5, yaw: -0.12, D: { x: 0, y: 0 }, sg: 1 },
+    { n: n2, bal: balloon(mat.primary), cn: note(mat.n2), t0: 0, t1: 0.1, dx: 18, dy: -36, z0: 90, x: 2, y: 0.9, z: 1.5, yaw: 0.14, D: { x: 0, y: 0 }, sg: 1 },
+    { n: n3, bal: balloon(mat.balloon), cn: note(mat.n3), t0: 0.1, t1: 0.2, dx: 22, dy: -44, z0: 100, x: -2.5, y: 1.8, z: -1.5, yaw: -0.12, D: { x: 0, y: 0 }, sg: 1 },
+    { n: n4, bal: balloon(mat.warm), cn: note(mat.n1), t0: 0.2, t1: 0.3, dx: 16, dy: -40, z0: 95, x: 1, y: 2.7, z: 0.5, yaw: 0.2, D: { x: 0, y: 0 }, sg: 1 },
   ];
   for (const o of carriers) scene.add(o.cn);
+
+  // the fan stands on the page where the packing section begins, and blows across it (round 11)
+  const blades = group(
+    ...[0, 1, 2].map((i) => {
+      const blade = at(new Mesh(new CircleGeometry(5.6, 14), mat.n3), 6.4, 0, 0);
+      blade.scale.set(1, 0.5, 1);
+      const arm = group(blade);
+      arm.rotation.z = (i * Math.PI * 2) / 3;
+      return arm;
+    }),
+  );
+  const fanHead = group(new Mesh(new TorusGeometry(13, 1, 6, 30), mat.ink), blades, at(new Mesh(SPH, mat.primary), 0, 0, 0.5));
+  fanHead.children[2]?.scale.setScalar(2.8);
+  const fan = group(fanHead, stick([0, -13, 0], [0, -29, 0], 1.2), stick([-8, -29, 0], [8, -29, 0], 1.7));
+  scene.add(fan);
+
+  // the spring waits where the route ends: the parcel presses it down, and it sends the plane off
+  const COILS = 28;
+  const coils = Array.from({ length: COILS }, () => new Mesh(CYL, mat.primary));
+  const springTop = new Mesh(CYL, mat.ink);
+  const springBase = new Mesh(CYL, mat.ink);
+  scene.add(...coils, springTop, springBase);
 
   const scraps: { s: Group; a: number; v: number; spin: number }[] = [];
   for (let i = 0; i < 14; i++) {
@@ -281,8 +322,24 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
     dashes.push({ m, v: (i + 0.45) / DASHES });
   }
 
-  let L: Layout = { width: 1, height: 1, size: 48, gutter: 16, start: 0, end: 0, shape: { cx: 0, amp: 0, wave: 90 }, landX: 0, landY: 0, bandTop: 0 };
+  let L: Layout = {
+    width: 1,
+    height: 1,
+    size: 48,
+    gutter: 16,
+    start: 0,
+    end: 0,
+    route: { x0: 0, events: [] },
+    anchors: { fan: 0.3, stamp: 0.6, pad: 0.05 },
+    fan: { x: 0, y: 0, dir: 1 },
+    note: { w: 0, h: 0, tilt: 0, keep: true },
+    landX: 0,
+    landY: 0,
+    bandTop: 0,
+  };
   let k = 1;
+  let spin = 0;
+  let lastNow = 0;
   const fl = { x: 0, y: 0, bow: 60, rise: 110 };
   /** The flight: one gentle bow from where the route ends to the demo button, no loop. */
   function flight(v: number, out: Vector3) {
@@ -297,22 +354,23 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
     camera.aspect = L.width / L.height;
     camera.updateProjectionMatrix();
 
-    // each balloon waits where the parcel rests on a free margin: half a swing down, then a whole one
+    // each balloon waits where the box will be when its note is due
     const span = Math.max(1, L.end - L.start);
-    const first = L.shape.amp ? clamp((0.9 * L.shape.wave) / 2 / span, 0.08, 0.2) : 0.1;
-    const second = L.shape.amp ? clamp((0.9 * L.shape.wave) / span, first + 0.08, 0.27) : 0.2;
-    [first, second].forEach((t1, i) => {
-      const o = carriers[i];
-      if (!o) return;
-      const s = tipS(t1, L.start, L.end);
-      o.t1 = t1;
-      o.t0 = t1 - 0.09;
-      o.D = { x: routeX(s - L.start, L.shape, L.gutter), y: s };
+    carriers.forEach((o, i) => {
+      const due = STORY.pickups[i + 1] ?? STORY.pickups[0];
+      const y = L.start + fractionAt(due, L.anchors) * span;
+      // the note lets go a moment earlier, so it lands on the beat
+      o.t1 = due - HAND;
+      o.t0 = o.t1 - 0.035;
+      o.D = { x: eventX(y, L.route), y };
       // it comes down from above, a touch towards the middle so it never leaves the window
       o.sg = o.D.x > L.width / 2 ? -1 : 1;
     });
+    fan.position.set(L.fan.x, -L.fan.y, LIFT + 16 * k);
+    fan.scale.setScalar(k * (L.width >= 700 ? 1.3 : 1));
+    fanHead.rotation.y = L.fan.dir * rad(52);
 
-    fl.x = routeX(L.end - L.start, L.shape, L.gutter);
+    fl.x = eventX(L.end, L.route);
     fl.y = L.end;
     fl.bow = (fl.x > L.landX ? 1 : -1) * Math.min(60, L.width * 0.08);
     fl.rise = 110 * k;
@@ -333,34 +391,52 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
   const up = new Vector3();
   const Zup = new Vector3(0, 0, 1);
   const basis = new Matrix4();
+  const inverse = new Quaternion();
 
   function pose(p: Pose) {
     const shadows: Shadow[] = [];
     let alive = false;
-    const { top, sway, ptr } = p;
+    const { top, sway, ptr, gust } = p;
+    const dt = Math.min(64, Math.max(0, p.now - lastNow));
+    lastNow = p.now;
+    const inWindow = (y: number) => y - top > -160 && y - top < L.height + 160;
     // one number for the whole story: scrolling packs the parcel (to 0.86), time turns it into a plane and flies it
-    const g = p.q < 0.86 ? p.q : 0.86 + 0.08 * p.morph + 0.06 * p.fly;
-    T.position.set(p.x, -p.y, LIFT + 6);
+    const g = p.g < STORY.sealed ? p.g : STORY.sealed + 0.08 * p.morph + 0.06 * p.fly;
+    // while the window is at the top, the note is still the hero's own
+    const out = p.f > 0;
+    T.position.set(p.x, -p.y + p.lift, LIFT + 6 + p.lift * 0.4);
     T.scale.setScalar(k);
-    const tiltP = E.io(seg(g, 0.3, 0.37));
+    const boxIn = seg(g, STORY.boxIn[0], STORY.boxIn[1]);
+    const tiltP = E.io(boxIn);
     const tr = seg(g, 0.86, 0.92);
     const tp = seg(g, 0.6, 0.72);
     const st = seg(g, 0.8, 0.86);
     const press = Math.pow(Math.sin(Math.PI * st), 8);
     const leanX = clamp((ptr.x - p.x) / L.width, -1, 1) * 0.45 * ptr.on;
     const leanY = clamp((ptr.y - (p.y - top)) / L.height, -1, 1) * 0.3 * ptr.on;
-    rig.rotation.set(lerp(Math.PI / 2, 0.62, tiltP) - leanY, lerp(0, -0.55, tiltP) + Math.sin(tp * Math.PI * 2) * 0.12 * (1 - tp) + E.in(tr) * Math.PI * 4 + leanX * lerp(0.4, 1, tiltP) - press * 0.12 + sway * 0.5, 0);
+    rig.rotation.set(
+      lerp(Math.PI / 2, 0.62, tiltP) - leanY,
+      lerp(0, -0.55, tiltP) + Math.sin(tp * Math.PI * 2) * 0.12 * (1 - tp) + E.in(tr) * Math.PI * 4 + leanX * lerp(0.4, 1, tiltP) - press * 0.2 + sway * 0.5,
+      // it leans away from the fan
+      -L.fan.dir * gust * 0.22,
+    );
     const gone = E.in(seg(g, 0.885, 0.915));
     rig.position.set(0, lerp(0, -7, tiltP) + Math.sin(Math.PI * tr) * 22, 0);
     rig.scale.setScalar(Math.max(0.001, 1 - gone));
-    rig.visible = gone < 0.99;
+    rig.visible = out && gone < 0.99;
 
-    // first note, then the two the balloons bring
-    n1.rotation.y = rad(lerp(-10 + 16 * seg(g, 0, 0.14), 0, E.io(seg(g, 0.12, 0.2))));
+    // the hero note comes off the drawing at its own size and lean, and shrinks into the travelling note
+    const peel = E.io(seg(g, 0, STORY.peel));
+    const unit = 26 * k;
+    const big = L.note.keep ? { x: 0.35, z: 0.35 } : { x: L.note.w / unit, z: L.note.h / unit };
+    n1.position.set(0, 0, 0);
+    n1.scale.set(lerp(big.x, 1, peel), 1, lerp(big.z, 1, peel));
+    n1.rotation.set(0, lerp(-L.note.tilt, 0, peel), 0);
+    // then the three the balloons bring
     for (const o of carriers) {
       const bal = o.bal;
       const a = E.io(seg(g, o.t0, o.t1));
-      const rel = E.in(seg(g, o.t1, o.t1 + 0.03));
+      const rel = E.in(seg(g, o.t1, o.t1 + HAND));
       const up2 = seg(g, o.t1 + 0.01, o.t1 + 0.24);
       // page position of the balloon: it bobs at its own spot, sinks to meet the parcel, later rises away
       const bob = Math.sin(p.now / 900 + o.dx) * 3 * k;
@@ -386,7 +462,7 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
       const hy = by + 46 * k;
       const hz = bz - 30 * k;
       const nx = lerp(hx, p.x, rel);
-      const ny = lerp(hy, p.y, rel);
+      const ny = lerp(hy, p.y - p.lift, rel);
       const nz = lerp(hz, LIFT + 8 + o.y * k, rel);
       o.cn.visible = rel < 1;
       o.cn.position.set(nx, -ny, nz);
@@ -394,28 +470,52 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
       o.cn.rotation.set(Math.PI / 2, lerp(Math.sin(a * 9) * 0.25 + sway * 2 + bal.fx * 0.02, o.yaw, rel), 0);
       o.n.visible = rel >= 1;
       o.n.position.set(o.x, o.y, o.z);
-      o.n.rotation.y = o.yaw;
-      o.n.scale.setScalar(1 + 0.12 * Math.sin(Math.PI * seg(g, o.t1 + 0.03, o.t1 + 0.05)));
+      o.n.rotation.set(0, o.yaw, 0);
+      o.n.scale.setScalar(1 + 0.12 * Math.sin(Math.PI * seg(g, o.t1 + HAND, o.t1 + HAND + 0.02)));
       const ty = -by - 14 * k * BALLOON;
       if (rel <= 0) setStick(bal.cord, bx, ty, bz, nx, -ny + 13 * k, nz, 0.5 * k);
       else setStick(bal.cord, bx, ty, bz, bx + sway * 40, ty - 22 * k, bz, 0.5 * k);
       if (show) {
-        shadows.push({ x: bx + bz * 0.4 + 6, y: by + bz * 0.6 + 30 * k, rx: 9 * k * BALLOON * (1 + bz / 400), ry: 5 * k * BALLOON * (1 + bz / 400), a: 0.11 * (1 - up2) * clamp(1.2 - bz / 500) });
-        if (by - top > -160 && by - top < L.height + 160) alive = true;
+        shadows.push({ x: bx + bz * 0.2 + 6, y: by + bz * 0.3 + 30 * k, rx: 9 * k * BALLOON * (1 + bz / 400), ry: 5 * k * BALLOON * (1 + bz / 400), a: 0.11 * (1 - up2) * clamp(1.2 - bz / 500) });
+        if (inWindow(by)) alive = true;
       }
     }
 
-    // the box pops up, the stack lifts and drops in
-    const rise = E.out(seg(g, 0.3, 0.37));
-    const drop = E.in(seg(g, 0.38, 0.45));
-    stack.position.y = lerp(27 * rise, 1.4, drop);
+    // the box flies in from below on a parabola, spinning, and the note hops up and drops into it
+    const rise = E.out(seg(g, STORY.peel, STORY.boxIn[1] - 0.01));
+    const drop = E.in(seg(g, STORY.boxIn[1], STORY.pickups[0]));
+    stack.position.set(0, lerp(27 * rise, 1.4, drop), 0);
     stack.scale.setScalar(lerp(1, 0.66, rise));
     stack.visible = g < 0.565;
-    const pop = E.back(seg(g, 0.3, 0.36));
-    const hit = Math.sin(Math.PI * seg(g, 0.45, 0.48)) + Math.sin(Math.PI * seg(g, 0.57, 0.6));
-    box.visible = g >= 0.3;
-    box.scale.set(1 + 0.05 * hit, Math.max(0.02, pop) * (1 - 0.09 * hit), 1 + 0.05 * hit);
-    box.position.z = -press * 1.6;
+    const side = p.x < L.width / 2 ? 1 : -1;
+    const way = arc(boxIn, { x: side * Math.min(L.width * 0.45, 480), y: L.height * 0.6 }, { x: 0, y: 0 }, L.height * 0.2);
+    // every note that lands squashes the box for a moment, and so does the lid
+    const hit = STORY.pickups.reduce((sum, due) => sum + Math.sin(Math.PI * seg(g, due, due + 0.025)), Math.sin(Math.PI * seg(g, 0.57, 0.6)));
+    const pop = lerp(0.6, 1, E.out(boxIn));
+    box.visible = out && g >= STORY.boxIn[0];
+    box.position.copy(tmp.set(way.x / k, -way.y / k, (1 - boxIn) * 40).applyQuaternion(inverse.copy(rig.quaternion).invert()));
+    box.position.z -= press * 3;
+    box.rotation.y = side * Math.pow(1 - boxIn, 2) * Math.PI * 3;
+    box.scale.set(pop * (1 + 0.07 * hit), pop * (1 - 0.12 * hit), pop * (1 + 0.07 * hit) * (1 - 0.1 * press));
+
+    // the fan blows the loose notes out of the open box; they flutter and settle again
+    spin += dt * (0.0015 + 0.04 * gust);
+    blades.rotation.z = spin;
+    fan.rotation.z = Math.sin(p.now / 60) * 0.03 * gust;
+    fan.visible = inWindow(L.fan.y);
+    if (fan.visible) {
+      alive = true;
+      shadows.push({ x: L.fan.x + 5, y: L.fan.y + 34 * fan.scale.x, rx: 12 * fan.scale.x, ry: 4 * fan.scale.x, a: 0.13 });
+    }
+    if (gust > 0) {
+      notes.forEach((n, i) => {
+        const flutter = p.now / 80 + i * 1.7;
+        n.position.x += L.fan.dir * gust * (24 + 13 * i);
+        n.position.y += gust * (20 + 9 * i) + Math.sin(flutter) * 2 * gust;
+        n.rotation.x = Math.sin(flutter) * 0.5 * gust;
+        n.rotation.z = Math.cos(flutter * 0.8) * 0.7 * gust;
+      });
+    }
     const flap = (a: number, b: number) => rad(lerp(125, 0, E.io(seg(g, a, b))));
     fL.rotation.z = flap(0.46, 0.51);
     fR.rotation.z = -flap(0.47, 0.52);
@@ -446,11 +546,34 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
     label.position.set(7, 10.5, lerp(46, 11.6, le));
     label.scale.setScalar(lerp(1.9, 1, le));
     label.rotation.z = lerp(-0.4, 0, le);
+    lines.forEach((line, i) => (line.visible = i < p.steps));
+    // a big stamp comes down hard: it is the page's second event, and knocks the parcel back across
     stamp.visible = st > 0 && st < 1;
-    stamp.position.set(-9, 6.5, st < 0.5 ? lerp(74, 12.9, E.io(seg(st, 0, 0.46))) : lerp(12.9, 74, E.io(seg(st, 0.54, 1))));
-    stamp.scale.setScalar(Math.max(0.001, Math.min(1, st * 7, (1 - st) * 7)));
+    stamp.position.set(-9, 6.5, st < 0.5 ? lerp(120, 13.6, E.in(seg(st, 0, 0.48))) : lerp(13.6, 120, E.io(seg(st, 0.56, 1))));
+    stamp.scale.setScalar(Math.max(0.001, 1.7 * Math.min(1, st * 7, (1 - st) * 7)));
     mark.visible = st >= 0.5;
-    mark.scale.setScalar(Math.max(0.001, E.back(seg(g, 0.83, 0.85))));
+    mark.scale.setScalar(Math.max(0.001, 1.25 * E.back(seg(g, STORY.stamp, 0.85))));
+
+    // the spring: pressed down by the parcel that has arrived, let go when it turns into the plane
+    const sy = L.end + 30 * k;
+    const full = 34 * k;
+    const onIt = out && p.morph <= 0 && Math.abs(p.x - fl.x) < 20 * k;
+    const coil = p.morph > 0 ? full - 16 * k * Math.exp(-5 * p.morph) * Math.cos(20 * p.morph) : onIt ? clamp(sy - (p.y + 12 * k), 14 * k, full) : full;
+    const seen = inWindow(sy);
+    for (const m of [...coils, springTop, springBase]) m.visible = seen;
+    if (seen) {
+      const z = LIFT + 8 * k;
+      const at2 = (t: number) => [fl.x + 9 * k * Math.cos(t * Math.PI * 9), -(sy - coil * t), z + 4.5 * k * Math.sin(t * Math.PI * 9)] as const;
+      coils.forEach((m, i) => {
+        const a = at2(i / COILS);
+        const b = at2((i + 1) / COILS);
+        setStick(m, a[0], a[1], a[2], b[0], b[1], b[2], 0.9 * k);
+      });
+      setStick(springTop, fl.x - 12 * k, -(sy - coil), z, fl.x + 12 * k, -(sy - coil), z, 1.3 * k);
+      setStick(springBase, fl.x - 13 * k, -sy, z, fl.x + 13 * k, -sy, z, 1.5 * k);
+      shadows.push({ x: fl.x + 4, y: sy + 5 * k, rx: 14 * k, ry: 4 * k, a: 0.12 });
+      if (p.morph > 0 && p.morph < 1) alive = true;
+    }
 
     // paper scraps as the parcel turns into a plane
     const su = seg(g, 0.885, 0.985);
@@ -489,7 +612,9 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
       if (d.m.visible) d.m.scale.x = d.m.scale.z = 1.1 * (1 - behind / WAKE);
     }
 
-    if (gone < 0.99) shadows.push({ x: p.x + 5, y: p.y + lerp(7, 15, tiltP) * k + LIFT * 0.5, rx: lerp(15, 19, tiltP) * k * (1 - gone), ry: lerp(6, 7, tiltP) * k * (1 - gone), a: 0.16 });
+    // a parcel in the air throws a smaller shadow
+    const air = 1 - clamp(p.lift / (L.size * 2), 0, 0.5);
+    if (out && gone < 0.99) shadows.push({ x: p.x + 5, y: p.y + lerp(7, 15, tiltP) * k + LIFT * 0.5, rx: lerp(15, 19, tiltP) * k * (1 - gone) * air, ry: lerp(6, 7, tiltP) * k * (1 - gone) * air, a: 0.16 * air });
     return { shadows, alive };
   }
 

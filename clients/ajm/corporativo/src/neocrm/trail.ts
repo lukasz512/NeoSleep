@@ -36,7 +36,7 @@ export function trailMode(env: { reduced: boolean; saveData: boolean; webgl: boo
   return env.webgl && !env.saveData ? "live" : "flat";
 }
 
-/** From this width the parcel swings across the page; narrower, it keeps to the left margin. */
+/** From this width the page's events move the parcel across the page; narrower, it keeps to the left margin. */
 export const ROUTE_WIDE = 700;
 /** The page's column (NeoCrmApp's max-width); what is left beside it is free paper. */
 const COLUMN = 1120;
@@ -46,42 +46,9 @@ export function parcelSize(width: number, gutter: number): number {
   return width >= ROUTE_WIDE ? clamp(34 + width * 0.03, 52, 84) : clamp(gutter * 1.7, 32, 44);
 }
 
-export type RouteShape = { cx: number; amp: number; wave: number };
-
-/** The route nobody sees: a slow swing from one free margin to the other, or a quiet line down the left one. */
-export function routeShape(width: number, gutter: number): RouteShape {
-  const size = parcelSize(width, gutter);
-  if (width < ROUTE_WIDE) return { cx: Math.max(gutter * 0.5, size * 0.42), amp: 0, wave: WAVE };
-  const margin = Math.max(0, (width - COLUMN) / 2) + gutter;
-  const amp = width / 2 - Math.max(margin / 2, size * 0.6);
-  return { cx: width / 2, amp, wave: Math.max(1300, amp * 3.8) };
-}
-
-/** The parcel's x, `s` px down the page from where its route starts. It only ever goes down: no loops. */
-export function routeX(s: number, shape: RouteShape, gutter: number): number {
-  if (!shape.amp) return shape.cx + Math.min(10, gutter * 0.12) * Math.sin(s / shape.wave);
-  const c = Math.cos((2 * Math.PI * s) / shape.wave);
-  // flattened at both ends, so the parcel lingers on the free margins and crosses the text quickly
-  return shape.cx + shape.amp * c * (1.5 - 0.5 * c * c);
-}
-
-/** The packing is finished at this point of the timeline; what is left is the plane. */
-export const LAUNCH = 0.9;
-
 /** Scroll progress at which the route ends, so the parcel is still in the window (55 % down) when it gets there. */
 export function launchAt(end: number, range: number, height: number): number {
   return range > 0 ? clamp((end - height * 0.55) / range, 0.5, 0.97) : 0.97;
-}
-
-/** Scroll progress to the packing timeline: `launch` lands on LAUNCH, the page's end on 1. */
-export function timeline(progress: number, launch: number): number {
-  const g = Number.isFinite(progress) ? clamp(progress) : 0;
-  return g < launch ? (LAUNCH * g) / launch : LAUNCH + ((1 - LAUNCH) * (g - launch)) / (1 - launch);
-}
-
-/** How far down its route the parcel is at `q` of the timeline. */
-export function tipS(q: number, start: number, end: number): number {
-  return lerp(start, end, clamp(q / LAUNCH));
 }
 
 /** The plane takes this long to reach the demo button, however fast the reader scrolls. */
@@ -116,4 +83,223 @@ export function tileNudge(px: number, py: number, tile: { x: number; y: number; 
   const d = Math.hypot(from.x, from.y) || 1;
   const near = inside ? 1 : Math.pow(clamp(1 - d / 160), 2);
   return { x: (from.x / d) * near * 4 * strength, y: (from.y / d) * near * 4 * strength };
+}
+
+// ---- the route that comes from the page (round 11) ----
+
+/** The packing story, in timeline points (0 the hero note, 0.86 the sealed parcel; the plane runs on time after that). */
+export const STORY = {
+  /** the hero note has shrunk into the travelling note */
+  peel: 0.05,
+  /** the box flies in */
+  boxIn: [0.05, 0.11],
+  /** each note lands in the box at its own moment: the hero's first, the balloons' once the page has free paper */
+  pickups: [0.13, 0.215, 0.255, 0.295],
+  /** the fan blows */
+  gust: [0.31, 0.41],
+  fan: 0.36,
+  stamp: 0.83,
+  sealed: 0.86,
+} as const;
+
+/** How many notes are in the box at `g` of the story. */
+export function collected(g: number): number {
+  return STORY.pickups.filter((at) => g >= at).length;
+}
+
+type Point = { x: number; y: number };
+
+/** A parabola from `from` to `to` that bows `bow` px upwards half-way (the box's way in). */
+export function arc(t: number, from: Point, to: Point, bow: number): Point {
+  return { x: lerp(from.x, to.x, t), y: lerp(from.y, to.y, t) - 4 * bow * t * (1 - t) };
+}
+
+export type RouteEvent = {
+  kind: "catch" | "fan" | "stamp" | "bounce";
+  /** page y where it starts to act, and for how many px */
+  at: number;
+  span: number;
+  /** where it leaves the parcel */
+  to: number;
+  /** how high the parcel hops meanwhile, in px */
+  lift: number;
+};
+/** Where the parcel starts and what moves it on the way down, top to bottom. */
+export type Route = { x0: number; events: RouteEvent[] };
+
+/** The parcel's x at page height `y`: it falls straight, and only an event moves it sideways. */
+export function eventX(y: number, route: Route): number {
+  let x = route.x0;
+  for (const e of route.events) {
+    if (y <= e.at) break;
+    const t = clamp((y - e.at) / e.span);
+    x = t >= 1 ? e.to : lerp(x, e.to, t * t * (3 - 2 * t));
+  }
+  return x;
+}
+
+/** How high an event has the parcel hop at page height `y`. */
+export function eventLift(y: number, route: Route): number {
+  let lift = 0;
+  for (const e of route.events) {
+    const t = (y - e.at) / e.span;
+    if (t > 0 && t < 1) lift = Math.max(lift, e.lift * Math.sin(Math.PI * t));
+  }
+  return lift;
+}
+
+/** Where on the route (0..1) the fan and the stamp stand, and how much route the stamp takes to seal the parcel. */
+export type Anchors = { fan: number; stamp: number; pad: number };
+
+/** The fan stands at the first of the two page heights `a`, `b`, the stamp at the second; a page without them still gets both. */
+export function anchors(start: number, end: number, a: number, b: number): Anchors {
+  const len = Math.max(1, end - start);
+  const ys = [a, b].filter((y) => Number.isFinite(y)).sort((p, q) => p - q);
+  const [first, second] = ys;
+  // the four notes need room before the fan
+  const fan = clamp(first === undefined ? 0.22 : (first - start) / len, Math.min(0.3, 520 / len), 0.6);
+  const stamp = clamp(second === undefined ? 0.6 : (second - start) / len, fan + 0.12, 0.92);
+  return { fan, stamp, pad: Math.min(0.05, 240 / len, (1 - stamp) / 2) };
+}
+
+function knots(a: Anchors): [number, number][] {
+  return [
+    [0, 0],
+    [a.fan, STORY.fan],
+    [a.stamp, STORY.stamp],
+    [a.stamp + a.pad, STORY.sealed],
+  ];
+}
+
+/** Route fraction to story point: the box is open at the fan and gets its postmark at the stamp. */
+export function packAt(fraction: number, a: Anchors): number {
+  const f = Number.isFinite(fraction) ? clamp(fraction) : 0;
+  const k = knots(a);
+  for (let i = 1; i < k.length; i++) {
+    const [f0, g0] = k[i - 1] ?? [0, 0];
+    const [f1, g1] = k[i] ?? [1, STORY.sealed];
+    if (f <= f1) return lerp(g0, g1, (f - f0) / (f1 - f0));
+  }
+  return STORY.sealed;
+}
+
+/** The inverse: how far down the route the story point `g` happens. */
+export function fractionAt(g: number, a: Anchors): number {
+  const k = knots(a);
+  for (let i = 1; i < k.length; i++) {
+    const [f0, g0] = k[i - 1] ?? [0, 0];
+    const [f1, g1] = k[i] ?? [1, STORY.sealed];
+    if (g <= g1) return lerp(f0, f1, clamp((g - g0) / (g1 - g0)));
+  }
+  return a.stamp + a.pad;
+}
+
+/** What the page looks like to the parcel, in page px. */
+export type Page = {
+  width: number;
+  gutter: number;
+  /** the hero note it starts from */
+  x0: number;
+  start: number;
+  end: number;
+  /** the middle of the free strip between a section's heading and its body; NaN when the page has none */
+  channel: number;
+  /** tops of the sections where the fan and the stamp stand (NaN when missing) */
+  fanY: number;
+  stampY: number;
+  /** tile edges the parcel bounces off */
+  edges: number[];
+};
+export type Plan = { route: Route; anchors: Anchors; fan: { x: number; y: number; dir: 1 | -1 } };
+
+const BOUNCE = 140;
+
+/** The route for this page: the box catches the note, the fan blows it across, the stamp knocks it back, tiles make it hop. */
+export function planRoute(page: Page): Plan {
+  const { width, gutter, start, end } = page;
+  const size = parcelSize(width, gutter);
+  const wide = width >= ROUTE_WIDE;
+  const len = Math.max(1, end - start);
+  const inWindow = (x: number) => clamp(x, size / 2, Math.max(size / 2, width - size / 2));
+  const margin = Math.max(0, (width - COLUMN) / 2) + gutter;
+  const left = inWindow(wide ? Math.max(margin / 2, size * 0.6) : Math.max(gutter * 0.5, size * 0.42));
+  const right = wide ? inWindow(width - left) : left;
+  const a = anchors(start, end, page.fanY, page.stampY);
+  const yAt = (g: number) => start + fractionAt(g, a) * len;
+  const free = Number.isFinite(page.channel) && page.channel > size / 2 && page.channel < width - size / 2;
+  const lane = wide ? (free ? page.channel : inWindow(left + size * 1.1)) : left;
+
+  const stampAt = yAt(0.835);
+  const big: RouteEvent[] = [
+    { kind: "catch", at: yAt(0.115), span: Math.max(1, yAt(0.155) - yAt(0.115)), to: lane, lift: 0 },
+    { kind: "fan", at: yAt(0.32), span: Math.max(1, yAt(0.4) - yAt(0.32)), to: right, lift: size * 0.35 },
+    { kind: "stamp", at: stampAt, span: Math.max(1, Math.min(260, end - stampAt)), to: left, lift: size * 0.5 },
+  ];
+  const bounces: RouteEvent[] = [];
+  let lastAt = -Infinity;
+  for (const y of page.edges.filter((edge) => Number.isFinite(edge)).sort((p, q) => p - q)) {
+    if (bounces.length >= 3) break;
+    if (y <= start || y + BOUNCE >= end || y - lastAt < 200) continue;
+    if (big.some((e) => y + BOUNCE > e.at - 60 && y < e.at + e.span + 60)) continue;
+    bounces.push({ kind: "bounce", at: y, span: BOUNCE, to: 0, lift: size * 0.3 });
+    lastAt = y;
+  }
+
+  // a tile edge knocks the parcel a little towards the middle, the next one back into its lane
+  const kick = wide ? Math.min(40, width * 0.035) : 0;
+  const x0 = inWindow(page.x0);
+  let rest = x0;
+  let x = x0;
+  const events = [...big, ...bounces]
+    .sort((p, q) => p.at - q.at)
+    .map((e) => {
+      const to = e.kind !== "bounce" ? e.to : x === rest ? inWindow(rest + (rest < width / 2 ? kick : -kick)) : rest;
+      if (e.kind !== "bounce") rest = to;
+      x = to;
+      return { ...e, to };
+    });
+
+  return {
+    route: { x0, events },
+    anchors: a,
+    fan: { x: wide ? left : width - size * 0.7, y: start + a.fan * len, dir: wide ? 1 : -1 },
+  };
+}
+
+/** Where the window has to be for the note to leave: until then it waits in the hero. */
+export function waitTop(noteY: number, height: number): number {
+  return Math.max(0, noteY - height * 0.6);
+}
+
+/** How far down its route the parcel is with the window at `top`: 0 while the note waits, 1 from `launchTop` on. */
+export function routeFraction(top: number, wait: number, launchTop: number): number {
+  return clamp((top - wait) / Math.max(1, launchTop - wait));
+}
+
+/** Which launch step is lit at `progress` through the section (0..1): forward with the scroll, and back. */
+export function launchStep(progress: number, count: number): number {
+  return Number.isFinite(progress) ? clamp(Math.floor(progress * count), 0, Math.max(0, count - 1)) : 0;
+}
+
+/** Progress through a pinned section: its content, `held` px tall, sticks at `stick` px while the section (`top`, `height`) scrolls by. */
+export function pinProgress(top: number, height: number, held: number, stick: number): number {
+  return clamp((stick - top) / Math.max(1, height - held));
+}
+
+/** Progress when nothing is pinned: 0 with the steps' top 75 % down the window, 1 at 25 %. */
+export function passProgress(top: number, viewport: number): number {
+  return clamp((viewport * 0.75 - top) / Math.max(1, viewport * 0.5));
+}
+
+/** One of `n` stars thrown when a note lands, `age` seconds on: up in a fan, down again, gone in under a second. */
+export function star(age: number, i: number, n: number): { x: number; y: number; spin: number; scale: number; alpha: number } {
+  const angle = -Math.PI / 2 + (n > 1 ? i / (n - 1) - 0.5 : 0) * 1.8;
+  const speed = 150 + 40 * ((i * 7) % 3);
+  return {
+    x: Math.cos(angle) * speed * age || 0,
+    y: Math.sin(angle) * speed * age + 260 * age * age || 0,
+    spin: age * (4 + (i % 3)) * (i % 2 ? -1 : 1),
+    scale: 0.7 + 0.3 * ((i * 5) % 3) * 0.5 + 0.4 * Math.sin(Math.PI * clamp(age / 0.9)),
+    alpha: clamp((0.9 - age) / 0.4),
+  };
 }
