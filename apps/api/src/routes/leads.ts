@@ -83,7 +83,8 @@ leadsRouter.post(
     const body = req.body as {
       salutation?: string; first_name?: string; last_name?: string;
       email?: string; phone?: string; status?: string; type?: string;
-      region?: string; country_code?: string; source?: string; institution?: string; assigned_to?: string;
+      region?: string; country_code?: string; territory_id?: string | null;
+      source?: string; institution?: string; assigned_to?: string;
       metadata?: Record<string, unknown>;
     };
 
@@ -99,6 +100,7 @@ leadsRouter.post(
         type:        typeof body.type        === "string" ? body.type               : undefined,
         region:      typeof body.region      === "string" ? body.region             : undefined,
         country_code: typeof body.country_code === "string" ? body.country_code.trim() || null : undefined,
+        territory_id: typeof body.territory_id === "string" ? body.territory_id : null,
         source:      typeof body.source      === "string" ? body.source             : null,
         institution: typeof body.institution === "string" ? body.institution.trim() : null,
         assigned_to: typeof body.assigned_to === "string" ? body.assigned_to.trim() : null,
@@ -124,7 +126,8 @@ leadsRouter.patch(
     const body = req.body as {
       salutation?: string; first_name?: string; last_name?: string;
       email?: string; phone?: string; status?: string; type?: string;
-      region?: string; country_code?: string | null; source?: string; institution?: string; assigned_to?: string;
+      region?: string; country_code?: string | null; territory_id?: string | null;
+      source?: string; institution?: string; assigned_to?: string;
       metadata?: Record<string, unknown>;
       converted_to_id?: string; converted_to_type?: string;
     };
@@ -158,6 +161,7 @@ leadsRouter.patch(
         type:        typeof body.type        === "string" ? body.type   : undefined,
         region:      typeof body.region      === "string" ? body.region  : undefined,
         country_code: body.country_code      !== undefined ? body.country_code : undefined,
+        territory_id: body.territory_id      !== undefined ? body.territory_id : undefined,
         source:      typeof body.source      === "string" ? body.source  : undefined,
         institution: typeof body.institution === "string" ? body.institution : undefined,
         assigned_to: typeof body.assigned_to === "string" ? body.assigned_to : undefined,
