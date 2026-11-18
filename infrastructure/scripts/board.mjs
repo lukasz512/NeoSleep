@@ -19,6 +19,7 @@
 // (gitignored), or BOARD_API_URL / BOARD_TOKEN / BOARD_URL in the environment.
 // English only (CLAUDE.md). No dependencies beyond Node.
 
+import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -88,12 +89,32 @@ export function parseArgs(argv) {
   return { flags, positional };
 }
 
-export function loadConfig(env = process.env, file = CONFIG_FILE) {
-  let fromFile = {};
+/**
+ * Where the session token may live: this checkout first, then the main checkout. The file is
+ * gitignored, so a worktree never has its own copy (CORE-247).
+ */
+export function configFiles(root = ROOT) {
+  const files = [join(root, ".claude/local/board.json")];
   try {
-    fromFile = JSON.parse(readFileSync(file, "utf-8"));
+    const common = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: root, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    const main = join(dirname(common), ".claude/local/board.json");
+    if (common && !files.includes(main)) files.push(main);
   } catch {
-    // benign: no config file yet; the environment may carry everything
+    // benign: not a git checkout; only the local file applies
+  }
+  return files;
+}
+
+/** `files` is one path or a list; the first readable one wins. */
+export function loadConfig(env = process.env, files = configFiles()) {
+  let fromFile = {};
+  for (const file of [files].flat()) {
+    try {
+      fromFile = JSON.parse(readFileSync(file, "utf-8"));
+      break;
+    } catch {
+      // benign: no config file here; the next one or the environment may carry everything
+    }
   }
   return {
     apiUrl: String(env.BOARD_API_URL ?? fromFile.apiUrl ?? "").replace(/\/+$/, ""),

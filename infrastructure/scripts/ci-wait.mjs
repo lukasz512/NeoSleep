@@ -7,14 +7,57 @@
 // Run it in the background:
 //
 //   node infrastructure/scripts/ci-wait.mjs [--branch <b>] [--sha <sha>] [--max-minutes 45]
-//     → prints the final ci-status JSON; exit 0 green, 1 red, 2 gave up (still pending)
+//     → prints the final ci-status JSON; exit 0 green, 1 red, 2 gave up (still pending),
+//       3 another ci-wait already waits on this commit
+//
+// One wait per commit (CORE-247): it holds .claude/local/ci-wait/<sha>.pid while it runs.
+// The quality gate reads that file and lets the turn end instead of blocking again, and
+// a second ci-wait for the same commit exits at once.
 //
 // English only (CLAUDE.md). No dependencies beyond Node.
 
+import { execFileSync } from "node:child_process";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ciStatus } from "./ci-status.mjs";
 
 export const POLL_MS = 60_000;
+
+export const lockFile = (dir, sha) => join(dir, `${sha}.pid`);
+
+function isAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    // EPERM: the process exists but belongs to someone else.
+    return err.code === "EPERM";
+  }
+}
+
+function holder(file) {
+  try {
+    const pid = Number(readFileSync(file, "utf-8").trim());
+    return Number.isInteger(pid) && pid > 0 ? pid : null;
+  } catch {
+    // benign: no lock file
+    return null;
+  }
+}
+
+/** Takes the lock unless a live process holds it. A stale or unreadable file is overwritten. */
+export function acquireLock(file, { pid = process.pid, alive = isAlive } = {}) {
+  const current = holder(file);
+  if (current && current !== pid && alive(current)) return { ok: false, pid: current };
+  writeFileSync(file, `${pid}\n`);
+  return { ok: true };
+}
+
+/** Removes the lock only when this process still holds it. */
+export function releaseLock(file, pid = process.pid) {
+  if (holder(file) === pid) rmSync(file, { force: true });
+}
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -42,6 +85,17 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const branch = arg("branch");
   const sha = arg("sha");
   const maxMs = Number(arg("max-minutes") ?? 45) * 60_000;
+  const git = (...args) => execFileSync("git", args, { encoding: "utf-8" }).trim();
+  const dir = join(git("rev-parse", "--show-toplevel"), ".claude/local/ci-wait");
+  mkdirSync(dir, { recursive: true });
+  const file = lockFile(dir, git("rev-parse", sha ?? "HEAD"));
+  const lock = acquireLock(file);
+  if (!lock.ok) {
+    process.stdout.write(`already waiting on this commit (pid ${lock.pid}); you are re-invoked when it exits. Don't start another one.\n`);
+    process.exit(3);
+  }
+  process.on("exit", () => releaseLock(file));
+  for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => process.exit(130));
   const status = await waitForCi({ check: () => ciStatus({ branch, sha }), maxMs });
   process.stdout.write(JSON.stringify(status) + "\n");
   process.exit(status.state === "success" ? 0 : status.state === "failure" ? 1 : 2);

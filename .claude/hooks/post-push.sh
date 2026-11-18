@@ -20,7 +20,17 @@ CHANGED=""
 if [ "$(change_shape "$CHANGED")" = full ]; then
   HANDOVER="full Artifact via /ship-artifact (UI/feature change: before/after, Change Index row)"
 else
-  HANDOVER="light handover: post one board comment with the PR link (pnpm board comment <KEY> …), then run node .claude/skills/ship-artifact/build.mjs light --board-commented (a non-UI change gets no Artifact page)"
+  HANDOVER="light handover in one command: node .claude/skills/ship-artifact/build.mjs light --title … --summary … --before … --after … (or --new … for a new element) --post — it posts the board comment (summary, before/after, PR link) and moves the ticket to Needs Review (a non-UI change gets no Artifact page)"
 fi
-MSG="Pushed. Finish this ticket in this order, then stop: (1) ${HANDOVER}; wait for CI green as the quality gate says; (2) write the handoff to .claude/local/handoff/<ticket>.md (≤30 lines: ticket, branch, done, left, links); (3) end the final reply with one line for Łukasz: \"Ticket done → /clear; the next ticket starts in a new session from the handoff.\""
+# CORE-247: one background wait per push instead of a gate block per poll.
+# shellcheck source=lib/ci-wait-lock.sh
+source "$DIR/lib/ci-wait-lock.sh"
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+SHA="$(git rev-parse HEAD 2>/dev/null || true)"
+CI="check CI once a PR exists"
+if [ -n "$SHA" ] && CI_AUTOFIX_FILE="${ROOT:-.}/.claude/ci-autofix.json" on_ci_branch "$BRANCH"; then
+  CI="start the CI wait now, once, in the background (run_in_background): node infrastructure/scripts/ci-wait.mjs --branch ${BRANCH} --sha ${SHA} — you are re-invoked when it exits; never poll gh run / ci-status yourself and never start a second wait for the same commit"
+fi
+MSG="Pushed. Finish this ticket in this order, then stop: (0) ${CI}; (1) ${HANDOVER}; the PR link goes to Łukasz only once CI is green; (2) write the handoff to .claude/local/handoff/<ticket>.md (≤30 lines: ticket, branch, done, left, links); (3) end the final reply with one line for Łukasz: \"Ticket done → /clear; the next ticket starts in a new session from the handoff.\""
 jq -n --arg ctx "$MSG" '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $ctx}}'
