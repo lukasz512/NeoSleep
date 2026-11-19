@@ -1636,6 +1636,8 @@
   "app.clinical.openFileError": "Nie udało się otworzyć pliku",
   "app.clinical.upload.title": "Dodaj badanie",
   "app.clinical.upload.file": "Plik (PDF, JPG lub PNG)",
+  "app.clinical.upload.chooseFile": "Wybierz plik",
+  "app.clinical.upload.changeFile": "Zmień plik",
   "app.clinical.upload.fileRequired": "Wybierz plik",
   "app.clinical.upload.titleField": "Tytuł",
   "app.clinical.upload.titleRequired": "Podaj tytuł",
