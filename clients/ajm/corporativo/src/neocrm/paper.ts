@@ -118,15 +118,17 @@ export function startPaper(o: PaperOptions): () => void {
 
     // the free strip between a section's heading and its body, where the page has two columns
     let channel = NaN;
+    let gap = 0;
     for (const sec of o.root.querySelectorAll(".sec")) {
       const head = sec.querySelector(".sec__head")?.getBoundingClientRect();
       const body = sec.querySelector(".sec__body")?.getBoundingClientRect();
       if (!head || !body || body.left < head.right + 8) continue;
       channel = (head.right + body.left) / 2;
+      gap = body.left - head.right;
       break;
     }
     const [fanY = NaN, stampY = NaN] = [...o.root.querySelectorAll(o.packing)].map(pageY);
-    const plan = planRoute({ width, gutter, x0: seen ? seen.left + seen.width / 2 : width / 2, start, end, channel, fanY, stampY, edges: [...o.root.querySelectorAll(o.bounce)].map(pageY) });
+    const plan = planRoute({ width, gutter, x0: seen ? seen.left + seen.width / 2 : width / 2, start, end, channel, gap, fanY, stampY, edges: [...o.root.querySelectorAll(o.bounce)].map(pageY) });
     layout = {
       width,
       height,
@@ -332,7 +334,8 @@ export function startPaper(o: PaperOptions): () => void {
       // the count, written by hand next to the box
       const pop = 1 + 0.35 * Math.sin(Math.PI * clamp(age / 0.3));
       c.save();
-      c.translate(b.x + size * 0.75, by - size * 0.2 - 30 * age);
+      // on the side with more free paper, so it stays off the tiles that sit towards the middle
+      c.translate(b.x + size * (b.x > width / 2 ? -0.75 : 0.75), by - size * 0.2 - 30 * age);
       c.rotate(-0.1);
       c.globalAlpha = clamp((1.3 - age) / 0.4);
       c.font = `600 ${Math.round(size * 0.62 * pop)}px ${colors.hand}`;

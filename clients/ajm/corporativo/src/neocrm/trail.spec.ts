@@ -93,6 +93,7 @@ describe("neocrm page › the route comes from the page (CORE-215 round 11)", ()
     gutter: gutterOf(width),
     x0: width * 0.58,
     channel: width >= 900 ? width * 0.37 : Number.NaN,
+    gap: width >= 900 ? 120 : 0,
     start: 380,
     end: 9000,
     fanY: 2300,
@@ -116,6 +117,14 @@ describe("neocrm page › the route comes from the page (CORE-215 round 11)", ()
         expect(eventX(to, route)).toBe(e.to);
       });
     }
+  });
+  it("a channel narrower than the parcel is not used: the catch keeps to the left margin", () => {
+    const width = 1280;
+    const size = parcelSize(width, gutterOf(width));
+    const plan = planRoute({ ...page(width), channel: 477, gap: size - 20 });
+    const catchEvent = plan.route.events.find((e) => e.kind === "catch");
+    expect(catchEvent).toBeDefined();
+    expect(catchEvent?.to).toBeLessThan(width * 0.2);
   });
   it("on a computer the catch takes it to the page's free channel, the fan to the right margin, the stamp back to the left", () => {
     for (const width of [ROUTE_WIDE, 820, 1280, 1920]) {

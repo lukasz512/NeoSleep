@@ -204,6 +204,8 @@ export type Page = {
   end: number;
   /** the middle of the free strip between a section's heading and its body; NaN when the page has none */
   channel: number;
+  /** how wide that strip is, px; the parcel only uses it when it fits */
+  gap: number;
   /** tops of the sections where the fan and the stamp stand (NaN when missing) */
   fanY: number;
   stampY: number;
@@ -226,7 +228,7 @@ export function planRoute(page: Page): Plan {
   const right = wide ? inWindow(width - left) : left;
   const a = anchors(start, end, page.fanY, page.stampY);
   const yAt = (g: number) => start + fractionAt(g, a) * len;
-  const free = Number.isFinite(page.channel) && page.channel > size / 2 && page.channel < width - size / 2;
+  const free = Number.isFinite(page.channel) && page.gap >= size + 12 && page.channel > size / 2 && page.channel < width - size / 2;
   const lane = wide ? (free ? page.channel : inWindow(left + size * 1.1)) : left;
 
   const stampAt = yAt(0.835);
