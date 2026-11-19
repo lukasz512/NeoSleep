@@ -334,8 +334,8 @@ export function startPaper(o: PaperOptions): () => void {
       // the count, written by hand next to the box
       const pop = 1 + 0.35 * Math.sin(Math.PI * clamp(age / 0.3));
       c.save();
-      // on the side with more free paper, so it stays off the tiles that sit towards the middle
-      c.translate(b.x + size * (b.x > width / 2 ? -0.75 : 0.75), by - size * 0.2 - 30 * age);
+      // towards the nearer window edge, where the margin is free paper and the text and tiles are not
+      c.translate(Math.min(Math.max(b.x + size * (b.x > width / 2 ? 0.75 : -0.75), size * 0.4), width - size * 0.4), by - size * 0.2 - 30 * age);
       c.rotate(-0.1);
       c.globalAlpha = clamp((1.3 - age) / 0.4);
       c.font = `600 ${Math.round(size * 0.62 * pop)}px ${colors.hand}`;
