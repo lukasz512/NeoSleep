@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { REVIEW_LIMIT, cardUrl, parseArgs, parseTicketBody, reviewReminder, run, teamsFileWith, ticketProblems, waitingForReview } from "./board.mjs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { REVIEW_LIMIT, cardUrl, configFiles, loadConfig, parseArgs, parseTicketBody, reviewReminder, run, teamsFileWith, ticketProblems, waitingForReview } from "./board.mjs";
 
 const GOOD = "## Problem\nThe board is stale.\n\n## Change\n- Sessions write here\n\n## Done when\n- A test proves it";
 const CONFIG = { apiUrl: "https://api.test", token: "nbs_x", boardUrl: "https://pwa.test/platform/board" };
@@ -91,6 +94,22 @@ test("surfaces the API's refusal", async () => {
 
 test("says how to configure when there is no token", async () => {
   await assert.rejects(run(["get", "CORE-1"], { config: { ...CONFIG, token: "" }, fetchImpl: fakeFetch().impl, log: () => {} }), /Session tokens/);
+});
+
+test("the config falls back to the next file: a worktree reads the main checkout's token (CORE-247)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "board-"));
+  const main = join(dir, "main.json");
+  writeFileSync(main, JSON.stringify({ apiUrl: "https://api.main/", token: "nbs_main" }));
+  const config = loadConfig({}, [join(dir, "missing.json"), main]);
+  assert.equal(config.apiUrl, "https://api.main");
+  assert.equal(config.token, "nbs_main");
+  assert.equal(loadConfig({}, main).token, "nbs_main");
+  assert.equal(loadConfig({ BOARD_TOKEN: "nbs_env" }, [main]).token, "nbs_env");
+  rmSync(dir, { recursive: true });
+});
+
+test("this checkout's config file is tried first", () => {
+  assert.match(configFiles()[0], /\.claude\/local\/board\.json$/);
 });
 
 test("rewrites the team keys and keeps the comment header", () => {
