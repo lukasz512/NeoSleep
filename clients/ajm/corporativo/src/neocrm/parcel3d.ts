@@ -306,9 +306,9 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
   /** A balloon's note takes this much of the story to fall into the box. */
   const HAND = 0.02;
   const carriers = [
-    { n: n2, bal: balloon(mat.primary), cn: note(mat.n2), t0: 0, t1: 0.1, dx: 18, dy: -36, z0: 90, x: 2, y: 0.9, z: 1.5, yaw: 0.14, D: { x: 0, y: 0 }, sg: 1 },
-    { n: n3, bal: balloon(mat.balloon), cn: note(mat.n3), t0: 0.1, t1: 0.2, dx: 22, dy: -44, z0: 100, x: -2.5, y: 1.8, z: -1.5, yaw: -0.12, D: { x: 0, y: 0 }, sg: 1 },
-    { n: n4, bal: balloon(mat.warm), cn: note(mat.n1), t0: 0.2, t1: 0.3, dx: 16, dy: -40, z0: 95, x: 1, y: 2.7, z: 0.5, yaw: 0.2, D: { x: 0, y: 0 }, sg: 1 },
+    { n: n2, bal: balloon(mat.primary), cn: note(mat.n2), t0: 0, t1: 0.1, dx: 70, dy: -36, z0: 90, x: 2, y: 0.9, z: 1.5, yaw: 0.14, D: { x: 0, y: 0 }, sg: 1 },
+    { n: n3, bal: balloon(mat.balloon), cn: note(mat.n3), t0: 0.1, t1: 0.2, dx: 95, dy: -44, z0: 100, x: -2.5, y: 1.8, z: -1.5, yaw: -0.12, D: { x: 0, y: 0 }, sg: 1 },
+    { n: n4, bal: balloon(mat.warm), cn: note(mat.n1), t0: 0.2, t1: 0.3, dx: 120, dy: -40, z0: 95, x: 1, y: 2.7, z: 0.5, yaw: 0.2, D: { x: 0, y: 0 }, sg: 1 },
   ];
   for (const o of carriers) scene.add(o.cn);
 
@@ -409,7 +409,7 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
       const y = L.start + fractionAt(due, L.anchors) * span;
       // the note lets go a moment earlier, so it lands on the beat
       o.t1 = due - HAND;
-      o.t0 = o.t1 - 0.07;
+      o.t0 = o.t1 - 0.09;
       o.D = { x: eventX(y, L.route), y };
       // it comes down from above, a touch towards the middle so it never leaves the window
       o.sg = o.D.x > L.width / 2 ? -1 : 1;
@@ -448,8 +448,11 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
   const Zup = new Vector3(0, 0, 1);
   const basis = new Matrix4();
   const inverse = new Quaternion();
-  // at rest the plane lies flat on the paper, seen from above, nose to the right
-  const rest = new Quaternion().setFromRotationMatrix(new Matrix4().makeBasis(new Vector3(1, 0, 0), new Vector3(0, 0, 1), new Vector3(0, -1, 0)));
+  // at rest the plane sits at an angle: nose down to the right (about 35 degrees), one wing lifted
+  const rest = new Quaternion()
+    .setFromAxisAngle(new Vector3(0, 0, 1), -0.62)
+    .multiply(new Quaternion().setFromRotationMatrix(new Matrix4().makeBasis(new Vector3(1, 0, 0), new Vector3(0, 0, 1), new Vector3(0, -1, 0))))
+    .multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), 0.5));
 
   function pose(p: Pose) {
     const shadows: Shadow[] = [];
@@ -484,12 +487,13 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
     rig.visible = out && gone < 0.99;
 
     // the hero note comes off the drawing at its own size and lean, and shrinks into the travelling note
-    const peel = E.io(seg(g, 0, STORY.peel));
+    const swap = E.io(seg(g, 0, 0.03));
+    const peel = E.io(seg(g, 0.03, STORY.peel));
     const unit = 26 * k;
     const big = L.note.keep ? { x: 0.35, z: 0.35 } : { x: L.note.w / unit, z: L.note.h / unit };
     const hand = L.note.text ?? "";
     if (hand && !L.note.keep) writeScribble(hand, L.note.font ?? "cursive", L.note.w, L.note.h);
-    const ink = E.io(1 - seg(peel, 0.1, 0.8));
+    const ink = 1 - swap;
     scribble.visible = !!scribbleMat.map && !L.note.keep && ink > 0.01;
     scribbleMat.opacity = ink;
     // the plain lines come in as the handwriting goes
@@ -504,10 +508,10 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
       const bal = o.bal;
       const a = E.io(seg(g, o.t0, o.t1));
       const rel = E.in(seg(g, o.t1, o.t1 + HAND));
-      const up2 = seg(g, o.t1 + 0.01, o.t1 + 0.24);
+      const up2 = seg(g, o.t1 + 0.01, o.t1 + 0.1);
       // page position of the balloon: it bobs at its own spot, sinks to meet the parcel, later rises away
       const bob = Math.sin(p.now / 900 + o.dx) * 3 * k;
-      let bx = o.D.x + o.sg * (o.dx * k * (1 - a) + 24 * k * up2);
+      let bx = clamp(o.D.x + o.sg * (o.dx * (L.width >= 700 ? 1 : 0.35) * k * (1 - a) + 24 * k * up2), 30 * k, L.width - 30 * k);
       let by = o.D.y - 46 * k + o.dy * k * (1 - a) - 170 * k * up2 + bob;
       const bz = lerp(o.z0, 44, a) * k + 300 * k * Math.pow(up2, 1.5);
       // it backs away from the cursor
@@ -550,7 +554,7 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
 
     // the box flies in from below on a parabola, spinning, and the note hops up and drops into it
     const rise = E.out(seg(g, STORY.peel, STORY.boxIn[1] - 0.01));
-    const drop = E.in(seg(g, STORY.boxIn[1], STORY.pickups[0]));
+    const drop = E.in(seg(g, STORY.boxIn[1] - 0.025, STORY.pickups[0]));
     stack.position.set(0, lerp(27 * rise, 1.4, drop), 0);
     stack.scale.setScalar(lerp(1, 0.66, rise));
     stack.visible = g < 0.565;
@@ -571,9 +575,9 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
     blades.rotation.z = spin;
     fan.rotation.z = Math.sin(p.now / 60) * 0.03 * gust;
     // it rolls in from the side as the notes need it, blows, and rolls off again
-    const away = (L.fan.dir > 0 ? L.fan.x + 140 : L.width - L.fan.x + 140) * (1 - E.out(seg(g, 0.3, 0.355)) + E.in(seg(g, 0.455, 0.5)));
+    const away = (L.fan.dir > 0 ? L.fan.x + 140 : L.width - L.fan.x + 140) * (1 - E.out(seg(g, 0.22, 0.27)) + E.in(seg(g, 0.35, 0.4)));
     fan.position.x = L.fan.x - L.fan.dir * away;
-    fan.visible = inWindow(L.fan.y) && away < 1e4 && (g > 0.3 && g < 0.5);
+    fan.visible = inWindow(L.fan.y) && away < 1e4 && (g > 0.22 && g < 0.4);
     if (fan.visible) {
       alive = true;
       shadows.push({ x: fan.position.x + 5, y: L.fan.y + 34 * fan.scale.x, rx: 12 * fan.scale.x, ry: 4 * fan.scale.x, a: 0.13 });
@@ -588,10 +592,10 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
       });
     }
     const flap = (a: number, b: number) => rad(lerp(125, 0, E.io(seg(g, a, b))));
-    fL.rotation.z = flap(0.46, 0.51);
-    fR.rotation.z = -flap(0.47, 0.52);
-    fB.rotation.x = -flap(0.5, 0.55);
-    fF.rotation.x = flap(0.52, 0.57);
+    fL.rotation.z = flap(0.48, 0.53);
+    fR.rotation.z = -flap(0.49, 0.54);
+    fB.rotation.x = -flap(0.51, 0.56);
+    fF.rotation.x = flap(0.53, 0.58);
 
     // the tape roll rides the seam, the string ties it, then the label and the postmark
     const tape = E.io(seg(g, 0.61, 0.7));

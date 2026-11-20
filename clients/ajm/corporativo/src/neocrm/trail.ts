@@ -90,14 +90,14 @@ export function tileNudge(px: number, py: number, tile: { x: number; y: number; 
 /** The packing story, in timeline points (0 the hero note, 0.86 the sealed parcel; the plane runs on time after that). */
 export const STORY = {
   /** the hero note has shrunk into the travelling note */
-  peel: 0.05,
+  peel: 0.06,
   /** the box flies in */
-  boxIn: [0.05, 0.11],
-  /** each note lands in the box at its own moment: the hero's first, the balloons' once the page has free paper */
-  pickups: [0.13, 0.2, 0.27, 0.34],
+  boxIn: [0.06, 0.115],
+  /** each note lands in the box at its own moment: the hero's first, then one balloon, the windmill, and two balloons from the other side */
+  pickups: [0.12, 0.21, 0.39, 0.44],
   /** the fan blows */
-  gust: [0.36, 0.45],
-  fan: 0.405,
+  gust: [0.27, 0.35],
+  fan: 0.31,
   stamp: 0.83,
   sealed: 0.86,
 } as const;
@@ -237,8 +237,8 @@ export function planRoute(page: Page): Plan {
 
   const stampAt = yAt(0.835);
   const big: RouteEvent[] = [
-    { kind: "catch", at: yAt(0.115), span: Math.max(1, yAt(0.155) - yAt(0.115)), to: lane, lift: size * 0.4 },
-    { kind: "fan", at: yAt(0.36), span: Math.max(1, yAt(0.45) - yAt(0.36)), to: right, lift: size * 0.35 },
+    { kind: "catch", at: yAt(0.108), span: Math.max(1, yAt(0.15) - yAt(0.108)), to: lane, lift: size * 0.4 },
+    { kind: "fan", at: yAt(STORY.gust[0]), span: Math.max(1, yAt(STORY.gust[1]) - yAt(STORY.gust[0])), to: right, lift: size * 0.35 },
     { kind: "stamp", at: stampAt, span: Math.max(1, Math.min(260, end - stampAt)), to: left, lift: size * 0.5 },
   ];
   const bounces: RouteEvent[] = [];

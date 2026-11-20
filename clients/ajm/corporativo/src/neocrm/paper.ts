@@ -37,7 +37,7 @@ export type PaperOptions = {
 const GRID = 22;
 const OFF = 1.5;
 /** Points of the packing where the paper gets a ripple: each note lands, the box shuts, the tape, the string, the stamp. */
-const BEATS = [...STORY.pickups, 0.455, 0.585, 0.7, STORY.stamp];
+const BEATS = [...STORY.pickups, 0.5, 0.585, 0.7, STORY.stamp];
 /** The parcel takes this long to turn into the plane. */
 const MORPH_MS = 1400;
 /** ...and this long to get onto the launch steps, and from one step to the next. */
@@ -556,7 +556,8 @@ export function startPaper(o: PaperOptions): () => void {
       for (const b of BEATS) if ((prevG < b && g >= b) || (prevG > b && g <= b)) ripple(x, y, 4.5, 240, 1.3);
       // a note lands in the box: stars, and the count written next to it
       STORY.pickups.forEach((at, i) => {
-        if (prevG < at && g >= at) burst(x, y - size * 0.3, 7);
+        // only the balloons' notes throw stars, not the hero's
+        if (i > 0 && prevG < at && g >= at) burst(x, y - size * 0.3, 7);
       });
       if (prevG < STORY.stamp && g >= STORY.stamp) burst(x, y - size * 0.2, 6);
       for (const e of route.events) {

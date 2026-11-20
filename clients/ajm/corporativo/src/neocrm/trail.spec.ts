@@ -182,7 +182,7 @@ describe("neocrm page › the route comes from the page (CORE-215 round 11)", ()
       expect(packAt(f, a)).toBeGreaterThanOrEqual(last);
       last = packAt(f, a);
     }
-    for (const g of [0.05, 0.13, 0.25, 0.36, 0.5, 0.83]) expect(packAt(fractionAt(g, a), a)).toBeCloseTo(g);
+    for (const g of [0.05, 0.13, 0.25, 0.31, 0.5, 0.83]) expect(packAt(fractionAt(g, a), a)).toBeCloseTo(g);
     // the fan blows while the flaps are still open
     expect(STORY.gust[1]).toBeLessThan(0.46);
     // a page without those sections still packs the parcel on the way
@@ -212,7 +212,9 @@ describe("neocrm page › the route comes from the page (CORE-215 round 11)", ()
       expect(collected(at)).toBe(i + 1);
     });
     expect(STORY.pickups).toHaveLength(4);
-    expect(STORY.pickups[3]).toBeLessThan(STORY.gust[0]);
+    // one balloon, then the windmill, then two balloons
+    expect(STORY.pickups[1]).toBeLessThan(STORY.gust[0]);
+    expect(STORY.pickups[2]).toBeGreaterThan(STORY.gust[1]);
   });
   it("each pickup throws stars that fly up, fall and fade", () => {
     for (let i = 0; i < 6; i++) {
