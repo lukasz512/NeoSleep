@@ -4,7 +4,7 @@
 :root {
   /* warm paper with a dot grid, like a notebook page (round 5); the dots are an SVG tile, not a gradient */
   --ncrm-bg: #f7f1e3;
-  --ncrm-dots: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Ccircle cx='1.5' cy='1.5' r='1' fill='%23dccfb2'/%3E%3C/svg%3E");
+  --ncrm-dots: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Ccircle cx='1.5' cy='1.5' r='1' fill='%23dccfb2'/%3E%3Cpath d='M-3 1.5h9M1.5-3v9' stroke='%23dccfb2'/%3E%3C/svg%3E");
   --ncrm-surface: #fffdf8;
   --ncrm-ink: #10211f;
   --ncrm-muted: #46605c;
@@ -50,7 +50,7 @@
 }
 :root[data-theme="dark"] {
   --ncrm-bg: #061a18;
-  --ncrm-dots: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Ccircle cx='1.5' cy='1.5' r='1' fill='%23173833'/%3E%3C/svg%3E");
+  --ncrm-dots: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Ccircle cx='1.5' cy='1.5' r='1' fill='%23173833'/%3E%3Cpath d='M-3 1.5h9M1.5-3v9' stroke='%23173833'/%3E%3C/svg%3E");
   --ncrm-note-shadow: rgba(0, 0, 0, 0.4);
   --ncrm-surface: #0c2925;
   --ncrm-ink: #e8f2f0;

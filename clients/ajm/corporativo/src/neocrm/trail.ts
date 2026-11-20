@@ -114,6 +114,9 @@ export function arc(t: number, from: Point, to: Point, bow: number): Point {
   return { x: lerp(from.x, to.x, t), y: lerp(from.y, to.y, t) - 4 * bow * t * (1 - t) };
 }
 
+/** The steps the parcel tumbles down after the kick. */
+export const STAIRS = 3;
+
 export type RouteEvent = {
   kind: "catch" | "fan" | "stamp" | "bounce";
   /** page y where it starts to act, and for how many px */
@@ -143,7 +146,8 @@ export function eventLift(y: number, route: Route): number {
   let lift = 0;
   for (const e of route.events) {
     const t = (y - e.at) / e.span;
-    if (t > 0 && t < 1) lift = Math.max(lift, e.lift * Math.sin(Math.PI * t));
+    // the kick sends it down three steps: a hop for each, landing on the step
+    if (t > 0 && t < 1) lift = Math.max(lift, e.lift * (e.kind === "stamp" ? Math.abs(Math.sin(STAIRS * Math.PI * t)) * (1 - 0.35 * t) : Math.sin(Math.PI * t)));
   }
   return lift;
 }

@@ -77,7 +77,10 @@ export function startPaper(o: PaperOptions): () => void {
   let launchEl: HTMLElement | null = null;
   let dirty = true;
   function show() {
-    if (hidden) hidden.style.opacity = "";
+    if (hidden) {
+      hidden.style.opacity = "";
+      hidden.style.transition = "";
+    }
     hidden = null;
   }
   function measure() {
@@ -227,7 +230,11 @@ export function startPaper(o: PaperOptions): () => void {
     const j1 = Math.ceil((top + height) / GRID) + 1;
     const i1 = Math.ceil(width / GRID) + 1;
     c.fillStyle = colors.dot;
+    c.strokeStyle = colors.dot;
+    c.lineWidth = 1;
     c.beginPath();
+    // a drawing board: every fourth grid point is a small cross, as on a blueprint
+    const marks = new Path2D();
     for (let j = j0; j <= j1; j++) {
       for (let i = -1; i <= i1; i++) {
         const wx = i * GRID + OFF;
@@ -270,11 +277,19 @@ export function startPaper(o: PaperOptions): () => void {
           strong.push(x, y, rr);
           continue;
         }
+        if (i % 4 === 0 && j % 4 === 0) {
+          marks.moveTo(x - 4, y);
+          marks.lineTo(x + 4, y);
+          marks.moveTo(x, y - 4);
+          marks.lineTo(x, y + 4);
+          continue;
+        }
         c.moveTo(x + rr, y);
         c.arc(x, y, rr, 0, 6.2832);
       }
     }
     c.fill();
+    c.stroke(marks);
     c.fillStyle = colors.strong;
     c.beginPath();
     for (let n = 0; n + 2 < strong.length; n += 3) {
@@ -518,7 +533,7 @@ export function startPaper(o: PaperOptions): () => void {
       }
     }
 
-    const over = !wide || morph > 0 || hop.on > 0.01 || crossing || y < heroBottom;
+    const over = !wide || morph > 0 || hop.on > 0.01 || crossing || (!wide ? y < heroBottom : false);
     if (over !== isOver) {
       isOver = over;
       o.over(over);
@@ -529,6 +544,8 @@ export function startPaper(o: PaperOptions): () => void {
       show();
       if (taken && src) {
         hidden = src.el;
+        // the drawn note gives way at once, so the 3D one takes over without a blink
+        hidden.style.transition = "opacity 0.18s ease 0s";
         hidden.style.opacity = "0";
       }
     }

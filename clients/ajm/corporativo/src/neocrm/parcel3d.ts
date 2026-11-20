@@ -30,7 +30,7 @@ import {
   WebGLRenderer,
 } from "three";
 import type { Material, Object3D } from "three";
-import { STORY, arc, clamp, eventX, fractionAt, lerp } from "./trail";
+import { STAIRS, STORY, arc, clamp, eventX, fractionAt, lerp } from "./trail";
 import type { Plan } from "./trail";
 
 export type Layout = Plan & {
@@ -289,6 +289,16 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
   const fan = group(fanHead, stick([0, -13, 0], [0, -29, 0], 1.2), stick([-8, -29, 0], [8, -29, 0], 1.7));
   scene.add(fan);
 
+  // a hammer kicks the sealed parcel off, and a flight of steps takes it down to the spring
+  const hammer = group(stick([0, 0, 0], [-44, 0, 0], 1.6), at(slab(9, 18, 12, mat.n2), -46, 0, 0));
+  hammer.visible = false;
+  scene.add(hammer);
+  const steps3d = Array.from({ length: STAIRS }, () => at(slab(52, 10, 22, mat.n2), 0, 0, 0));
+  steps3d.forEach((m) => {
+    m.visible = false;
+    scene.add(m);
+  });
+
   // the spring waits where the route ends: the parcel presses it down, and it sends the plane off
   const COILS = 28;
   const coils = Array.from({ length: COILS }, () => new Mesh(CYL, mat.primary));
@@ -365,6 +375,14 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
       o.D = { x: eventX(y, L.route), y };
       // it comes down from above, a touch towards the middle so it never leaves the window
       o.sg = o.D.x > L.width / 2 ? -1 : 1;
+    });
+    const kick = L.route.events.find((e) => e.kind === "stamp");
+    steps3d.forEach((m, i) => {
+      m.visible = !!kick && L.width >= 700;
+      if (!kick) return;
+      const y = kick.at + (kick.span * (i + 1)) / STAIRS;
+      m.position.set(eventX(y, L.route), -(y + L.size * 0.5 + 5 * k), LIFT - 2);
+      m.scale.setScalar(k);
     });
     fan.position.set(L.fan.x, -L.fan.y, LIFT + 16 * k);
     fan.scale.setScalar(k * (L.width >= 700 ? 1.3 : 1));
@@ -505,10 +523,13 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
     spin += dt * (0.0015 + 0.04 * gust);
     blades.rotation.z = spin;
     fan.rotation.z = Math.sin(p.now / 60) * 0.03 * gust;
-    fan.visible = inWindow(L.fan.y);
+    // it rolls in from the side as the notes need it, blows, and rolls off again
+    const away = (L.fan.dir > 0 ? L.fan.x + 140 : L.width - L.fan.x + 140) * (1 - E.out(seg(g, 0.3, 0.355)) + E.in(seg(g, 0.455, 0.5)));
+    fan.position.x = L.fan.x - L.fan.dir * away;
+    fan.visible = inWindow(L.fan.y) && away < 1e4 && (g > 0.3 && g < 0.5);
     if (fan.visible) {
       alive = true;
-      shadows.push({ x: L.fan.x + 5, y: L.fan.y + 34 * fan.scale.x, rx: 12 * fan.scale.x, ry: 4 * fan.scale.x, a: 0.13 });
+      shadows.push({ x: fan.position.x + 5, y: L.fan.y + 34 * fan.scale.x, rx: 12 * fan.scale.x, ry: 4 * fan.scale.x, a: 0.13 });
     }
     if (gust > 0) {
       notes.forEach((n, i) => {
@@ -554,27 +575,39 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
     stamp.visible = st > 0 && st < 1;
     stamp.position.set(-9, 6.5, st < 0.5 ? lerp(120, 13.6, E.in(seg(st, 0, 0.48))) : lerp(13.6, 120, E.io(seg(st, 0.56, 1))));
     stamp.scale.setScalar(Math.max(0.001, 1.7 * Math.min(1, st * 7, (1 - st) * 7)));
+    // the hammer swings up and hits the parcel off to the left
+    const swing = seg(st, 0.5, 0.64);
+    hammer.visible = st > 0.45 && st < 0.9 && inWindow(p.y);
+    if (hammer.visible) {
+      hammer.position.set(p.x + 72 * k, -p.y, LIFT + 10 * k);
+      hammer.scale.setScalar(k);
+      hammer.rotation.z = -rad(80) * (st < 0.64 ? 1 - E.in(swing) : E.io(seg(st, 0.64, 0.9)));
+      alive = true;
+    }
     mark.visible = st >= 0.5;
     mark.scale.setScalar(Math.max(0.001, 1.25 * E.back(seg(g, STORY.stamp, 0.85))));
 
     // the spring: pressed down by the parcel that has arrived, let go when it turns into the plane
     const sy = L.end + 30 * k;
     const full = 34 * k;
+    // it slides in from the left as the box nears, and leaves left once the plane is off
+    const slide = (1 - E.out(seg(p.y, L.end - 420, L.end - 120)) + E.in(seg(p.fly, 0.05, 0.4))) * (fl.x + 140 * k);
+    const sx = fl.x - slide;
     const onIt = out && p.morph <= 0 && Math.abs(p.x - fl.x) < 20 * k;
     const coil = p.morph > 0 ? full - 16 * k * Math.exp(-5 * p.morph) * Math.cos(20 * p.morph) : onIt ? clamp(sy - (p.y + 12 * k), 14 * k, full) : full;
     const seen = inWindow(sy);
     for (const m of [...coils, springTop, springBase]) m.visible = seen;
     if (seen) {
       const z = LIFT + 8 * k;
-      const at2 = (t: number) => [fl.x + 9 * k * Math.cos(t * Math.PI * 9), -(sy - coil * t), z + 4.5 * k * Math.sin(t * Math.PI * 9)] as const;
+      const at2 = (t: number) => [sx + 9 * k * Math.cos(t * Math.PI * 9), -(sy - coil * t), z + 4.5 * k * Math.sin(t * Math.PI * 9)] as const;
       coils.forEach((m, i) => {
         const a = at2(i / COILS);
         const b = at2((i + 1) / COILS);
         setStick(m, a[0], a[1], a[2], b[0], b[1], b[2], 0.9 * k);
       });
-      setStick(springTop, fl.x - 12 * k, -(sy - coil), z, fl.x + 12 * k, -(sy - coil), z, 1.3 * k);
-      setStick(springBase, fl.x - 13 * k, -sy, z, fl.x + 13 * k, -sy, z, 1.5 * k);
-      shadows.push({ x: fl.x + 4, y: sy + 5 * k, rx: 14 * k, ry: 4 * k, a: 0.12 });
+      setStick(springTop, sx - 12 * k, -(sy - coil), z, sx + 12 * k, -(sy - coil), z, 1.3 * k);
+      setStick(springBase, sx - 13 * k, -sy, z, sx + 13 * k, -sy, z, 1.5 * k);
+      shadows.push({ x: sx + 4, y: sy + 5 * k, rx: 14 * k, ry: 4 * k, a: 0.12 });
       if (p.morph > 0 && p.morph < 1) alive = true;
     }
 
