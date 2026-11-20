@@ -145,6 +145,8 @@ export function startPaper(o: PaperOptions): () => void {
         h: src && seen ? src.el.offsetHeight : 0,
         tilt: transform ? Math.atan2(parseFloat(transform[2] ?? "0"), parseFloat(transform[1] ?? "1")) : 0,
         keep: !src || !seen || src.keep,
+        text: src?.el.textContent?.trim() ?? "",
+        font: src ? getComputedStyle(src.el).fontFamily : "cursive",
       },
       // it lands under the button, on the paper, never on the words
       landX: button ? button.left + button.width * 0.72 : width / 2,

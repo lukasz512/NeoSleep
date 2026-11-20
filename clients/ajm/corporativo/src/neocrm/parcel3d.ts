@@ -8,6 +8,7 @@ import {
   BackSide,
   BoxGeometry,
   BufferGeometry,
+  CanvasTexture,
   CircleGeometry,
   ColorManagement,
   ConeGeometry,
@@ -22,6 +23,7 @@ import {
   MeshBasicMaterial,
   MeshLambertMaterial,
   PerspectiveCamera,
+  PlaneGeometry,
   Quaternion,
   Scene,
   SphereGeometry,
@@ -42,7 +44,7 @@ export type Layout = Plan & {
   start: number;
   end: number;
   /** the hero note the story starts from: its size and lean, and whether it stays in the hero */
-  note: { w: number; h: number; tilt: number; keep: boolean };
+  note: { w: number; h: number; tilt: number; keep: boolean; text?: string; font?: string };
   /** where the plane lands, in page px */
   landX: number;
   landY: number;
@@ -217,6 +219,42 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
   const n2 = note(mat.n2);
   const n3 = note(mat.n3);
   const n4 = note(mat.n1);
+  // the hero note's own handwriting rides on the first note and fades into the plain lines as it peels off
+  const scribbleMat = new MeshBasicMaterial({ transparent: true, depthWrite: false });
+  const scribble = new Mesh(new PlaneGeometry(26, 26), scribbleMat);
+  scribble.rotation.x = -Math.PI / 2;
+  scribble.position.y = 0.75;
+  scribble.visible = false;
+  n1.add(scribble);
+  let scribbled = "";
+  function writeScribble(text: string, font: string, w: number, h: number) {
+    const key = `${text}|${font}|${w}|${h}`;
+    if (key === scribbled || !text || w < 8 || h < 8) return;
+    scribbled = key;
+    const cv = document.createElement("canvas");
+    cv.width = Math.round(w * 2);
+    cv.height = Math.round(h * 2);
+    const c = cv.getContext("2d");
+    if (!c) return;
+    c.scale(2, 2);
+    c.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--ncrm-note-ink").trim() || "#3b2f1a";
+    c.font = `500 21px ${font}`;
+    c.textBaseline = "top";
+    let row = 0;
+    let line = "";
+    for (const word of text.split(/\s+/)) {
+      const tryLine = line ? `${line} ${word}` : word;
+      if (c.measureText(tryLine).width > w - 24 && line) {
+        c.fillText(line, 12, 12 + row * 23);
+        row++;
+        line = word;
+      } else line = tryLine;
+    }
+    c.fillText(line, 12, 12 + row * 23);
+    scribbleMat.map?.dispose();
+    scribbleMat.map = new CanvasTexture(cv);
+    scribbleMat.needsUpdate = true;
+  }
   const notes = [n1, n2, n3, n4];
   const stack = group(...notes);
   rig.add(stack);
@@ -449,6 +487,15 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
     const peel = E.io(seg(g, 0, STORY.peel));
     const unit = 26 * k;
     const big = L.note.keep ? { x: 0.35, z: 0.35 } : { x: L.note.w / unit, z: L.note.h / unit };
+    const hand = L.note.text ?? "";
+    if (hand && !L.note.keep) writeScribble(hand, L.note.font ?? "cursive", L.note.w, L.note.h);
+    const ink = E.io(1 - seg(peel, 0.1, 0.8));
+    scribble.visible = !!scribbleMat.map && !L.note.keep && ink > 0.01;
+    scribbleMat.opacity = ink;
+    // the plain lines come in as the handwriting goes
+    n1.children.forEach((c, i) => {
+      if (i >= 2) c.visible = L.note.keep || !scribbleMat.map || ink < 0.6;
+    });
     n1.position.set(0, 0, 0);
     n1.scale.set(lerp(big.x, 1, peel), 1, lerp(big.z, 1, peel));
     n1.rotation.set(0, lerp(-L.note.tilt, 0, peel), 0);
