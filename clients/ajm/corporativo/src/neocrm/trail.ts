@@ -94,10 +94,10 @@ export const STORY = {
   /** the box flies in */
   boxIn: [0.05, 0.11],
   /** each note lands in the box at its own moment: the hero's first, the balloons' once the page has free paper */
-  pickups: [0.13, 0.215, 0.255, 0.295],
+  pickups: [0.13, 0.2, 0.27, 0.34],
   /** the fan blows */
-  gust: [0.31, 0.41],
-  fan: 0.36,
+  gust: [0.36, 0.45],
+  fan: 0.405,
   stamp: 0.83,
   sealed: 0.86,
 } as const;
@@ -233,8 +233,8 @@ export function planRoute(page: Page): Plan {
 
   const stampAt = yAt(0.835);
   const big: RouteEvent[] = [
-    { kind: "catch", at: yAt(0.115), span: Math.max(1, yAt(0.155) - yAt(0.115)), to: lane, lift: 0 },
-    { kind: "fan", at: yAt(0.32), span: Math.max(1, yAt(0.4) - yAt(0.32)), to: right, lift: size * 0.35 },
+    { kind: "catch", at: yAt(0.115), span: Math.max(1, yAt(0.155) - yAt(0.115)), to: lane, lift: size * 0.4 },
+    { kind: "fan", at: yAt(0.36), span: Math.max(1, yAt(0.45) - yAt(0.36)), to: right, lift: size * 0.35 },
     { kind: "stamp", at: stampAt, span: Math.max(1, Math.min(260, end - stampAt)), to: left, lift: size * 0.5 },
   ];
   const bounces: RouteEvent[] = [];

@@ -143,8 +143,9 @@ export function startPaper(o: PaperOptions): () => void {
         tilt: transform ? Math.atan2(parseFloat(transform[2] ?? "0"), parseFloat(transform[1] ?? "1")) : 0,
         keep: !src || !seen || src.keep,
       },
-      landX: button ? button.right - 8 : width / 2,
-      landY: button ? button.top + top + 4 : demoTop + 40,
+      // it lands under the button, on the paper, never on the words
+      landX: button ? button.left + button.width * 0.72 : width / 2,
+      landY: button ? button.bottom + top + 30 : demoTop + 80,
       bandTop: demoTop,
     };
     wait = waitTop(start, height);
@@ -391,6 +392,8 @@ export function startPaper(o: PaperOptions): () => void {
   let morph = 0;
   let fly = 0;
   let landed = false;
+  // the flight happens once: the plane stays on the page and the parcel does not come back on the way up
+  let finished = false;
   let isOver = false;
   let alive = false;
   let tokenAge = 0;
@@ -434,10 +437,20 @@ export function startPaper(o: PaperOptions): () => void {
 
     // the parcel keeps its height in the window exactly; its packing and what the page's events do to it are eased
     const ys = lerp(start, end, fs);
-    const g = packAt(fs, layout.anchors);
+    const g = finished ? STORY.sealed + 0.14 : packAt(fs, layout.anchors);
     let x = eventX(ys, route);
     let y = lerp(start, end, f);
     let lift = eventLift(ys, route);
+    // each balloon's note drops into the box with a thump: the box hops, and hops away a little
+    let thump = 0;
+    STORY.pickups.forEach((at, i) => {
+      const u = clamp((g - at) / 0.05);
+      if (u > 0 && u < 1 && i > 0) {
+        thump += Math.sin(Math.PI * u);
+        x += (i % 2 ? 1 : -1) * Math.sin(Math.PI * u) * size * 0.35;
+      }
+    });
+    lift += thump * size * 0.55;
     const gust = Math.sin(Math.PI * clamp((g - STORY.gust[0]) / (STORY.gust[1] - STORY.gust[0])));
     const wind: Wind = { x: layout.fan.x, y: layout.fan.y, dir: layout.fan.dir, power: gl ? gust : 0 };
     const crossing = route.events.some((e) => e.kind !== "bounce" && ys > e.at && ys < e.at + e.span);
@@ -449,6 +462,11 @@ export function startPaper(o: PaperOptions): () => void {
     const wasFly = fly;
     fly = glide(fly, arrived && morph >= 1 && buttonSeen ? 1 : 0, dt, arrived ? FLIGHT_MS : FLIGHT_MS / 3);
     morph = glide(morph, arrived || fly > 0 ? 1 : 0, dt, MORPH_MS);
+    if (fly >= 1) finished = true;
+    if (finished) {
+      fly = 1;
+      morph = 1;
+    }
     if (landed !== fly >= 1) {
       landed = !landed;
       o.land(landed);
@@ -515,11 +533,11 @@ export function startPaper(o: PaperOptions): () => void {
       }
     }
 
-    if (gl) {
+    if (gl && !finished) {
       for (const b of BEATS) if ((prevG < b && g >= b) || (prevG > b && g <= b)) ripple(x, y, 4.5, 240, 1.3);
       // a note lands in the box: stars, and the count written next to it
       STORY.pickups.forEach((at, i) => {
-        if (prevG < at && g >= at) burst(x, y - size * 0.3, 7, `${i + 1}/${STORY.pickups.length}`);
+        if (prevG < at && g >= at) burst(x, y - size * 0.3, 7);
       });
       if (prevG < STORY.stamp && g >= STORY.stamp) burst(x, y - size * 0.2, 6);
       for (const e of route.events) {

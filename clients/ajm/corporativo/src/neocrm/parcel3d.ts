@@ -361,7 +361,7 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
       const y = L.start + fractionAt(due, L.anchors) * span;
       // the note lets go a moment earlier, so it lands on the beat
       o.t1 = due - HAND;
-      o.t0 = o.t1 - 0.035;
+      o.t0 = o.t1 - 0.07;
       o.D = { x: eventX(y, L.route), y };
       // it comes down from above, a touch towards the middle so it never leaves the window
       o.sg = o.D.x > L.width / 2 ? -1 : 1;
@@ -392,6 +392,8 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
   const Zup = new Vector3(0, 0, 1);
   const basis = new Matrix4();
   const inverse = new Quaternion();
+  // at rest the plane lies flat on the paper, seen from above, nose to the right
+  const rest = new Quaternion().setFromRotationMatrix(new Matrix4().makeBasis(new Vector3(1, 0, 0), new Vector3(0, 0, 1), new Vector3(0, -1, 0)));
 
   function pose(p: Pose) {
     const shadows: Shadow[] = [];
@@ -487,7 +489,8 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
     stack.position.set(0, lerp(27 * rise, 1.4, drop), 0);
     stack.scale.setScalar(lerp(1, 0.66, rise));
     stack.visible = g < 0.565;
-    const side = p.x < L.width / 2 ? 1 : -1;
+    // the box always rides in from the right, grabs the first note and spins off to the left
+    const side = 1;
     const way = arc(boxIn, { x: side * Math.min(L.width * 0.45, 480), y: L.height * 0.6 }, { x: 0, y: 0 }, L.height * 0.2);
     // every note that lands squashes the box for a moment, and so does the lid
     const hit = STORY.pickups.reduce((sum, due) => sum + Math.sin(Math.PI * seg(g, due, due + 0.025)), Math.sin(Math.PI * seg(g, 0.57, 0.6)));
@@ -602,6 +605,8 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
       plane.quaternion.setFromRotationMatrix(basis);
       const w = seg(v, 0.16, 0.74);
       plane.rotateX(0.5 * Math.sin(Math.PI * w) + (1 - E.out(open)) * Math.PI * 2);
+      // the last part of the flight it levels out and settles face up
+      plane.quaternion.slerp(rest, E.io(seg(v, 0.5, 1)));
       plane.position.copy(fa);
       plane.scale.setScalar(k * 1.15 * Math.max(0.001, E.back(open)));
       shadows.push({ x: fa.x + fa.z * 0.4 + 4, y: -fa.y + fa.z * 0.6 + 6, rx: 15 * k, ry: 6 * k, a: lerp(0.2, 0.07, clamp(fa.z / 120)) });
