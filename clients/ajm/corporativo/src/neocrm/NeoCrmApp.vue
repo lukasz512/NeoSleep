@@ -986,6 +986,13 @@ function toggleTheme() {
   border-color: var(--ncrm-primary);
   color: var(--ncrm-on-primary);
 }
+/* the focus ring sits inside the pill, so a pressed button keeps its size (no second outer border) */
+.seg__btn:focus-visible {
+  outline-offset: -5px;
+}
+.seg__btn[aria-pressed="true"]:focus-visible {
+  outline-color: var(--ncrm-on-primary);
+}
 .chip.is-warm {
   background: var(--ncrm-warm);
   border-color: var(--ncrm-warm);

@@ -331,6 +331,34 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
   const leg = group(at(slab(38, 9, 10, mat.balloon), -19, 0, 0), at(slab(13, 13, 12, mat.warm), -43, 2, 0));
   leg.visible = false;
   scene.add(leg);
+  // a comic bubble pops out of the one kick
+  const bubbleCv = document.createElement("canvas");
+  bubbleCv.width = 256;
+  bubbleCv.height = 160;
+  const bc = bubbleCv.getContext("2d");
+  if (bc) {
+    bc.translate(128, 80);
+    bc.fillStyle = "#ffd23f";
+    bc.strokeStyle = "#1c1b1a";
+    bc.lineWidth = 7;
+    bc.beginPath();
+    for (let i = 0; i < 20; i++) {
+      const a = (i / 20) * Math.PI * 2;
+      const r = i % 2 ? 62 : 118;
+      bc.lineTo(Math.cos(a) * r, Math.sin(a) * r * 0.62);
+    }
+    bc.closePath();
+    bc.fill();
+    bc.stroke();
+    bc.fillStyle = "#1c1b1a";
+    bc.font = "900 46px system-ui, sans-serif";
+    bc.textAlign = "center";
+    bc.textBaseline = "middle";
+    bc.fillText("POW!", 0, 3);
+  }
+  const bubble = new Mesh(new PlaneGeometry(88, 55), new MeshBasicMaterial({ map: new CanvasTexture(bubbleCv), transparent: true, depthWrite: false }));
+  bubble.visible = false;
+  scene.add(bubble);
   const steps3d = Array.from({ length: STAIRS }, () => at(slab(52, 10, 22, mat.n2), 0, 0, 0));
   steps3d.forEach((m) => {
     m.visible = false;
@@ -569,7 +597,7 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
     box.visible = out && g >= STORY.boxIn[0];
     box.position.copy(tmp.set(way.x / k, -way.y / k, (1 - boxIn) * 40).applyQuaternion(inverse.copy(rig.quaternion).invert()));
     box.position.z -= press * 3;
-    box.rotation.y = side * Math.pow(1 - boxIn, 2) * Math.PI * 3;
+    box.rotation.y = side * Math.pow(1 - boxIn, 2) * Math.PI * 3 + gust * 2.4 * Math.sin(p.now / 420);
     box.scale.set(pop * (1 + 0.07 * hit), pop * (1 - 0.12 * hit), pop * (1 + 0.07 * hit) * (1 - 0.1 * press));
 
     // the fan blows the loose notes out of the open box; they flutter and settle again
@@ -628,13 +656,21 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
     stamp.visible = st > 0 && st < 1;
     stamp.position.set(-9, 6.5, st < 0.5 ? lerp(120, 13.6, E.in(seg(st, 0, 0.48))) : lerp(13.6, 120, E.io(seg(st, 0.56, 1))));
     stamp.scale.setScalar(Math.max(0.001, 1.7 * Math.min(1, st * 7, (1 - st) * 7)));
-    // the leg swings up and kicks the parcel off to the left
+    // the leg swings in and kicks once; it is gone right after, and a bubble marks the hit
     const swing = seg(st, 0.5, 0.64);
-    leg.visible = st > 0.45 && st < 0.9 && inWindow(p.y);
+    leg.visible = st > 0.45 && st < 0.7 && inWindow(p.y);
+    bubble.visible = st > 0.64 && st < 0.84 && inWindow(p.y);
     if (leg.visible) {
       leg.position.set(p.x + 72 * k, -p.y, LIFT + 10 * k);
       leg.scale.setScalar(k);
-      leg.rotation.z = -rad(80) * (st < 0.64 ? 1 - E.in(swing) : E.io(seg(st, 0.64, 0.9)));
+      leg.rotation.z = -rad(80) * (1 - E.in(swing));
+      alive = true;
+    }
+    if (bubble.visible) {
+      const pop = E.back(seg(st, 0.64, 0.7)) * (1 - E.in(seg(st, 0.78, 0.84)));
+      bubble.position.set(p.x + 60 * k, -p.y + 50 * k, LIFT + 40 * k);
+      bubble.scale.setScalar(Math.max(0.001, k * pop));
+      bubble.rotation.z = rad(-8);
       alive = true;
     }
     mark.visible = st >= 0.5;
