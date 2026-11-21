@@ -328,7 +328,11 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
   scene.add(fan);
 
   // a toy leg in blue kicks the sealed parcel off, and a flight of steps takes it down the page
-  const leg = group(at(slab(38, 9, 10, mat.balloon), -19, 0, 0), at(slab(13, 13, 12, mat.warm), -43, 2, 0));
+  const leg = group(
+    at(slab(38, 10, 10, mat.balloon), -19, 0, 0),
+    at(new Mesh(new SphereGeometry(8.5, 14, 10), mat.warm), -43, 0, 0),
+    at(slab(10, 30, 9, mat.balloon), -30, -17, 0),
+  );
   leg.visible = false;
   scene.add(leg);
   // a comic bubble pops out of the one kick
@@ -659,7 +663,7 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
     // the leg swings in and kicks once; it is gone right after, and a bubble marks the hit
     const swing = seg(st, 0.5, 0.64);
     leg.visible = st > 0.45 && st < 0.7 && inWindow(p.y);
-    bubble.visible = st > 0.64 && st < 0.84 && inWindow(p.y);
+    bubble.visible = st >= 0.635 && st < 0.84 && inWindow(p.y);
     if (leg.visible) {
       leg.position.set(p.x + 72 * k, -p.y, LIFT + 10 * k);
       leg.scale.setScalar(k);
@@ -667,8 +671,8 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
       alive = true;
     }
     if (bubble.visible) {
-      const pop = E.back(seg(st, 0.64, 0.7)) * (1 - E.in(seg(st, 0.78, 0.84)));
-      bubble.position.set(p.x + 60 * k, -p.y + 50 * k, LIFT + 40 * k);
+      const pop = E.back(seg(st, 0.635, 0.665)) * (1 - E.in(seg(st, 0.78, 0.84)));
+      bubble.position.set(p.x + 30 * k, -p.y + 34 * k, LIFT + 40 * k);
       bubble.scale.setScalar(Math.max(0.001, k * pop));
       bubble.rotation.z = rad(-8);
       alive = true;
