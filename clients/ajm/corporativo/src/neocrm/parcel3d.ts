@@ -327,10 +327,10 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
   const fan = group(fanHead, stick([0, -13, 0], [0, -29, 0], 1.2), stick([-8, -29, 0], [8, -29, 0], 1.7));
   scene.add(fan);
 
-  // a hammer kicks the sealed parcel off, and a flight of steps takes it down to the spring
-  const hammer = group(stick([0, 0, 0], [-44, 0, 0], 1.6), at(slab(9, 18, 12, mat.n2), -46, 0, 0));
-  hammer.visible = false;
-  scene.add(hammer);
+  // a toy leg in blue kicks the sealed parcel off, and a flight of steps takes it down the page
+  const leg = group(at(slab(38, 9, 10, mat.balloon), -19, 0, 0), at(slab(13, 13, 12, mat.warm), -43, 2, 0));
+  leg.visible = false;
+  scene.add(leg);
   const steps3d = Array.from({ length: STAIRS }, () => at(slab(52, 10, 22, mat.n2), 0, 0, 0));
   steps3d.forEach((m) => {
     m.visible = false;
@@ -448,9 +448,9 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
   const Zup = new Vector3(0, 0, 1);
   const basis = new Matrix4();
   const inverse = new Quaternion();
-  // at rest the plane sits at an angle: nose down to the right (about 35 degrees), one wing lifted
+  // at rest the plane points 45 degrees up towards the top right corner, one wing lifted
   const rest = new Quaternion()
-    .setFromAxisAngle(new Vector3(0, 0, 1), -0.62)
+    .setFromAxisAngle(new Vector3(0, 0, 1), Math.PI / 4)
     .multiply(new Quaternion().setFromRotationMatrix(new Matrix4().makeBasis(new Vector3(1, 0, 0), new Vector3(0, 0, 1), new Vector3(0, -1, 0))))
     .multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), 0.5));
 
@@ -477,13 +477,15 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
     const leanY = clamp((ptr.y - (p.y - top)) / L.height, -1, 1) * 0.3 * ptr.on;
     rig.rotation.set(
       lerp(Math.PI / 2, 0.62, tiltP) - leanY,
-      lerp(0, -0.55, tiltP) + Math.sin(tp * Math.PI * 2) * 0.12 * (1 - tp) + E.in(tr) * Math.PI * 4 + leanX * lerp(0.4, 1, tiltP) - press * 0.2 + sway * 0.5,
+      lerp(0, -0.55, tiltP) + Math.sin(tp * Math.PI * 2) * 0.12 * (1 - tp) + leanX * lerp(0.4, 1, tiltP) - press * 0.2 + sway * 0.5,
       // it leans away from the fan
       -L.fan.dir * gust * 0.22,
     );
     const gone = E.in(seg(g, 0.885, 0.915));
     rig.position.set(0, lerp(0, -7, tiltP) + Math.sin(Math.PI * tr) * 22, 0);
-    rig.scale.setScalar(Math.max(0.001, 1 - gone));
+    // it squashes flat like a folded sheet, then pops into the plane
+    const fold = Math.sin(Math.PI * seg(g, 0.87, 0.9));
+    rig.scale.set(Math.max(0.001, (1 + 0.3 * fold) * (1 - gone)), Math.max(0.001, (1 - 0.55 * fold) * (1 - gone)), Math.max(0.001, (1 - 0.3 * fold) * (1 - gone)));
     rig.visible = out && gone < 0.99;
 
     // the hero note comes off the drawing at its own size and lean, and shrinks into the travelling note
@@ -626,27 +628,25 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
     stamp.visible = st > 0 && st < 1;
     stamp.position.set(-9, 6.5, st < 0.5 ? lerp(120, 13.6, E.in(seg(st, 0, 0.48))) : lerp(13.6, 120, E.io(seg(st, 0.56, 1))));
     stamp.scale.setScalar(Math.max(0.001, 1.7 * Math.min(1, st * 7, (1 - st) * 7)));
-    // the hammer swings up and hits the parcel off to the left
+    // the leg swings up and kicks the parcel off to the left
     const swing = seg(st, 0.5, 0.64);
-    hammer.visible = st > 0.45 && st < 0.9 && inWindow(p.y);
-    if (hammer.visible) {
-      hammer.position.set(p.x + 72 * k, -p.y, LIFT + 10 * k);
-      hammer.scale.setScalar(k);
-      hammer.rotation.z = -rad(80) * (st < 0.64 ? 1 - E.in(swing) : E.io(seg(st, 0.64, 0.9)));
+    leg.visible = st > 0.45 && st < 0.9 && inWindow(p.y);
+    if (leg.visible) {
+      leg.position.set(p.x + 72 * k, -p.y, LIFT + 10 * k);
+      leg.scale.setScalar(k);
+      leg.rotation.z = -rad(80) * (st < 0.64 ? 1 - E.in(swing) : E.io(seg(st, 0.64, 0.9)));
       alive = true;
     }
     mark.visible = st >= 0.5;
     mark.scale.setScalar(Math.max(0.001, 1.25 * E.back(seg(g, STORY.stamp, 0.85))));
 
-    // the spring: pressed down by the parcel that has arrived, let go when it turns into the plane
-    const sy = L.end + 30 * k;
+    // the spring waits on the way down: the parcel lands on it, squashes it, and is thrown high
+    const bounce = L.route.events.find((e) => e.kind === "spring");
+    const sy = bounce ? bounce.at + 26 * k : -1e6;
+    const sx = bounce ? eventX(bounce.at, L.route) : 0;
     const full = 34 * k;
-    // it slides in from the left as the box nears, and leaves left once the plane is off
-    const slide = (1 - E.out(seg(p.y, L.end - 420, L.end - 120)) + E.in(seg(p.fly, 0.05, 0.4))) * (fl.x + 140 * k);
-    const sx = fl.x - slide;
-    const onIt = out && p.morph <= 0 && Math.abs(p.x - fl.x) < 20 * k;
-    const coil = p.morph > 0 ? full - 16 * k * Math.exp(-5 * p.morph) * Math.cos(20 * p.morph) : onIt ? clamp(sy - (p.y + 12 * k), 14 * k, full) : full;
-    const seen = inWindow(sy);
+    const coil = clamp(sy - (p.y - p.lift + 12 * k), 14 * k, full);
+    const seen = !!bounce && out && inWindow(sy);
     for (const m of [...coils, springTop, springBase]) m.visible = seen;
     if (seen) {
       const z = LIFT + 8 * k;
@@ -659,7 +659,6 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
       setStick(springTop, sx - 12 * k, -(sy - coil), z, sx + 12 * k, -(sy - coil), z, 1.3 * k);
       setStick(springBase, sx - 13 * k, -sy, z, sx + 13 * k, -sy, z, 1.5 * k);
       shadows.push({ x: sx + 4, y: sy + 5 * k, rx: 14 * k, ry: 4 * k, a: 0.12 });
-      if (p.morph > 0 && p.morph < 1) alive = true;
     }
 
     // paper scraps as the parcel turns into a plane

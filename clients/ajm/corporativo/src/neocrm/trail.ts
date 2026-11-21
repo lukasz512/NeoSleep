@@ -118,7 +118,7 @@ export function arc(t: number, from: Point, to: Point, bow: number): Point {
 export const STAIRS = 3;
 
 export type RouteEvent = {
-  kind: "catch" | "fan" | "stamp" | "bounce";
+  kind: "catch" | "fan" | "stamp" | "spring" | "bounce";
   /** page y where it starts to act, and for how many px */
   at: number;
   span: number;
@@ -218,7 +218,7 @@ export type Page = {
 };
 export type Plan = { route: Route; anchors: Anchors; fan: { x: number; y: number; dir: 1 | -1 } };
 
-const BOUNCE = 140;
+const BOUNCE = 220;
 
 /** The route for this page: the box catches the note, the fan blows it across, the stamp knocks it back, tiles make it hop. */
 export function planRoute(page: Page): Plan {
@@ -237,10 +237,13 @@ export function planRoute(page: Page): Plan {
 
   const stampAt = yAt(0.835);
   const big: RouteEvent[] = [
-    { kind: "catch", at: yAt(0.108), span: Math.max(1, yAt(0.15) - yAt(0.108)), to: lane, lift: size * 0.4 },
-    { kind: "fan", at: yAt(STORY.gust[0]), span: Math.max(1, yAt(STORY.gust[1]) - yAt(STORY.gust[0])), to: right, lift: size * 0.35 },
-    { kind: "stamp", at: stampAt, span: Math.max(1, Math.min(260, end - stampAt)), to: left, lift: size * 0.5 },
+    { kind: "catch", at: yAt(0.108), span: Math.max(1, (yAt(0.15) - yAt(0.108)) * 2), to: lane, lift: size * 0.4 },
+    { kind: "fan", at: yAt(STORY.gust[0]), span: Math.max(1, (yAt(STORY.gust[1]) - yAt(STORY.gust[0])) * 1.7), to: right, lift: size * 0.35 },
+    { kind: "stamp", at: stampAt, span: Math.max(1, Math.min(440, end - stampAt)), to: left, lift: size * 0.5 },
   ];
+  // a spring waits between the last pickup and the tape: the parcel lands on it and is thrown high
+  const springAt = yAt(0.5);
+  big.push({ kind: "spring", at: springAt, span: 300, to: 0, lift: size * 1.1 });
   const bounces: RouteEvent[] = [];
   let lastAt = -Infinity;
   for (const y of page.edges.filter((edge) => Number.isFinite(edge)).sort((p, q) => p - q)) {
@@ -259,8 +262,8 @@ export function planRoute(page: Page): Plan {
   const events = [...big, ...bounces]
     .sort((p, q) => p.at - q.at)
     .map((e) => {
-      const to = e.kind !== "bounce" ? e.to : x === rest ? inWindow(rest + (rest < width / 2 ? kick : -kick)) : rest;
-      if (e.kind !== "bounce") rest = to;
+      const to = e.kind === "spring" ? x : e.kind !== "bounce" ? e.to : x === rest ? inWindow(rest + (rest < width / 2 ? kick : -kick)) : rest;
+      if (e.kind !== "bounce" && e.kind !== "spring") rest = to;
       x = to;
       return { ...e, to };
     });
