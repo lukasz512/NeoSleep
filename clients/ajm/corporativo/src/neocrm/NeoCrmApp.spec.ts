@@ -332,13 +332,11 @@ describe("neocrm page › the launch steps follow the scroll (CORE-215 round 11)
       scrollTo({ section: top - 200, steps: top });
       await w.vm.$nextTick();
       expect(lit(w)).toBe(step);
-      // steps left behind are ticked off, and the handwritten count says where the reader is
+      // steps left behind are ticked off
       expect(w.findAll("#onboarding .path__num.is-done")).toHaveLength(step);
-      expect(w.find("#onboarding .steps__count").text()).toBe(`${step + 1}/4`);
       expect(w.find("#onboarding .steps__detail").text()).toBe(makeNeoCrmI18n("es").global.t(`sections.onboarding.items.${step}.body`));
     }
-    // the count is decoration: the lit step is already announced
-    expect(w.find("#onboarding .steps__count").attributes("aria-hidden")).toBe("true");
+    expect(w.find("#onboarding .steps__count").exists()).toBe(false);
     expect(w.findAll("#onboarding .path__num").map((n) => n.text())).toEqual(["1", "2", "3", "4"]);
   });
   it("on a computer the pinned section walks through the steps while it scrolls by", async () => {
@@ -373,6 +371,5 @@ describe("neocrm page › the launch steps follow the scroll (CORE-215 round 11)
     scrollTo({ section: -100, steps: 100 });
     await w.vm.$nextTick();
     expect(lit(w)).toBe(0);
-    expect(w.find("#onboarding .steps__count").text()).toBe("1/4");
   });
 });

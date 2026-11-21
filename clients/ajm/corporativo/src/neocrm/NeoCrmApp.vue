@@ -239,7 +239,6 @@
               <p class="steps__detail" aria-live="polite">
                 <span :key="stage" class="steps__text">{{ t(`sections.onboarding.items.${stage}.body`) }}</span>
               </p>
-              <p class="steps__count hand" aria-hidden="true">{{ stage + 1 }}/{{ itemKeys(id).length }}</p>
             </div>
           </div>
           <!-- roadmap: filter by status -->
@@ -1586,18 +1585,6 @@ function toggleTheme() {
     opacity: 0;
     transform: translateY(8px);
   }
-}
-/* the same handwritten count the box got with each note */
-.steps__count {
-  position: absolute;
-  right: 12px;
-  top: -22px;
-  margin: 0;
-  font-size: 30px;
-  line-height: 1;
-  color: var(--ncrm-primary);
-  transform: rotate(-4deg);
-  pointer-events: none;
 }
 @media (min-width: 640px) {
   .path {
