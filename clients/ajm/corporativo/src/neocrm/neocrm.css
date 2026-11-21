@@ -3,8 +3,8 @@
    Every text/background pair below is at least 4.5:1. No gradients (style.spec.ts). */
 :root {
   /* warm paper with a dot grid, like a notebook page (round 5); the dots are an SVG tile, not a gradient */
-  --ncrm-bg: #f7f1e3;
-  --ncrm-dots: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Ccircle cx='1.5' cy='1.5' r='1' fill='%23dccfb2'/%3E%3Cpath d='M-3 1.5h9M1.5-3v9' stroke='%23dccfb2'/%3E%3C/svg%3E");
+  --ncrm-bg: #f3f6ef;
+  --ncrm-dots: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Ccircle cx='1.5' cy='1.5' r='1' fill='%23bcd5cd'/%3E%3Cpath d='M-3 1.5h9M1.5-3v9' stroke='%23bcd5cd'/%3E%3C/svg%3E");
   --ncrm-surface: #fffdf8;
   --ncrm-ink: #10211f;
   --ncrm-muted: #46605c;
@@ -34,8 +34,8 @@
   /* the reader's own system typeface, so the page reads like a native app (round 9); handwriting stays Caveat */
   --ncrm-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
   /* the living paper (paper.ts): the same dot grid drawn on a canvas, the parcel's shadow, the second balloon */
-  --ncrm-dot: #dccfb2;
-  --ncrm-dot-strong: #b39c68;
+  --ncrm-dot: #bcd5cd;
+  --ncrm-dot-strong: #5fa396;
   --ncrm-shade: #3c2d0a;
   --ncrm-balloon: #2b4a8b;
   /* glass tiles (round 9): a see-through fill over the blurred paper, a light edge, a soft shadow */

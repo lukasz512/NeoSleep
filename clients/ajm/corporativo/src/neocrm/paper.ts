@@ -203,7 +203,7 @@ export function startPaper(o: PaperOptions): () => void {
   const onDown = (e: PointerEvent) => ripple(e.clientX, e.clientY + window.scrollY, 7, 300, 1.6);
 
   // ---------- the paper: dots and flat shadows; the parcel's route is never drawn ----------
-  let colors = { dot: "#dccfb2", strong: "#b39c68", shade: "#3c2d0a", warm: "#f2b84b", ink: "#2a2412", primary: "#0b6b62", bg: "#f7f1e3", hand: "cursive" };
+  let colors = { dot: "#bcd5cd", strong: "#5fa396", shade: "#3c2d0a", warm: "#f2b84b", ink: "#2a2412", primary: "#0b6b62", bg: "#f3f6ef", hand: "cursive" };
   let colorAge = 99;
   function drawPaper(c: CanvasRenderingContext2D, now: number, top: number, S: number, wave: number, ox: number, oy: number, wind: Wind, shadows: Shadow[]) {
     if (++colorAge > 30) {
@@ -277,6 +277,16 @@ export function startPaper(o: PaperOptions): () => void {
         const rr = 1 + inf * 0.9;
         if (inf > 0.35) {
           strong.push(x, y, rr);
+          continue;
+        }
+        if (i % 8 === 4 && j % 8 === 4) {
+          // a hospital plan sign: a little medical cross in a ring
+          marks.moveTo(x + 9, y);
+          marks.arc(x, y, 9, 0, 6.2832);
+          marks.moveTo(x - 5, y);
+          marks.lineTo(x + 5, y);
+          marks.moveTo(x, y - 5);
+          marks.lineTo(x, y + 5);
           continue;
         }
         if (i % 4 === 0 && j % 4 === 0) {
