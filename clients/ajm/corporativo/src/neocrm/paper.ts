@@ -426,6 +426,9 @@ export function startPaper(o: PaperOptions): () => void {
   let tokenAge = 0;
   // the hop onto the launch steps: how far on (0..1), where to, which step, when it last jumped
   const hop = { on: 0, x: 0, y: 0, n: -1, t0: -1e9, star: 0 };
+  // loose physics over the whole page (round 15): a spring on the parcel's offset, kicked by scroll speed and the pointer, so it never hangs dead still
+  const reduce = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const body = { x: 0, y: 0, vx: 0, vy: 0 };
   function frame(now: number) {
     raf = requestAnimationFrame(frame);
     if (document.hidden) {
@@ -478,6 +481,32 @@ export function startPaper(o: PaperOptions): () => void {
       }
     });
     lift += thump * size * 0.55;
+    {
+      // scroll speed shoves it against the way it is going, the pointer pushes it aside, a spring brings it home
+      const k = dt / 16;
+      const idle = reduce || !gl || f <= 0 ? 0 : Math.sin(now / 900) * 0.5;
+      body.vy += clamp(-vel * 0.05, -3, 3) * k;
+      body.vx += clamp(vel * 0.02, -1.5, 1.5) * k;
+      if (ptr.on > 0.05) {
+        const dx = x - ptr.sx;
+        const dy = y - top - ptr.sy;
+        const d = Math.hypot(dx, dy);
+        if (d < size * 1.1 && d > 1) {
+          const push = ((1 - d / (size * 1.1)) * ptr.on * 1.4) * k;
+          body.vx += (dx / d) * push;
+          body.vy += (dy / d) * push;
+        }
+      }
+      body.vx += (-body.x * 0.06 - body.vx * 0.12) * k;
+      body.vy += (-body.y * 0.06 - body.vy * 0.12 + idle * 0.04) * k;
+      body.x += body.vx * k;
+      body.y += body.vy * k;
+      const lim = size * 0.5;
+      body.x = clamp(body.x, -lim, lim);
+      body.y = clamp(body.y, -lim, lim);
+      x += body.x;
+      y += body.y;
+    }
     const gust = Math.sin(Math.PI * clamp((g - STORY.gust[0]) / (STORY.gust[1] - STORY.gust[0])));
     const wind: Wind = { x: layout.fan.x, y: layout.fan.y, dir: layout.fan.dir, power: gl ? gust : 0 };
     const crossing = route.events.some((e) => e.kind !== "bounce" && ys > e.at && ys < e.at + e.span);
@@ -581,6 +610,7 @@ export function startPaper(o: PaperOptions): () => void {
       dirty ||
       scrolled ||
       alive ||
+      Math.abs(body.x) + Math.abs(body.y) + Math.abs(body.vx) + Math.abs(body.vy) > 0.05 ||
       fs !== wasFs ||
       wave > 0.02 ||
       Math.abs(sway) > 0.002 ||
