@@ -274,6 +274,9 @@
             <li v-for="key in itemKeys(id)" :key="key" class="item">
               <h3 class="item__title">{{ t(`${key}.title`) }}</h3>
               <p class="item__body">{{ t(`${key}.body`) }}</p>
+              <ul v-if="id === 'onboarding'" class="item__points">
+                <li v-for="n in 3" :key="n">{{ t(`${key}.points.${n - 1}`) }}</li>
+              </ul>
             </li>
           </ul>
         </div>
@@ -1772,5 +1775,68 @@ function toggleTheme() {
 }
 .foot a {
   color: inherit;
+}
+
+/* depth (round 15): glass panels stand off the paper, lift toward the pointer, and form fields are glass too */
+.sec__body {
+  perspective: 1100px;
+}
+.item,
+.card,
+.skin {
+  transition:
+    transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.35s;
+  box-shadow:
+    inset 0 1px 0 var(--ncrm-glass-hi),
+    inset 0 -1px 0 var(--ncrm-glass-lo),
+    0 2px 4px -1px var(--ncrm-glass-shadow),
+    0 22px 40px -18px var(--ncrm-glass-shadow);
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .item:hover,
+  .card:hover,
+  .skin:hover {
+    transform: translateY(-4px) rotateX(2.5deg);
+    box-shadow:
+      inset 0 1px 0 var(--ncrm-glass-hi),
+      inset 0 -1px 0 var(--ncrm-glass-lo),
+      0 4px 8px -2px var(--ncrm-glass-shadow),
+      0 34px 52px -20px var(--ncrm-glass-shadow);
+  }
+}
+.field {
+  border: 1px solid var(--ncrm-glass-edge);
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: var(--ncrm-glass);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  box-shadow:
+    inset 0 1px 0 var(--ncrm-glass-hi),
+    0 6px 14px -10px var(--ncrm-glass-shadow);
+}
+.item__points {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  font-size: 0.9em;
+}
+.item__points li {
+  position: relative;
+  padding-left: 18px;
+}
+.item__points li::before {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0.55em;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ncrm-warm);
+  box-shadow: 0 1px 2px var(--ncrm-glass-shadow);
 }
 </style>

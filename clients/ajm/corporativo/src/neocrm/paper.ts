@@ -243,11 +243,6 @@ export function startPaper(o: PaperOptions): () => void {
         const wy = j * GRID + OFF;
         let dx = 0;
         let dy = 0;
-        if (ptr.on > 0.01 && Math.abs(wx - px) < R && Math.abs(wy - py) < R) {
-          const push = pushAway(wx - px, wy - py, R, 10 * S * ptr.on);
-          dx += push.x;
-          dy += push.y;
-        }
         if (Math.abs(wx - ox) < 70 && Math.abs(wy - oy) < 70) {
           const push = pushAway(wx - ox, wy - oy, 70, 6 * S);
           dx += push.x;

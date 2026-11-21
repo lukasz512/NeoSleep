@@ -13,6 +13,7 @@ import {
   ColorManagement,
   ConeGeometry,
   CylinderGeometry,
+  Vector2,
   DirectionalLight,
   DoubleSide,
   Float32BufferAttribute,
@@ -327,12 +328,22 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
   const fan = group(fanHead, stick([0, -13, 0], [0, -29, 0], 1.2), stick([-8, -29, 0], [8, -29, 0], 1.7));
   scene.add(fan);
 
-  // a toy leg in blue kicks the sealed parcel off, and a flight of steps takes it down the page
-  const leg = group(
-    at(slab(38, 10, 10, mat.balloon), -19, 0, 0),
-    at(new Mesh(new SphereGeometry(8.5, 14, 10), mat.warm), -43, 0, 0),
-    at(slab(10, 30, 9, mat.balloon), -30, -17, 0),
-  );
+  // a red boxing glove punches the sealed parcel off, and a flight of steps takes it down the page
+  const gloveRed = lam();
+  gloveRed.color.set(0xd7263d);
+  const gloveCuff = lam();
+  gloveCuff.color.set(0xf4f1ea);
+  const fist = new Mesh(new SphereGeometry(15, 20, 14), gloveRed);
+  fist.scale.set(1.15, 1, 1);
+  const thumb = at(new Mesh(new SphereGeometry(6.5, 14, 10), gloveRed), 2, 12, 7);
+  thumb.scale.set(1.5, 0.9, 0.9);
+  const cuff = new Mesh(new CylinderGeometry(9.5, 10.5, 16, 18), gloveCuff);
+  cuff.rotation.z = Math.PI / 2;
+  cuff.position.set(22, 0, 0);
+  const sleeve = new Mesh(new CylinderGeometry(7, 7, 40, 14), gloveRed);
+  sleeve.rotation.z = Math.PI / 2;
+  sleeve.position.set(48, 0, 0);
+  const leg = group(fist, thumb, cuff, sleeve);
   leg.visible = false;
   scene.add(leg);
   // a comic bubble pops out of the one kick
@@ -363,6 +374,7 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
   const bubble = new Mesh(new PlaneGeometry(88, 55), new MeshBasicMaterial({ map: new CanvasTexture(bubbleCv), transparent: true, depthWrite: false }));
   bubble.visible = false;
   scene.add(bubble);
+  const pow = new Vector2();
   const steps3d = Array.from({ length: STAIRS }, () => at(slab(52, 10, 22, mat.n2), 0, 0, 0));
   steps3d.forEach((m) => {
     m.visible = false;
@@ -662,17 +674,20 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
     stamp.scale.setScalar(Math.max(0.001, 1.7 * Math.min(1, st * 7, (1 - st) * 7)));
     // the leg swings in and kicks once; it is gone right after, and a bubble marks the hit
     const swing = seg(st, 0.5, 0.64);
-    leg.visible = st > 0.45 && st < 0.7 && inWindow(p.y);
+    leg.visible = st > 0.45 && st < 0.72 && inWindow(p.y);
+    const wasBubble = bubble.visible;
     bubble.visible = st >= 0.635 && st < 0.84 && inWindow(p.y);
     if (leg.visible) {
-      leg.position.set(p.x + 72 * k, -p.y, LIFT + 10 * k);
+      const back = seg(st, 0.64, 0.72);
+      leg.position.set(p.x + lerp(34, 170, back > 0 ? E.in(back) : 1 - E.out(swing)) * k, -p.y + 4 * k, LIFT + 14 * k);
       leg.scale.setScalar(k);
-      leg.rotation.z = -rad(80) * (1 - E.in(swing));
       alive = true;
     }
     if (bubble.visible) {
+      // the sound word is pinned where the glove landed; only the parcel flies on
+      if (!wasBubble) pow.set(p.x + 8 * k, -p.y + 40 * k);
       const pop = E.back(seg(st, 0.635, 0.665)) * (1 - E.in(seg(st, 0.78, 0.84)));
-      bubble.position.set(p.x + 30 * k, -p.y + 34 * k, LIFT + 40 * k);
+      bubble.position.set(pow.x, pow.y, LIFT + 40 * k);
       bubble.scale.setScalar(Math.max(0.001, k * pop));
       bubble.rotation.z = rad(-8);
       alive = true;

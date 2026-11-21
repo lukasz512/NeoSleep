@@ -216,19 +216,39 @@
       "items": [
         {
           "title": "Demo",
-          "body": "We show you the product with a case close to yours."
+          "body": "We show you the product with a case close to yours.",
+          "points": [
+            "Thirty minutes, no commitment",
+            "We look at your real process: how visits go, what gets noted, what is lost today",
+            "We bring a sample record for your sector"
+          ]
         },
         {
           "title": "Your space",
-          "body": "We create your space with brand, language, roles and territories."
+          "body": "We create your space with brand, language, roles and territories.",
+          "points": [
+            "Brand, language and roles set up by us",
+            "We import your client list if it already lives in a spreadsheet",
+            "We define territories and who sees what"
+          ]
         },
         {
           "title": "Your team",
-          "body": "You add your people and they start logging visits from the phone."
+          "body": "You add your people and they start logging visits from the phone.",
+          "points": [
+            "People added in minutes",
+            "Everyone installs the app from the browser",
+            "First visit logged the same day"
+          ]
         },
         {
           "title": "Adjustments",
-          "body": "We review the first weeks together and adapt wording and permissions."
+          "body": "We review the first weeks together and adapt wording and permissions.",
+          "points": [
+            "Joint review for the first weeks",
+            "We change texts, fields and permissions based on how you use it",
+            "One contact for questions"
+          ]
         }
       ]
     },

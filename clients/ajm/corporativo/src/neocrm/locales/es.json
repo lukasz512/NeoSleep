@@ -216,19 +216,39 @@
       "items": [
         {
           "title": "Demo",
-          "body": "Os enseñamos el producto con un caso parecido al vuestro."
+          "body": "Os enseñamos el producto con un caso parecido al vuestro.",
+          "points": [
+            "Treinta minutos, sin compromiso",
+            "Vemos vuestro proceso real: cómo se visita, qué se anota y qué se pierde hoy",
+            "Os llevamos una ficha de ejemplo con vuestro sector"
+          ]
         },
         {
           "title": "Vuestro espacio",
-          "body": "Creamos vuestro espacio con marca, idioma, roles y territorios."
+          "body": "Creamos vuestro espacio con marca, idioma, roles y territorios.",
+          "points": [
+            "Marca, idioma y roles configurados por nosotros",
+            "Importamos vuestra lista de clientes si ya la tenéis en una hoja",
+            "Definimos zonas y quién ve qué"
+          ]
         },
         {
           "title": "Vuestro equipo",
-          "body": "Dais de alta a las personas y empiezan a registrar visitas desde el móvil."
+          "body": "Dais de alta a las personas y empiezan a registrar visitas desde el móvil.",
+          "points": [
+            "Altas de personas en minutos",
+            "Cada persona instala la aplicación desde el navegador",
+            "Primera visita registrada el mismo día"
+          ]
         },
         {
           "title": "Ajustes",
-          "body": "Revisamos juntos las primeras semanas y adaptamos textos y permisos."
+          "body": "Revisamos juntos las primeras semanas y adaptamos textos y permisos.",
+          "points": [
+            "Revisión conjunta las primeras semanas",
+            "Cambiamos textos, campos y permisos según lo que veáis en el uso",
+            "Un solo contacto para dudas"
+          ]
         }
       ]
     },
