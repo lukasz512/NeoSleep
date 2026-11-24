@@ -4,7 +4,7 @@
      (?rol=): the role reorders the sections in the DOM itself, so keyboard and screen-reader order
      match what is on screen. Hero first and the demo request last, always. -->
 <template>
-  <div class="ncrm">
+  <div ref="page" class="ncrm">
     <a class="skip" href="#contenido">{{ t("nav.skip") }}</a>
     <header class="top">
       <a class="top__mark" href="#inicio">neo<span>CRM</span></a>
@@ -274,9 +274,6 @@
             <li v-for="key in itemKeys(id)" :key="key" class="item">
               <h3 class="item__title">{{ t(`${key}.title`) }}</h3>
               <p class="item__body">{{ t(`${key}.body`) }}</p>
-              <ul v-if="id === 'onboarding'" class="item__points">
-                <li v-for="n in 3" :key="n">{{ t(`${key}.points.${n - 1}`) }}</li>
-              </ul>
             </li>
           </ul>
         </div>
@@ -306,6 +303,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import es from "./locales/es.json";
 import LivePaper from "./LivePaper.vue";
+import { attachPagePhysics } from "./physics";
 import { ROLES, SECTORS, lensFrom, lensQuery, sectionOrder, type Role, type SectionId, type Sector } from "./lens";
 import { launchStep, passProgress, pinProgress } from "./trail";
 import { CONTACT, whatsappLink } from "../content/contact";
@@ -412,6 +410,12 @@ function followSteps() {
   scrolledTo = n;
   stage.value = n;
 }
+const page = ref<HTMLElement | null>(null);
+let detachPhysics: () => void = () => {};
+onMounted(() => {
+  if (page.value) detachPhysics = attachPagePhysics(page.value);
+});
+onBeforeUnmount(() => detachPhysics());
 onMounted(() => {
   // a reader who asked for less motion picks the steps by hand
   if (media("(prefers-reduced-motion: reduce)")) return;

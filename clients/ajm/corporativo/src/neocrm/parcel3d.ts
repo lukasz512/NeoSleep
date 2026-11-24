@@ -33,7 +33,7 @@ import {
   WebGLRenderer,
 } from "three";
 import type { Material, Object3D } from "three";
-import { STAIRS, STORY, arc, clamp, eventX, fractionAt, lerp } from "./trail";
+import { STORY, arc, clamp, eventX, fractionAt, lerp } from "./trail";
 import type { Plan } from "./trail";
 
 export type Layout = Plan & {
@@ -375,11 +375,6 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
   bubble.visible = false;
   scene.add(bubble);
   const pow = new Vector2();
-  const steps3d = Array.from({ length: STAIRS }, () => at(slab(52, 10, 22, mat.n2), 0, 0, 0));
-  steps3d.forEach((m) => {
-    m.visible = false;
-    scene.add(m);
-  });
 
   // the spring waits where the route ends: the parcel presses it down, and it sends the plane off
   const COILS = 28;
@@ -457,14 +452,6 @@ export function buildParcel(canvas: HTMLCanvasElement): Parcel3d {
       o.D = { x: eventX(y, L.route), y };
       // it comes down from above, a touch towards the middle so it never leaves the window
       o.sg = o.D.x > L.width / 2 ? -1 : 1;
-    });
-    const kick = L.route.events.find((e) => e.kind === "stamp");
-    steps3d.forEach((m, i) => {
-      m.visible = !!kick && L.width >= 700;
-      if (!kick) return;
-      const y = kick.at + (kick.span * (i + 1)) / STAIRS;
-      m.position.set(eventX(y, L.route), -(y + L.size * 0.5 + 5 * k), LIFT - 2);
-      m.scale.setScalar(k);
     });
     fan.position.set(L.fan.x, -L.fan.y, LIFT + 16 * k);
     fan.scale.setScalar(k * (L.width >= 700 ? 1.3 : 1));
