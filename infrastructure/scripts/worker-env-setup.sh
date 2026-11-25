@@ -6,9 +6,12 @@
 # "packageManager" pin, downloads pnpm 12 and fails with ERR_PNPM_NO_PKG_MANIFEST.
 set -euo pipefail
 
-WORKSPACE_FILE="$(find /home/user /workspace -maxdepth 3 -name pnpm-workspace.yaml -not -path '*/node_modules/*' 2>/dev/null | head -n 1)"
+# find exits non-zero when a search root is missing (e.g. /workspace); with pipefail that
+# would kill the script before it looked anywhere else, so tolerate it and check the result.
+WORKSPACE_FILE="$( (find "$PWD" /home /workspace /workspaces /mnt /tmp -maxdepth 4 -name pnpm-workspace.yaml -not -path '*/node_modules/*' 2>/dev/null || true) | head -n 1)"
 if [ -z "$WORKSPACE_FILE" ]; then
-  echo "worker-env-setup: no pnpm-workspace.yaml under /home/user or /workspace" >&2
+  echo "worker-env-setup: no pnpm-workspace.yaml found (PWD=$PWD)" >&2
+  ls -la "$PWD" /home /workspace 2>&1 | head -n 40 >&2 || true
   exit 1
 fi
 
