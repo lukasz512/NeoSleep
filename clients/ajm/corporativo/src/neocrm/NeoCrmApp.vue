@@ -92,7 +92,7 @@
       </section>
 
       <section v-for="(id, i) in order" :id="id" :key="id" class="sec" :class="`sec--${id}`" :aria-labelledby="`${id}-title`">
-        <header class="sec__head">
+        <header v-if="id !== 'onboarding'" class="sec__head">
           <span class="sec__num hand" aria-hidden="true">{{ String(i + 1).padStart(2, "0") }}</span>
           <h2 :id="`${id}-title`" class="sec__title">{{ t(`sections.${id}.title`) }}</h2>
           <p class="sec__lead">{{ t(`sections.${id}.lead`) }}</p>
@@ -207,6 +207,12 @@
 
           <!-- who: a sector card is a button that adjusts the page (headline and link) -->
           <template v-if="id === 'who'">
+            <ul class="polaroids">
+              <li v-for="(name, n) in WHO_PHOTOS" :key="name" class="polaroid">
+                <img :src="photoUrl(name)" :alt="t(`photos.who.${n}.alt`)" loading="lazy" width="1600" height="1067" />
+                <span class="polaroid__cap hand">{{ t(`photos.who.${n}.caption`) }}</span>
+              </li>
+            </ul>
             <ul class="sec__items">
               <li v-for="sector in sectors" :key="sector" class="item item--pick" :class="{ 'item--on': lens.sector === sector }">
                 <span class="item__icon" aria-hidden="true">
@@ -224,21 +230,42 @@
           </template>
           <!-- onboarding: four numbered stops, one explained at a time; scrolling walks through them (round 11) -->
           <div v-else-if="id === 'onboarding'" class="steps">
-            <ol class="path">
-              <li v-for="(key, n) in itemKeys(id)" :key="key" class="path__step" :class="{ 'is-past': n < stage }">
-                <h3 class="item__title">
-                  <button type="button" class="path__btn" :aria-current="stage === n ? 'step' : undefined" @click="stage = n">
-                    <!-- prettier-ignore -->
-                    <span class="path__num" :class="{ 'is-warm': stage === n, 'is-done': n < stage }">{{ n + 1 }}<svg class="path__tick" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
-                    {{ t(`${key}.title`) }}
-                  </button>
-                </h3>
-              </li>
-            </ol>
-            <div class="steps__card">
-              <p class="steps__detail" aria-live="polite">
-                <span :key="stage" class="steps__text">{{ t(`sections.onboarding.items.${stage}.body`) }}</span>
-              </p>
+            <div class="stage-full">
+              <img
+                v-for="(name, n) in LAUNCH_PHOTOS"
+                :key="name"
+                class="stage-full__img"
+                :class="{ 'is-on': stage === n }"
+                :src="photoUrl(name)"
+                :alt="stage === n ? t(`photos.launch.${n}.alt`) : ''"
+                :aria-hidden="stage !== n"
+                :loading="n === 0 ? 'eager' : 'lazy'"
+                width="1600"
+                height="1067"
+              />
+              <div class="stage-full__top">
+                <span class="sec__num hand" aria-hidden="true">{{ String(i + 1).padStart(2, "0") }}</span>
+                <h2 :id="`${id}-title`" class="sec__title">{{ t(`sections.${id}.title`) }}</h2>
+                <p class="sec__lead">{{ t(`sections.${id}.lead`) }}</p>
+              </div>
+              <div class="stage-full__card" aria-live="polite">
+                <div :key="stage" class="stage-full__text">
+                  <span class="stage-full__big hand" aria-hidden="true">{{ stage + 1 }}</span>
+                  <p class="stage-full__title">{{ t(`sections.onboarding.items.${stage}.title`) }}</p>
+                  <p class="stage-full__body">{{ t(`sections.onboarding.items.${stage}.body`) }}</p>
+                </div>
+              </div>
+              <ol class="path">
+                <li v-for="(key, n) in itemKeys(id)" :key="key" class="path__step" :class="{ 'is-past': n < stage }">
+                  <h3 class="item__title">
+                    <button type="button" class="path__btn" :aria-current="stage === n ? 'step' : undefined" @click="stage = n">
+                      <!-- prettier-ignore -->
+                      <span class="path__num" :class="{ 'is-warm': stage === n, 'is-done': n < stage }">{{ n + 1 }}<svg class="path__tick" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
+                      <span class="path__label"> {{ t(`${key}.title`) }}</span>
+                    </button>
+                  </h3>
+                </li>
+              </ol>
             </div>
           </div>
           <!-- roadmap: filter by status -->
@@ -280,6 +307,10 @@
       </section>
 
       <section id="demo" class="demo" aria-labelledby="demo-title">
+        <figure class="demo__photo polaroid">
+          <img :src="photoUrl('hands')" :alt="t('photos.demo.alt')" loading="lazy" width="1600" height="1068" />
+          <figcaption class="polaroid__cap hand">{{ t("photos.demo.caption") }}</figcaption>
+        </figure>
         <p class="demo__hand hand">{{ t("contact.hand") }}</p>
         <h2 id="demo-title" class="demo__title">{{ prospect ? t("contact.titleFor", { name: prospect.name }) : t("contact.title") }}</h2>
         <p class="demo__body">{{ t("contact.body") }}</p>
@@ -313,6 +344,12 @@ import { applyTheme, storeTheme, type Theme } from "../lib/theme";
 
 const props = defineProps<{ locale: Locale; search: string }>();
 const { t } = useI18n();
+
+// Stock photos of people at work (Unsplash licence); the page is about the people using the product
+const PHOTOS = import.meta.glob<string>("./photos/*.webp", { eager: true, query: "?url", import: "default" });
+const photoUrl = (name: string): string => PHOTOS[`./photos/${name}.webp`] ?? "";
+const WHO_PHOTOS = ["guide", "space", "team"] as const;
+const LAUNCH_PHOTOS = ["demo", "space", "team", "adjust"] as const;
 
 const ROLE_OPTIONS = ["all", ...ROLES] as const;
 const other: Locale = props.locale === "es" ? "en" : "es";
@@ -401,7 +438,7 @@ function followSteps() {
     const cs = getComputedStyle(sec);
     const above = parseFloat(cs.paddingTop) || 0;
     const below = parseFloat(cs.paddingBottom) || 0;
-    progress = pinProgress(r.top + above, r.height - above - below, body.offsetHeight, parseFloat(getComputedStyle(body).top) || 92);
+    progress = pinProgress(r.top + above, r.height - above - below, body.offsetHeight, Number.parseFloat(getComputedStyle(body).top) || 0);
   } else {
     progress = passProgress(steps.getBoundingClientRect().top, window.innerHeight);
   }
@@ -450,6 +487,9 @@ function toggleTheme() {
 </script>
 
 <style scoped>
+:global(body) {
+  overflow-x: clip;
+}
 .ncrm {
   position: relative;
   max-width: 1120px;
@@ -1580,20 +1620,6 @@ function toggleTheme() {
     transform: none;
   }
 }
-.steps__card {
-  position: relative;
-}
-.steps__detail {
-  margin: 0;
-  padding: 20px 24px;
-  border-radius: 20px;
-  font-size: clamp(17px, 2vw, 20px);
-  text-wrap: balance;
-}
-.steps__text {
-  display: block;
-  animation: step-text 0.35s ease;
-}
 @keyframes step-text {
   from {
     opacity: 0;
@@ -1716,20 +1742,6 @@ function toggleTheme() {
     align-self: start;
   }
 }
-/* on a computer the launch section stays in the window while the scroll walks through its four steps;
-   it sticks lower than the other headings, so the parcel has room to hop onto the numbers */
-@media (min-width: 900px) and (prefers-reduced-motion: no-preference) {
-  .sec--onboarding {
-    min-height: 220vh;
-  }
-  .sec--onboarding .sec__head,
-  .sec--onboarding .sec__body {
-    position: sticky;
-    top: clamp(140px, 30vh, 300px);
-    align-self: start;
-  }
-}
-
 .demo {
   margin: clamp(24px, 5vw, 56px) 0;
   padding: clamp(32px, 6vw, 72px);
@@ -1842,5 +1854,232 @@ function toggleTheme() {
   border-radius: 50%;
   background: var(--ncrm-warm);
   box-shadow: 0 1px 2px var(--ncrm-glass-shadow);
+}
+
+/* photos: stock pictures of people at work, laid on the desk like prints with a line in marker */
+.polaroids {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.polaroid {
+  margin: 0;
+  padding: 10px 10px 0;
+  background: #fffdf8;
+  box-shadow:
+    0 2px 4px var(--ncrm-glass-shadow),
+    0 18px 30px -16px var(--ncrm-glass-shadow);
+  transform: rotate(-1.6deg);
+  transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.polaroids .polaroid:nth-child(even) {
+  transform: rotate(1.4deg) translateY(8px);
+}
+.polaroid img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: var(--ncrm-tint);
+}
+.polaroid__cap {
+  display: block;
+  padding: 6px 4px 8px;
+  font-size: 24px;
+  line-height: 1.1;
+  color: var(--ncrm-note-ink);
+  text-align: center;
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .polaroids .polaroid:hover {
+    transform: rotate(0deg) scale(1.03);
+  }
+}
+.demo__photo {
+  width: min(100%, 260px);
+  margin: 0 0 24px;
+  transform: rotate(-3deg);
+}
+@media (min-width: 900px) {
+  .demo__photo {
+    float: right;
+    margin: 0 0 16px 40px;
+    transform: rotate(3deg);
+  }
+}
+
+/* "Puesta en marcha": the whole window is one picture; each step changes the photo and the sentence over it */
+.sec--onboarding {
+  display: block;
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
+  padding: 0;
+  border-top: 0;
+  scroll-margin-top: 0;
+}
+.sec--onboarding .sec__body {
+  display: block;
+  perspective: none;
+}
+.stage-full {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  gap: 16px;
+  height: 100svh;
+  min-height: 560px;
+  padding: 96px var(--ncrm-gutter) clamp(20px, 4vh, 40px);
+  overflow: hidden;
+  background: #10211f;
+  color: #fff;
+}
+.stage-full::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: rgba(8, 20, 18, 0.5);
+  pointer-events: none;
+}
+.stage-full__img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transform: scale(1.06);
+  transition:
+    opacity 0.7s ease,
+    transform 1.6s ease;
+}
+.stage-full__img.is-on {
+  opacity: 1;
+  transform: none;
+}
+.stage-full__top,
+.stage-full__card,
+.stage-full .path {
+  position: relative;
+  z-index: 2;
+}
+.stage-full__top {
+  display: grid;
+  gap: 8px;
+  max-width: 640px;
+}
+.stage-full .sec__num {
+  color: var(--ncrm-warm);
+}
+.stage-full .sec__lead {
+  margin: 0;
+  font-size: clamp(16px, 2vw, 20px);
+  color: rgba(255, 255, 255, 0.88);
+}
+.stage-full__card {
+  align-self: end;
+  max-width: 760px;
+}
+.stage-full__text {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: clamp(12px, 3vw, 28px);
+  align-items: end;
+  animation: step-text 0.45s ease;
+}
+.stage-full__big {
+  grid-row: 1 / 3;
+  font-size: clamp(96px, 18vw, 220px);
+  line-height: 0.8;
+  color: var(--ncrm-warm);
+  text-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
+.stage-full__title {
+  margin: 0;
+  font-size: clamp(32px, 6vw, 72px);
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.stage-full__body {
+  margin: 8px 0 0;
+  font-size: clamp(17px, 2.2vw, 26px);
+  line-height: 1.3;
+  text-wrap: balance;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.5);
+}
+.stage-full .path {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+.stage-full .path__btn {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  color: #fff;
+  font-size: clamp(13px, 1.6vw, 18px);
+  font-weight: 600;
+}
+.stage-full .path__step::before {
+  content: "";
+  position: absolute;
+  left: 52px;
+  right: -8px;
+  top: 25px;
+  border-top: 2px dotted rgba(255, 255, 255, 0.7);
+  pointer-events: none;
+}
+.stage-full .path__step:last-child::before,
+.stage-full .path__step:last-child::after {
+  display: none;
+}
+.stage-full .path__step::after {
+  content: "";
+  position: absolute;
+  left: 52px;
+  right: -8px;
+  top: 25px;
+  border-top: 2px solid var(--ncrm-warm);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.45s ease;
+  pointer-events: none;
+}
+.stage-full .path__step.is-past::after {
+  transform: scaleX(1);
+}
+@media (max-width: 639px) {
+  .stage-full .path__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .stage-full .path__step::before,
+  .stage-full .path__step::after {
+    left: 52px;
+  }
+}
+/* on a computer the window stays on this section while the scroll walks through the four steps */
+@media (min-width: 900px) and (prefers-reduced-motion: no-preference) {
+  .sec--onboarding {
+    min-height: 400vh;
+  }
+  .sec--onboarding .sec__body {
+    position: sticky;
+    top: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stage-full__img,
+  .stage-full__text {
+    transition: none;
+    animation: none;
+  }
 }
 </style>

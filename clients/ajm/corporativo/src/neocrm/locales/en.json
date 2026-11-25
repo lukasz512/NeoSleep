@@ -455,5 +455,39 @@
   "footer": {
     "note": "neoCRM · A CRM under your own brand",
     "back": "Back to AJ Management"
+  },
+  "photos": {
+    "who": [
+      {
+        "alt": "A team member calmly explains something to a colleague beside a laptop",
+        "caption": "The one out visiting"
+      },
+      {
+        "alt": "A team gathered at a wall of sticky notes, one person pointing at a note",
+        "caption": "And the one coordinating"
+      },
+      {
+        "alt": "Colleagues working together on laptops at a table",
+        "caption": "Everyone with the same thing in front of them"
+      }
+    ],
+    "launch": [
+      {
+        "alt": "Two people talking at a table during a demo"
+      },
+      {
+        "alt": "A team sets up its workspace with notes on the wall"
+      },
+      {
+        "alt": "A group of colleagues starts using their laptops together"
+      },
+      {
+        "alt": "Two people high-five after reviewing the first results"
+      }
+    ],
+    "demo": {
+      "alt": "Two hands shaking",
+      "caption": "Thirty minutes and we'll see"
+    }
   }
 }

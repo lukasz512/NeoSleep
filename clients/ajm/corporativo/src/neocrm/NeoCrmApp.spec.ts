@@ -67,7 +67,7 @@ describe("neocrm page › every section is drawn, not only written", () => {
     const w = page();
     expect(w.findAll("#onboarding .path__num").map((n) => n.text())).toEqual(["1", "2", "3", "4"]);
     // the number sits inside the step's button since the steps can be picked
-    expect(w.find("#onboarding h3").text()).toBe("1 Demo");
+    expect(w.find("#onboarding h3").text()).toMatch(/^1\s*Demo$/);
   });
   it("every roadmap item carries its status as a pill, apart from its title", () => {
     const w = page();
@@ -159,9 +159,9 @@ describe("neocrm page › every section can be tried, each in its own way", () =
   it("onboarding: one step is explained at a time", async () => {
     const w = page();
     const t = makeNeoCrmI18n("es").global.t;
-    expect(w.find("#onboarding .steps__detail").text()).toBe(t("sections.onboarding.items.0.body"));
+    expect(w.find("#onboarding .stage-full__body").text()).toBe(t("sections.onboarding.items.0.body"));
     await w.findAll("#onboarding .path__btn")[2]?.trigger("click");
-    expect(w.find("#onboarding .steps__detail").text()).toBe(t("sections.onboarding.items.2.body"));
+    expect(w.find("#onboarding .stage-full__body").text()).toBe(t("sections.onboarding.items.2.body"));
     expect(w.findAll("#onboarding .path__btn").map((b) => b.attributes("aria-current"))).toEqual([undefined, undefined, "step", undefined]);
   });
   it("roadmap: the filter leaves only the status picked", async () => {
@@ -334,7 +334,7 @@ describe("neocrm page › the launch steps follow the scroll (CORE-215 round 11)
       expect(lit(w)).toBe(step);
       // steps left behind are ticked off
       expect(w.findAll("#onboarding .path__num.is-done")).toHaveLength(step);
-      expect(w.find("#onboarding .steps__detail").text()).toBe(makeNeoCrmI18n("es").global.t(`sections.onboarding.items.${step}.body`));
+      expect(w.find("#onboarding .stage-full__body").text()).toBe(makeNeoCrmI18n("es").global.t(`sections.onboarding.items.${step}.body`));
     }
     expect(w.find("#onboarding .steps__count").exists()).toBe(false);
     expect(w.findAll("#onboarding .path__num").map((n) => n.text())).toEqual(["1", "2", "3", "4"]);

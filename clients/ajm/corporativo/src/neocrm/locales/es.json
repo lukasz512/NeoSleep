@@ -455,5 +455,39 @@
   "footer": {
     "note": "neoCRM · CRM con vuestra marca",
     "back": "Volver a AJ Management"
+  },
+  "photos": {
+    "who": [
+      {
+        "alt": "Una persona del equipo explica algo con calma a un compañero junto a un portátil",
+        "caption": "El que sale a visitar"
+      },
+      {
+        "alt": "Un equipo reunido ante una pared de notas adhesivas, una persona señala una",
+        "caption": "Y el que coordina"
+      },
+      {
+        "alt": "Compañeros trabajando juntos con sus portátiles en una mesa",
+        "caption": "Todos con lo mismo delante"
+      }
+    ],
+    "launch": [
+      {
+        "alt": "Dos personas conversan en una mesa durante una demostración"
+      },
+      {
+        "alt": "Un equipo prepara su espacio de trabajo con notas en la pared"
+      },
+      {
+        "alt": "Un grupo de compañeros empieza a usar sus portátiles juntos"
+      },
+      {
+        "alt": "Dos personas chocan la mano tras revisar los primeros resultados"
+      }
+    ],
+    "demo": {
+      "alt": "Dos manos que se estrechan",
+      "caption": "Treinta minutos y lo vemos"
+    }
   }
 }
