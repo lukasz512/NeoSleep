@@ -1,0 +1,44 @@
+# CI health (CORE-58): once a night, looks at the CI runs on dev and tells the board
+# what changed, each thing once:
+#   - 10 green CI runs in a row while `tooling` / `api-image` are still optional checks
+#     → CORE-63 gets the ready change (decision core-58-plan-r1 Q4);
+#   - the API test step failed in a dev run of the last 24 h → CORE-35 (Q3);
+#   - the flake hunt passed on ubuntu-latest 3 nights in a row → CORE-242 (the CI test
+#     job can leave the ubuntu-24.04 pin).
+# The numbers also land in this run's summary. Read-only on GitHub: making a check
+# required needs a repo admin (`node infrastructure/scripts/ci-health.mjs --require`).
+#
+# Secrets: BOARD_API_URL + BOARD_AGENT_TOKEN (same as board-git-state.yml).
+# The logic lives in infrastructure/scripts/ci-health.mjs.
+
+name: CI health
+
+on:
+  # 09:30 UTC: after the nightly flake hunt (03:00) and the nightly CI run (08:00).
+  schedule:
+    - cron: "30 9 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ci-health
+  cancel-in-progress: false
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+      - name: Report CI health and tell the board
+        run: node infrastructure/scripts/ci-health.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BOARD_API_URL: ${{ secrets.BOARD_API_URL }}
+          BOARD_AGENT_TOKEN: ${{ secrets.BOARD_AGENT_TOKEN }}

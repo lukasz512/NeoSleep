@@ -102,3 +102,19 @@ export async function assertTerritoryAccessByTerritoryId(
     throw new ForbiddenError("This record is outside your assigned region", "OUTSIDE_TERRITORY");
   }
 }
+
+/**
+ * A write reaches exactly as far as a read (CORE-226): the record's current
+ * territory must be inside the caller's scope, and so must the territory it is
+ * being moved to. Create passes the new territory as `currentTerritoryId`.
+ */
+export async function assertTerritoryWriteAccess(
+  ctx: TenantContext,
+  currentTerritoryId: string | null | undefined,
+  targetTerritoryId?: string | null
+): Promise<void> {
+  await assertTerritoryAccessByTerritoryId(ctx, currentTerritoryId);
+  if (targetTerritoryId && targetTerritoryId !== currentTerritoryId) {
+    await assertTerritoryAccessByTerritoryId(ctx, targetTerritoryId);
+  }
+}

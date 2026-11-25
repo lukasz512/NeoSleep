@@ -304,12 +304,17 @@ problemReportRouter.patch(
       throw new ValidationError("admin_note must be text of at most 5000 characters", "admin_note");
     }
     const slug = tenantSlugFromHost(req.hostname);
-    const updated = await updateProblemReport(slug, id, {
-      status: statusRaw as ProblemReportStatus | undefined,
-      admin_note: noteRaw === undefined ? undefined : typeof noteRaw === "string" ? noteRaw.trim() || null : null,
-      tracker_ref: trackerRef,
-      reporter_reply: reporterReply,
-    });
+    const updated = await updateProblemReport(
+      slug,
+      id,
+      {
+        status: statusRaw as ProblemReportStatus | undefined,
+        admin_note: noteRaw === undefined ? undefined : typeof noteRaw === "string" ? noteRaw.trim() || null : null,
+        tracker_ref: trackerRef,
+        reporter_reply: reporterReply,
+      },
+      platformAuditActor(req)
+    );
     if (!updated) throw new NotFoundError("ProblemReport", id);
     await notifyProblemReportStatusChanged({ tenantSlug: slug, ...updated, actorUserId: req.user!.sub });
     res.json(updated.row);

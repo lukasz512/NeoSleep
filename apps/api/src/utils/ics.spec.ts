@@ -7,6 +7,7 @@ const base = {
   method: "REQUEST" as const,
   startAt: "2031-01-15T15:00:00.000Z",
   endAt: "2031-01-15T16:00:00.000Z",
+  timezone: "America/Mexico_City",
   summary: "Cita · Clínica Sonrisa",
   location: "Av. Reforma 1, CDMX",
   description: "Para cambiar la cita, contacte a la clínica: +52 55 1234 5678",
@@ -15,15 +16,26 @@ const base = {
 };
 
 describe("buildAppointmentIcs (CORE-26)", () => {
-  it("is a valid VCALENDAR with CRLF line endings and UTC times", () => {
+  it("is a valid VCALENDAR with CRLF line endings and the clinic's wall-clock times (CORE-244)", () => {
     const ics = buildAppointmentIcs(base);
     expect(ics.startsWith("BEGIN:VCALENDAR\r\n")).toBe(true);
     expect(ics.endsWith("END:VCALENDAR\r\n")).toBe(true);
     expect(ics).toContain("METHOD:REQUEST\r\n");
-    expect(ics).toContain("DTSTART:20310115T150000Z\r\n");
-    expect(ics).toContain("DTEND:20310115T160000Z\r\n");
+    expect(ics).toContain("DTSTART;TZID=America/Mexico_City:20310115T090000\r\n");
+    expect(ics).toContain("DTEND;TZID=America/Mexico_City:20310115T100000\r\n");
     expect(ics).toContain("STATUS:CONFIRMED\r\n");
     expect(ics.replace(/\r\n/g, "")).not.toMatch(/\n/);
+  });
+
+  it("CORE-244: declares the clinic's zone with the offset in force on the day, so the instant is unchanged", () => {
+    const mx = buildAppointmentIcs(base);
+    expect(mx).toContain("BEGIN:VTIMEZONE\r\nTZID:America/Mexico_City\r\n");
+    expect(mx).toContain("TZOFFSETTO:-0600\r\n");
+    expect(mx.indexOf("END:VTIMEZONE")).toBeLessThan(mx.indexOf("BEGIN:VEVENT"));
+    // Warsaw in summer is +02:00: 15:00 UTC reads 17:00 there.
+    const pl = buildAppointmentIcs({ ...base, timezone: "Europe/Warsaw", startAt: "2031-07-15T15:00:00.000Z", endAt: "2031-07-15T16:00:00.000Z" });
+    expect(pl).toContain("DTSTART;TZID=Europe/Warsaw:20310715T170000\r\n");
+    expect(pl).toContain("TZOFFSETTO:+0200\r\n");
   });
 
   it("keeps one stable UID per appointment and carries the SEQUENCE, so a reschedule updates the device calendar instead of duplicating", () => {
@@ -59,6 +71,7 @@ describe("add-to-calendar links", () => {
     const url = new URL(googleCalendarLink(base));
     expect(url.hostname).toBe("calendar.google.com");
     expect(url.searchParams.get("dates")).toBe("20310115T150000Z/20310115T160000Z");
+    expect(url.searchParams.get("ctz")).toBe("America/Mexico_City");
     expect(url.searchParams.get("text")).toBe(base.summary);
   });
 

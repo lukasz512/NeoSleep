@@ -4,7 +4,7 @@
 #   full  = UI or feature: any .vue/.css/.scss, a view, an API route or a migration.
 #           Needs the full ship-artifact page (before/after, 3 sections, Change Index row).
 #   light = everything else (service fix, hooks, docs, config). One board comment with
-#           the PR link is the handover: `build.mjs light`.
+#           the PR link and the before/after is the handover: `build.mjs light … --post`.
 
 FULL_SHAPE_REGEX='\.(vue|css|scss)$|^apps/[^/]+/src/(views|routes)/|^apps/api/migrations/'
 

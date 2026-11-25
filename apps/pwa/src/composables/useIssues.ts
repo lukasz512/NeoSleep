@@ -3,9 +3,11 @@
  * diagnostics (platform admins only). Every call reports a failure once and rethrows, so the
  * caller only decides what to show.
  */
+import { onBeforeUnmount, onMounted } from "vue";
 import { isApiError, reportCaught, reportFailedResponse } from "@api";
 import { apiFetch } from "./useApi";
 import type {
+  DiagnosticEnv,
   DiagnosticGroup,
   DiagnosticStatus,
   MyProblemReport,
@@ -66,12 +68,33 @@ export async function fetchAttachmentUrl(id: string): Promise<string> {
   return body.url;
 }
 
-export async function fetchDiagnostics(status: DiagnosticStatus | "all"): Promise<DiagnosticGroup[]> {
+/** The env label each view reads; the archive is the pre-CORE-190 "production" label. */
+const DIAGNOSTIC_ENV_LABEL: Record<DiagnosticEnv, string> = { prod: "prod", dev: "dev", archive: "production" };
+
+export async function fetchDiagnostics(status: DiagnosticStatus | "all", env: DiagnosticEnv): Promise<DiagnosticGroup[]> {
   const body = await request<{ items?: DiagnosticGroup[] } | DiagnosticGroup[]>(
     "useIssues.diagnostics",
-    `/api/v1/admin/diagnostics?status=${status}&env=prod`,
+    `/api/v1/admin/diagnostics?status=${status}&env=${DIAGNOSTIC_ENV_LABEL[env]}`,
   );
   return unwrapItems(body);
+}
+
+/**
+ * Re-runs `refresh` every minute while the calling component is mounted and the tab is
+ * visible, so a ticket that moved shows its new state without a reload (CORE-227).
+ */
+export const ISSUES_POLL_MS = 60_000;
+
+export function useIssuesPolling(refresh: () => unknown, intervalMs: number = ISSUES_POLL_MS): void {
+  let timer: ReturnType<typeof setInterval> | null = null;
+  onMounted(() => {
+    timer = setInterval(() => {
+      if (document.visibilityState !== "hidden") void refresh();
+    }, intervalMs);
+  });
+  onBeforeUnmount(() => {
+    if (timer) clearInterval(timer);
+  });
 }
 
 export function patchDiagnostic(id: string, status: DiagnosticStatus): Promise<DiagnosticGroup> {

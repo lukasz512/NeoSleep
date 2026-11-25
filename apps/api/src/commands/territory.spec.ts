@@ -146,6 +146,19 @@ describe("UpdateTerritoryCommand", () => {
 });
 
 describe("DeleteTerritoryCommand (soft delete)", () => {
+  it("refuses to delete a territory that still scopes someone's role, and leaves it in place (CORE-226)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const territory = await CreateTerritoryCommand(ctx, { name: `InUse-${uniqueSuffix()}`, country_code: "MX", kind: "region" });
+      const hash = await bcrypt.hash("irrelevant-not-logged-in-with", 4);
+      await insertStaffUser(client, `qa-territory-grant-${uniqueSuffix()}@neosleepcare.com`, "QA", "Scoped", "rep", hash, false, null, null, territory.id);
+
+      await expect(DeleteTerritoryCommand(ctx, territory.id)).rejects.toMatchObject({ statusCode: 409, code: "TERRITORY_IN_USE" });
+      expect((await getTerritoryPath(client, territory.id)).length).toBeGreaterThan(0);
+    });
+  });
+
+
   it("soft-deletes the target node itself — getTerritoryPath called on a deleted id returns []", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildTestContext(client);

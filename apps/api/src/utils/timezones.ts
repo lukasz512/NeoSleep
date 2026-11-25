@@ -33,10 +33,18 @@ export function utcToWallTime(iso: string, timeZone: string): string {
 }
 
 /** Minutes `timeZone` is ahead of UTC at instant `ms` (whole minutes). */
-function offsetMinutes(ms: number, timeZone: string): number {
+export function offsetMinutes(ms: number, timeZone: string): number {
   const m = WALL_TIME.exec(utcToWallTime(new Date(ms).toISOString(), timeZone))!;
   const [y, mo, d, h, mi] = m.slice(1).map(Number) as [number, number, number, number, number];
   return Math.round((Date.UTC(y, mo - 1, d, h, mi) - ms) / 60_000);
+}
+
+/** "GMT-6", "GMT+5:30" — the zone's offset at `iso`, the same in every language. */
+export function utcOffsetLabel(iso: string, timeZone: string): string {
+  const minutes = offsetMinutes(new Date(iso).getTime(), timeZone);
+  const abs = Math.abs(minutes);
+  const rest = abs % 60 ? `:${String(abs % 60).padStart(2, "0")}` : "";
+  return `GMT${minutes < 0 ? "-" : "+"}${Math.floor(abs / 60)}${rest}`;
 }
 
 /**

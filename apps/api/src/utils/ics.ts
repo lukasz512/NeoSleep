@@ -1,3 +1,5 @@
+import { offsetMinutes, utcToWallTime } from "./timezones.js";
+
 /**
  * iCalendar (RFC 5545) file for an appointment email (CORE-26).
  *
@@ -5,6 +7,9 @@
  * higher SEQUENCE and the patient's calendar app moves the entry; a
  * cancellation sends METHOD:CANCEL and the entry goes away. No library —
  * one VEVENT is a few lines, and the escaping/folding rules are tested.
+ *
+ * CORE-244: the times are the clinic's wall clock with its TZID, so the
+ * calendar entry keeps the clinic's zone; the instant is the same as in UTC.
  */
 
 export interface AppointmentIcsInput {
@@ -14,6 +19,8 @@ export interface AppointmentIcsInput {
   method: "REQUEST" | "CANCEL";
   startAt: string;
   endAt: string;
+  /** IANA zone of the clinic. */
+  timezone: string;
   summary: string;
   location: string | null;
   description: string | null;
@@ -28,6 +35,27 @@ export function appointmentIcsUid(appointmentId: string): string {
 /** 2031-01-15T15:00:00.000Z → 20310115T150000Z */
 function utcStamp(iso: string): string {
   return new Date(iso).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+}
+
+/** 2031-01-15T15:00:00.000Z in America/Mexico_City → 20310115T090000 */
+function wallStamp(iso: string, timeZone: string): string {
+  return `${utcToWallTime(iso, timeZone).replace(/[-:]/g, "")}00`;
+}
+
+/** -360 → -0600 */
+function offsetStamp(minutes: number): string {
+  const abs = Math.abs(minutes);
+  return `${minutes < 0 ? "-" : "+"}${String(Math.floor(abs / 60)).padStart(2, "0")}${String(abs % 60).padStart(2, "0")}`;
+}
+
+/**
+ * A one-rule VTIMEZONE: the offset in force when the visit starts. Enough for
+ * a single, non-repeating event; calendar apps that know the IANA name use
+ * their own rules anyway.
+ */
+function vtimezone(startAt: string, timeZone: string): string[] {
+  const offset = offsetStamp(offsetMinutes(new Date(startAt).getTime(), timeZone));
+  return ["BEGIN:VTIMEZONE", `TZID:${timeZone}`, "BEGIN:STANDARD", "DTSTART:19700101T000000", `TZOFFSETFROM:${offset}`, `TZOFFSETTO:${offset}`, "END:STANDARD", "END:VTIMEZONE"];
 }
 
 function escapeText(value: string): string {
@@ -64,12 +92,13 @@ export function buildAppointmentIcs(input: AppointmentIcsInput): string {
     "PRODID:-//NeoSleep//Appointments//EN",
     "CALSCALE:GREGORIAN",
     `METHOD:${input.method}`,
+    ...vtimezone(input.startAt, input.timezone),
     "BEGIN:VEVENT",
     `UID:${appointmentIcsUid(input.appointmentId)}`,
     `SEQUENCE:${input.sequence}`,
     `DTSTAMP:${utcStamp(new Date().toISOString())}`,
-    `DTSTART:${utcStamp(input.startAt)}`,
-    `DTEND:${utcStamp(input.endAt)}`,
+    `DTSTART;TZID=${input.timezone}:${wallStamp(input.startAt, input.timezone)}`,
+    `DTEND;TZID=${input.timezone}:${wallStamp(input.endAt, input.timezone)}`,
     `SUMMARY:${escapeText(input.summary)}`,
     ...(input.location ? [`LOCATION:${escapeText(input.location)}`] : []),
     ...(input.description ? [`DESCRIPTION:${escapeText(input.description)}`] : []),
@@ -83,7 +112,7 @@ export function buildAppointmentIcs(input: AppointmentIcsInput): string {
   return lines.map(fold).join("\r\n") + "\r\n";
 }
 
-type CalendarLinkInput = Pick<AppointmentIcsInput, "startAt" | "endAt" | "summary" | "location" | "description">;
+type CalendarLinkInput = Pick<AppointmentIcsInput, "startAt" | "endAt" | "timezone" | "summary" | "location" | "description">;
 
 /** "Add to Google Calendar" — a fallback for inboxes that hide the attachment. */
 export function googleCalendarLink(input: CalendarLinkInput): string {
@@ -91,6 +120,7 @@ export function googleCalendarLink(input: CalendarLinkInput): string {
     action: "TEMPLATE",
     text: input.summary,
     dates: `${utcStamp(input.startAt)}/${utcStamp(input.endAt)}`,
+    ctz: input.timezone,
     ...(input.location ? { location: input.location } : {}),
     ...(input.description ? { details: input.description } : {}),
   });
