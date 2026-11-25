@@ -116,7 +116,7 @@
   },
   "env": {
     "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet",
-    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "140000"
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "115000"
   },
   "cleanupPeriodDays": 30,
   "enabledPlugins": {
