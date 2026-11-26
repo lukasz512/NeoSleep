@@ -13,6 +13,7 @@ import {
 } from "@neo/email";
 import { maskEmail } from "./utils/maskEmail.js";
 import { utcOffsetLabel } from "./utils/timezones.js";
+import { patientEmailLocale } from "./utils/patientEmailLocale.js";
 import { AppError } from "./errors.js";
 import { RESEND_API_KEY, RESEND_FROM_EMAIL, RESEND_NOTIFY_TO, PARTNER_DOCS_CC_EMAIL, RESEND_WEBHOOK_SECRET } from "./env.js";
 
@@ -35,6 +36,15 @@ export interface EmailRecipient {
 export interface EmailSender {
   name: string;
   email: string;
+}
+
+/**
+ * Email language for any recipient (CORE-259): an explicit pl/es language wins, otherwise the
+ * recipient's region (identities.language defaults to 'en', so 'en' alone never beats a PL/MX region),
+ * otherwise English. Always resolve from the RECIPIENT, never from a third party such as the patient.
+ */
+export function emailLocale(recipient: EmailRecipient): string {
+  return patientEmailLocale(recipient.language ?? null, recipient.region ?? null);
 }
 
 /** Active-market region -> email locale (see CLAUDE.md's active markets). Falls back to English elsewhere. */
@@ -163,7 +173,7 @@ export async function sendContactEmail(subject: string, rows: [string, string][]
 }
 
 export async function sendPasswordResetEmail(to: string, resetLink: string, recipient: EmailRecipient): Promise<void> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const greetingName = formatGreetingName(recipient, to);
 
   const bodyHtml = `
@@ -211,7 +221,7 @@ export async function sendAccountCreatedEmail(
   recipient: EmailRecipient,
   context: AccountCreatedContext
 ): Promise<string | null> {
-  const locale = recipient.language ?? localeForRegion(recipient.region);
+  const locale = emailLocale(recipient);
   const greetingName = formatGreetingName(recipient, to);
   const params = { inviter: context.inviterName, tenant: context.tenantName };
 
@@ -263,7 +273,7 @@ export interface ProblemReportEmail {
  * admin's reply. Pure, so the copy is testable without Resend.
  */
 export function buildProblemReportEmail(to: string, recipient: EmailRecipient, report: ProblemReportEmail): { subject: string; html: string } {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const t = (key: string, params?: Record<string, string>) => emailT(locale, `email.problemReport.${report.kind}.${key}`, params);
   const number = String(report.number);
   const muted = (text: string) => `<p style="margin:0 0 16px;font-size:13px;color:#7a827e;">${escapeHtml(text)}</p>`;
@@ -318,7 +328,7 @@ export async function sendQuestionnaireLinkEmail(
   tags?: EmailTags,
   validDays?: number
 ): Promise<string | null> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const greetingName = formatGreetingName(recipient, to);
   const clinicName = clinic.name ?? emailT(locale, "email.questionnaireLink.yourClinic");
 
@@ -367,7 +377,7 @@ export async function sendDocumentLinkEmail(
   validDays: number,
   tags?: EmailTags
 ): Promise<string | null> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const greetingName = formatGreetingName(recipient, to);
   const clinicName = clinic.name ?? emailT(locale, "email.questionnaireLink.yourClinic");
 
@@ -414,7 +424,7 @@ export async function sendLeadOfferEmail(
   recipient: EmailRecipient,
   sender: EmailSender
 ): Promise<void> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const greetingName = formatGreetingName(recipient, to);
 
   const bodyHtml = `
@@ -453,7 +463,7 @@ export interface DemoBookingMeeting {
 }
 
 export async function sendDemoBookingConfirmationEmail(to: string, meeting: DemoBookingMeeting, recipient: EmailRecipient): Promise<void> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const greetingName = formatGreetingName(recipient, to);
   const intlLocale = INTL_LOCALE[locale ?? "en"] ?? INTL_LOCALE.en;
   const formattedDateTime = `${new Intl.DateTimeFormat(intlLocale, {
@@ -498,7 +508,7 @@ export async function sendDemoBookingConfirmationEmail(to: string, meeting: Demo
  * so a missing salutation on the record falls back to the locale's "Dr" rather than dropping it.
  */
 function formatPartnerAddress(recipient: EmailRecipient, to: string): string {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const hasName = !!(recipient.firstName?.trim() || recipient.lastName?.trim());
   const title = recipient.title?.trim() || (hasName ? emailT(locale, "email.partner.defaultTitle") : null);
   return emailT(locale, "email.partner.address", { name: formatGreetingName({ ...recipient, title }, to) });
@@ -510,7 +520,7 @@ export async function sendPartnerInviteEmail(
   recipient: EmailRecipient,
   sender: EmailSender
 ): Promise<void> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
 
   const bodyHtml = `
     <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.partnerInvite.title"))}</h1>
@@ -547,7 +557,7 @@ export async function sendPartnerInviteEmail(
  * to ActivatePractitionerCommand, once training/capacitation is finished.
  */
 export async function sendPartnerJoinThankYouEmail(to: string, recipient: EmailRecipient, sender: EmailSender): Promise<void> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const greetingName = formatGreetingName(recipient, to);
 
   const bodyHtml = `
@@ -590,7 +600,7 @@ export async function sendPatientSignedCopyEmail(
   signedOn: string,
   tags?: EmailTags
 ): Promise<string | null> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const greetingName = formatGreetingName(recipient, to);
   const clinicName = clinic.name ?? emailT(locale, "email.questionnaireLink.yourClinic");
 
@@ -731,7 +741,7 @@ const iconImg = (name: EmailIconName, size = 20): string =>
  * link; the clinic leads the sender name and receives replies.
  */
 export async function sendAppointmentPatientEmail(to: string, recipient: EmailRecipient, appointment: AppointmentEmail, tags?: EmailTags): Promise<string | null> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const t = (key: string, params?: Record<string, string>): string => emailT(locale, `email.appointment.${key}`, params);
   const greetingName = formatGreetingName(recipient, to);
   const clinicName = appointment.clinicName ?? emailT(locale, "email.questionnaireLink.yourClinic");
@@ -899,7 +909,7 @@ export async function sendSignedDocumentsEmail(
   loginLink: string,
   ccEmail?: string | null
 ): Promise<string | null> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
 
   const bodyHtml = `
     <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.signedDocuments.title"))}</h1>
@@ -961,9 +971,10 @@ export function verifyResendWebhook(
  */
 export async function sendEmailSentConfirmation(
   to: string,
-  info: { patient: string; sentTo: string; count: number; clinic: string | null; language: string }
+  info: { patient: string; sentTo: string; count: number; clinic: string | null },
+  recipient: EmailRecipient
 ): Promise<void> {
-  const locale = info.language;
+  const locale = emailLocale(recipient);
   const when = new Intl.DateTimeFormat(INTL_LOCALE[locale] ?? "en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date());
   const bodyHtml = `
     <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.sendConfirmation.title"))}</h1>

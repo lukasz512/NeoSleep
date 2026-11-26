@@ -30,6 +30,7 @@ import { hashToken } from "../utils/hashToken.js";
 import { generateToken } from "../utils/generateToken.js";
 import { AppError, NotFoundError, ValidationError } from "../errors.js";
 import { sendQuestionnaireLinkEmail, sendPatientSignedCopyEmail, sendEmailSentConfirmation } from "../mailer.js";
+import { getUserById } from "../db/users.js";
 import { isPatientEmailHeldByAnother } from "../db/identityEmail.js";
 import { insertPatientEmailSend } from "../db/patientEmailSend.js";
 import { maskEmail } from "../utils/maskEmail.js";
@@ -226,13 +227,17 @@ export async function SendQuestionnaireEmailCommand(
 
   // D4: the doctor's own confirmation — who, how many, when; never the patient's link.
   if (body.copy_to_me === true && ctx.user.email) {
-    await sendEmailSentConfirmation(ctx.user.email, {
-      patient: shortPatientName(context.patient_first_name, context.patient_last_name),
-      sentTo,
-      count: created.request.items.length,
-      clinic: context.organization_name,
-      language: patientEmailLocale(context.patient_language, context.patient_region),
-    }).catch((err: unknown) => console.error("[questionnaireRequest] send confirmation email failed:", err));
+    const doctor = await getUserById(ctx.client, ctx.user.id);
+    await sendEmailSentConfirmation(
+      ctx.user.email,
+      {
+        patient: shortPatientName(context.patient_first_name, context.patient_last_name),
+        sentTo,
+        count: created.request.items.length,
+        clinic: context.organization_name,
+      },
+      { language: doctor?.language, region: doctor?.region ?? doctor?.country_code }
+    ).catch((err: unknown) => console.error("[questionnaireRequest] send confirmation email failed:", err));
   }
   return { request: created.request, sent_to: sentTo, url: created.url };
 }

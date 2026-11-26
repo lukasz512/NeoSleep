@@ -121,9 +121,16 @@ describe("mailer — configured", () => {
   it("sendEmailSentConfirmation tells the doctor who/what/when in their language, with no patient link (NEO-192)", async () => {
     const { sendEmailSentConfirmation } = await importMailer(true);
 
-    await sendEmailSentConfirmation("doctor@neosleepcare.com", { patient: "Lucía C.", sentTo: "l***@example.mx", count: 2, clinic: "Clínica Sonrisa", language: "pl" });
+    await sendEmailSentConfirmation("doctor@neosleepcare.com", { patient: "Lucía C.", sentTo: "l***@example.mx", count: 2, clinic: "Clínica Sonrisa" }, { language: "en", region: "MX" });
 
     const call = sendMock.mock.calls[0]![0];
+    // CORE-259: the doctor's region (MX) decides the language, not the default 'en' and not the patient's.
+    expect(call.html).toContain("Lucía C.");
+    const { emailLocale } = await importMailer(true);
+    expect(emailLocale({ language: "en", region: "MX" })).toBe("mx");
+    expect(emailLocale({ language: "en", region: "PL" })).toBe("pl");
+    expect(emailLocale({ language: "pl", region: "MX" })).toBe("pl");
+    expect(emailLocale({ language: null, region: "TH" })).toBe("en");
     expect(call.to).toBe("doctor@neosleepcare.com");
     expect(call.from).toBe('"Clínica Sonrisa | NeoSleep" <notifications@mail.neosleepcare.com>');
     expect(call.subject).toContain("Lucía C.");
@@ -391,7 +398,7 @@ describe("sendAccountCreatedEmail (CORE-199)", () => {
   ])("renders the %s template with inviter, tenant, button link and Google line", async (language, subject, cta, body, google) => {
     const { sendAccountCreatedEmail } = await importMailer(true);
 
-    const id = await sendAccountCreatedEmail("new.rep@example.com", LINK, { ...RECIPIENT, language }, CONTEXT);
+    const id = await sendAccountCreatedEmail("new.rep@example.com", LINK, { ...RECIPIENT, language, region: "TH" }, CONTEXT);
 
     expect(id).toBe("test-email-id");
     expect(sendMock).toHaveBeenCalledTimes(1);
