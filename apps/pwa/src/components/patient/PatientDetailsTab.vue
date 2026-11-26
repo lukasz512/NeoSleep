@@ -121,6 +121,14 @@
             <dt>{{ t("app.patients.detail.region") }}</dt>
             <dd>{{ regionBreadcrumb }}</dd>
           </div>
+          <div class="patient-details__row" data-testid="patient-country">
+            <dt>{{ t("app.patients.detail.country") }}</dt>
+            <dd>{{ patient.region || "—" }}</dd>
+          </div>
+          <div class="patient-details__row" data-testid="patient-language">
+            <dt>{{ t("app.patients.detail.language") }}</dt>
+            <dd>{{ patient.language ? t(`app.language.${patient.language}`) : "—" }}</dd>
+          </div>
           <div v-if="patient.created_at" class="patient-details__row">
             <dt>{{ t("app.patients.detail.patientSince") }}</dt>
             <dd>{{ formatDate(patient.created_at) }}</dd>

@@ -12,7 +12,8 @@ import {
 import { insertAuditLog } from "../db.js";
 import { ValidationError } from "../errors.js";
 import { assertTerritoryWriteAccess } from "../middleware/requireScope.js";
-import { sendLeadOfferEmail, localeForRegion } from "../mailer.js";
+import { sendLeadOfferEmail } from "../mailer.js";
+import { localeForCountry } from "../utils/patientEmailLocale.js";
 
 /**
  * COMMANDS — Lead domain.
@@ -319,7 +320,7 @@ export async function SendLeadOfferEmailCommand(ctx: TenantContext, id: string):
       title: lead.salutation,
       firstName: lead.first_name,
       lastName: lead.last_name,
-      language: localeForRegion(lead.region),
+      language: localeForCountry(lead.region),
       region: lead.region,
     },
     // Doctor sees this as coming from the rep who made the call, not a faceless system

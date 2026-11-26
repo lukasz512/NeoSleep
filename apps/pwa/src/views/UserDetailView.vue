@@ -3,6 +3,7 @@
     <FormRenderer
       v-model="showEditModal"
       :fields="userFormFields"
+      :derive="userFormDerive"
       :initial-data="user ?? undefined"
       title-key="user.users.form.title"
       edit-title-key="user.users.form.editTitle"
@@ -186,6 +187,12 @@
             </div>
             <div class="view-item__row">
               <dt class="view-item__label">
+                {{ t("user.users.detail.language") }}
+              </dt>
+              <dd class="view-item__value">{{ user.language ? t(`app.language.${user.language}`) : "—" }}</dd>
+            </div>
+            <div class="view-item__row">
+              <dt class="view-item__label">
                 {{ t("user.users.detail.territory") }}
               </dt>
               <dd class="view-item__value">{{ user.territory_name || "—" }}</dd>
@@ -274,7 +281,7 @@ import AppIcon from "../components/AppIcon.vue";
 import AppAvatar from "../components/AppAvatar.vue";
 import IdentityDetails from "../components/IdentityDetails.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
-import { userFormFields } from "../config/forms/userForm";
+import { userFormFields, userFormDerive } from "../config/forms/userForm";
 import {
   entityActionIcon,
   entityActionBtnClass,
@@ -296,6 +303,7 @@ interface UserDetail {
   role: string;
   status: string;
   region: string | null;
+  language: string | null;
   territory_id: string | null;
   territory_name: string | null;
   phone?: string | null;

@@ -47,14 +47,6 @@ export function emailLocale(recipient: EmailRecipient): string {
   return patientEmailLocale(recipient.language ?? null, recipient.region ?? null);
 }
 
-/** Active-market region -> email locale (see CLAUDE.md's active markets). Falls back to English elsewhere. */
-export function localeForRegion(region: string | null | undefined): string {
-  const normalized = (region ?? "").trim().toUpperCase();
-  if (normalized === "PL") return "pl";
-  if (normalized === "MX") return "mx";
-  return "en";
-}
-
 /** Intl.DateTimeFormat locale for each supported email language — used to format the demo-booking meeting time. */
 const INTL_LOCALE: Record<string, string> = { pl: "pl-PL", mx: "es-MX", en: "en-US" };
 

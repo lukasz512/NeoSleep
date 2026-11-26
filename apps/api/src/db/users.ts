@@ -2,6 +2,8 @@ import type { PoolClient } from "pg";
 import { toArray } from "./helpers.js";
 import { AppError, DatabaseError } from "../errors.js";
 import { displayNameSql } from "../utils/personName.js";
+import { localeForCountry } from "../utils/patientEmailLocale.js";
+import { getTerritoryCountryCode } from "./territory.js";
 
 export type StaffRole = "admin" | "manager" | "kam" | "msl" | "rep" | "doctor" | "support";
 
@@ -222,11 +224,25 @@ export async function insertStaffUser(
   const normalizedEmail = email.trim().toLowerCase();
 
   try {
+    // CORE-261: the assigned territory is the only source of the initial region and language.
+    // An explicit country wins; both stay editable afterwards (identities.region / .language).
+    const territoryCountry = scopeTerritoryId ? await getTerritoryCountryCode(client, scopeTerritoryId) : null;
+    const region = countryCode ?? territoryCountry;
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (email, title, first_name, last_name, phone, country_code) VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO identities (email, title, first_name, last_name, phone, country_code, region, language)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT (email) WHERE NOT email_shared DO UPDATE SET email = EXCLUDED.email
        RETURNING id`,
-      [normalizedEmail, salutation?.trim() || null, firstName, lastName, phone ?? null, countryCode ?? null]
+      [
+        normalizedEmail,
+        salutation?.trim() || null,
+        firstName,
+        lastName,
+        phone ?? null,
+        countryCode ?? null,
+        region,
+        localeForCountry(region),
+      ]
     );
     const identityId = identityResult.rows[0]!.id;
 
@@ -461,6 +477,10 @@ export interface UpdateUserInput {
   phone?: string | null;
   status?: "active" | "inactive" | "suspended";
   country_code?: string | null;
+  /** Country the identity belongs to (PL, MX…). Stored on identities, shared by user/HCP/patient. */
+  region?: string | null;
+  /** Language of every mail and notification to this identity (en, pl, mx). */
+  language?: string;
   role?: StaffRole;
   /** RBAC access scope for `role` — a territory id (country or global root).
    *  Defaults to the existing scope, or the global root for a brand-new role. */
@@ -507,6 +527,18 @@ export async function updateUser(
     }
     if (input.country_code !== undefined) {
       await client.query(`UPDATE identities SET country_code = $1, updated_at = now() WHERE id = $2`, [input.country_code, existing.identity_id]);
+    }
+    if (input.region !== undefined || input.language !== undefined) {
+      // One identity row feeds every mail and notification, so a doctor who
+      // is also a user changes language here and on the HCP screen at once.
+      await client.query(
+        `UPDATE identities SET
+           region     = CASE WHEN $1::boolean THEN $2 ELSE region END,
+           language   = CASE WHEN $3::boolean THEN $4 ELSE language END,
+           updated_at = now()
+         WHERE id = $5`,
+        [input.region !== undefined, input.region?.trim().toUpperCase() || null, input.language !== undefined, input.language, existing.identity_id]
+      );
     }
     if (input.role !== undefined || input.territory_id !== undefined) {
       // Single {role, scope} pair per user for now (no multi-role assignment

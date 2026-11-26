@@ -92,15 +92,28 @@ describe("hcpFormFields", () => {
     expect(tier.default).toBe("A");
   });
 
-  it("region is always hidden — populated live via hcpFormDerive, not a static default", () => {
+  it("region is a visible, editable country field — populated live via hcpFormDerive, no static default (CORE-261)", () => {
+    setActivePinia(createPinia());
     const region = hcpFormFields.find((f) => f.key === "region")!;
-    expect(region.hidden).toBe(true);
+    const hidden = region.hidden as (form: Record<string, unknown>) => boolean;
+    type AuthUser = NonNullable<ReturnType<typeof useAuthStore>["user"]>;
+    useAuthStore().user = { role: "admin" } as AuthUser;
+    expect(hidden({})).toBe(false);
+    useAuthStore().user = { role: "rep" } as AuthUser;
+    expect(hidden({})).toBe(true);
     expect(region.default).toBeUndefined();
   });
 
-  it("language is hidden with a function default (inherited from the creating user)", () => {
+  it("language is a visible select with a function default, hidden from roles that may not change it (CORE-261)", () => {
+    setActivePinia(createPinia());
     const language = hcpFormFields.find((f) => f.key === "language")!;
-    expect(language.hidden).toBe(true);
+    const hidden = language.hidden as (form: Record<string, unknown>) => boolean;
+    type AuthUser = NonNullable<ReturnType<typeof useAuthStore>["user"]>;
+    useAuthStore().user = { role: "manager" } as AuthUser;
+    expect(hidden({})).toBe(false);
+    useAuthStore().user = { role: "rep" } as AuthUser;
+    expect(hidden({})).toBe(true);
+    expect(language.type).toBe("select");
     expect(typeof language.default).toBe("function");
   });
 

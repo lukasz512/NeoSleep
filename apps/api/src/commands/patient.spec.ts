@@ -3,7 +3,7 @@ import bcrypt from "bcrypt";
 import { withTenant, insertStaffUser, getGlobalTerritoryId, getCountryTerritoryId, getPatientById } from "../db.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import type { StaffRole } from "../db/users.js";
-import { ForbiddenError } from "../errors.js";
+import { ForbiddenError, ValidationError } from "../errors.js";
 import { CreatePatientCommand, UpdatePatientCommand, DeletePatientCommand } from "./patient.js";
 
 /**
@@ -118,6 +118,44 @@ describe("DeletePatientCommand territory scoping (NEO-47)", () => {
       await expect(DeletePatientCommand(mxAdminCtx, plPatient.id)).rejects.toThrow(ForbiddenError);
 
       expect(await getPatientById(client, plPatient.id)).not.toBeNull();
+    });
+  }, 20000);
+});
+
+describe("UpdatePatientCommand language and region (CORE-261)", () => {
+  it("lets an admin change a patient's language, and the identity keeps it", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const { globalId, plId } = await seedTerritories(client);
+      const adminCtx = await buildTestContext(client, "admin", globalId);
+      const patient = await createTestPatient(adminCtx, plId);
+
+      const updated = await UpdatePatientCommand(adminCtx, patient.id, { language: "mx" });
+
+      expect(updated?.language).toBe("mx");
+      expect((await getPatientById(client, patient.id))!.language).toBe("mx");
+    });
+  }, 20000);
+
+  it("forbids a rep from changing language, but allows re-sending unchanged values", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const { globalId, plId } = await seedTerritories(client);
+      const adminCtx = await buildTestContext(client, "admin", globalId);
+      const repCtx = await buildTestContext(client, "rep", plId);
+      const patient = await createTestPatient(adminCtx, plId);
+
+      await expect(UpdatePatientCommand(repCtx, patient.id, { language: "mx" })).rejects.toThrow(ForbiddenError);
+      const same = await UpdatePatientCommand(repCtx, patient.id, { language: patient.language, region: patient.region });
+      expect(same?.language).toBe(patient.language);
+    });
+  }, 20000);
+
+  it("rejects a language that has no place in the app", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const { globalId, plId } = await seedTerritories(client);
+      const adminCtx = await buildTestContext(client, "admin", globalId);
+      const patient = await createTestPatient(adminCtx, plId);
+
+      await expect(UpdatePatientCommand(adminCtx, patient.id, { language: "xx" })).rejects.toThrow(ValidationError);
     });
   }, 20000);
 });

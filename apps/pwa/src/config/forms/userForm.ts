@@ -1,8 +1,8 @@
 import type { FormFieldDef } from "../../types/formField";
-import { useConfigStore } from "../../stores/config";
 import { useAuthStore } from "../../stores/auth";
 import { identityFields } from "./identityFields";
-import { loadScopeTerritoryOptions } from "./territoryOptions";
+import { languageField, languageForCountry } from "./localeFields";
+import { countryOfTerritory, loadScopeTerritoryOptions } from "./territoryOptions";
 
 // A user's own RBAC access scope (territory_id field below) is coarse — a
 // country, or everywhere — see requireScope.ts. Not the same field as
@@ -59,12 +59,19 @@ const STATUS_OPTIONS = [
   { title: "user.users.status.suspended", value: "suspended" },
 ];
 
-async function loadRegionOptions() {
-  const configStore = useConfigStore();
-  if (configStore.options.regions.length === 0) {
-    await configStore.loadOptions();
-  }
-  return configStore.regionItems;
+/**
+ * Choosing a territory fills country and language (CORE-261); both stay
+ * editable afterwards. Only a real change of territory_id triggers it, so
+ * opening an existing user never overwrites what is stored.
+ */
+export function userFormDerive(
+  form: Record<string, unknown>,
+  prev: Record<string, unknown>,
+): Partial<Record<string, unknown>> | void {
+  if (!("territory_id" in prev) || prev.territory_id === form.territory_id) return;
+  const country = countryOfTerritory(form.territory_id);
+  if (!country) return;
+  return { region: country, language: languageForCountry(country) };
 }
 
 const identity = identityFields();
@@ -89,14 +96,6 @@ export const userFormFields: FormFieldDef[] = [
     cols: 6,
   },
   {
-    key: "region",
-    section: "territory",
-    type: "autocomplete",
-    labelKey: "user.users.form.fieldRegion",
-    options: loadRegionOptions,
-    cols: 6,
-  },
-  {
     key: "territory_id",
     section: "territory",
     type: "autocomplete",
@@ -107,6 +106,10 @@ export const userFormFields: FormFieldDef[] = [
     icon: "nav-territories",
     cols: 6,
   },
+  // Country is derived from the territory (hidden, still sent to the API);
+  // the language stays visible and editable (CORE-261).
+  { key: "region", section: "territory", type: "text", labelKey: "user.users.form.fieldRegion", default: "", hidden: () => true },
+  languageField("user.users.form.fieldLanguage"),
   {
     key: "status",
     section: "access",

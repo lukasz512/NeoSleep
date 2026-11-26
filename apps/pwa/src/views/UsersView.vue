@@ -74,6 +74,7 @@
     <FormRenderer
       v-model="showForm"
       :fields="userFormFields"
+      :derive="userFormDerive"
       title-key="user.users.form.title"
       submit-label-key="user.users.form.submit"
       edit-submit-label-key="user.users.form.editSubmit"
@@ -83,6 +84,7 @@
     <FormRenderer
       v-model="showEditModal"
       :fields="userFormFields"
+      :derive="userFormDerive"
       :initial-data="selectedUser ?? undefined"
       title-key="user.users.form.title"
       edit-title-key="user.users.form.editTitle"
@@ -126,7 +128,7 @@ import { useNotifications } from "../composables/useNotifications";
 import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import type { FilterDefinition } from "../composables/useFilters";
-import { userFormFields } from "../config/forms/userForm";
+import { userFormFields, userFormDerive } from "../config/forms/userForm";
 import { useAuthStore } from "../stores/auth";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
