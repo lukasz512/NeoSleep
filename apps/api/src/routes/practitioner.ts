@@ -323,7 +323,7 @@ practitionerRouter.post(
     const slug = tenantSlugFromHost(req.hostname);
     const practitioner = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return ActivatePractitionerCommand(ctx, id, resolveFrontendOrigin(req));
+      return ActivatePractitionerCommand(ctx, id, resolveFrontendOrigin(req), req.body?.language);
     });
 
     if (!practitioner) { res.status(404).json({ error: "Practitioner not found" }); return; }

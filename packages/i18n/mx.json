@@ -3120,7 +3120,8 @@
   "app.clinical.email.noneOpen": "El paciente ya no tiene nada pendiente de llenar o firmar.",
   "app.clinical.email.validity": "El enlace es personal y funciona durante 7 días.",
   "app.clinical.email.spamHint": "Si el paciente no encuentra el correo, pídele que revise su carpeta de spam.",
-  "app.clinical.email.copyToMe": "Enviarme una confirmación (sin enlaces)",
+  "app.clinical.email.copyToMe": "Enviarme una copia",
+  "app.clinical.email.copyToMeHint": "Recibirás un correo breve con la fecha, el paciente y los documentos enviados. No incluye enlaces, así que nadie más podrá abrir los documentos del paciente desde tu bandeja.",
   "app.clinical.email.language": "Idioma del correo",
   "app.clinical.email.submit": "Enviar",
   "app.clinical.email.copyLink": "Copiar enlace",
@@ -3471,5 +3472,10 @@
   "app.deviceOrder.errors.scanFileEmpty": "Este archivo está vacío.",
   "app.deviceOrder.errors.scanFileType": "Solo se pueden subir archivos {types}.",
   "app.deviceOrder.errors.scanFileTooLarge": "Este archivo pesa más de {maxMb} MB.",
-  "app.deviceOrder.errors.scanUploadFailed": "No se pudo subir. Quite el archivo e inténtelo de nuevo."
+  "app.deviceOrder.errors.scanUploadFailed": "No se pudo subir. Quite el archivo e inténtelo de nuevo.",
+  "app.clinical.email.copyToMeInfoLabel": "¿Qué es la copia del correo?",
+  "app.clinical.email.languageFlagLabel": "Idioma del correo: {language}. Clic para cambiar.",
+  "user.hcp.detail.inviteDialog.title": "Enviar invitación",
+  "user.hcp.detail.inviteDialog.body": "La invitación sale en el idioma del médico. Cámbialo solo si el médico lee en otro.",
+  "user.hcp.detail.inviteDialog.send": "Enviar invitación"
 }

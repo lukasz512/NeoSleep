@@ -21,7 +21,7 @@ import { insertAuditLog } from "../db.js";
 import { ValidationError, ConflictError } from "../errors.js";
 import { assertTerritoryWriteAccess } from "../middleware/requireScope.js";
 import { ConvertLeadCommand } from "./lead.js";
-import { localeForCountry, SUPPORTED_LANGUAGES } from "../utils/patientEmailLocale.js";
+import { resolveSendLanguage, SUPPORTED_LANGUAGES } from "../utils/patientEmailLocale.js";
 import { sendPartnerInviteEmail } from "../mailer.js";
 import { DEFAULT_FRONTEND_ORIGIN } from "../utils/frontendOrigin.js";
 import { hashToken } from "../utils/hashToken.js";
@@ -274,7 +274,9 @@ export async function ActivatePractitionerCommand(
   /** Resolved by the route from the request (utils/frontendOrigin.ts) — never the raw,
    * possibly comma-separated FRONTEND_URL, which produced links like
    * "https://pwa…,https://pwa-dev…/partner-register" that Gmail flags as invalid. */
-  frontendOrigin: string = DEFAULT_FRONTEND_ORIGIN
+  frontendOrigin: string = DEFAULT_FRONTEND_ORIGIN,
+  /** NEO-272: the sender's one-off choice of invite language; absent = the doctor's own language. */
+  language?: unknown
 ): Promise<Practitioner | null> {
   if (!id?.trim()) throw new ValidationError("practitioner id is required");
 
@@ -295,6 +297,8 @@ export async function ActivatePractitionerCommand(
     );
   }
   await resolvePartnerDocumentSet(ctx.client, jurisdiction);
+  // Validated before any token or login is created, so a bad value sends nothing.
+  const mailLanguage = resolveSendLanguage(language, practitioner.language, jurisdiction);
 
   // Only provision a login when this identity has no users account yet —
   // a resend (status already "invited") reuses the account created on the
@@ -364,8 +368,8 @@ export async function ActivatePractitionerCommand(
         title: practitioner.salutation,
         firstName: practitioner.first_name,
         lastName: practitioner.last_name,
-        language: localeForCountry(jurisdiction),
-        region: jurisdiction,
+        language: mailLanguage.language,
+        region: mailLanguage.region ?? jurisdiction,
       },
       { name: ctx.user.name ?? "NeoSleep", email: ctx.user.email }
     );

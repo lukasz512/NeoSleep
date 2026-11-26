@@ -3120,7 +3120,8 @@
   "app.clinical.email.noneOpen": "Pacjent nie ma już nic do wypełnienia ani podpisania.",
   "app.clinical.email.validity": "Link jest osobisty i działa przez 7 dni.",
   "app.clinical.email.spamHint": "Jeśli pacjent nie widzi maila, poproś, by sprawdził folder SPAM.",
-  "app.clinical.email.copyToMe": "Wyślij mi potwierdzenie (bez linków)",
+  "app.clinical.email.copyToMe": "Wyślij mi kopię",
+  "app.clinical.email.copyToMeHint": "Dostaniesz krótki e-mail z datą, pacjentem i wysłanymi dokumentami. Nie zawiera on linków, więc nikt inny nie otworzy dokumentów pacjenta z Twojej skrzynki.",
   "app.clinical.email.language": "Język wiadomości",
   "app.clinical.email.submit": "Wyślij",
   "app.clinical.email.copyLink": "Kopiuj link",
@@ -3471,5 +3472,10 @@
   "app.deviceOrder.errors.scanFileEmpty": "Ten plik jest pusty.",
   "app.deviceOrder.errors.scanFileType": "Można przesłać tylko pliki {types}.",
   "app.deviceOrder.errors.scanFileTooLarge": "Ten plik jest większy niż {maxMb} MB.",
-  "app.deviceOrder.errors.scanUploadFailed": "Przesyłanie nie powiodło się. Usuń plik i spróbuj ponownie."
+  "app.deviceOrder.errors.scanUploadFailed": "Przesyłanie nie powiodło się. Usuń plik i spróbuj ponownie.",
+  "app.clinical.email.copyToMeInfoLabel": "Czym jest kopia e-maila?",
+  "app.clinical.email.languageFlagLabel": "Język wiadomości: {language}. Kliknij, aby zmienić.",
+  "user.hcp.detail.inviteDialog.title": "Wyślij zaproszenie",
+  "user.hcp.detail.inviteDialog.body": "Zaproszenie wyjdzie w języku lekarza. Zmień go tylko, jeśli lekarz czyta w innym.",
+  "user.hcp.detail.inviteDialog.send": "Wyślij zaproszenie"
 }

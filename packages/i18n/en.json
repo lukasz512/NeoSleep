@@ -3120,7 +3120,8 @@
   "app.clinical.email.noneOpen": "The patient has nothing left to fill in or sign.",
   "app.clinical.email.validity": "The link is personal and works for 7 days.",
   "app.clinical.email.spamHint": "If the patient can't find the email, ask them to check their spam folder.",
-  "app.clinical.email.copyToMe": "Send me a confirmation (no links)",
+  "app.clinical.email.copyToMe": "Email me a copy",
+  "app.clinical.email.copyToMeHint": "You get a short email with the date, the patient and the documents you sent. It has no links, so nobody else can open the patient's documents from your inbox.",
   "app.clinical.email.language": "Email language",
   "app.clinical.email.submit": "Send",
   "app.clinical.email.copyLink": "Copy link",
@@ -3471,5 +3472,10 @@
   "app.deviceOrder.errors.scanFileEmpty": "This file is empty.",
   "app.deviceOrder.errors.scanFileType": "Only {types} files can be uploaded.",
   "app.deviceOrder.errors.scanFileTooLarge": "This file is larger than {maxMb} MB.",
-  "app.deviceOrder.errors.scanUploadFailed": "Upload failed. Remove the file and try again."
+  "app.deviceOrder.errors.scanUploadFailed": "Upload failed. Remove the file and try again.",
+  "app.clinical.email.copyToMeInfoLabel": "What is the email copy?",
+  "app.clinical.email.languageFlagLabel": "Email language: {language}. Click to change.",
+  "user.hcp.detail.inviteDialog.title": "Send invite",
+  "user.hcp.detail.inviteDialog.body": "The invite goes out in the doctor's own language. Change it only if the doctor reads another.",
+  "user.hcp.detail.inviteDialog.send": "Send invite"
 }

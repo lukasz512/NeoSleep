@@ -6,6 +6,12 @@
     @update:model-value="emit('update:modelValue', $event)"
     @close="emit('update:modelValue', false)"
   >
+    <template #header-extra>
+      <div class="send-email__header-slot" data-testid="send-email-header-slot">
+        <EmailLanguageSelect v-if="recipient && items.length" v-model="mailLanguage" />
+      </div>
+    </template>
+
     <form id="send-email-form" class="send-email" novalidate @submit.prevent="onSubmit">
       <p class="send-email__to" data-testid="send-email-to">
         <span class="send-email__label">{{ t("app.clinical.email.to") }}</span>
@@ -30,19 +36,24 @@
         <p class="send-email__muted">{{ t("app.clinical.email.validity") }}</p>
       </fieldset>
 
-      <EmailLanguageSelect v-if="recipient && items.length" v-model="mailLanguage" />
-
-      <VCheckbox
-        v-if="recipient && items.length"
-        v-model="copyToMe"
-        :label="t('app.clinical.email.copyToMe')"
-        color="primary"
-        density="compact"
-        hide-details
-      />
-      <p v-if="recipient" class="send-email__hint">
-        <AppIcon name="info-circle" class="send-email__hint-icon" />{{ t("app.clinical.email.spamHint") }}
-      </p>
+      <div v-if="recipient && items.length" class="send-email__copy">
+        <VCheckbox v-model="copyToMe" :label="t('app.clinical.email.copyToMe')" color="primary" density="compact" hide-details />
+        <VTooltip location="top" max-width="280" open-on-click :eager="false">
+          <template #activator="{ props: tipProps }">
+            <button
+              v-bind="tipProps"
+              type="button"
+              class="send-email__info"
+              data-testid="send-email-copy-info"
+              :aria-label="t('app.clinical.email.copyToMeInfoLabel')"
+            >
+              <AppIcon name="info-circle" class="send-email__info-icon" />
+            </button>
+          </template>
+          {{ t("app.clinical.email.copyToMeHint") }}
+        </VTooltip>
+      </div>
+      <AppInlineAlert v-if="recipient" type="info" data-testid="send-email-spam-alert" :text="t('app.clinical.email.spamHint')" />
 
       <section class="send-email__history" :aria-label="t('app.clinical.email.history')">
         <h3 class="send-email__label">{{ t("app.clinical.email.history") }}</h3>
@@ -197,19 +208,37 @@ async function copyLink() {
   font-size: 0.8125rem;
   color: rgba(var(--v-theme-on-surface), 0.6);
 }
-.send-email__hint {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  margin: 0;
-  font-size: 0.8125rem;
-  color: rgba(var(--v-theme-on-surface), 0.7);
+.send-email__header-slot {
+  padding: 4px 24px 0;
 }
-.send-email__hint-icon {
-  flex: none;
-  width: 16px;
-  height: 16px;
-  margin-top: 2px;
+.send-email__header-slot:empty {
+  display: none;
+}
+.send-email__copy {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.send-email__info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 0;
+  background: transparent;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  cursor: pointer;
+}
+.send-email__info:hover,
+.send-email__info:focus-visible {
+  color: rgb(var(--v-theme-primary));
+  background: rgba(var(--v-theme-primary), 0.08);
+}
+.send-email__info-icon {
+  width: 18px;
+  height: 18px;
 }
 .send-email__history {
   border-top: 1px solid rgba(var(--v-theme-on-surface), 0.12);
