@@ -90,7 +90,8 @@ for (const [label, width, height] of [
 
 test("the form still scrolls after the Edit details dialog was opened and closed", async ({ page }) => {
   await openRegistration(page, 1280, 720);
-  await page.getByRole("button", { name: /edit details/i }).click();
+  // NEO-270: person and clinic cards each have an edit button, so target the clinic one.
+  await page.getByTestId("edit-clinic").click();
   await expect(page.locator(".v-dialog .v-card")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.locator(".v-dialog .v-card")).toBeHidden();
