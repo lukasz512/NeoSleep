@@ -1,3 +1,4 @@
+import "./boot/polyfills";
 import { computed, createApp } from "vue";
 import { createGtag } from "vue-gtag";
 import { createPinia } from "pinia";
