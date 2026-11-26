@@ -1,0 +1,669 @@
+import { Router, type Request, type Response } from "express";
+import crypto from "node:crypto";
+import bcrypt from "bcrypt";
+import rateLimit from "express-rate-limit";
+import { asyncHandler } from "./middleware/errorHandler.js";
+import { requireAuth } from "./middleware/requireAuth.js";
+import {
+  withTenant,
+  tenantSlugFromHost,
+  resolveGoogleSignInUser,
+  getStaffUserByEmail,
+  setUserPassword,
+  createPasswordResetToken,
+  getPasswordResetUserIdByHash,
+  deletePasswordResetTokenByHash,
+  getUserIdByEmail,
+  getUserById,
+  getUsersWithoutPassword,
+  incrementUserTokenVersion,
+  insertRememberMeToken,
+  getRememberMeTokenByHash,
+  rotateRememberMeToken,
+  revokeRememberMeToken,
+  revokeAllRememberMeTokensForUser,
+} from "./db.js";
+import { sendPasswordResetEmail } from "./mailer.js";
+import { hashToken } from "./utils/hashToken.js";
+import { DEFAULT_FRONTEND_ORIGIN, resolveFrontendOrigin } from "./utils/frontendOrigin.js";
+import { FRONTEND_URLS } from "./env.js";
+import { signAuthToken, refreshTokenExpiryDate } from "./utils/jwt.js";
+import { signOAuthState, verifyOAuthState, signExchangeCode, verifyExchangeCode } from "./utils/oauthTokens.js";
+
+const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+const GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
+
+const clientId = process.env.GOOGLE_CLIENT_ID ?? "";
+const clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? "";
+/** OAuth redirect_uri: use frontend when proxied (dev) so cookie is set for frontend origin. */
+const oauthRedirectOrigin = process.env.OAUTH_REDIRECT_ORIGIN ?? DEFAULT_FRONTEND_ORIGIN;
+
+/** Initial password set for any seeded staff account with no password yet (user must change on first login). */
+const INITIAL_USER_PASSWORD = process.env.INITIAL_USER_PASSWORD ?? "ChangeMe1!";
+
+const PASSWORD_RESET_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+const BCRYPT_ROUNDS = 10;
+
+export const authRouter: import('express').Router = Router();
+
+/** Rate limit: 10 login attempts per 15 minutes per IP. */
+/** Overridable only for the PWA's Playwright E2E suite (playwright.config.ts sets
+ *  LOGIN_RATE_LIMIT_MAX on its API webServer) — a realistic multi-browser run makes
+ *  10+ real login calls in minutes, which is normal E2E traffic, not the credential-
+ *  stuffing pattern this limiter exists to catch. Unset anywhere else, so production
+ *  and every other environment keep the real limit of 10. */
+const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: Number(process.env.LOGIN_RATE_LIMIT_MAX) || 10,
+  message: { error: "Too many login attempts. Try again in 15 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+/**
+ * Mints a fresh refresh token, hashes it, and stores it — the raw value is
+ * returned once and never persisted (only its sha256 hash lives in the DB,
+ * same convention as password_reset_tokens). Must be called with the
+ * tenant-scoped client from an open withTenant() transaction (ADR-020).
+ */
+async function issueRefreshToken(
+  client: Parameters<typeof insertRememberMeToken>[0],
+  userId: string,
+  rememberMe: boolean,
+  req: Request
+): Promise<string> {
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  await insertRememberMeToken(client, {
+    userId,
+    tokenHash: hashToken(rawToken),
+    expiresAt: refreshTokenExpiryDate(rememberMe),
+    userAgent: req.headers["user-agent"],
+    ipAddress: req.ip,
+  });
+  return rawToken;
+}
+
+/**
+ * Set an initial password for any seeded staff account that was never given one
+ * (seed migrations insert rows with password_hash NULL — no code path sets it
+ * otherwise). Safe on every startup: only touches accounts with no password yet,
+ * so it never overwrites a real one once the user has changed it.
+ */
+export async function ensureInitialUserPasswords(slug: string): Promise<void> {
+  await withTenant(slug, async (client) => {
+    const pending = await getUsersWithoutPassword(client);
+    for (const user of pending) {
+      const hash = await bcrypt.hash(INITIAL_USER_PASSWORD, BCRYPT_ROUNDS);
+      await setUserPassword(client, user.id, hash, true);
+      console.log(`[auth] Set initial password for ${user.email} in ${slug} (change required on first login).`);
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// POST /auth/login (email + password, optional remember me)
+// ---------------------------------------------------------------------------
+
+authRouter.post(
+  "/auth/login",
+  loginRateLimiter,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { email, password, remember_me } = req.body as {
+      email?: string;
+      password?: string;
+      remember_me?: boolean;
+    };
+    const emailStr = typeof email === "string" ? email.trim().toLowerCase() : "";
+    const passwordStr = typeof password === "string" ? password : "";
+    if (!emailStr || !passwordStr) {
+      // `field`/`reason` let the sign-in form mark the empty field (NEO-109).
+      res.status(400).json({
+        error: "Email and password are required.",
+        code: "VALIDATION_ERROR",
+        field: emailStr ? "password" : "email",
+        reason: "required",
+      });
+      return;
+    }
+    if (passwordStr.length < 8) {
+      res.status(400).json({ error: "Invalid email or password." });
+      return;
+    }
+    const slug = tenantSlugFromHost(req.hostname);
+    // Runs entirely inside one withTenant() transaction — issuing the refresh token
+    // needs the same tenant-scoped client that verified the password, and per the
+    // change-password handler's own note below, responding only after COMMIT avoids
+    // racing the client's next request against our own transaction.
+    const result = await withTenant(slug, async (client) => {
+      const staff = await getStaffUserByEmail(client, emailStr);
+      if (!staff?.password_hash) {
+        return { status: 401, body: { error: "Invalid email or password." } } as const;
+      }
+      const match = await bcrypt.compare(passwordStr, staff.password_hash);
+      if (!match) {
+        return { status: 401, body: { error: "Invalid email or password." } } as const;
+      }
+      // An 'inactive' account (deactivated, or an invited doctor who hasn't
+      // completed registration yet) must not sign in — same generic message,
+      // so this can't be used to probe which emails were invited.
+      if (staff.status !== "active") {
+        return { status: 401, body: { error: "Invalid email or password." } } as const;
+      }
+      const token = signAuthToken(staff);
+      const refreshToken = await issueRefreshToken(client, staff.id, remember_me === true, req);
+      return {
+        status: 200,
+        body: {
+          token,
+          refresh_token: refreshToken,
+          user: {
+            id: staff.id,
+            // CORE-45: the PWA keys per-user device settings (filters, offline cache) by tenant + user.
+            tenant: slug,
+            email: staff.email,
+            name: staff.name ?? undefined,
+            role: staff.role,
+            country_code: staff.country_code ?? undefined,
+            region: staff.region ?? undefined,
+            language: staff.language ?? undefined,
+            forcePasswordChange: staff.force_password_change,
+            hasPassword: staff.has_password,
+          },
+          forcePasswordChange: staff.force_password_change,
+        },
+      } as const;
+    });
+    res.status(result.status).json(result.body);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /auth/session — echoes the bearer token's claims back as { user }.
+// Intentionally does NOT re-check token_version against the DB (that's
+// buildContext's job, see TenantContext.ts) — requireAuth already validated
+// signature+expiry, which is all this endpoint needs.
+// ---------------------------------------------------------------------------
+
+authRouter.get(
+  "/auth/session",
+  requireAuth,
+  (req: Request, res: Response) => {
+    const user = req.user!;
+    res.json({
+      user: {
+        id: user.sub,
+        tenant: tenantSlugFromHost(req.hostname),
+        email: user.email,
+        name: user.name,
+        picture: user.picture,
+        role: user.role,
+        country_code: user.country_code,
+        region: user.region,
+        language: user.language,
+        forcePasswordChange: user.forcePasswordChange ?? false,
+        hasPassword: user.hasPassword ?? false,
+      },
+    });
+  }
+);
+
+// ---------------------------------------------------------------------------
+// POST /auth/refresh — exchange a refresh token for a new access token,
+// rotating the refresh token in the same call (ADR-020). No cookies: the
+// refresh token travels in the request body, same as everything else in
+// this router — see auth-token.spec.ts for why cookies are off the table.
+//
+// A refresh token that's already revoked (either logged-out, or already
+// rotated away by an earlier /auth/refresh call) is treated as a theft
+// signal, not a routine error: every token for that user is revoked, forcing
+// a real re-login on every device. Exception: within ROTATION_RACE_GRACE_MS of
+// the rotation, a re-presented token is a race (two tabs of one browser, or a
+// phone that lost the response), so only that one request fails.
+// ---------------------------------------------------------------------------
+
+/** How long after a rotation a re-presented old token counts as a race, not theft. */
+const ROTATION_RACE_GRACE_MS = 60_000;
+
+authRouter.post("/auth/refresh", asyncHandler(async (req: Request, res: Response) => {
+  const { refresh_token } = req.body as { refresh_token?: string };
+  const refreshStr = typeof refresh_token === "string" ? refresh_token : "";
+  if (!refreshStr) {
+    res.status(401).json({ error: "Refresh token is required." });
+    return;
+  }
+  const tokenHash = hashToken(refreshStr);
+  const slug = tenantSlugFromHost(req.hostname);
+  const result = await withTenant(slug, async (client) => {
+    const row = await getRememberMeTokenByHash(client, tokenHash);
+    if (!row) {
+      return { status: 401, body: { error: "Invalid refresh token." } } as const;
+    }
+    if (row.revoked_at) {
+      // Two different reasons a token can be revoked, and only one is theft:
+      // replaced_by_id set means it was ROTATED away — a legitimate client never
+      // re-presents that, so seeing it again means it was copied. replaced_by_id
+      // NULL means a plain dead end (logout, or an earlier theft response) — just
+      // a dead token, not a new signal, and must NOT cascade into revoking this
+      // user's other, still-legitimate sessions.
+      if (row.replaced_by_id) {
+        if (Date.now() - row.revoked_at.getTime() < ROTATION_RACE_GRACE_MS) {
+          return { status: 401, body: { error: "This session was refreshed elsewhere." } } as const;
+        }
+        await revokeAllRememberMeTokensForUser(client, row.user_id);
+        return { status: 401, body: { error: "This session is no longer valid. Please log in again." } } as const;
+      }
+      return { status: 401, body: { error: "Session has been logged out." } } as const;
+    }
+    if (row.expires_at.getTime() < Date.now()) {
+      return { status: 401, body: { error: "Session expired. Please log in again." } } as const;
+    }
+    const user = await getUserById(client, row.user_id);
+    if (!user) {
+      return { status: 401, body: { error: "Account no longer exists." } } as const;
+    }
+    const token = signAuthToken(user);
+    const rawRefresh = crypto.randomBytes(32).toString("hex");
+    // Preserves the original remember-me/default window across rotations
+    // instead of resetting it — a 30-day "remember me" session should still
+    // be ~30 days from now after its 10th silent refresh, not reset to 7.
+    const originalWindowMs = row.expires_at.getTime() - row.created_at.getTime();
+    const newExpiresAt = new Date(Date.now() + originalWindowMs);
+    await rotateRememberMeToken(client, row.id, {
+      userId: user.id,
+      tokenHash: hashToken(rawRefresh),
+      expiresAt: newExpiresAt,
+      userAgent: req.headers["user-agent"],
+      ipAddress: req.ip,
+    });
+    return { status: 200, body: { token, refresh_token: rawRefresh } } as const;
+  });
+  res.status(result.status).json(result.body);
+}));
+
+// ---------------------------------------------------------------------------
+// POST /auth/logout — revokes only the one refresh token presented, i.e.
+// only the current device/session. Other devices for the same user are
+// untouched (contrast with change-password below, which revokes all of
+// them) — see ADR-020. requireAuth still guards this (an access token is
+// needed to reach it), but a token that's already expired can't stop the
+// frontend from dropping its local tokens regardless.
+// ---------------------------------------------------------------------------
+
+authRouter.post("/auth/logout", requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  const { refresh_token } = req.body as { refresh_token?: string };
+  if (typeof refresh_token === "string" && refresh_token) {
+    const tokenHash = hashToken(refresh_token);
+    const slug = tenantSlugFromHost(req.hostname);
+    await withTenant(slug, async (client) => {
+      const row = await getRememberMeTokenByHash(client, tokenHash);
+      if (row && !row.revoked_at) {
+        await revokeRememberMeToken(client, row.id);
+      }
+    });
+  }
+  res.status(204).end();
+}));
+
+// ---------------------------------------------------------------------------
+// POST /auth/change-password (authenticated; current + new password)
+// ---------------------------------------------------------------------------
+
+authRouter.post("/auth/change-password", requireAuth, asyncHandler(async (req: Request, res: Response) => {
+  const { current_password, new_password } = req.body as {
+    current_password?: string;
+    new_password?: string;
+  };
+  const newStr = typeof new_password === "string" ? new_password : "";
+  if (newStr.length < 8) {
+    res.status(400).json({
+      error: "New password must be at least 8 characters.",
+      code: "VALIDATION_ERROR",
+      field: "new_password",
+      reason: "invalid",
+    });
+    return;
+  }
+  const slug = tenantSlugFromHost(req.hostname);
+  const sessionUser = req.user!;
+  // withTenant returns a {status, body} pair instead of calling res.json() itself —
+  // it commits the transaction *after* the callback returns, so responding from inside
+  // it would race the client's next request against our own COMMIT.
+  const result = await withTenant(slug, async (client) => {
+    const staff = await getStaffUserByEmail(client, sessionUser.email);
+    if (!staff?.password_hash) {
+      return { status: 400, body: { error: "Password login not set for this account." } } as const;
+    }
+    const currentStr = typeof current_password === "string" ? current_password : "";
+    const match = await bcrypt.compare(currentStr, staff.password_hash);
+    if (!match) {
+      return { status: 401, body: { error: "Current password is incorrect." } } as const;
+    }
+    const hash = await bcrypt.hash(newStr, BCRYPT_ROUNDS);
+    await setUserPassword(client, staff.id, hash);
+    // Invalidates every outstanding access token for this user, INCLUDING the one used to
+    // make this very request (token_version-based, unchanged). Refresh tokens aren't
+    // covered by token_version — revoke them explicitly too, so every device is fully
+    // signed out, not just left able to silently refresh back in (ADR-020).
+    await incrementUserTokenVersion(client, staff.id);
+    await revokeAllRememberMeTokensForUser(client, staff.id);
+    return { status: 200, body: { success: true } } as const;
+  });
+  res.status(result.status).json(result.body);
+}));
+
+// ---------------------------------------------------------------------------
+// POST /auth/forgot-password (email → create token, send email placeholder)
+// ---------------------------------------------------------------------------
+
+authRouter.post("/auth/forgot-password", asyncHandler(async (req: Request, res: Response) => {
+  const { email } = req.body as { email?: string };
+  const emailStr = typeof email === "string" ? email.trim().toLowerCase() : "";
+  if (!emailStr) {
+    res.status(400).json({ error: "Email is required.", code: "VALIDATION_ERROR", field: "email", reason: "required" });
+    return;
+  }
+  const slug = tenantSlugFromHost(req.hostname);
+  // Respond only after withTenant's COMMIT — see the change-password handler above for why.
+  const result = await withTenant(slug, async (client) => {
+    const genericBody = { message: "If an account exists, you will receive an email." } as const;
+    const userId = await getUserIdByEmail(client, emailStr);
+    if (!userId) {
+      return genericBody;
+    }
+    const staff = await getStaffUserByEmail(client, emailStr);
+    if (!staff?.password_hash) {
+      return genericBody;
+    }
+    const token = crypto.randomBytes(32).toString("hex");
+    const tokenHash = hashToken(token);
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_EXPIRY_MS);
+    await createPasswordResetToken(client, userId, tokenHash, expiresAt);
+    // Origin is reliable here — a direct fetch from the frontend that's handling this
+    // request, not a redirect landing from elsewhere (contrast with the OAuth callback).
+    const resetLink = `${resolveFrontendOrigin(req)}/reset-password?token=${encodeURIComponent(token)}`;
+    // Always attempt to send — mailer.ts itself no-ops (with a console warning) if Resend
+    // isn't configured, so this is safe locally too. The console log + devResetLink below
+    // stay regardless, so local dev works without needing real Resend creds set up.
+    sendPasswordResetEmail(emailStr, resetLink, {
+      title: staff.salutation,
+      firstName: staff.first_name,
+      lastName: staff.last_name,
+      language: staff.language,
+      region: staff.region ?? staff.country_code,
+    }).catch((err) => {
+      console.error("[auth] Failed to send password reset email:", err);
+    });
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[auth] Password reset link for", emailStr, ":", resetLink);
+    }
+    return {
+      ...genericBody,
+      devResetLink: process.env.NODE_ENV !== "production" ? resetLink : undefined,
+    };
+  });
+  res.status(200).json(result);
+}));
+
+// ---------------------------------------------------------------------------
+// GET /auth/reset-password/validate?token= (check if token valid)
+// ---------------------------------------------------------------------------
+
+authRouter.get("/auth/reset-password/validate", asyncHandler(async (req: Request, res: Response) => {
+  const token = typeof req.query.token === "string" ? req.query.token : "";
+  if (!token) {
+    res.status(400).json({ valid: false, error: "Token is required." });
+    return;
+  }
+  const tokenHash = hashToken(token);
+  const slug = tenantSlugFromHost(req.hostname);
+  const userId = await withTenant(slug, (client) => getPasswordResetUserIdByHash(client, tokenHash));
+  res.status(200).json({ valid: !!userId });
+}));
+
+// ---------------------------------------------------------------------------
+// POST /auth/reset-password (token + new_password; single use)
+// ---------------------------------------------------------------------------
+
+authRouter.post("/auth/reset-password", asyncHandler(async (req: Request, res: Response) => {
+  const { token, new_password } = req.body as { token?: string; new_password?: string };
+  const tokenStr = typeof token === "string" ? token : "";
+  const newStr = typeof new_password === "string" ? new_password : "";
+  if (!tokenStr) {
+    // The token comes from the emailed link, not a form field — so no `field`.
+    res.status(400).json({ error: "Reset token is required.", code: "VALIDATION_ERROR", reason: "required" });
+    return;
+  }
+  if (newStr.length < 8) {
+    res.status(400).json({
+      error: "New password must be at least 8 characters.",
+      code: "VALIDATION_ERROR",
+      field: "new_password",
+      reason: "invalid",
+    });
+    return;
+  }
+  const tokenHash = hashToken(tokenStr);
+  const slug = tenantSlugFromHost(req.hostname);
+  // Respond only after withTenant's COMMIT — see the change-password handler above for why.
+  const result = await withTenant(slug, async (client) => {
+    const userId = await getPasswordResetUserIdByHash(client, tokenHash);
+    if (!userId) {
+      return { status: 400, body: { error: "Invalid or expired reset link. Request a new one." } } as const;
+    }
+    const hash = await bcrypt.hash(newStr, BCRYPT_ROUNDS);
+    await setUserPassword(client, userId, hash);
+    await deletePasswordResetTokenByHash(client, tokenHash);
+    await incrementUserTokenVersion(client, userId);
+    await revokeAllRememberMeTokensForUser(client, userId);
+    return { status: 200, body: { success: true } } as const;
+  });
+  res.status(result.status).json(result.body);
+}));
+
+// ---------------------------------------------------------------------------
+// Google OAuth: an alternative sign-in for EXISTING accounts only (NEO-78).
+// The rep app shows a "Sign in with Google" button when GET /auth/providers
+// says Google is configured. A Google identity is matched to an existing
+// active user (by linked google_sub, else by Google-verified email); an
+// unknown email is refused, never auto-provisioned: accounts are created only
+// by an admin. Refusals come back as /login?error=<GoogleSignInError> so the
+// login screen can show a localized message.
+//
+// No server-side session exists to stash anything in across the redirect to
+// Google and back — the CSRF `state` and the post-callback hand-off are both
+// self-contained signed JWTs (utils/oauthTokens.ts) instead. See that file's
+// doc comments for why: `state` carries the frontendOrigin claim (Origin is
+// only reliable at the point /auth/google is hit, not on the callback, which
+// is reached via Google's own redirect); the callback never puts the real
+// (7/30-day) auth token in a redirect URL — it mints a narrow, 60-second,
+// single-claim exchange code instead, and the frontend immediately exchanges
+// that for a real token via POST /auth/google/exchange.
+// ---------------------------------------------------------------------------
+
+/** Error codes the callback puts in /login?error=... . Mirrored by the login screen
+ *  (packages/ui GOOGLE_SIGN_IN_ERROR_KEYS), which maps each to an i18n message. */
+export const GOOGLE_SIGN_IN_ERRORS = {
+  /** No active admin-created account matches this Google identity. */
+  noAccount: "google_no_account",
+  /** The matching account exists but is not active. */
+  inactive: "google_account_inactive",
+} as const;
+
+const googleLoginConfigured = (): boolean => Boolean(clientId && clientSecret);
+
+/**
+ * GET /auth/providers: public, tells the login screen which alternative sign-in
+ * methods this environment supports, so the "Sign in with Google" button is only
+ * rendered where the flow can actually complete. Deliberately separate from
+ * /config/app (per-tenant branding stored in the DB): this is per-deployment
+ * env configuration. Returns booleans only, never the client id itself.
+ */
+authRouter.get("/auth/providers", (_req: Request, res: Response) => {
+  res.json({ google: googleLoginConfigured() });
+});
+
+/** The frontend passes its own origin as ?origin= (a top-level navigation carries
+ *  no Origin header, so resolveFrontendOrigin() alone would always fall back to the
+ *  default). Honoured only when it's in the FRONTEND_URL allowlist, same set CORS
+ *  allows, so this can never become an open redirect. */
+function googleStartOrigin(req: Request): string {
+  const requested = typeof req.query.origin === "string" ? req.query.origin : "";
+  return requested && FRONTEND_URLS.includes(requested) ? requested : resolveFrontendOrigin(req);
+}
+
+authRouter.get("/auth/google", (req: Request, res: Response) => {
+  if (!googleLoginConfigured()) {
+    res.status(503).json({ error: "Google login not configured (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET)" });
+    return;
+  }
+  const state = signOAuthState(googleStartOrigin(req));
+  const redirectUri = `${oauthRedirectOrigin}/api/v1/auth/google/callback`;
+  // select_account (not consent): lets someone with several Google accounts pick
+  // the right one every time. No access_type=offline: the app never calls Google
+  // APIs on the user's behalf, it only needs the identity once.
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "openid email profile",
+    state,
+    prompt: "select_account",
+  });
+  res.redirect(`${GOOGLE_AUTH_URL}?${params.toString()}`);
+});
+
+authRouter.get("/auth/google/callback", asyncHandler(async (req: Request, res: Response) => {
+  const { code, state } = req.query as { code?: string; state?: string };
+  const frontendOrigin = (state ? verifyOAuthState(state) : null) ?? DEFAULT_FRONTEND_ORIGIN;
+
+  if (!code || !state || !verifyOAuthState(state)) {
+    res.redirect(`${frontendOrigin}/login?error=auth_failed`);
+    return;
+  }
+
+  if (!clientId || !clientSecret) {
+    res.redirect(`${frontendOrigin}/login?error=server_config`);
+    return;
+  }
+
+  const redirectUri = `${oauthRedirectOrigin}/api/v1/auth/google/callback`;
+  const body = new URLSearchParams({
+    code,
+    client_id: clientId,
+    client_secret: clientSecret,
+    redirect_uri: redirectUri,
+    grant_type: "authorization_code",
+  });
+
+  const tokenRes = await fetch(GOOGLE_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+
+  if (!tokenRes.ok) {
+    const errText = await tokenRes.text();
+    console.error("Google token error:", tokenRes.status, errText);
+    res.redirect(`${frontendOrigin}/login?error=token_exchange`);
+    return;
+  }
+
+  const tokens = (await tokenRes.json()) as { access_token?: string };
+  const accessToken = tokens.access_token;
+  if (!accessToken) {
+    res.redirect(`${frontendOrigin}/login?error=no_token`);
+    return;
+  }
+
+  const userRes = await fetch(GOOGLE_USERINFO_URL, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!userRes.ok) {
+    res.redirect(`${frontendOrigin}/login?error=userinfo`);
+    return;
+  }
+
+  const userInfo = (await userRes.json()) as {
+    sub?: string;
+    email?: string;
+    email_verified?: boolean;
+  };
+  if (!userInfo.sub) {
+    res.redirect(`${frontendOrigin}/login?error=userinfo`);
+    return;
+  }
+  const slug = tenantSlugFromHost(req.hostname);
+  const result = await withTenant(slug, (client) =>
+    resolveGoogleSignInUser(client, userInfo.sub!, userInfo.email ?? "", userInfo.email_verified === true)
+  );
+  if (result.kind === "no_account") {
+    res.redirect(`${frontendOrigin}/login?error=${GOOGLE_SIGN_IN_ERRORS.noAccount}`);
+    return;
+  }
+  if (result.kind === "inactive") {
+    res.redirect(`${frontendOrigin}/login?error=${GOOGLE_SIGN_IN_ERRORS.inactive}`);
+    return;
+  }
+
+  const exchangeCode = signExchangeCode(result.user.id);
+  res.redirect(`${frontendOrigin}/auth/callback?code=${encodeURIComponent(exchangeCode)}`);
+}));
+
+// ---------------------------------------------------------------------------
+// POST /auth/google/exchange — the frontend's /auth/callback view POSTs the
+// short-lived exchange code here and gets back a real auth token, same shape
+// as /auth/login's response. Re-fetches the user fresh from DB rather than
+// trusting anything carried across the redirect, so it naturally picks up
+// the current token_version.
+// ---------------------------------------------------------------------------
+
+authRouter.post("/auth/google/exchange", asyncHandler(async (req: Request, res: Response) => {
+  const { code } = req.body as { code?: string };
+  if (typeof code !== "string" || !code) {
+    res.status(400).json({ error: "Exchange code is required." });
+    return;
+  }
+  let userId: string;
+  try {
+    userId = verifyExchangeCode(code);
+  } catch {
+    res.status(401).json({ error: "Invalid or expired exchange code." });
+    return;
+  }
+  const slug = tenantSlugFromHost(req.hostname);
+  const result = await withTenant(slug, async (client) => {
+    const user = await getUserById(client, userId);
+    if (!user) {
+      return { status: 401, body: { error: "Account no longer exists." } } as const;
+    }
+    // The callback already refused inactive accounts; this covers one deactivated
+    // in the (at most 60 s) window between the callback and this exchange.
+    if (user.status !== "active") {
+      return { status: 401, body: { error: "Account is not active." } } as const;
+    }
+    const token = signAuthToken(user);
+    const refreshToken = await issueRefreshToken(client, user.id, false, req);
+    return {
+      status: 200,
+      body: {
+        token,
+        refresh_token: refreshToken,
+        user: {
+          id: user.id,
+          tenant: slug,
+          email: user.email,
+          name: user.name ?? undefined,
+          role: user.role,
+          country_code: user.country_code ?? undefined,
+          region: user.region ?? undefined,
+          language: user.language ?? undefined,
+          forcePasswordChange: false,
+          hasPassword: user.has_password,
+        },
+        forcePasswordChange: false,
+      },
+    } as const;
+  });
+  res.status(result.status).json(result.body);
+}));

@@ -1,0 +1,30 @@
+# Pings the Cloud Run APIs every 10 minutes and fails loudly if one is down,
+# so an outage shows up as a red run before someone opens the app (CORE-66).
+# Cold starts themselves are handled by MIN_INSTANCES in deploy-api.yml.
+# The URLs are public (same values as OAUTH_REDIRECT_ORIGIN in
+# infrastructure/cloud-run/<env>.env.yaml).
+
+name: Keep API warm (Cloud Run health ping)
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: prod
+            url: https://neosleep-api-prod-692668694184.us-west2.run.app
+          - target: dev
+            url: https://neosleep-api-dev-692668694184.us-west2.run.app
+    steps:
+      - name: Ping health endpoint
+        run: |
+          curl -sf --retry 2 --retry-delay 5 -o /dev/null \
+            -w "${{ matrix.target }}: HTTP %{http_code} in %{time_total}s\n" \
+            "${{ matrix.url }}/health"

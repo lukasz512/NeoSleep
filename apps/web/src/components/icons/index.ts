@@ -1,0 +1,10 @@
+export { default as IconBox } from "./IconBox.vue";
+export { default as IconHeartbeat } from "./IconHeartbeat.vue";
+export { default as IconClock } from "./IconClock.vue";
+export { default as IconPeople } from "./IconPeople.vue";
+export { default as IconChart } from "./IconChart.vue";
+export { default as IconGraduation } from "./IconGraduation.vue";
+export { default as IconHeart } from "./IconHeart.vue";
+export { default as IconMoon } from "./IconMoon.vue";
+export { default as IconShield } from "./IconShield.vue";
+export { default as IconSmile } from "./IconSmile.vue";

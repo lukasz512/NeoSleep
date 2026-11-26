@@ -1,0 +1,7 @@
+{
+  "timestamp": "2026-10-03T15:11:02.846+0000",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Required Integer parameter productId is not present",
+  "path": "/apneadock/api/products/manufacturingDate"
+}

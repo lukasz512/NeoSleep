@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<!--
+  Partner privacy notice (PL: art. 13/14 GDPR information notice;
+  MX: aviso de privacidad integral, LFPDPPP)
+  =====================================================================
+  NEO-51. Replaces templates/gdprConsent.pl.html / gdprConsent.mx.html for
+  partner onboarding: the doctor's own data is processed on a contract /
+  legitimate-interest basis, so this is an information notice the doctor
+  ACKNOWLEDGES reading — not a consent they sign (see
+  docs/stories/partner-onboarding-countersigned-documents.md, round 3).
+
+  Locale == jurisdiction ("pl" / "mx"), same as partnerAgreement.html. Body
+  prose is the admin-editable content slot. Per-instance fields:
+  doctor_name, acknowledged_at (data-field, filled by applyDocumentFields).
+-->
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>{{documents.partnerPrivacyNotice.title}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: {{brand:primary}};
+    --secondary: {{brand:secondary}};
+    --text: #1a1a1a;
+    --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  @page { size: A4; margin: 18mm 14mm 18mm; }
+  body { font-family: var(--font); font-weight: 300; color: var(--text); font-size: 9.5pt; line-height: 1.45; max-width: 800px; margin: 0 auto; padding: 28px 24px 20px; background: #fff; }
+  p { margin: 0 0 8px; text-align: justify; }
+  ol, ul { margin: 0 0 8px; padding-left: 20px; }
+  li { margin-bottom: 6px; text-align: justify; }
+  /* Acknowledgement uses the shared sign-off panel (docFields.css) — no drawn
+     signature, just who acknowledged and when, side by side. */
+  .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
+  .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
+  @media print { body { padding: 0; max-width: none; } .screen-only { display: none; } }
+  /* Same phone-width preview rule as partnerAgreement.html. */
+  @media screen and (max-width: 600px) {
+    body { padding: 20px 16px; }
+    p, li { text-align: left; }
+  }
+  {{style:docFields}}
+  {{style:docTheme}}
+</style>
+</head>
+<body>
+
+  <header class="doc-header">
+    <span class="logo">{{brand:logo}}</span>
+    <span class="doc-cat">{{documents.common.category.privacy}}</span>
+  </header>
+
+  <div class="doc-title">
+    <h1>{{documents.partnerPrivacyNotice.title}}</h1>
+    <h2>{{documents.partnerPrivacyNotice.subtitle}}</h2>
+  </div>
+
+  <div class="doc-content">{{content}}</div>
+
+  <div class="ack sig-panels">
+    <div class="sig-panel">
+      <div class="sig-main">
+        <div class="sig-label">{{documents.partnerPrivacyNotice.ackLabel}}</div>
+        <dl class="sig-details">
+          <div><dt>{{documents.signature.name}}</dt><dd data-field="doctor_name"></dd></div>
+          <div><dt>{{documents.signature.date}}</dt><dd data-field="acknowledged_at"></dd></div>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <div class="contact-footer screen-only">
+    <div>{{brand:contactLine}}</div>
+    <div class="doc-ref" data-field="doc_ref">{{doc:ref}}</div>
+  </div>
+
+</body>
+</html>

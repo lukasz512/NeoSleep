@@ -1,0 +1,208 @@
+import type { TenantContext } from "../context/TenantContext.js";
+import {
+  getPatientsPaginated,
+  getPatientById,
+  getTerritoryPath,
+  type GetPatientsFilters,
+  type Patient,
+  type TerritoryPathNode,
+} from "../db.js";
+import { withPlatform } from "../db/tenant.js";
+import { listPatientChecklistConfig, type ChecklistFillMode } from "../db/documentTemplateEntityType.js";
+import { getPatientFormStatus, POLYSOMNOGRAPHY_FORM_KEY, type FormCompletionItem } from "../db/patientFormCompletion.js";
+import { DOCUMENT_MANIFEST } from "@neo/documents";
+import { getLatestDeviceOrderByPatient, type PatientDeviceOrder } from "../db/treatmentPlan.js";
+import { getViewer, patientListScope, assertCanSeePatient } from "./entityAccess.js";
+
+/**
+ * QUERIES — Patient domain.
+ *
+ * Read-only. No writes, no events, no audit log.
+ */
+
+// ---------------------------------------------------------------------------
+// SERIALIZATION
+// ---------------------------------------------------------------------------
+
+export interface PatientDto {
+  id: string;
+  name: string;
+  salutation: string | null;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+  /** male | female | other | prefer_not_to_say | null — the list shows F/M + age (NEO-57) */
+  gender: string | null;
+  /** YYYY-MM-DD or null */
+  date_of_birth: string | null;
+  practitioner_id: string | null;
+  practitioner_name: string | null;
+  /** Name parts for the PWA's short list name (first given name + first surname). */
+  practitioner_first_name: string | null;
+  practitioner_last_name: string | null;
+  /** Doctor's specialty lookup key, labelled via lookups on the client */
+  practitioner_specialty: string | null;
+  practitioner_specialties: string[];
+  diagnosis_code: Record<string, unknown> | null;
+  ahi_baseline: number | null;
+  /** NEO-231: entered once on the patient card; STOP-Bang takes it from here. */
+  height_cm: number | null;
+  cpap_device: string | null;
+  medical_record: string | null;
+  region: string;
+  territory_id: string | null;
+  territory_name: string | null;
+  /** Root-first breadcrumb ("mx"/"cdmx"/"polanco") — only populated on the
+   *  single-record GetPatientByIdQuery (one extra query, fine for a detail
+   *  view); the paginated list query omits it to avoid N+1. Null when
+   *  territory_id is unset or points at a deleted/unknown node — the
+   *  frontend falls back to the flat `region` text in that case. */
+  territory_path: TerritoryPathNode[] | null;
+  status: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** One entry per document template assigned to patients, in DOCUMENT_MANIFEST order (NEO-54). */
+export interface PatientIntakeFormStatus {
+  key: string;
+  done: boolean;
+  /** Which list column it belongs to (NEO-221): "study" = lab/device results (fill_mode external + polysomnography), like the patient's Estudios tab. */
+  category: "document" | "study";
+  /** The patient can still fill it through a QR link — the list's "Next step" (NEO-221). */
+  waiting_on_patient: boolean;
+}
+
+export type PatientListItemDto = PatientDto & {
+  intake_forms: PatientIntakeFormStatus[];
+  /** Latest device order (NEO-223) — once one is placed, the list's Next step follows it instead of the QR. */
+  device_order: PatientDeviceOrder | null;
+};
+
+function toDto(p: Patient & { name: string }, territoryPath: TerritoryPathNode[] | null = null): PatientDto {
+  return {
+    id:              p.id,
+    name:            p.name,
+    salutation:      p.salutation ?? null,
+    first_name:      p.first_name,
+    last_name:       p.last_name,
+    email:           p.email ?? null,
+    phone:           p.phone ?? null,
+    gender:          p.gender ?? null,
+    date_of_birth:   p.date_of_birth ?? null,
+    practitioner_id: p.practitioner_id ?? null,
+    practitioner_name: p.practitioner_name ?? null,
+    practitioner_first_name: p.practitioner_first_name ?? null,
+    practitioner_last_name: p.practitioner_last_name ?? null,
+    practitioner_specialty: p.practitioner_specialty ?? null,
+    practitioner_specialties: p.practitioner_specialties ?? [],
+    diagnosis_code:  p.diagnosis_code ?? null,
+    ahi_baseline:    p.ahi_baseline ?? null,
+    height_cm:       p.height_cm ?? null,
+    cpap_device:     p.cpap_device ?? null,
+    medical_record:  p.medical_record ?? null,
+    region:          p.region,
+    territory_id:    p.territory_id ?? null,
+    territory_name:  p.territory_name ?? null,
+    territory_path:  territoryPath && territoryPath.length > 0 ? territoryPath : null,
+    status:          p.status,
+    metadata:        p.metadata ?? null,
+    created_at:      p.created_at,
+    updated_at:      p.updated_at,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// QUERY: GET LIST
+// ---------------------------------------------------------------------------
+
+export interface GetPatientListInput {
+  search?: string;
+  status?: string;
+  region?: string;
+  practitioner_id?: string;
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+}
+
+export interface GetPatientListResult {
+  items: PatientListItemDto[];
+  total: number;
+}
+
+export async function GetPatientListQuery(
+  ctx: TenantContext,
+  input: GetPatientListInput
+): Promise<GetPatientListResult> {
+  const filters: GetPatientsFilters = {
+    search: input.search,
+    status: input.status,
+    region: input.region,
+    // CORE-104: a doctor's list is always their own, whatever practitioner_id was sent.
+    ...patientListScope(await getViewer(ctx), input.practitioner_id),
+  };
+
+  const page      = input.page ?? 1;
+  const limit     = input.limit ?? 50;
+  const sortBy    = input.sortBy ?? "created_at";
+  const sortOrder = input.sortOrder ?? "desc";
+
+  const { rows, total } = await getPatientsPaginated(ctx.client, filters, page, limit, sortBy, sortOrder);
+
+  const forms = await getPatientIntakeForms();
+  const ids = rows.map((row) => row.id);
+  const status = await getPatientFormStatus(ctx.client, ids, forms);
+  const deviceOrders = await getLatestDeviceOrderByPatient(ctx.client, ids);
+  const items = rows.map((row) => {
+    const s = status.get(row.id);
+    return {
+      ...toDto(row),
+      intake_forms: forms.map(({ key, fillMode }) => ({
+        key,
+        done: s?.done.has(key) ?? false,
+        category: fillMode === null || fillMode === "external" ? ("study" as const) : ("document" as const),
+        waiting_on_patient: s?.waitingOnPatient.has(key) ?? false,
+      })),
+      device_order: deviceOrders.get(row.id) ?? null,
+    };
+  });
+  return { items, total };
+}
+
+/**
+ * The patient's Estudios items, in the same order the Estudios checklist
+ * shows them (ADR-024): the templates an admin assigned to "patient"
+ * (Documents → Permissions), grouped consent → patient → doctor → results by
+ * their fill mode and ordered by the admin's position within a group, then
+ * polysomnography, which every patient always has. Hidden (test-fixture) and
+ * unknown keys are dropped.
+ */
+const FILL_MODE_ORDER: ChecklistFillMode[] = ["consent", "patient", "doctor", "external"];
+export async function getPatientIntakeForms(): Promise<FormCompletionItem[]> {
+  const config = await withPlatform((client) => listPatientChecklistConfig(client));
+  const known = new Set(DOCUMENT_MANIFEST.filter((entry) => !entry.hidden).map((entry) => entry.templateKey));
+  const templates = config
+    .filter((c) => known.has(c.template_key))
+    .map((c) => ({ key: c.template_key, fillMode: c.fill_mode ?? ("doctor" as const) }))
+    .sort((x, y) => FILL_MODE_ORDER.indexOf(x.fillMode) - FILL_MODE_ORDER.indexOf(y.fillMode));
+  return [...templates, { key: POLYSOMNOGRAPHY_FORM_KEY, fillMode: null }];
+}
+
+// ---------------------------------------------------------------------------
+// QUERY: GET BY ID
+// ---------------------------------------------------------------------------
+
+export async function GetPatientByIdQuery(
+  ctx: TenantContext,
+  id: string
+): Promise<PatientDto | null> {
+  const patient = await getPatientById(ctx.client, id);
+  if (!patient) return null;
+  await assertCanSeePatient(ctx, patient);
+  const territoryPath = patient.territory_id ? await getTerritoryPath(ctx.client, patient.territory_id) : null;
+  return toDto(patient, territoryPath);
+}

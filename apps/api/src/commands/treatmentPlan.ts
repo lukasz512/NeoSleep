@@ -1,0 +1,211 @@
+import type { TenantContext } from "../context/TenantContext.js";
+import { requirePatientInScope } from "../queries/entityAccess.js";
+import { requireTreatmentPlanInScope } from "../queries/treatmentPlan.js";
+import {
+  insertTreatmentPlan,
+  hasActiveTreatmentPlan,
+  updateTreatmentPlan,
+  getTreatmentPlanById,
+  getSleepStudyById,
+  getPractitionerById,
+  softDeleteTreatmentPlan,
+  restoreTreatmentPlan,
+  setTreatmentPlanAdvanceLevel,
+  type TreatmentPlan,
+} from "../db.js";
+import { insertAuditLog } from "../db.js";
+import { ValidationError, ConflictError } from "../errors.js";
+import {
+  TREATMENT_PLAN_TYPES,
+  TREATMENT_PLAN_STATUSES,
+  type TreatmentPlanInsert,
+  type TreatmentPlanUpdate,
+} from "../db/treatmentPlan.js";
+
+/**
+ * COMMANDS — Treatment plan domain.
+ *
+ * Each command validates, writes, writes audit log, returns result.
+ * No req/res. No getDb(). Only ctx.client (tenant-scoped, same transaction).
+ *
+ * Does NOT call out to the OrthoApnea partner API — this command only reads/
+ * writes the local treatment_plan row. Partner order submission is a separate,
+ * not-yet-built piece (see services/partners/orthoapnea.ts header comment).
+ */
+
+function assertValidType(type: string): void {
+  if (!TREATMENT_PLAN_TYPES.includes(type as (typeof TREATMENT_PLAN_TYPES)[number])) {
+    throw new ValidationError(`Invalid type '${type}' — expected one of ${TREATMENT_PLAN_TYPES.join(", ")}`);
+  }
+}
+
+function assertValidStatus(status: string | undefined): void {
+  if (status !== undefined && !TREATMENT_PLAN_STATUSES.includes(status as (typeof TREATMENT_PLAN_STATUSES)[number])) {
+    throw new ValidationError(`Invalid status '${status}' — expected one of ${TREATMENT_PLAN_STATUSES.join(", ")}`);
+  }
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The OrthoApnea order wizard's "Doctor" field sets dentist_id — a doctor
+ * soft-deleted since the draft was saved (or a malformed id) used to surface
+ * as an opaque database error. Named explicitly so the wizard can mark its
+ * doctor field instead of showing a toast (NEO-109). Checked before the
+ * lookup so a non-UUID never reaches Postgres and aborts the transaction.
+ */
+async function assertDentistExists(ctx: TenantContext, dentistId: string | undefined): Promise<void> {
+  if (dentistId === undefined) return;
+  if (!UUID_RE.test(dentistId) || !(await getPractitionerById(ctx.client, dentistId))) {
+    throw new ValidationError("dentist_id does not reference an existing practitioner", "dentist_id");
+  }
+}
+
+export type CreateTreatmentPlanInput = TreatmentPlanInsert;
+
+export async function CreateTreatmentPlanCommand(
+  ctx: TenantContext,
+  input: CreateTreatmentPlanInput
+): Promise<TreatmentPlan> {
+  if (!input.patient_id?.trim()) throw new ValidationError("patient_id is required");
+  if (!input.sleep_study_id?.trim()) throw new ValidationError("sleep_study_id is required");
+  assertValidType(input.type);
+  assertValidStatus(input.status);
+  await assertDentistExists(ctx, input.dentist_id);
+  // CORE-104: only for a patient the caller may see (a doctor: their own).
+  await requirePatientInScope(ctx, input.patient_id);
+
+  const study = await getSleepStudyById(ctx.client, input.sleep_study_id);
+  if (!study) throw new ValidationError("sleep_study_id does not reference an existing sleep study");
+  if (study.patient_id !== input.patient_id) {
+    throw new ValidationError("sleep_study_id does not belong to the given patient_id");
+  }
+
+  // NEO-223: one active device per patient — follow up on the open order (comments) instead.
+  if (await hasActiveTreatmentPlan(ctx.client, input.patient_id, input.type)) {
+    throw new ConflictError("The patient already has an active order of this type", "DEVICE_ORDER_ACTIVE");
+  }
+
+  const plan = await insertTreatmentPlan(ctx.client, input);
+
+  await insertAuditLog(ctx.client, {
+    user_id: ctx.user.id,
+    action: "create",
+    entity_type: "TreatmentPlan",
+    entity_id: plan.id,
+    entity_after: { patient_id: plan.patient_id, type: plan.type, status: plan.status },
+    request_id: ctx.requestId,
+  });
+
+  return plan;
+}
+
+export type UpdateTreatmentPlanInput = TreatmentPlanUpdate;
+
+export async function UpdateTreatmentPlanCommand(
+  ctx: TenantContext,
+  id: string,
+  input: UpdateTreatmentPlanInput
+): Promise<TreatmentPlan | null> {
+  if (!id?.trim()) throw new ValidationError("treatment plan id is required");
+  if (input.type !== undefined) assertValidType(input.type);
+  assertValidStatus(input.status);
+  await assertDentistExists(ctx, input.dentist_id);
+
+  const before = await getTreatmentPlanById(ctx.client, id);
+  if (!before) return null;
+  await requirePatientInScope(ctx, before.patient_id);
+
+  const after = await updateTreatmentPlan(ctx.client, id, input);
+  if (!after) return null;
+
+  await insertAuditLog(ctx.client, {
+    user_id: ctx.user.id,
+    action: "update",
+    entity_type: "TreatmentPlan",
+    entity_id: id,
+    entity_before: { status: before.status },
+    entity_after: { status: after.status },
+    request_id: ctx.requestId,
+  });
+
+  return after;
+}
+
+/** Highest mandibular advance level the doctor can record (one device per level, protocol slide 15). */
+export const MAX_ADVANCE_LEVEL = 10;
+
+/**
+ * Records the mandibular advance level the doctor authorized at a control visit
+ * (metadata.advance_level). null clears it. Only this key changes, so an order
+ * draft or anything else in metadata survives.
+ */
+export async function SetTreatmentAdvanceLevelCommand(
+  ctx: TenantContext,
+  id: string,
+  level: number | null
+): Promise<TreatmentPlan> {
+  if (level !== null && (!Number.isInteger(level) || level < 1 || level > MAX_ADVANCE_LEVEL)) {
+    throw new ValidationError(`advance_level must be a whole number from 1 to ${MAX_ADVANCE_LEVEL}`, "advance_level");
+  }
+  const before = await requireTreatmentPlanInScope(ctx, id);
+  const after = await setTreatmentPlanAdvanceLevel(ctx.client, id, level);
+
+  await insertAuditLog(ctx.client, {
+    user_id: ctx.user.id,
+    action: "update",
+    entity_type: "TreatmentPlan",
+    entity_id: id,
+    entity_before: { advance_level: before.metadata?.advance_level ?? null },
+    entity_after: { advance_level: level },
+    request_id: ctx.requestId,
+  });
+
+  return after;
+}
+
+/**
+ * Admin-only soft delete (see requireRole("admin", "manager") on the DELETE route) —
+ * hides the plan from every list view (getTreatmentPlansPaginated/
+ * getTreatmentPlanById both filter deleted_at IS NULL) without touching its
+ * partner_link/partner_transaction rows, so a failed OrthoApnea order's full
+ * request/response history stays intact and queryable even once hidden.
+ */
+export async function DeleteTreatmentPlanCommand(ctx: TenantContext, id: string): Promise<void> {
+  if (!id?.trim()) throw new ValidationError("treatment plan id is required");
+  await requireTreatmentPlanInScope(ctx, id);
+
+  await softDeleteTreatmentPlan(ctx.client, id);
+
+  await insertAuditLog(ctx.client, {
+    user_id: ctx.user.id,
+    action: "delete",
+    entity_type: "TreatmentPlan",
+    entity_id: id,
+    request_id: ctx.requestId,
+  });
+}
+
+/**
+ * Admin-only undo for DeleteTreatmentPlanCommand — e.g. a plan hidden as
+ * abandoned turns out to have gone through with the partner after all, and
+ * needs to keep being the one record of that order rather than being
+ * abandoned in place while a second plan gets created for the same order.
+ */
+export async function RestoreTreatmentPlanCommand(ctx: TenantContext, id: string): Promise<TreatmentPlan | null> {
+  if (!id?.trim()) throw new ValidationError("treatment plan id is required");
+
+  await restoreTreatmentPlan(ctx.client, id);
+  const restored = await getTreatmentPlanById(ctx.client, id);
+  if (!restored) return null;
+
+  await insertAuditLog(ctx.client, {
+    user_id: ctx.user.id,
+    action: "restore",
+    entity_type: "TreatmentPlan",
+    entity_id: id,
+    request_id: ctx.requestId,
+  });
+
+  return restored;
+}

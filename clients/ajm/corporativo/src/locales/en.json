@@ -1,0 +1,255 @@
+{
+  "meta": {
+    "title": "AJ Management — Corporate events & experiences",
+    "description": "We plan, produce and run corporate events designed around people, brands and business goals."
+  },
+  "nav": {
+    "aria": "Sections",
+    "projects": "Projects",
+    "capabilities": "Capabilities",
+    "about": "About",
+    "contact": "Contact",
+    "language": "Español",
+    "languageAria": "View this page in Spanish",
+    "themeToDark": "Switch to dark mode",
+    "themeToLight": "Switch to light mode"
+  },
+  "entry": {
+    "skip": "Skip",
+    "kicker": "Corporate Events · Experiences"
+  },
+  "prospect": {
+    "hello": "Hello {name}",
+    "with": "for {name}"
+  },
+  "media": {
+    "play": "Play video",
+    "enlarge": "View photo larger",
+    "prev": "Previous photo",
+    "next": "Next photo",
+    "close": "Close"
+  },
+  "hero": {
+    "line1": "We create experiences",
+    "line2": "that bring [people] ~together~",
+    "kicker": "Corporate Events · Experiences · Production",
+    "body": "From concept to execution, we plan, produce and run corporate events designed around people, brands and business goals.",
+    "places": "Mexico City · Madrid · International",
+    "cta": "See our work"
+  },
+  "what": {
+    "title1": "Big [ideas]",
+    "title2": "Flawless ~execution~",
+    "body1": "AJ Management is an independent agency specialised in planning, producing, coordinating and delivering corporate events and experiences.",
+    "body2": "We work as an extension of our clients' teams, handling every stage: from the first idea and venue selection to production, suppliers, logistics and on-site operations.",
+    "words": [
+      "Strategy",
+      "Planning",
+      "Production",
+      "Logistics",
+      "Experiences",
+      "Execution"
+    ]
+  },
+  "capabilities": {
+    "eyebrow": "Capabilities",
+    "title1": "[One] partner",
+    "title2": "From planning to ~execution~",
+    "items": [
+      {
+        "title": "Corporate Events",
+        "body": "Conventions, company meetings, presentations and corporate gatherings."
+      },
+      {
+        "title": "Executive Experiences",
+        "body": "Kick-offs, leadership meetings, forums and executive events."
+      },
+      {
+        "title": "Team Experiences",
+        "body": "Team-building events, celebrations, recognition programmes and employee experiences."
+      },
+      {
+        "title": "Event Production",
+        "body": "Creative development, audiovisual production, staging, lighting, furniture and technical coordination."
+      },
+      {
+        "title": "Logistics & Operations",
+        "body": "Guest management, transport, run-of-show, accreditation, suppliers and on-site coordination."
+      },
+      {
+        "title": "Venues & Suppliers",
+        "body": "Venue sourcing, negotiation, catering, entertainment and specialist supplier management."
+      }
+    ]
+  },
+  "projects": {
+    "eyebrow": "Selected projects",
+    "lead": "Every project is different. Our approach stays the same: understand the goal, build the right team and execute every detail."
+  },
+  "universal": {
+    "number": "Case 01",
+    "client": "Universal Products & Experiences",
+    "title": "Bringing ~global~ brands to [life]",
+    "tags": "Production · Experiences · Content",
+    "body": "AJ Management works on projects that turn globally recognised entertainment properties into experiences and productions that matter to the local market.",
+    "rooms": [
+      "Lounge",
+      "Collection",
+      "Meeting room"
+    ],
+    "videoLabel": "Walk-through of the Universal pop-up, Mexico City"
+  },
+  "planeta": {
+    "number": "Case 02",
+    "client": "Grupo Planeta",
+    "title": "We ~build~ experiences around [stories]",
+    "tags": "Corporate Events · Launches · Production · Guest Experience",
+    "body": "AJ Management works with Grupo Planeta to develop and produce events that connect authors, media, partners and audiences through carefully designed experiences.",
+    "city": "Mexico City",
+    "photoCount": "{n} photos",
+    "photoAlt": "{event}: event set-up",
+    "events": {
+      "bordes": "Collection launch",
+      "novedades2025": "New releases showcase",
+      "novedades2024": "New releases showcase",
+      "cronicas": "Book launch",
+      "algundia": "Book launch",
+      "duelo": "Book launch",
+      "vesubio": "Book launch"
+    }
+  },
+  "privalia": {
+    "number": "Case 03",
+    "client": "Privalia",
+    "title": "A [partnership] built over ~time~",
+    "tags": "Corporate Events · Experiences · Production",
+    "body": "A long-term relationship built on consistent execution, operational trust and an understanding of the client's changing needs.",
+    "photoAlt": "eFashion Day 2019: set-up and guests",
+    "chapters": {
+      "y2019": {
+        "mark": "2019",
+        "name": "eFashion Day",
+        "body": "Talks, networking and a lunch for hundreds of guests in a courtyard turned into a stage. From set-up to the last table, in a single day."
+      },
+      "y2020": {
+        "mark": "2020",
+        "name": "eFashion Day Live",
+        "body": "When nobody could gather, the event became a live broadcast: its own set, remote speakers and full technical production."
+      },
+      "beauty": {
+        "mark": "2023",
+        "name": "Privalia Beauty Week × Glamour",
+        "body": "A beauty week with Glamour at Brick Hotel in Mexico City: brand spaces, make-up stations and content captured live for social."
+      },
+      "live": {
+        "mark": "Live",
+        "name": "Hugo Boss × Privalia",
+        "body": "Live shopping production for Hugo Boss on Privalia Mexico, covered by GQ Mexico & Latin America."
+      }
+    },
+    "photoAlt2020": "eFashion Day Live 2020: the broadcast set",
+    "photoAltBeauty": "Privalia Beauty Week × Glamour at Brick Hotel"
+  },
+  "mendel": {
+    "number": "Case 04",
+    "client": "Mendel",
+    "title": "Corporate [experiences] designed around ~people~",
+    "tags": "Corporate Event · Production · Logistics",
+    "body": "From planning and supplier coordination to production and on-site operations, AJ Management built a corporate experience designed to bring the Mendel community together.",
+    "videoLabel": "Mendel event in Mexico City",
+    "stats": {
+      "guests": "Guests",
+      "coordination": "Production & Coordination",
+      "team": "Dedicated Production Team"
+    }
+  },
+  "more": {
+    "eyebrow": "More projects",
+    "lead": "Other stories we have produced.",
+    "photoAlt": "{event}: a moment from the event",
+    "items": {
+      "minions": {
+        "kind": "Universal Products & Experiences · Brand activation",
+        "place": "São Paulo"
+      },
+      "wedding": {
+        "kind": "Social event · Production",
+        "place": "Mexico City"
+      }
+    }
+  },
+  "process": {
+    "eyebrow": "How we work",
+    "title": "One ~point~ of contact from [start] to finish",
+    "steps": [
+      {
+        "name": "Brief",
+        "body": "We understand goals, audience, timing and budget."
+      },
+      {
+        "name": "Concept",
+        "body": "We design the experience and define the venue and production approach."
+      },
+      {
+        "name": "Planning",
+        "body": "We coordinate suppliers, logistics, timelines and technical production."
+      },
+      {
+        "name": "Production",
+        "body": "Build, coordination and quality control."
+      },
+      {
+        "name": "Showtime",
+        "body": "On-site operations and guest experience."
+      },
+      {
+        "name": "Wrap-up",
+        "body": "Load-out, operational close, report and follow-up."
+      }
+    ]
+  },
+  "clients": {
+    "eyebrow": "Selected clients",
+    "see": "See the project",
+    "goTo": "See the {name} project"
+  },
+  "about": {
+    "eyebrow": "About AJ Management",
+    "title1": "Local [expertise]",
+    "title2": "~International~ perspective",
+    "body1": "Founded in Mexico, AJ Management creates and produces events and experiences for companies and brands across markets.",
+    "body2": "Our network of producers, venues, technical partners and specialist suppliers lets us build the right team for every project, with one central point of coordination.",
+    "cities": [
+      {
+        "city": "Madrid",
+        "role": "Europe & Partnerships"
+      },
+      {
+        "city": "Mexico City",
+        "role": "Production & Operations"
+      },
+      {
+        "city": "International",
+        "role": "Projects & Experiences"
+      }
+    ]
+  },
+  "contact": {
+    "title": "Have an [event] in ~mind~?",
+    "body": "Whether it's a corporate meeting, an executive experience, a convention or a large-scale event, we'd love to hear about your project.",
+    "cta": "Let's talk about your project",
+    "whatsappMessage": "Hi Alfred, I saw the AJ Management portfolio and would like to talk about an event.",
+    "email": "Email",
+    "whatsapp": "WhatsApp Mexico",
+    "phoneEs": "Phone Spain",
+    "linkedin": "LinkedIn",
+    "instagram": "Instagram",
+    "stageLabel": "eFashion Day Live 2020 stage",
+    "person": "Alfred Jan Díaz · Founder & Director",
+    "places": "Mexico City · Madrid"
+  },
+  "footer": {
+    "privacy": "This page uses no cookies. We only count visits anonymously and in aggregate; we don't identify anyone.",
+    "rights": "© {year} AJ Management"
+  }
+}

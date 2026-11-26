@@ -1,0 +1,131 @@
+import { computed, createApp } from "vue";
+import { createGtag } from "vue-gtag";
+import { createPinia } from "pinia";
+import App from "./App.vue";
+import router from "./router";
+import { installChunkRecovery, browserChunkRecoveryDeps } from "./router/chunkRecovery";
+import vuetify, { lightTheme, darkTheme } from "./plugins/vuetify";
+import { i18n } from "./plugins/i18n";
+import "./styles/theme.scss";
+import "./styles/app-responsive.scss";
+import "./styles/page-transitions.css";
+import "./styles/flags.css";
+import "@brand/spacing.css";
+import "@brand/transitions.css";
+import "./styles/transitions.css";
+import { configureErrorReporting, installGlobalErrorHandlers } from "@api";
+import { setupOfflineCacheSession } from "./composables/useOfflineCacheSession";
+import { setupPrefsSession } from "./composables/usePrefsSession";
+import { apiFetch } from "./composables/useApi";
+import { authTokenStorage, useAuthStore } from "./stores/auth";
+import { installSessionLossRedirect, installCrossTabSessionSync } from "./router/sessionLossRedirect";
+import { APP_STORAGE_KEYS } from "./config/storageKeys";
+import { useConfigStore } from "./stores/config";
+import { USER_ROLE_BADGE_OVERRIDES } from "./utils/userRoleBadge";
+import { useNotifications } from "./composables/useNotifications";
+import { getApiUrl } from "./config/env";
+import { resolveInitialThemeMode, useMotionPreferenceStore, APP_VERSION_KEY } from "@stores";
+import { resolveAppVersion } from "./boot/appVersion";
+import { activateDeferredStyles } from "./boot/bootSplash";
+import { initInstallPrompt } from "./composables/useInstallPrompt";
+import { installServiceWorkerUpdates } from "./boot/registerServiceWorker";
+
+// First thing: apply the bundle CSS that index.html loads as a non-blocking
+// preload (so the static boot splash could paint before it arrived) — see
+// src/boot/splash.ts. The splash stays up until this has applied.
+activateDeferredStyles();
+
+// Silent wake-up ping: the API can cold-start (Render free tier spins down when
+// idle), so hit the cheapest possible route as early as possible — before the
+// user even reaches the login form — instead of waiting for their first real
+// request to eat the cold-start delay. Fire-and-forget: no loading state, no
+// error surfaced (plain fetch, not apiFetch, so a failure never reaches the
+// notification pipeline). no-cors: the response is never read, and /health
+// sends no CORS headers — a normal cross-origin fetch logged a CORS error in
+// every console even though the ping itself worked.
+fetch(`${getApiUrl()}/health`, { mode: "no-cors" }).catch(() => {
+  // benign: wake-up ping only — the first real request reports its own failure.
+});
+
+// Pre-mount, before Pinia exists — avoids a flash of the wrong theme. The
+// theme store re-resolves reactively (incl. the tenant-default tier) once
+// the app mounts; see composables/useLayoutState.ts.
+const savedTheme = resolveInitialThemeMode();
+
+if (typeof document !== "undefined" && document.documentElement) {
+  document.documentElement.setAttribute("data-theme", savedTheme);
+}
+
+vuetify.theme.change(savedTheme === "dark" ? darkTheme : lightTheme);
+
+// Before anything can fail: every reportCaught() call (and the global handlers
+// below) logs to the console and reports to POST /api/v1/diagnostics (NEO-81).
+configureErrorReporting({
+  getApiBase: getApiUrl,
+  app: "pwa",
+  appVersion: (import.meta.env.VITE_APP_VERSION as string | undefined) ?? "dev",
+});
+
+// Catch Chrome's one-shot install event even when it fires on the login
+// screen, before the app bar's Install button exists (NEO-87).
+initInstallPrompt();
+
+const app = createApp(App);
+app.use(createPinia());
+app.use(vuetify);
+app.use(router);
+// After a deploy, an already-open tab can't fetch its old lazy chunks —
+// reload into the new version (with a toast) instead of silently ignoring clicks.
+installChunkRecovery(router, browserChunkRecoveryDeps(useNotifications().show));
+// After a deploy the service worker first serves the cached previous build —
+// reload into the new one as soon as it takes over (NEO-125).
+if (import.meta.env.PROD) installServiceWorkerUpdates(router);
+app.use(i18n);
+
+useMotionPreferenceStore().startListening();
+
+installGlobalErrorHandlers(app);
+setupOfflineCacheSession();
+setupPrefsSession();
+
+// A session that ends mid-use (refresh rejected, signed out in another tab) goes
+// straight to /login instead of leaving the screen up with no user.
+const authStore = useAuthStore();
+const sessionUserId = () => authStore.user?.id ?? null;
+installSessionLossRedirect(router, {
+  userId: sessionUserId,
+  notify: useNotifications().show,
+  message: () => i18n.global.t("user.login.sessionEnded"),
+});
+installCrossTabSessionSync(APP_STORAGE_KEYS.sessionUser, {
+  userId: sessionUserId,
+  storage: typeof localStorage === "undefined" ? null : localStorage,
+  onStorage: (listener) => window.addEventListener("storage", listener),
+  signOut: () => authStore.clearAuth(),
+  reload: () => window.location.reload(),
+});
+
+app.provide("neo:apiFetch", apiFetch);
+app.provide("neo:authTokenStorage", authTokenStorage);
+// AuthView's "Sign in with Google" button (NEO-78) is a top-level navigation
+// to the API, not a fetch, so it needs the API base URL itself. Same string
+// key as packages/ui's API_URL_KEY (a plain string, like the provides above,
+// so main.ts doesn't pull the whole @ui barrel into the entry chunk).
+app.provide("neo:apiUrl", getApiUrl());
+app.provide(APP_VERSION_KEY, resolveAppVersion(import.meta.env));
+// Lets shared views in packages/ui (e.g. AuthView, which runs before the
+// authenticated shell that owns most of the app's toasts) show a native
+// notification without packages/ui depending on apps/pwa's useNotifications
+// module directly — same cross-package DI pattern as apiFetch/authTokenStorage.
+app.provide("neo:notify", useNotifications().show);
+// The tenant's role → avatar badge icons (CORE-114), read by AppAvatar.
+const configStore = useConfigStore();
+app.provide(USER_ROLE_BADGE_OVERRIDES, computed(() => configStore.config.user_role_badges));
+const gaId = import.meta.env.VITE_GA_ID as string | undefined;
+if (import.meta.env.PROD && gaId) {
+  // The patient self-fill page is never tracked: its URL carries a live
+  // single-use credential, and the visit itself is health information.
+  app.use(createGtag({ tagId: gaId, pageTracker: { router, exclude: [{ name: "patient-questionnaire" }] } }));
+}
+
+app.mount("#app");

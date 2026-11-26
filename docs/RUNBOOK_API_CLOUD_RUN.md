@@ -1,0 +1,105 @@
+# Runbook — API on Google Cloud Run (NEO-45)
+
+Decision record: [ADR-025](ADR-025-api-hosting-cloud-run.md).
+Workflow: [.github/workflows/deploy-api.yml](../.github/workflows/deploy-api.yml).
+
+| | dev | prod |
+|---|---|---|
+| Service | `neosleep-api-dev` | `neosleep-api-prod` |
+| Deployed on | push to `dev` | push to `prod` |
+| Non-secret config | `infrastructure/cloud-run/dev.env.yaml` | `infrastructure/cloud-run/prod.env.yaml` |
+| Frontend secret | `API_URL_DEV` | `API_URL_PROD` (+ website `VITE_API_URL`) |
+
+GCP project `neosleep-api`, region `us-west2`. Console:
+<https://console.cloud.google.com/run?project=neosleep-api>
+
+## Deploy
+
+Automatic: merging to `dev` / `prod` when API-related paths change (see the workflow's
+`paths`). Manual: Actions → **Deploy API (Cloud Run)** → Run workflow on `dev` or `prod`.
+The job fails if `/health` does not return 200 after the deploy.
+
+## Rollback
+
+- **Bad code**: Cloud Run keeps old revisions. Console → service → **Revisions** → pick
+  the previous one → **Manage traffic** → 100%. Or:
+  `gcloud run services update-traffic neosleep-api-prod --region us-west2 --to-revisions <REVISION>=100`
+
+## Logs
+
+Console → service → **Logs**, or
+`gcloud run services logs read neosleep-api-prod --region us-west2 --limit 100`.
+
+## Config and secrets
+
+- **Non-secret** values: edit `infrastructure/cloud-run/<env>.env.yaml`, merge, and it deploys.
+- **Secrets** (names in `infrastructure/cloud-run/secrets.list`) live in Secret Manager
+  and are shared by dev and prod. To change one:
+  `printf '%s' 'NEW_VALUE' | gcloud secrets versions add NAME --project neosleep-api --data-file=-`
+  then re-run the deploy (the service reads `:latest` at startup).
+- **Adding a secret**: create it in Secret Manager, then add its name to `secrets.list`
+  in the same PR. A name in the list without a secret makes the deploy fail.
+
+## Scheduled jobs (GitHub Actions)
+
+| Workflow | When | Calls | Secret |
+|---|---|---|---|
+| `appointment-reminders.yml` | every 10 min | dev + prod `/appointments/jobs/reminders` | `INTERNAL_JOB_SECRET` |
+| `orthoapnea-status-sync.yml` | 4x a day (08/11/14/17 Mexico City) | prod `/partners/orthoapnea/jobs/sync-statuses` (dev only if prod is unset/404; one target because the DB is shared) | `INTERNAL_JOB_SECRET` |
+| `device-order-reconciliation.yml` | 13:00 UTC daily | dev + prod `/device-orders/jobs/reconcile` | `RECONCILIATION_JOB_SECRET` |
+
+The order status sync also runs from the app: while someone has it open, it calls
+`POST /partners/orthoapnea/sync-statuses` every 15 min, and the API runs that at most once
+per tenant per 15 min. The status write is locked per order, so the app sync, the
+scheduled job and dev/prod never notify the dentist twice for one change.
+
+A red run in Actions = the API answered non-2xx or a tenant crashed; open the run log,
+then the Cloud Run logs (`[orthoapnea-sync]` prefix for the status sync). Run one by hand:
+Actions → the workflow → **Run workflow**.
+
+## Limits to keep in mind
+
+- `max-instances=1` is deliberate: the OrthoApnea queue and rate limiters are in-memory.
+- Both services share one Supabase DB, so migrations must be additive only.
+- `MIN_INSTANCES` in `.github/workflows/deploy-api.yml` is `1` on prod (one instance always
+  warm) and `0` on dev (CORE-193): the first dev request after idle waits for a cold start
+  (a few seconds). `keep-api-warm.yml` pings both every 10 minutes, which costs nothing
+  (only request time is billed) and keeps dev mostly warm anyway.
+- Billing: account `NeoSleep - PL` (01086A-4C475D-ED9966) pays for `neosleep-api` and
+  `neosleep-backups`, with a 20 PLN/month budget alert (CORE-193). If both services return
+  the Google "Service not available yet" 503 with no logs, check
+  `gcloud billing projects describe neosleep-api` first: the 2026-11-12 outage was an
+  expired free-trial billing account.
+
+## One-time setup (done once, kept for reference / a future EU stack)
+
+1. `brew install --cask google-cloud-sdk && gcloud auth login` (neosleep Google account).
+2. `PROJECT_ID=neosleep-api BILLING_ACCOUNT=<id> bash infrastructure/cloud-run/setup-gcp.sh`
+   creates the project, the registry, the service accounts and WIF, and prints 4 values.
+3. Set these 4 values as GitHub secrets: `GCP_API_PROJECT`, `GCP_API_WIF_PROVIDER`,
+   `GCP_API_DEPLOY_SA`, `GCP_API_RUNTIME_SA`.
+4. Create each secret named in `infrastructure/cloud-run/secrets.list` in Secret Manager
+   (`printf %s "$VALUE" | gcloud secrets create <NAME> --data-file=- --project neosleep-api`).
+   The original values were copied from Render, which CORE-188 retired.
+5. Google login: in the OAuth client (GCP project `neosleep` → APIs & Services →
+   Credentials), add both
+   `https://neosleep-api-{dev,prod}-692668694184.us-west2.run.app/api/v1/auth/google/callback`
+   as authorized redirect URIs. `OAUTH_REDIRECT_ORIGIN` in each env yaml points at the
+   service's own URL.
+
+## Features switched on at the move (2026-09-25)
+
+Render only ever had 9 env vars, so several features never worked on a deployed API.
+Cloud Run enables them, with the same keys as the local `.env`:
+
+- Google login
+- Supabase Storage (generated PDFs, signed documents, attachments)
+- OrthoApnea: the shared **real** account, so dev orders are real
+- Google Calendar booking: the **real** calendar, so dev bookings send real invites
+- Google Maps geocoding: the server key lives in GCP project `project-c793f38f-…`
+  ("My First Project"). The Geocoding API had to be enabled there and added to the key's
+  API restrictions.
+
+Web push is not enabled because the PWA has no subscription code yet.
+6. Merge to `dev`, check the dev service, set `API_URL_DEV`, re-run Deploy PWA. Then
+   repeat for prod.

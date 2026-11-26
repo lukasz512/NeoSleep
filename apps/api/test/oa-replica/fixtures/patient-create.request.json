@@ -1,0 +1,18 @@
+{
+  "name": "Tester Patient 1",
+  "email": "redacted@example.com",
+  "identityNumber": "",
+  "insuranceNumber": "",
+  "birthDate": "1975-06-15T00:00:00",
+  "male": true,
+  "phone": "+520000000000",
+  "countryId": 29,
+  "province": "",
+  "city": "Ciudad de Mexico",
+  "address": "Calle de Prueba 1, Col. Juarez",
+  "postalCode": "06600",
+  "userId": 15682,
+  "profession": "PACIENTE DE PRUEBA",
+  "observations": "PACIENTE DE PRUEBA – NeoSleep, Łukasz Ostrowski. Diagnóstico de prueba: SAOS moderado, IAH 22/h (estudio de sueño de prueba).",
+  "diagnosis": "SAOS moderado (IAH 22/h) – PRUEBA"
+}

@@ -1,0 +1,12 @@
+<!-- Test-only fixture template, exercised by documentRender.spec.ts. Not
+     listed in documentManifest.ts (that manifest is for real documents the
+     admin editor/API validate against — this fixture is neither). Kept
+     alongside the real templates because loadTemplate() reads from this
+     same directory. -->
+<html>
+<head><title>{{documents.testFixture.title}}</title></head>
+<body>
+  <p style="color: {{brand:primary}};">{{documents.testFixture.body}}</p>
+  <div class="doc-content">{{content}}</div>
+</body>
+</html>

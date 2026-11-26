@@ -1,0 +1,426 @@
+import type { PoolClient } from "pg";
+import { toArray, trimOrNull, trimOrEmpty, normalizeEmail } from "./helpers.js";
+import { AppError, DatabaseError, ValidationError } from "../errors.js";
+import { assertEmailNotTaken } from "./identityEmail.js";
+import { formatDisplayName } from "../utils/personName.js";
+
+export interface Lead {
+  id: string;
+  identity_id: string;
+  // From identities JOIN
+  salutation: string | null;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+  // From lead table
+  source: string | null;
+  status: string;
+  /** doctor/hospital/pharmacy/patient/other — see 009_partner_invite_and_documents.sql. Drives the "Invite to collaborate" action (doctor-only). */
+  type: string;
+  country_code: string | null;
+  institution: string | null;
+  converted_to_id: string | null;
+  converted_to_type: string | null;
+  converted_at: Date | null;
+  region: string;
+  territory_id: string | null;
+  territory_name: string | null;
+  assigned_to: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: Date;
+  updated_at: Date;
+  // Computed for backward compat
+  name: string;
+}
+
+export interface GetLeadsFilters {
+  search?: string;
+  status?: string | string[];
+  region?: string | string[];
+  hideCompletedOlderThan24h?: boolean;
+  /** 'declined' leads (3 failed follow-up attempts, no meeting booked) are admin-only visibility. */
+  hideDeclined?: boolean;
+  /** RBAC territory scope (migration 022, requireScope.ts) — same shape/rollout-
+   *  safety fallback as GetPatientsFilters.scopePaths in db/patient.ts. */
+  scopePaths?: string[] | null;
+}
+
+export interface GetLeadsPaginatedResult {
+  rows: Lead[];
+  total: number;
+}
+
+export interface InsertLeadInput {
+  salutation?: string | null;
+  first_name: string;
+  last_name: string;
+  email?: string | null;
+  phone?: string | null;
+  status?: string;
+  type?: string;
+  region?: string;
+  /** RBAC scope (see middleware/requireScope.ts) — distinct from `region` above, see migration 013's comment. */
+  country_code?: string | null;
+  territory_id?: string | null;
+  source?: string | null;
+  institution?: string | null;
+  assigned_to?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface UpdateLeadInput {
+  salutation?: string | null;
+  first_name?: string;
+  last_name?: string;
+  email?: string | null;
+  phone?: string | null;
+  status?: string;
+  type?: string;
+  region?: string;
+  country_code?: string | null;
+  territory_id?: string | null;
+  source?: string | null;
+  institution?: string | null;
+  assigned_to?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
+export type LeadSortColumn = "first_name" | "last_name" | "email" | "status" | "region" | "created_at";
+
+const SORT_COLUMNS: readonly LeadSortColumn[] = ["first_name", "last_name", "email", "status", "region", "created_at"];
+
+function isLeadSortColumn(s: string): s is LeadSortColumn {
+  return SORT_COLUMNS.includes(s as LeadSortColumn);
+}
+
+const LEAD_SELECT_COLS = `
+  l.id, l.identity_id, l.source, l.status, l.type, l.institution,
+  l.converted_to_id, l.converted_to_type, l.converted_at,
+  l.assigned_to, l.metadata, l.created_at, l.updated_at,
+  i.title AS salutation, i.first_name, i.last_name, i.email, i.phone,
+  COALESCE(i.region, '') AS region, i.country_code, i.territory_id, t.name AS territory_name`.trim();
+
+// territory: immediate assigned node's own name only — same no-N+1-on-the-
+// list-query reasoning as db/patient.ts's PATIENT_JOIN.
+const LEAD_JOIN = `
+  FROM lead l
+  JOIN identities i ON l.identity_id = i.id
+  LEFT JOIN territory t ON i.territory_id = t.id`.trim();
+
+function buildName(row: { salutation: string | null; first_name: string; last_name: string }): string {
+  return formatDisplayName(row);
+}
+
+type LeadRow = Omit<Lead, "name"> & { first_name: string; last_name: string };
+
+function attachName(row: LeadRow): Lead {
+  return { ...row, name: buildName(row) };
+}
+
+export async function getLeadsPaginated(
+  client: PoolClient,
+  filters: GetLeadsFilters,
+  page: number,
+  limit: number,
+  sortBy: string,
+  sortOrder: "asc" | "desc"
+): Promise<GetLeadsPaginatedResult> {
+  const conditions: string[] = ["l.deleted_at IS NULL"];
+  const params: unknown[] = [];
+  let paramIndex = 1;
+
+  if (filters.search?.trim()) {
+    conditions.push(
+      `(LOWER(i.first_name || ' ' || i.last_name) LIKE $${paramIndex} OR LOWER(COALESCE(i.email,'')) LIKE $${paramIndex} OR LOWER(l.status) LIKE $${paramIndex} OR LOWER(COALESCE(i.region,'')) LIKE $${paramIndex})`
+    );
+    params.push(`%${filters.search.trim().toLowerCase()}%`);
+    paramIndex++;
+  }
+  const statusArr = toArray(filters.status);
+  if (statusArr.length > 0) {
+    conditions.push(`l.status = ANY($${paramIndex}::text[])`);
+    params.push(statusArr);
+    paramIndex++;
+  }
+  const regionArr = toArray(filters.region);
+  if (regionArr.length > 0) {
+    conditions.push(`i.region = ANY($${paramIndex}::text[])`);
+    params.push(regionArr);
+    paramIndex++;
+  }
+  if (filters.scopePaths !== undefined && filters.scopePaths !== null) {
+    conditions.push(`(i.territory_id IS NULL OR t.path <@ ANY($${paramIndex}::extensions.ltree[]))`);
+    params.push(filters.scopePaths);
+    paramIndex++;
+  }
+  if (filters.hideCompletedOlderThan24h) {
+    conditions.push(`(l.status IS NULL OR LOWER(l.status) != 'completed' OR COALESCE(l.updated_at, l.created_at) >= now() - interval '24 hours')`);
+  }
+  if (filters.hideDeclined) {
+    // ANDed unconditionally (not merged into the status filter above) so an
+    // explicit ?status=declined from a non-admin caller can't bypass this.
+    conditions.push(`l.status != 'declined'`);
+  }
+
+  const whereClause = `WHERE ${conditions.join(" AND ")}`;
+  const orderCol = isLeadSortColumn(sortBy) ? sortBy : "created_at";
+  const orderDir = sortOrder === "asc" ? "ASC" : "DESC";
+  const identityCols: LeadSortColumn[] = ["first_name", "last_name", "email", "region"];
+  const safeOrder = identityCols.includes(orderCol as LeadSortColumn)
+    ? `i."${orderCol}"`
+    : orderCol === "created_at"
+      ? "l.created_at"
+      : `l."${orderCol}"`;
+
+  try {
+    const countResult = await client.query<{ count: string }>(
+      `SELECT COUNT(*) AS count ${LEAD_JOIN} ${whereClause}`,
+      params
+    );
+    const total = Number(countResult.rows[0]?.count ?? 0);
+
+    const offset = (page - 1) * limit;
+    params.push(limit, offset);
+    const dataResult = await client.query<LeadRow>(
+      `SELECT ${LEAD_SELECT_COLS}
+       ${LEAD_JOIN}
+       ${whereClause} ORDER BY ${safeOrder} ${orderDir} LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      params
+    );
+    return { rows: dataResult.rows.map(attachName), total };
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getLeadsPaginated", err);
+  }
+}
+
+export async function getLeadById(client: PoolClient, id: string): Promise<Lead | null> {
+  try {
+    const result = await client.query<LeadRow>(
+      `SELECT ${LEAD_SELECT_COLS}
+       ${LEAD_JOIN}
+       WHERE l.id = $1 AND l.deleted_at IS NULL`,
+      [id]
+    );
+    const row = result.rows[0];
+    return row ? attachName(row) : null;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getLeadById", err);
+  }
+}
+
+/**
+ * Finds the lead a patient was converted from, if any — used by the patient
+ * History tab to show "originally referred as a lead (source)". Returns null
+ * for patients created directly (never a lead).
+ */
+export async function findLeadConvertedToPatient(client: PoolClient, patientId: string): Promise<Lead | null> {
+  try {
+    const result = await client.query<LeadRow>(
+      `SELECT ${LEAD_SELECT_COLS}
+       ${LEAD_JOIN}
+       WHERE l.converted_to_id = $1 AND l.converted_to_type = 'patient'`,
+      [patientId]
+    );
+    const row = result.rows[0];
+    return row ? attachName(row) : null;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("findLeadConvertedToPatient", err);
+  }
+}
+
+/**
+ * Inserts a lead + identity record using the provided client.
+ * The client must already be in a transaction (withTenant handles this).
+ * No BEGIN/COMMIT here — the caller owns the transaction boundary.
+ */
+export async function insertLead(client: PoolClient, input: InsertLeadInput): Promise<Lead> {
+  const firstName = trimOrEmpty(input.first_name);
+  const lastName = trimOrEmpty(input.last_name);
+  if (!firstName || !lastName) throw new ValidationError("Lead first_name and last_name are required", "first_name");
+
+  try {
+    await assertEmailNotTaken(client, normalizeEmail(input.email), null);
+    const identityResult = await client.query<{ id: string }>(
+      `INSERT INTO identities (title, first_name, last_name, email, phone, region, country_code, territory_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id`,
+      [
+        trimOrNull(input.salutation), firstName, lastName, normalizeEmail(input.email), trimOrNull(input.phone),
+        trimOrEmpty(input.region) || null, trimOrNull(input.country_code), input.territory_id ?? null,
+      ]
+    );
+    const identityId = identityResult.rows[0]!.id;
+
+    const leadResult = await client.query<{ id: string }>(
+      `INSERT INTO lead (identity_id, status, type, source, institution, assigned_to, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id`,
+      [
+        identityId,
+        trimOrEmpty(input.status) || "new",
+        trimOrEmpty(input.type) || "other",
+        trimOrNull(input.source),
+        trimOrNull(input.institution),
+        trimOrNull(input.assigned_to),
+        input.metadata ? JSON.stringify(input.metadata) : null,
+      ]
+    );
+    const leadId = leadResult.rows[0]!.id;
+
+    const lead = await getLeadById(client, leadId);
+    if (!lead) throw new DatabaseError("insertLead", new Error("Insert returned no rows"));
+    return lead;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("insertLead", err);
+  }
+}
+
+/**
+ * Updates lead + identity fields using the provided client.
+ * The client must already be in a transaction (withTenant handles this).
+ */
+export async function updateLead(client: PoolClient, id: string, input: UpdateLeadInput): Promise<Lead | null> {
+  const lead = await getLeadById(client, id);
+  if (!lead) return null;
+
+  try {
+    // Update identity fields
+    const identitySets: string[] = ["updated_at = now()"];
+    const identityParams: unknown[] = [];
+    let iidx = 1;
+
+    if (input.salutation !== undefined) {
+      identityParams.push(trimOrNull(input.salutation));
+      identitySets.push(`title = $${iidx++}`);
+    }
+    if (input.first_name !== undefined) {
+      identityParams.push(trimOrEmpty(input.first_name) || lead.first_name);
+      identitySets.push(`first_name = $${iidx++}`);
+    }
+    if (input.last_name !== undefined) {
+      identityParams.push(trimOrEmpty(input.last_name) || lead.last_name);
+      identitySets.push(`last_name = $${iidx++}`);
+    }
+    if (input.email !== undefined) {
+      await assertEmailNotTaken(client, normalizeEmail(input.email), lead.identity_id);
+      identityParams.push(normalizeEmail(input.email));
+      identitySets.push(`email = $${iidx++}`);
+    }
+    if (input.phone !== undefined) {
+      identityParams.push(trimOrNull(input.phone));
+      identitySets.push(`phone = $${iidx++}`);
+    }
+    if (input.region !== undefined) {
+      identityParams.push(trimOrEmpty(input.region) || null);
+      identitySets.push(`region = $${iidx++}`);
+    }
+    if (input.country_code !== undefined) {
+      identityParams.push(trimOrNull(input.country_code));
+      identitySets.push(`country_code = $${iidx++}`);
+    }
+    if (input.territory_id !== undefined) {
+      identityParams.push(input.territory_id ?? null);
+      identitySets.push(`territory_id = $${iidx++}`);
+    }
+    identityParams.push(lead.identity_id);
+    await client.query(
+      `UPDATE identities SET ${identitySets.join(", ")} WHERE id = $${iidx}`,
+      identityParams
+    );
+
+    // Update lead fields
+    const leadSets: string[] = ["updated_at = now()"];
+    const leadParams: unknown[] = [];
+    let lidx = 1;
+
+    if (input.status !== undefined) {
+      leadParams.push(input.status);
+      leadSets.push(`status = $${lidx++}`);
+    }
+    if (input.type !== undefined) {
+      leadParams.push(input.type);
+      leadSets.push(`type = $${lidx++}`);
+    }
+    if (input.source !== undefined) {
+      leadParams.push(trimOrNull(input.source));
+      leadSets.push(`source = $${lidx++}`);
+    }
+    if (input.institution !== undefined) {
+      leadParams.push(trimOrNull(input.institution));
+      leadSets.push(`institution = $${lidx++}`);
+    }
+    if (input.assigned_to !== undefined) {
+      leadParams.push(trimOrNull(input.assigned_to));
+      leadSets.push(`assigned_to = $${lidx++}`);
+    }
+    if (input.metadata !== undefined) {
+      leadParams.push(input.metadata ? JSON.stringify(input.metadata) : null);
+      leadSets.push(`metadata = $${lidx++}`);
+    }
+    leadParams.push(id);
+    await client.query(
+      `UPDATE lead SET ${leadSets.join(", ")} WHERE id = $${lidx}`,
+      leadParams
+    );
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("updateLead", err);
+  }
+
+  return getLeadById(client, id);
+}
+
+/**
+ * Soft-deletes a lead by setting deleted_at — status is left untouched:
+ * 'inactive' already means a rep-set workflow state on this entity, distinct
+ * from "deleted by admin", and every read query already filters on
+ * deleted_at IS NULL, so deleted_at alone is sufficient for visibility.
+ */
+export async function softDeleteLead(client: PoolClient, id: string): Promise<void> {
+  try {
+    await client.query(`UPDATE lead SET deleted_at = now() WHERE id = $1`, [id]);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("softDeleteLead", err);
+  }
+}
+
+export interface ConvertLeadInput {
+  converted_to_id: string;
+  // DB CHECK constraint (lead_converted_to_type_check) only allows these
+  // lowercase values (or NULL) — see 005_lead_institution_and_patient_conversion.sql
+  // and 009_partner_invite_and_documents.sql (added 'user').
+  converted_to_type: "practitioner" | "organization" | "patient" | "user";
+}
+
+/**
+ * Atomically marks a lead as converted: sets status='converted' plus
+ * converted_to_id/converted_to_type/converted_at in a single write.
+ * Kept separate from updateLead() so the "convert" transition (and its own
+ * audit action) stays explicit rather than folded into a generic partial update.
+ * The client must already be in a transaction (withTenant handles this).
+ */
+export async function convertLead(client: PoolClient, id: string, input: ConvertLeadInput): Promise<Lead | null> {
+  const lead = await getLeadById(client, id);
+  if (!lead) return null;
+
+  try {
+    await client.query(
+      `UPDATE lead
+       SET status = 'converted', converted_to_id = $1, converted_to_type = $2,
+           converted_at = now(), updated_at = now()
+       WHERE id = $3`,
+      [input.converted_to_id, input.converted_to_type, id]
+    );
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("convertLead", err);
+  }
+
+  return getLeadById(client, id);
+}

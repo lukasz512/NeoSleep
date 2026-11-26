@@ -1,0 +1,307 @@
+# Design & UI — NeoCRM Visual Language
+
+> Referenced from `apps/pwa/src/styles/theme.scss`. This is the source of truth for design
+> tokens and the direction we're rolling them out toward. Update whenever a token changes or
+> a new surface adopts the system described here.
+
+## Reference / north star
+
+Direction confirmed 2026-07-19 against a monochrome, tonal-layered dashboard style (shadcn
+community theme "Luma" — neutral SaaS/fintech aesthetic, not Google's Material 3 Expressive,
+which is colorful and playful). What we're taking from it:
+
+- **Depth via tone, not shadow** — elevation communicated by a lighter/darker surface tint
+  (nested cards sit on a visibly different gray), shadow is a supporting detail, not the
+  primary depth cue.
+- **Big, soft shape language** — generous corner radii on cards, pill/stadium shape on
+  chips and primary actions.
+- **Color is reserved** — grayscale carries structure and hierarchy; color appears only on
+  interactive elements and status. **Decision: keep the existing teal primary** as the sole UI
+  accent — do not move to a black/near-black primary as in the reference screenshot. Fits
+  white-label: a neutral shell lets each tenant's brand color read clearly instead of
+  competing with UI chrome.
+- **Hierarchy via weight**, not just color or size — key numbers (KPIs, targets) get heavy
+  font weight as the primary signal.
+- **Motion stays restrained** — this look pairs with fast, snappy transitions, not bouncy
+  ones. `spatial` here means layered tone, not playful physics.
+
+This direction validates — rather than replaces — work already piloted on
+`AppEntityList.vue` / `AppEntityList.css` (see below). The "refactor" tracked in
+`FEATURE_BACKLOG.md` → Design System is mostly about extending that existing system to the
+rest of the app, not inventing a new one.
+
+## Motion & transition inspiration
+
+Sites worth revisiting when we get to page transitions, scroll animation, and micro-interactions
+(mainly relevant to `apps/web`, but the easing/restraint philosophy applies to `apps/pwa` too —
+see "Motion stays restrained" above). Not yet scoped to a stage — parking here until we pick it up.
+
+- [Shopify Editions Winter 2026](https://www.shopify.com/editions/winter2026#retail)
+- [patrickheng.com](https://patrickheng.com)
+
+## Core principles
+
+1. **Depth via tone, not shadow.** Prefer `surface-container-*` role differences over
+   `box-shadow` stacking. Shadows (`--pwa-shadow-sm` / `--pwa-shadow-md`) stay subtle,
+   supporting cues only.
+2. **Fibonacci shape & spacing scale** for anything that should read as "expressive"
+   (feed cards, spatial groupings) — see token table below. Flat controls (inputs, buttons)
+   keep the smaller `--pwa-radius` scale.
+3. **Color is reserved for interactive/status elements.** Teal (`--pwa-primary`) is the one
+   UI accent. Status chips use tonal color (existing `.pwa-lead-status-chip*` pattern in
+   `theme.scss`) — already aligned with this direction, no change needed there.
+4. **Weight-based hierarchy** for key metrics — bold numeric display, not color, is the
+   primary signal for dashboard/KPI values (relevant to Stage 4 FFM dashboard work).
+5. **Motion stays snappy, not bouncy.** `--pwa-ease-out-smooth` is the default for all
+   navigation/state transitions. `--pwa-ease-spring` is reserved for rare, deliberate feedback
+   moments (e.g. a save-success confirmation) — not general-purpose motion.
+6. **One canonical component per UI pattern — reuse it, don't reinvent it inline.** Loading,
+   notification, and tooltip are not "pick whatever's convenient for this view" decisions.
+   Every loading state is `AppLoadingState.vue` (which wraps `AppSpinner.vue` — never a bare
+   `<VProgressCircular>` or a hand-placed spinner dropped next to some other control). Every
+   toast/banner is `useNotifications()` + `AppNotifications.vue`. Every tooltip is Vuetify's
+   `VTooltip`. If an existing canonical component doesn't fit a new situation (placement,
+   size, whatever), fix or extend that component — add a prop, add a variant — rather than
+   building a one-off next to it. A second loading spinner with its own look is a regression
+   even if it "works", because the whole point is that a user (and a future reader of the
+   code) can trust one visual language for "this is loading" everywhere, not re-learn it per
+   screen. This applies retroactively too: if you spot an ad-hoc reinvention while touching a
+   view, hoist it back onto the canonical component instead of leaving it as-is.
+
+## CSS authoring convention: utility-first with Vuetify
+
+**Decision (2026-07-31):** new and refactored templates default to Vuetify utility classes
+(`d-flex`, `pa-*`, `ma-*`, `text-*`, `bg-*`, gap/flex utilities, etc.) and built-in Vuetify
+components. Hand-written `<style scoped>` CSS is a documented exception, not the default.
+
+Why: the long-term plan is to bring `apps/web` onto Vuetify (eventually Nuxt), sharing the same
+`packages/vuetify` factory both apps already have access to. Standardizing on Vuetify's own
+utility/component vocabulary now — rather than growing more BEM-style `<style scoped>` blocks —
+is what makes that migration a "point `apps/web` at the same factory" move later instead of a
+second design system to reconcile. Full `vuetify/styles` is already imported unminified in
+`packages/vuetify/src/index.ts` (not tree-shaken), so utility classes work today with no build
+change.
+
+This is not primarily about writing less CSS — a rule expressed as a utility class in the
+template is roughly the same amount of code as the equivalent scoped rule, just relocated. What
+it actually removes is the failure surface that accumulates in ~2000 lines of hand-written scoped
+CSS across `apps/pwa`: dead rules, class-name drift between components, specificity conflicts.
+That's the sense in which this serves "robust", not line count.
+
+Rules:
+1. **Default**: layout, spacing, and typography in the template use Vuetify utility classes. Don't
+   open a new `<style scoped>` block for something a utility class already expresses.
+2. **Escape hatch**: `<style scoped>` stays allowed when a rule encodes a constraint a utility
+   class can't carry (a specific layout conflict, an animation, a pseudo-element trick) — always
+   with a one-line comment explaining *why*, not *what*. `AppFilterBar.vue`'s `.app-filter-bar__badge
+   { flex-shrink: 0; }` (with its comment on the sibling flex-basis conflict) is the template for
+   this — the exception, not a pattern to copy for ordinary layout.
+3. **Components over hand-rolled equivalents**: prefer Vuetify's built-ins (`VNavigationDrawer`,
+   `VList` with `:to`/`color="primary"` for active-state, etc.) — see the nav drawer entry in
+   Rollout status below for the precedent (manual `RouterLink`+`isActive` bookkeeping replaced by
+   Vuetify's own active-state handling).
+4. **Tokens**: don't add a new `--pwa-*` custom property for something Vuetify's theme system
+   already models (spacing scale, color roles). Extend `theme.colors` in
+   `packages/vuetify/src/index.ts` instead — see the M3 color roles below for the existing
+   precedent of doing this. That way `apps/web`'s eventual Vuetify adoption inherits the same
+   tokens for free instead of needing its own `--website-*` translation layer.
+
+**Not decided yet**: retrofitting the ~40 existing `<style scoped>` components in `apps/pwa` to
+this convention. That's a separate, larger refactor call — this section only fixes the convention
+for new/touched code going forward.
+
+## Existing tokens (`theme.scss`)
+
+| Token | Value | Use |
+|---|---|---|
+| `--pwa-fib-xs` … `--pwa-fib-3xl` | 5 / 8 / 13 / 21 / 34 / 55 / 89px | Fibonacci spacing/shape scale — expressive surfaces (feed cards) |
+| `--pwa-radius` | 10px | Flat controls: inputs, buttons |
+| `--pwa-modal-radius` | 28px | Dialogs/modals (M3 extra-large) |
+| `--pwa-radius-sm` | 2px | Small elements (loader bars) |
+| `--pwa-shadow-sm` / `--pwa-shadow-md` | soft, low-alpha black | Supporting elevation only — never the primary depth cue |
+| `--pwa-ease-out-smooth` | `cubic-bezier(0.22, 1, 0.36, 1)` | Default transition easing |
+| `--pwa-ease-spring` | `cubic-bezier(0.34, 1.2, 0.64, 1)` | Reserved for rare feedback moments, not general motion |
+| `--pwa-primary` / `--pwa-primary-hover` | brand teal | The one color accent — do not introduce a second competing accent |
+
+## M3 color roles (`packages/vuetify/src/index.ts`)
+
+Values reuse the grays already in `--pwa-border` / `--pwa-bg-secondary` under M3-standard
+semantic names, so existing surfaces don't shift — only the vocabulary becomes reusable for
+new components.
+
+| Role | Light | Dark |
+|---|---|---|
+| `outline` | `#79747E` | `#948F94` |
+| `outline-variant` | `#e0e0e0` | `#333333` |
+| `surface-container-low` | `#f7f7f7` | `#1a1a1a` |
+| `surface-container` | `#f2f2f2` | `#1e1e1e` |
+| `surface-container-high` | `#ececec` | `#262626` |
+
+## State-layer pattern
+
+Hover/press feedback is a separate tonal overlay composited on top of the base surface —
+not a `background-color` swap, which would replace the tone instead of tinting it:
+
+```css
+.card--clickable {
+  position: relative;
+}
+.card--clickable::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-color: rgb(var(--v-theme-on-surface));
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+.card--clickable:hover::after { opacity: 0.04; }
+.card--clickable:active::after { opacity: 0.08; }
+```
+
+## Identity avatars & entity links
+
+Every patient, doctor (HCP) and organization (HCO) name in the PWA shows up with an avatar,
+whether it's a table cell, a mobile card line, a detail panel or a note author. It is never plain text.
+
+- **Primary name of a row** (the entity the row opens): `AppAvatar` + name
+  (32px in table cells, 55px as the mobile card avatar).
+- **Any related entity** (the doctor on a patient row, the dentist on a plan, a doctor's
+  clinics, a lead's institution): `EntityLink`, i.e. a 20px avatar + link to that entity's
+  detail page. Use the `utils/entityLinks.ts` helpers (`hcpDetailLink`, `hcoDetailLink`,
+  `patientDetailLink`, `hcoListLink`). They return `null` for a missing id, and in that case the
+  name renders unlinked. Mobile card second lines use `EntityMetaLine` (meta text + EntityLink),
+  because a `" · "`-joined string can't carry a link.
+- **Organizations always get the avatar and the link together.** When there's no organization
+  id (a lead's free-text institution), link to the filtered HCO list and pass `entity-type="hco"`.
+- **Patient vs. doctor at a glance:** doctors, reps and leads get a solid fill with white initials.
+  Patients get the negative: a white fill, with the ring and initials in the same seeded color. The ring
+  scales with size (`size / 19`, min 1px) and outlined initials are bold (700), so the ring
+  and the letter strokes match at every size. Organizations get their type icon, never initials.
+
+## Rollout status
+
+- **Piloted**: `AppEntityList.vue` / `.css` mobile feed cards — Fibonacci shape/spacing,
+  `outline` / `outline-variant` / `surface-container-*` roles, `::after` state-layer hover/press.
+  Card sizing uses two consecutive Fibonacci numbers deliberately (89px tile / 55px avatar ≈
+  golden ratio).
+- **Done**: buttons, inputs, dialogs, desktop data table (`theme.scss`):
+  - Buttons: labeled (non-icon) `.v-btn` moved to pill/stadium shape (`--pwa-radius-pill`,
+    9999px) — decision confirmed, matches the Fibonacci-scale card rounding. Icon-only buttons
+    stay circular (Vuetify's own `.v-btn--icon` default, already correct for M3).
+  - Inputs: outlined `.v-field` border now uses `outline-variant` at rest / `outline` when
+    focused, replacing Vuetify's default `currentColor`-at-opacity border — same static gray
+    as the card borders instead of an on-surface tint. **Bugfix**: the rest-state border was
+    initially near-invisible — Vuetify's own `--v-field-border-opacity` (0.38, meant to dim an
+    on-surface `currentColor`) was still applying on top of the already-light `outline-variant`
+    gray, double-dimming it. Forced to full opacity at rest since the color itself is already
+    the subtle element; hover/error still layer their own opacity bump on top unchanged.
+  - Dialogs (2026-09-26): exactly two shells — `AppFormDialog.vue` for every form-style dialog
+    and `AppConfirmDialog.vue` for every two-option confirm. A raw `<VDialog>` anywhere else
+    fails `AppFormDialog.spec.ts` (only the full-screen presentation/legal-document viewers are
+    exempt). Surface is plain white (`surface`), not the `surface-container-high` grey tone
+    used before — forms read as paper, the scrim already separates them from the page;
+    `--pwa-shadow-md` stays as a supporting cue.
+  - "Record stack" paper look (NEO-85, 2026-09-26, variant C picked from a live proposal): the
+    chrome and everything behind the content is a teal-grey desk (`--pwa-desk`); the routed
+    content is one white sheet (`AppLayout .layout-main__inner`, AppShell `sheet` mode keeps its
+    top corners round) with two more sheets peeking out under its bottom edge; list rows are
+    ruled lines (`--pwa-rule`) under a brand-coloured header rule; dialogs are a single lifted
+    sheet with no stack under it (decided 2026-09-26), the main action a filled pill. The peeking sheets are extra `box-shadow`
+    layers (offset down, negative spread), not elements, so nothing can clip or mis-stack them.
+    Every tint mixes from `--pwa-primary`, which the tenant config overrides at runtime.
+    Motion: rows stagger in with M3 emphasized-decelerate; dialogs grow from the tap and close
+    faster (180ms emphasized-accelerate); on phones (< 600px) form dialogs are a bottom sheet
+    (`sheetDialogTransition`); focused fields get a brand halo; all of it honours
+    `prefers-reduced-motion`.
+  - Page changes (NEO-85, picked from a live proposal): list → record slides the record in
+    from the right over the list (which dims and drifts left), Back slides it off again, and
+    every other move (menu / bottom nav) is a 90/210ms M3 fade-through. Built on the View
+    Transitions API (`router/pageTransitions.ts` + `styles/page-transitions.css`) with only the
+    content sheet named, so the bar and menu never move; browsers without it keep the old
+    `view-fade-lift`. Don't wrap the routed view in a CSS-less `<Transition>` where View
+    Transitions run: the synchronous swap made Vue throw and the list stayed empty after Back.
+  - "Carpeta" form folder (NEO-92, 2026-09-26, variant C picked from a live proposal): a
+    FormRenderer form whose fields span ≥ 2 sections (`FormFieldDef.section`, labels
+    `app.formRenderer.section.*`) opens as a folder. A tinted spine on the left
+    (`FormFolderSpine.vue`) holds the avatar, the live name, the record header's detail line
+    (`useIdentity().detailsFor`), the status pill and a scroll-spy section index. The page on
+    the right holds the title + X, one sheet with a ruled heading per section, and the actions
+    with an "Unsaved changes: n" counter. Sections with unsaved changes get a warning-colour
+    dot. The spine is desktop-only (≥ 960px). Tablets (600–959px, decided 2026-09-26: "like
+    mobile but still on a tile") keep a floating tile and phones the bottom sheet; both show the
+    index as chips under the header (`FormSectionChips.vue`).
+    Create and edit are the same view. Content scrolled behind the header or the actions fades
+    out over `--pwa-dialog-fade` (20px, a mask on the body) instead of meeting a hairline:
+    the hairline let a floating field label touch the header. No serif (decided); hierarchy
+    comes from weight and size.
+  - Phone list toolbar: three icons (search, filter, add); focused search grows over the row
+    while the others step aside; a query left behind stays as a tinted pill on the left.
+  - Dialog scroll model: the dialog is capped at the viewport, header and actions stay pinned,
+    only the body scrolls, and a hairline divider shows under the header / above the actions
+    only while content runs behind them (M3). **Bugfix** (Vuetify 4): Vuetify ships all of its
+    CSS in cascade layers, so our unlayered `overflow: hidden` on the card beat Vuetify's own
+    `overflow-y: auto` and no form taller than the screen could scroll or reach Save. The scroll
+    model now lives only in `theme.scss`'s `.pwa-form-dialog*` rules + `AppFormDialog.vue`;
+    measured at real phone/laptop heights by `apps/pwa/e2e/dialog-scroll.spec.ts` on all three
+    engines. General rule after Vuetify 4: any unlayered app CSS on a Vuetify class wins over
+    Vuetify regardless of specificity — never set layout properties (overflow, display,
+    height) on Vuetify elements outside a shell that owns the whole model.
+  - Dialog headers: every titled dialog uses `AppDialogHeader.vue` — optional avatar, 16px gap,
+    title, close X pinned right (`closable=false` only for confirm dialogs). Never a hand-built
+    `VCardTitle`: Vuetify injects its component CSS after `theme.scss`, so a global flex rule on
+    a card title silently loses (`display: block`) and the X wraps under the avatar. Guarded by
+    `AppDialogHeader.spec.ts` (no `VCardTitle` in any dialog file) and
+    `apps/pwa/e2e/dialog-header.spec.ts` (real-browser layout on Chromium/Firefox/WebKit).
+  - Dialog spacing (M3 dialog spec, 2026-09-25): every dialog card carries
+    `pwa-form-dialog__card` (forms) or `pwa-confirm-dialog__card` (confirmations) and gets
+    one spacing system from `theme.scss`'s `--pwa-dialog-*` tokens — 24dp container padding,
+    16dp header→content, 16dp between fields, 24dp content→actions, 8dp between actions,
+    28dp corner radius (`--pwa-modal-radius`), M3 headline-small title (24/32), sentence-case
+    text buttons with 12dp side padding. Vuetify's always-reserved error line under each field
+    only takes space while it shows a message. The same e2e spec measures all of these in
+    pixels; the unit guard fails on a dialog card missing one of the two classes.
+    Uppercase buttons outside dialogs are unchanged (still Vuetify's M2-style default).
+  - Desktop data table: `.app-entity-list__table-wrap` border moved from generic
+    `--v-border-color` to `outline-variant`; header row (`.v-data-table__th`) now sits on
+    `surface-container-low` as a distinct tonal layer instead of Vuetify's own header
+    background.
+  - Button padding: labeled `.v-btn` horizontal padding bumped (`padding-inline: 24px` default/
+    large, `16px` small) — the pill shape's rounded ends were eating into Vuetify's original
+    rectangular-button padding, cramping labels like "Cancel" / "Add patient" against the curve.
+- **Done**: `apps/web` (`website-theme.scss`) — same role vocabulary aliased onto existing
+  tokens rather than touched file-by-file: `--website-outline` / `--website-outline-variant` /
+  `--website-surface-container-*` added (light + dark), and `--website-border` (used at ~40
+  call sites across HomeHero, CareersJobCard, EventoView, FindSpecialistView, ...) now aliases
+  `--website-outline-variant` so the whole site picks up the M3 tone from one token change.
+  Buttons (`.home-btn`, `--brand-radius-btn: 9999px`) were already pill-shaped before this
+  rollout started — no change needed there. `surface-container-*` tokens are defined and
+  available but not yet retrofitted onto shadow-elevated cards (bigger per-view redesign,
+  deferred — see open items).
+- **Done**: left nav drawer (`packages/ui/AppShell.vue`, `apps/pwa/AppNavLinks.vue`) — a
+  short-lived custom glassmorphism treatment (backdrop-filter blur, animated glow, spring
+  easing) was tried and reverted per direct feedback ("no custom stuff"). Settled on plain
+  Vuetify-native theming instead: the drawer's `color="surface-container-low"` prop replaces
+  what used to be hand-rolled `--pwa-sidebar-bg` CSS vars, and nav items switched from manual
+  `RouterLink`+`isActive` bookkeeping to `VListItem :to` + `VList color="primary"`, which gives
+  Vuetify's own tonal active-state background/text for free — the "one teal accent" rule
+  applied via the framework instead of custom rgba/color-mix. Desktop and mobile also collapsed
+  from two different drawer components into one `VNavigationDrawer` (`:temporary="mobile"` +
+  `:rail="!mobile && railCollapsed"`), Vuetify's own responsive composition — `apps/web`'s
+  separate hand-rolled `MobileNavDrawer` (swipeable) is intentionally untouched, since
+  `apps/web` doesn't use Vuetify anywhere else and one drawer isn't worth pulling it in for.
+- Tracked in `FEATURE_BACKLOG.md` → Design System → "Material 3 rollout (full app)".
+
+## Open items for the next pass
+
+- Uppercase "kicker" label utility (small, letter-spaced, `--pwa-text-secondary`) for section
+  metadata — not yet defined as a reusable class.
+- Numeric-display type scale for KPI values (Stage 4 FFM dashboard, rep target tracking) —
+  not yet defined.
+- `apps/web`: `--website-surface-container-*` tokens exist but aren't yet used — retrofitting
+  shadow-elevated cards (job cards, feature panels, testimonials) to tonal depth is a larger,
+  per-view design pass, not a token-only change like the border rollout.
+- `AppDataTable.vue` appears unreferenced anywhere in the app (superseded by
+  `AppEntityList.vue`) — candidate for removal in a separate cleanup pass, left untouched here.
+
+_Last updated: 2026-07-31_

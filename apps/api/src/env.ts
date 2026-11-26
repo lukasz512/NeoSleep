@@ -1,0 +1,132 @@
+const DEV_SESSION_SECRET = "dev-secret-change-in-production";
+
+function readSessionSecret(): string {
+  const value = process.env.SESSION_SECRET;
+  if (value) return value;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET must be set in production");
+  }
+  return DEV_SESSION_SECRET;
+}
+
+export const SESSION_SECRET: string = readSessionSecret();
+
+/** JWT signing secret — reuses SESSION_SECRET's value/validation on purpose (no separate
+ *  env var / Render dashboard entry needed just to rename it). */
+export const JWT_SECRET: string = SESSION_SECRET;
+
+export const FRONTEND_URL: string = process.env.FRONTEND_URL ?? "http://localhost:5173";
+
+/**
+ * FRONTEND_URL can be a comma-separated list (e.g. one Render BFF serving both
+ * pwa.neosleepcare.com and pwa-dev.neosleepcare.com — see server.ts's CORS
+ * config). FRONTEND_URL itself must never be interpolated directly into a
+ * redirect/link URL when it holds more than one value — that produces a
+ * literally broken URL like "https://a.com,https://b.com/reset-password".
+ * Use this array + a per-request resolver (see auth.ts's resolveFrontendOrigin)
+ * to pick exactly one origin instead.
+ */
+export const FRONTEND_URLS: string[] = FRONTEND_URL.split(",").map((s) => s.trim()).filter(Boolean);
+
+/**
+ * Which environment this API is (NEO-218). It goes into the environment tag on
+ * every device order, so the reconciliation can tell "sent by the other
+ * environment" apart from "placed directly in the lab". Set explicitly in
+ * infrastructure/cloud-run/*.env.yaml. When unset, it is derived from the
+ * first FRONTEND_URL (pwa-dev → dev, pwa → prod); anything else is "local".
+ */
+export function resolveDeployEnv(explicit: string | undefined, frontendUrls: readonly string[]): "dev" | "prod" | "local" {
+  const value = explicit?.trim().toLowerCase();
+  if (value === "dev" || value === "prod" || value === "local") return value;
+  const first = frontendUrls[0] ?? "";
+  if (/\/\/pwa-dev\./.test(first)) return "dev";
+  if (/\/\/pwa\.neosleepcare\.com/.test(first)) return "prod";
+  return "local";
+}
+
+export const DEPLOY_ENV: "dev" | "prod" | "local" = resolveDeployEnv(process.env.DEPLOY_ENV, FRONTEND_URLS);
+
+/** Full privacy notice linked from the patient self-fill consent (the layered notice there is the short version). */
+export const PRIVACY_NOTICE_URL: string = process.env.PRIVACY_NOTICE_URL ?? "https://neosleepcare.com/privacy";
+
+/** Supabase Storage — signed documents (GDPR consent, partner agreement PDFs). Backend-only, never sent to the frontend. */
+export const SUPABASE_URL: string | undefined = process.env.SUPABASE_URL;
+export const SUPABASE_SERVICE_KEY: string | undefined = process.env.SUPABASE_SERVICE_KEY;
+export const SUPABASE_DOCUMENTS_BUCKET: string = process.env.SUPABASE_DOCUMENTS_BUCKET ?? "partner-documents";
+
+/**
+ * OrthoApnea (apneadock.es) — one shared NeoSleep account, used server-side
+ * only. Optional: environments without it just have the partner feature
+ * unavailable (see services/partners/orthoapnea.ts), the API server still boots.
+ */
+export const ORTHOAPNEA_BASE_URL: string = process.env.ORTHOAPNEA_BASE_URL ?? "https://apneadock.es";
+export const ORTHOAPNEA_EMAIL: string | undefined = process.env.ORTHOAPNEA_EMAIL;
+export const ORTHOAPNEA_PASSWORD: string | undefined = process.env.ORTHOAPNEA_PASSWORD;
+
+/**
+ * Shared secret for machine-to-machine job endpoints (e.g. the partner
+ * status-sync job — see middleware/requireInternalJobSecret.ts) that an
+ * external scheduler (Render Cron Job / GitHub Actions schedule) calls
+ * instead of a logged-in user. Optional: without it, those endpoints reject
+ * every request rather than falling back to no auth at all — same
+ * fail-closed shape used everywhere else a secret gates a feature.
+ */
+export const INTERNAL_JOB_SECRET: string | undefined = process.env.INTERNAL_JOB_SECRET;
+
+/**
+ * Google Calendar — books partnership-offer calls onto a single personal Gmail
+ * calendar (not Google Workspace, so no built-in "Appointment schedule" page).
+ * OAuth2 with a long-lived refresh token, server-side only. Optional: without
+ * it the booking routes just respond 503 (see services/googleCalendar.ts).
+ */
+export const GOOGLE_CALENDAR_CLIENT_ID: string | undefined = process.env.GOOGLE_CALENDAR_CLIENT_ID;
+export const GOOGLE_CALENDAR_CLIENT_SECRET: string | undefined = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
+export const GOOGLE_CALENDAR_REFRESH_TOKEN: string | undefined = process.env.GOOGLE_CALENDAR_REFRESH_TOKEN;
+export const GOOGLE_CALENDAR_ID: string = process.env.GOOGLE_CALENDAR_ID ?? "neosleepcare@gmail.com";
+/** Always invited alongside the lead on every booked demo call (e.g. lukasz.ostrowski@neosleepcare.com,alfred.jan@neosleepcare.com). */
+export const GOOGLE_CALENDAR_EXTRA_ATTENDEES: string[] = (process.env.GOOGLE_CALENDAR_EXTRA_ATTENDEES ?? "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+/**
+ * Google Geocoding API — server-side only, resolves an organization's address
+ * to lat/lng for the public "find a specialist" map pins (see
+ * services/geocoding.ts). A plain API key (no OAuth), restricted in Google
+ * Cloud Console to the Geocoding API + this server's IP. Optional: without it
+ * geocoding is just skipped (organizations save fine, they simply have no pin
+ * until this is configured and re-saved/backfilled).
+ */
+export const GOOGLE_MAPS_SERVER_API_KEY: string | undefined = process.env.GOOGLE_MAPS_SERVER_API_KEY;
+
+/**
+ * Resend — transactional email sender (password reset, partner invites, lead
+ * offers, demo booking confirmations, contact form notifications), see
+ * mailer.ts. Sent over Resend's HTTP API, not SMTP — SMTP ports are blocked
+ * on Render's Free plan (see ADR-016), so this is not just a provider swap,
+ * it's the only thing that can actually work there. RESEND_FROM_EMAIL must
+ * be on a domain verified in the Resend dashboard (DNS records added there)
+ * — use a dedicated subdomain (mail.neosleepcare.com), not the apex, so
+ * Resend's own MX/SPF/DKIM never collides with the apex domain's human mail
+ * (Microsoft 365, see docs/INFRASTRUCTURE.md). No real mailbox needs to
+ * exist behind that address — individual reps/admins send "as themselves"
+ * via a Reply-To header instead (see mailer.ts's sendEmail()), not a
+ * per-person verified sending address. Optional: without both, mailer.ts
+ * logs a warning and silently skips sending (see ORTHOAPNEA_* above for the
+ * same pattern).
+ */
+export const RESEND_API_KEY: string | undefined = process.env.RESEND_API_KEY;
+export const RESEND_FROM_EMAIL: string | undefined = process.env.RESEND_FROM_EMAIL;
+/**
+ * Signing secret of the Resend webhook (whsec_…, Resend dashboard → Webhooks).
+ * routes/webhooks.ts refuses every call without it (503), so patient emails'
+ * delivery status stays "sent" until it is set (NEO-190).
+ */
+export const RESEND_WEBHOOK_SECRET: string | undefined = process.env.RESEND_WEBHOOK_SECRET;
+/** Fixed admin inbox for internal notifications (e.g. contact form). */
+export const RESEND_NOTIFY_TO: string | undefined = process.env.RESEND_NOTIFY_TO;
+/** Fixed compliance inbox cc'd on every signed partner-registration document email (interim
+ * single-tenant-MVP env var, not per-tenant `app_config` — see
+ * docs/stories/partner-registration-legal-documents.md, 2026-09-16 addendum). Optional: unset
+ * just means no cc, same degrade-gracefully shape as the other Resend vars above. */
+export const PARTNER_DOCS_CC_EMAIL: string | undefined = process.env.PARTNER_DOCS_CC_EMAIL;

@@ -1,0 +1,547 @@
+import type { PoolClient } from "pg";
+import { trimOrNull, trimOrEmpty } from "./helpers.js";
+import { AppError, DatabaseError, ValidationError } from "../errors.js";
+import { displayNameSql } from "../utils/personName.js";
+
+export interface Organization {
+  id: string;
+  name: string;
+  type: string | null;
+  identifiers: Record<string, string> | null;
+  address_line1: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+  country_code: string | null;
+  region: string;
+  territory_id: string | null;
+  // Immediate assigned territory node's own name — see the identical field on
+  // Practitioner (db/practitioner.ts) for why this is the flat name, not the
+  // full ancestor path (that's the single-record detail query's job).
+  territory_name: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  google_link: string | null;
+  /** Shown to patients in appointment emails under “what to bring” (CORE-25); plain text, ≤ 500 chars. */
+  visit_instructions: string | null;
+  /** The clinic's own aviso de privacidad (CORE-113) — shown to patients before they sign a consent. */
+  privacy_notice_url: string | null;
+  /** Geocoded from the address fields — see services/geocoding.ts. Null until geocoded (unconfigured key, geocode failure, or no address yet). */
+  latitude: number | null;
+  longitude: number | null;
+  specialties: string[];
+  status: string;
+  /** Listed on the public website's find-a-specialist map (migration 033, NEO-79). */
+  show_on_public_map: boolean;
+  metadata: Record<string, unknown> | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface GetOrganizationFilters {
+  search?: string;
+  type?: string;
+  region?: string;
+  status?: string;
+  /** RBAC territory scope (migration 022) — see GetPatientsFilters.scopePaths for the contract. */
+  scopePaths?: string[] | null;
+}
+
+export interface InsertOrganizationInput {
+  name: string;
+  type?: string;
+  address_line1?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country_code?: string | null;
+  region?: string;
+  territory_id?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  google_link?: string | null;
+  visit_instructions?: string | null;
+  privacy_notice_url?: string | null;
+  /** True when country_code came from geocoding the address (NEO-210 D1): the territory must not override it. */
+  country_from_address?: boolean;
+  /** Set by the command layer after geocoding the address fields above — not user input. */
+  latitude?: number | null;
+  longitude?: number | null;
+  specialties?: string[];
+  status?: string;
+  show_on_public_map?: boolean;
+  metadata?: Record<string, unknown> | null;
+}
+
+export interface UpdateOrganizationInput {
+  name?: string;
+  type?: string;
+  address_line1?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country_code?: string | null;
+  region?: string;
+  territory_id?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  google_link?: string | null;
+  visit_instructions?: string | null;
+  privacy_notice_url?: string | null;
+  /** True when country_code came from geocoding the address (NEO-210 D1): the territory must not override it. */
+  country_from_address?: boolean;
+  /** Set by the command layer after geocoding the address fields above — not user input. */
+  latitude?: number | null;
+  longitude?: number | null;
+  specialties?: string[];
+  status?: string;
+  show_on_public_map?: boolean;
+  metadata?: Record<string, unknown> | null;
+}
+
+const ORG_SORT_COLUMNS = ["name", "type", "region", "status", "created_at"] as const;
+
+function isOrgSortColumn(s: string): s is (typeof ORG_SORT_COLUMNS)[number] {
+  return ORG_SORT_COLUMNS.includes(s as (typeof ORG_SORT_COLUMNS)[number]);
+}
+
+const ORG_SELECT_COLS = `
+  o.id, o.name, o.type, o.identifiers, o.address_line1, o.city, o.state, o.postal_code,
+  o.country_code, o.region, o.territory_id, t.name AS territory_name, o.phone, o.email, o.website, o.google_link, o.visit_instructions, o.privacy_notice_url,
+  o.latitude, o.longitude, o.specialties, o.status, o.show_on_public_map, o.metadata, o.created_at, o.updated_at`.trim();
+
+export async function getOrganizationPaginated(
+  client: PoolClient,
+  filters: GetOrganizationFilters,
+  page: number,
+  limit: number,
+  sortBy: string,
+  sortOrder: "asc" | "desc"
+): Promise<{ rows: Organization[]; total: number }> {
+  const conditions: string[] = ["o.deleted_at IS NULL"];
+  const params: unknown[] = [];
+  let paramIndex = 1;
+
+  if (filters.search?.trim()) {
+    conditions.push(
+      `(LOWER(o.name) LIKE $${paramIndex} OR LOWER(COALESCE(o.type,'')) LIKE $${paramIndex} OR LOWER(COALESCE(o.region,'')) LIKE $${paramIndex} OR LOWER(o.status) LIKE $${paramIndex})`
+    );
+    params.push(`%${filters.search.trim().toLowerCase()}%`);
+    paramIndex++;
+  }
+  if (filters.type?.trim()) {
+    conditions.push(`o.type = $${paramIndex}`);
+    params.push(filters.type.trim());
+    paramIndex++;
+  }
+  if (filters.region?.trim()) {
+    conditions.push(`o.region = $${paramIndex}`);
+    params.push(filters.region.trim());
+    paramIndex++;
+  }
+  if (filters.status?.trim()) {
+    conditions.push(`o.status = $${paramIndex}`);
+    params.push(filters.status.trim());
+    paramIndex++;
+  }
+  if (filters.scopePaths !== undefined && filters.scopePaths !== null) {
+    conditions.push(`(o.territory_id IS NULL OR t.path <@ ANY($${paramIndex}::extensions.ltree[]))`);
+    params.push(filters.scopePaths);
+    paramIndex++;
+  }
+
+  const whereClause = `WHERE ${conditions.join(" AND ")}`;
+  const orderCol = isOrgSortColumn(sortBy) ? sortBy : "created_at";
+  const orderDir = sortOrder === "asc" ? "ASC" : "DESC";
+  const safeOrder = orderCol === "created_at" ? "o.created_at" : `o."${orderCol}"`;
+  const orgJoin = `FROM organization o LEFT JOIN territory t ON o.territory_id = t.id`;
+
+  try {
+    const countResult = await client.query<{ count: string }>(
+      `SELECT COUNT(*) AS count ${orgJoin} ${whereClause}`,
+      params
+    );
+    const total = Number(countResult.rows[0]?.count ?? 0);
+
+    const offset = (page - 1) * limit;
+    params.push(limit, offset);
+    const dataResult = await client.query<Organization>(
+      `SELECT ${ORG_SELECT_COLS}
+       ${orgJoin} ${whereClause} ORDER BY ${safeOrder} ${orderDir} LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      params
+    );
+    return { rows: dataResult.rows, total };
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getOrganizationPaginated", err);
+  }
+}
+
+export async function getOrganizationById(client: PoolClient, id: string): Promise<Organization | null> {
+  try {
+    const result = await client.query<Organization>(
+      `SELECT ${ORG_SELECT_COLS} FROM organization o LEFT JOIN territory t ON o.territory_id = t.id WHERE o.id = $1 AND o.deleted_at IS NULL`,
+      [id]
+    );
+    return result.rows[0] ?? null;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getOrganizationById", err);
+  }
+}
+
+/**
+ * Looks up an organization id by case-insensitive name match among non-deleted
+ * rows (optionally excluding a given id, for update-time checks). Used by
+ * commands/organization.ts to reject an explicit create/rename with a clean
+ * ConflictError before the DB's unique index (organization_name_unique_idx,
+ * see migrations/004_organization_name_unique_index.sql) would otherwise
+ * surface as an opaque 23505 constraint violation.
+ *
+ * This is a different UX intent from resolveOrganizationId() in
+ * db/practitioner.ts, which silently reuses/creates an organization by name
+ * for the "type an institution name inline" freetext convenience flow.
+ */
+export async function getOrganizationIdByName(
+  client: PoolClient,
+  name: string,
+  excludeId?: string
+): Promise<string | null> {
+  try {
+    const result = excludeId
+      ? await client.query<{ id: string }>(
+          `SELECT id FROM organization WHERE LOWER(name) = LOWER($1) AND id != $2 AND deleted_at IS NULL LIMIT 1`,
+          [name, excludeId]
+        )
+      : await client.query<{ id: string }>(
+          `SELECT id FROM organization WHERE LOWER(name) = LOWER($1) AND deleted_at IS NULL LIMIT 1`,
+          [name]
+        );
+    return result.rows[0]?.id ?? null;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getOrganizationIdByName", err);
+  }
+}
+
+/** The nearest territory (itself or an ancestor) country that is set — SQL shared by the two helpers below. */
+const TERRITORY_COUNTRY_SQL = `
+  SELECT a.country_code
+    FROM territory t
+    JOIN territory a ON t.path <@ a.path
+   WHERE t.id = $1
+     AND NULLIF(a.country_code, '') IS NOT NULL
+   ORDER BY extensions.nlevel(a.path) DESC
+   LIMIT 1`;
+
+/** Country of a territory (its own or its nearest ancestor's), or null. */
+export async function getTerritoryCountry(client: PoolClient, territoryId: string): Promise<string | null> {
+  try {
+    const { rows } = await client.query<{ country_code: string }>(TERRITORY_COUNTRY_SQL, [territoryId]);
+    return rows[0]?.country_code ?? null;
+  } catch (err) {
+    throw new DatabaseError("getTerritoryCountry", err);
+  }
+}
+
+/**
+ * A clinic's country is a fact of its address, not of who typed it in
+ * (NEO-210 D1): the command layer sets it from the geocoded address
+ * (`country_from_address`), and this is the fallback when the address gave
+ * none — the country of the clinic's territory. Without either, the stored
+ * value stays as sent. Fixes MX clinics saved as PL by a PL-based user.
+ */
+async function syncCountryFromTerritory(client: PoolClient, id: string): Promise<void> {
+  await client.query(
+    `UPDATE organization o
+        SET country_code = COALESCE((${TERRITORY_COUNTRY_SQL.replace("$1", "o.territory_id")}), o.country_code)
+      WHERE o.id = $1 AND o.territory_id IS NOT NULL`,
+    [id]
+  );
+}
+
+/**
+ * Inserts an organization record using the provided client.
+ * The client must already be in a transaction (withTenant handles this).
+ * No BEGIN/COMMIT here — the caller owns the transaction boundary.
+ */
+export async function insertOrganization(client: PoolClient, input: InsertOrganizationInput): Promise<Organization> {
+  const name = trimOrEmpty(input.name);
+  if (!name) throw new ValidationError("Organization name is required", "name");
+
+  try {
+    const result = await client.query<{ id: string }>(
+      `INSERT INTO organization
+         (name, type, address_line1, city, state, postal_code, country_code, region, territory_id, phone, email, website, google_link, latitude, longitude, specialties, status, metadata, show_on_public_map, visit_instructions, privacy_notice_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+       RETURNING id`,
+      [
+        name,
+        trimOrEmpty(input.type) || "other",
+        trimOrNull(input.address_line1),
+        trimOrNull(input.city),
+        trimOrNull(input.state),
+        trimOrNull(input.postal_code),
+        trimOrNull(input.country_code),
+        trimOrEmpty(input.region),
+        input.territory_id ?? null,
+        trimOrNull(input.phone),
+        trimOrNull(input.email),
+        trimOrNull(input.website),
+        trimOrNull(input.google_link),
+        input.latitude ?? null,
+        input.longitude ?? null,
+        input.specialties ?? [],
+        trimOrEmpty(input.status) || "active",
+        input.metadata ? JSON.stringify(input.metadata) : null,
+        input.show_on_public_map ?? true,
+        trimOrNull(input.visit_instructions),
+        trimOrNull(input.privacy_notice_url),
+      ]
+    );
+    const id = result.rows[0]!.id;
+    if (!input.country_from_address) await syncCountryFromTerritory(client, id);
+
+    const org = await getOrganizationById(client, id);
+    if (!org) throw new DatabaseError("insertOrganization", new Error("Insert returned no rows"));
+    return org;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("insertOrganization", err);
+  }
+}
+
+/**
+ * Updates organization fields using the provided client.
+ * The client must already be in a transaction (withTenant handles this).
+ */
+export async function updateOrganization(client: PoolClient, id: string, input: UpdateOrganizationInput): Promise<Organization | null> {
+  const existing = await getOrganizationById(client, id);
+  if (!existing) return null;
+
+  try {
+    const sets: string[] = ["updated_at = now()"];
+    const params: unknown[] = [];
+    let idx = 1;
+
+    if (input.name !== undefined) {
+      params.push(trimOrEmpty(input.name) || existing.name);
+      sets.push(`name = $${idx++}`);
+    }
+    if (input.type !== undefined) {
+      params.push(input.type);
+      sets.push(`type = $${idx++}`);
+    }
+    if (input.address_line1 !== undefined) {
+      params.push(trimOrNull(input.address_line1));
+      sets.push(`address_line1 = $${idx++}`);
+    }
+    if (input.city !== undefined) {
+      params.push(trimOrNull(input.city));
+      sets.push(`city = $${idx++}`);
+    }
+    if (input.state !== undefined) {
+      params.push(trimOrNull(input.state));
+      sets.push(`state = $${idx++}`);
+    }
+    if (input.postal_code !== undefined) {
+      params.push(trimOrNull(input.postal_code));
+      sets.push(`postal_code = $${idx++}`);
+    }
+    if (input.country_code !== undefined) {
+      params.push(trimOrNull(input.country_code));
+      sets.push(`country_code = $${idx++}`);
+    }
+    if (input.region !== undefined) {
+      params.push(trimOrEmpty(input.region));
+      sets.push(`region = $${idx++}`);
+    }
+    if (input.territory_id !== undefined) {
+      params.push(input.territory_id);
+      sets.push(`territory_id = $${idx++}`);
+    }
+    if (input.phone !== undefined) {
+      params.push(trimOrNull(input.phone));
+      sets.push(`phone = $${idx++}`);
+    }
+    if (input.email !== undefined) {
+      params.push(trimOrNull(input.email));
+      sets.push(`email = $${idx++}`);
+    }
+    if (input.website !== undefined) {
+      params.push(trimOrNull(input.website));
+      sets.push(`website = $${idx++}`);
+    }
+    if (input.google_link !== undefined) {
+      params.push(trimOrNull(input.google_link));
+      sets.push(`google_link = $${idx++}`);
+    }
+    if (input.visit_instructions !== undefined) {
+      params.push(trimOrNull(input.visit_instructions));
+      sets.push(`visit_instructions = $${idx++}`);
+    }
+    if (input.privacy_notice_url !== undefined) {
+      params.push(trimOrNull(input.privacy_notice_url));
+      sets.push(`privacy_notice_url = $${idx++}`);
+    }
+    if (input.latitude !== undefined) {
+      params.push(input.latitude);
+      sets.push(`latitude = $${idx++}`);
+    }
+    if (input.longitude !== undefined) {
+      params.push(input.longitude);
+      sets.push(`longitude = $${idx++}`);
+    }
+    if (input.specialties !== undefined) {
+      params.push(input.specialties ?? []);
+      sets.push(`specialties = $${idx++}`);
+    }
+    if (input.status !== undefined) {
+      params.push(input.status);
+      sets.push(`status = $${idx++}`);
+    }
+    if (input.metadata !== undefined) {
+      params.push(input.metadata ? JSON.stringify(input.metadata) : null);
+      sets.push(`metadata = $${idx++}`);
+    }
+    if (input.show_on_public_map !== undefined) {
+      params.push(input.show_on_public_map);
+      sets.push(`show_on_public_map = $${idx++}`);
+    }
+
+    params.push(id);
+    await client.query(`UPDATE organization SET ${sets.join(", ")} WHERE id = $${idx}`, params);
+    if (!input.country_from_address) await syncCountryFromTerritory(client, id);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("updateOrganization", err);
+  }
+
+  return getOrganizationById(client, id);
+}
+
+/**
+ * Soft-deletes an organization by setting deleted_at — status is left
+ * untouched (every read query already filters deleted_at IS NULL, so that
+ * alone is sufficient for visibility; see softDeleteLead for the same call).
+ */
+export async function softDeleteOrganization(client: PoolClient, id: string): Promise<void> {
+  try {
+    await client.query(`UPDATE organization SET deleted_at = now() WHERE id = $1`, [id]);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("softDeleteOrganization", err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PUBLIC SPECIALIST SEARCH (unauthenticated — "find a specialist" map)
+// ---------------------------------------------------------------------------
+
+export interface PublicSpecialistPractitioner {
+  id: string;
+  name: string;
+  specialties: string[];
+}
+
+export interface PublicSpecialistRow {
+  id: string;
+  name: string;
+  address_line1: string | null;
+  city: string | null;
+  state: string | null;
+  country_code: string | null;
+  phone: string | null;
+  website: string | null;
+  google_link: string | null;
+  specialties: string[];
+  latitude: number;
+  longitude: number;
+  practitioners: PublicSpecialistPractitioner[];
+}
+
+/**
+ * Only `active` organizations that have been geocoded (latitude/longitude
+ * not null) and are flagged `show_on_public_map` (migration 033, NEO-79) —
+ * never exposes pending_approval/inactive records, test clinics, or ones
+ * without a pin yet. `search`, if given, matches the organization's own
+ * name/city/state/specialties OR an affiliated practitioner's name/specialty
+ * — a doctor's name should surface the clinic they work at.
+ *
+ * Specialties are stored as codes (`dentist`), but a patient types the word
+ * in their own language ("dentista", "Stomatolog"). The search therefore
+ * also matches a specialty code whose translated label — the global
+ * platform.lookups vocabulary or the tenant's own lookup override, any
+ * locale — contains the search text (NEO-79).
+ *
+ * Affiliation is the union of `practitioner.organization_id` (primary
+ * workplace) and the `practitioner_organization` junction table (full
+ * multi-clinic list) — see the header comment on that column in
+ * 001_tenant_schema.sql.
+ */
+export async function getPublicSpecialists(
+  client: PoolClient,
+  { search, limit }: { search?: string; limit: number }
+): Promise<PublicSpecialistRow[]> {
+  const pattern = search?.trim() ? `%${search.trim().toLowerCase()}%` : null;
+
+  try {
+    const result = await client.query<PublicSpecialistRow>(
+      `WITH org_practitioners AS (
+         SELECT DISTINCT p.id AS practitioner_id, p.organization_id, i.title, i.first_name, i.last_name, p.specialties
+         FROM practitioner p
+         JOIN identities i ON i.id = p.identity_id
+         WHERE p.deleted_at IS NULL AND p.status = 'active' AND p.organization_id IS NOT NULL
+         UNION
+         SELECT DISTINCT p.id AS practitioner_id, po.organization_id, i.title, i.first_name, i.last_name, p.specialties
+         FROM practitioner_organization po
+         JOIN practitioner p ON p.id = po.practitioner_id
+         JOIN identities i ON i.id = p.identity_id
+         WHERE p.deleted_at IS NULL AND p.status = 'active'
+       ),
+       matched_specialty AS (
+         SELECT key FROM platform.lookups
+         WHERE $1::text IS NOT NULL AND type = 'specialty' AND (LOWER(key) LIKE $1 OR LOWER(value) LIKE $1)
+         UNION
+         SELECT key FROM lookup
+         WHERE $1::text IS NOT NULL AND type = 'specialty' AND enabled AND (LOWER(key) LIKE $1 OR LOWER(value) LIKE $1)
+       )
+       SELECT
+         o.id, o.name, o.address_line1, o.city, o.state, o.country_code,
+         o.phone, o.website, o.google_link, o.specialties, o.latitude, o.longitude,
+         COALESCE(
+           (SELECT json_agg(json_build_object('id', op.practitioner_id, 'name', ${displayNameSql("op")}, 'specialties', op.specialties))
+            FROM org_practitioners op WHERE op.organization_id = o.id),
+           '[]'
+         ) AS practitioners
+       FROM organization o
+       WHERE o.deleted_at IS NULL
+         AND o.status = 'active'
+         AND o.latitude IS NOT NULL
+         AND o.longitude IS NOT NULL
+         AND o.show_on_public_map
+         AND ($1::text IS NULL OR (
+           LOWER(o.name) LIKE $1 OR
+           LOWER(COALESCE(o.city, '')) LIKE $1 OR
+           LOWER(COALESCE(o.state, '')) LIKE $1 OR
+           EXISTS (SELECT 1 FROM unnest(o.specialties) s WHERE LOWER(s) LIKE $1 OR s IN (SELECT key FROM matched_specialty)) OR
+           EXISTS (
+             SELECT 1 FROM org_practitioners op
+             WHERE op.organization_id = o.id
+               AND (LOWER(op.first_name || ' ' || op.last_name) LIKE $1
+                 OR EXISTS (SELECT 1 FROM unnest(op.specialties) ps WHERE LOWER(ps) LIKE $1 OR ps IN (SELECT key FROM matched_specialty)))
+           )
+         ))
+       ORDER BY o.name ASC
+       LIMIT $2`,
+      [pattern, limit]
+    );
+    return result.rows;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getPublicSpecialists", err);
+  }
+}

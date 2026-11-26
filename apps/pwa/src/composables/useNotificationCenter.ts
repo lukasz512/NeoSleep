@@ -1,0 +1,186 @@
+import { isOfflineError, reportCaught, reportFailedResponse } from "@api";
+import { ref } from "vue";
+import { apiFetch } from "./useApi";
+import type { NotificationAction } from "../utils/notificationFeed";
+
+/**
+ * Notification Center — in-app inbox (bell + badge). See ADR-012.
+ *
+ * Not to be confused with useNotifications.ts, which is the unrelated toast/
+ * snackbar hub (ephemeral success/error banners).
+ *
+ * Module-level shared state (same pattern as useNotifications.ts): the badge
+ * count is read from three places at once (bell, sidebar nav, bottom nav),
+ * all of which must agree without prop-drilling.
+ *
+ * Realtime strategy (ADR-012 §3): poll refresh() while the tab is visible,
+ * plus web push nudges a refresh when backgrounded. refresh() is the single
+ * point where the transport could later move to SSE without touching any
+ * component that calls this composable.
+ */
+
+export interface CenterNotification {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  entityType: string | null;
+  entityId: string | null;
+  actionUrl: string | null;
+  readAt: string | null;
+  createdAt: string;
+  /** Folded repeats of the same event (ADR-027 grouping). */
+  groupCount: number;
+  /** Who it is about, joined by the API when the list is read (CORE-4 D1). */
+  subjectName: string | null;
+  /** The appointment's start, for appointment events. */
+  subjectAt: string | null;
+  /** Quick actions, only on events that need someone to act (CORE-4 D2). */
+  actions: NotificationAction[];
+}
+
+interface NotificationApiRow {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  entity_type: string | null;
+  entity_id: string | null;
+  action_url: string | null;
+  read_at: string | null;
+  created_at: string;
+  group_count?: number;
+  subject_name?: string | null;
+  subject_at?: string | null;
+  actions?: NotificationAction[];
+}
+
+function fromApi(row: NotificationApiRow): CenterNotification {
+  return {
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    body: row.body,
+    entityType: row.entity_type,
+    entityId: row.entity_id,
+    actionUrl: row.action_url,
+    readAt: row.read_at,
+    createdAt: row.created_at,
+    groupCount: row.group_count ?? 1,
+    subjectName: row.subject_name ?? null,
+    subjectAt: row.subject_at ?? null,
+    actions: row.actions ?? [],
+  };
+}
+
+const POLL_INTERVAL_MS = 45_000;
+
+const items = ref<CenterNotification[]>([]);
+const total = ref(0);
+const unreadCount = ref(0);
+const loading = ref(false);
+const loadError = ref(false);
+/** The error behind loadError (NEO-81) — lets the error state say offline vs. server problem. */
+const loadFailure = ref<unknown>(null);
+
+let pollTimer: ReturnType<typeof setInterval> | null = null;
+let pollRefCount = 0;
+
+async function fetchUnreadCount(): Promise<void> {
+  try {
+    const res = await apiFetch("/api/v1/notification/unread-count", { handleErrors: false });
+    if (!res.ok) {
+      // Deduped by reportCaught, so a failing poll reports at most once per 5 s.
+      await reportFailedResponse(res, { where: "useNotificationCenter.fetchUnreadCount" });
+      return;
+    }
+    const data = (await res.json()) as { count: number };
+    unreadCount.value = data.count;
+  } catch (err) {
+    // The badge just stays stale until the next successful poll. Offline polls are
+    // expected (a rep in a basement) and not worth a console line every interval.
+    if (!isOfflineError(err)) reportCaught(err, { where: "useNotificationCenter.fetchUnreadCount" });
+  }
+}
+
+async function fetchList(filter: "all" | "unread"): Promise<void> {
+  loading.value = true;
+  loadError.value = false;
+  loadFailure.value = null;
+  try {
+    const res = await apiFetch(`/api/v1/notification?filter=${filter}&limit=30`, { handleErrors: false });
+    if (!res.ok) {
+      loadFailure.value = await reportFailedResponse(res, { where: "useNotificationCenter.fetchList" });
+      loadError.value = true;
+      return;
+    }
+    const data = (await res.json()) as { items: NotificationApiRow[]; total: number };
+    items.value = data.items.map(fromApi);
+    total.value = data.total;
+  } catch (err) {
+    reportCaught(err, { where: "useNotificationCenter.fetchList" });
+    loadFailure.value = err;
+    loadError.value = true;
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function markRead(id: string): Promise<void> {
+  const target = items.value.find((n) => n.id === id);
+  if (target?.readAt) return; // already read, avoid a redundant round-trip
+
+  const res = await apiFetch(`/api/v1/notification/${id}/read`, { method: "PATCH", handleErrors: false });
+  if (!res.ok) return;
+
+  if (target) target.readAt = new Date().toISOString();
+  if (unreadCount.value > 0) unreadCount.value -= 1;
+}
+
+async function markAllRead(): Promise<void> {
+  const res = await apiFetch("/api/v1/notification/mark-all-read", { method: "POST", handleErrors: false });
+  if (!res.ok) return;
+
+  const now = new Date().toISOString();
+  items.value = items.value.map((n) => (n.readAt ? n : { ...n, readAt: now }));
+  unreadCount.value = 0;
+}
+
+/** Single refresh entry point — see module doc comment on why this matters. */
+async function refresh(): Promise<void> {
+  await fetchUnreadCount();
+}
+
+function startPolling(): void {
+  pollRefCount += 1;
+  if (pollTimer) return;
+  void refresh();
+  pollTimer = setInterval(() => {
+    if (document.visibilityState === "visible") void refresh();
+  }, POLL_INTERVAL_MS);
+}
+
+function stopPolling(): void {
+  pollRefCount = Math.max(0, pollRefCount - 1);
+  if (pollRefCount === 0 && pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
+export function useNotificationCenter() {
+  return {
+    items,
+    total,
+    unreadCount,
+    loadFailure,
+    loading,
+    loadError,
+    fetchList,
+    markRead,
+    markAllRead,
+    refresh,
+    startPolling,
+    stopPolling,
+  };
+}

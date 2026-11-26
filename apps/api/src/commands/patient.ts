@@ -1,0 +1,336 @@
+import type { TenantContext } from "../context/TenantContext.js";
+import {
+  insertPatient,
+  updatePatient,
+  getPatientById,
+  softDeletePatient,
+  type PatientInsert,
+  type PatientUpdate,
+  type Patient,
+} from "../db.js";
+import { insertAuditLog } from "../db.js";
+import { SUPPORTED_LANGUAGES } from "../utils/patientEmailLocale.js";
+import { ForbiddenError, ValidationError } from "../errors.js";
+import { assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
+import { assertCanSeePatient, practitionerIdForWrite } from "../queries/entityAccess.js";
+import { ConvertLeadCommand } from "./lead.js";
+import { addCareTeamMember } from "./careTeam.js";
+
+/**
+ * COMMANDS — Patient domain.
+ *
+ * Each command validates, writes, writes audit log, returns result.
+ * No req/res. No getDb(). Only ctx.client (tenant-scoped, same transaction).
+ */
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Same set as the identities.gender CHECK constraint (001_tenant_schema.sql). */
+const GENDERS = ["male", "female", "other", "prefer_not_to_say"] as const;
+
+/** undefined = not sent (leave as is), null/"" = clear, otherwise must be a known value. */
+function normalizeGender(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  const v = value?.trim() ?? "";
+  if (!v) return null;
+  if (!(GENDERS as readonly string[]).includes(v)) throw new ValidationError("Invalid gender", "gender");
+  return v;
+}
+
+/** undefined = not sent, null/"" = clear, otherwise a real calendar date
+ *  (YYYY-MM-DD) between 1900-01-01 and today. */
+function normalizeDateOfBirth(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  const v = value?.trim() ?? "";
+  if (!v) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (!m) throw new ValidationError("date_of_birth must be YYYY-MM-DD", "date_of_birth");
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  if (d.toISOString().slice(0, 10) !== v) throw new ValidationError("date_of_birth is not a valid date", "date_of_birth");
+  if (v < "1900-01-01" || d.getTime() > Date.now()) throw new ValidationError("date_of_birth is out of range", "date_of_birth");
+  return v;
+}
+
+// ---------------------------------------------------------------------------
+// CREATE PATIENT
+// ---------------------------------------------------------------------------
+
+export interface CreatePatientInput {
+  salutation?: string;
+  first_name: string;
+  last_name: string;
+  email?: string;
+  phone?: string;
+  gender?: string | null;
+  date_of_birth?: string | null;
+  practitioner_id?: string;
+  // Legacy alias: hcp_id maps to practitioner_id
+  hcp_id?: string;
+  diagnosis_code?: Record<string, unknown>;
+  ahi_baseline?: number;
+  height_cm?: number | string | null;
+  cpap_device?: string;
+  medical_record?: string;
+  status?: string;
+  region?: string;
+  territory_id?: string | null;
+  /** RBAC scope (see middleware/requireScope.ts) — the PWA's patientForm.ts
+   *  defaults this to the creating user's own country_code (hidden field,
+   *  same pattern as hcoForm.ts), so it's populated without a visible
+   *  required field for the common case. */
+  country_code?: string | null;
+  metadata?: Record<string, unknown>;
+  /** When set, this patient is being created from a lead ("move to contacts") —
+   *  the lead is atomically marked converted in the same transaction. */
+  lead_id?: string | null;
+}
+
+/** Same plausibility range as migration 049's CHECK (and STOP-Bang's, migration 034). */
+const HEIGHT_RANGE = [100, 230] as const;
+
+/** Height in cm, one decimal: undefined = not sent, null = cleared ("" too). Accepts a decimal comma. */
+export function normalizeHeight(value: number | string | null | undefined): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || (typeof value === "string" && !value.trim())) return null;
+  const number = typeof value === "number" ? value : Number(value.trim().replace(",", "."));
+  const [min, max] = HEIGHT_RANGE;
+  if (!Number.isFinite(number) || number < min || number > max) {
+    throw new ValidationError(`height_cm must be a number between ${min} and ${max}`, "height_cm");
+  }
+  return Math.round(number * 10) / 10;
+}
+
+export async function CreatePatientCommand(
+  ctx: TenantContext,
+  input: CreatePatientInput
+): Promise<Patient & { name: string }> {
+  const firstName = input.first_name?.trim() ?? "";
+  const lastName  = input.last_name?.trim() ?? "";
+  if (!firstName) throw new ValidationError("first_name is required", "first_name");
+  if (!lastName)  throw new ValidationError("last_name is required", "last_name");
+
+  const email = input.email?.trim() ?? "";
+  if (!email) throw new ValidationError("email is required", "email");
+  if (!EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format", "email");
+
+  const phone = input.phone?.trim() ?? "";
+  if (!phone) throw new ValidationError("phone is required", "phone");
+  if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits", "phone");
+
+  // Required for patients only (doctors share identities but never record these).
+  const gender = normalizeGender(input.gender);
+  if (!gender) throw new ValidationError("gender is required", "gender");
+  const dateOfBirth = normalizeDateOfBirth(input.date_of_birth);
+  if (!dateOfBirth) throw new ValidationError("date_of_birth is required", "date_of_birth");
+
+  // Support legacy hcp_id → practitioner_id. A doctor's new patient is always their own (CORE-104).
+  const practitionerId = (await practitionerIdForWrite(ctx, input.practitioner_id?.trim() || input.hcp_id?.trim() || undefined)) ?? undefined;
+  // A new patient can't land in a territory its creator doesn't cover (CORE-226) — same
+  // check UpdatePatientCommand runs on a territory change. Doctors are scoped by care team.
+  if (ctx.user.role !== "doctor") await assertTerritoryAccessByTerritoryId(ctx, input.territory_id);
+
+  const insertInput: PatientInsert = {
+    salutation:     input.salutation?.trim() || undefined,
+    first_name:     firstName,
+    last_name:      lastName,
+    email,
+    phone,
+    gender,
+    date_of_birth:  dateOfBirth,
+    practitioner_id: practitionerId,
+    diagnosis_code: input.diagnosis_code,
+    ahi_baseline:   input.ahi_baseline,
+    height_cm:      normalizeHeight(input.height_cm) ?? undefined,
+    cpap_device:    input.cpap_device?.trim() || undefined,
+    medical_record: input.medical_record?.trim() || undefined,
+    status:         input.status || "active",
+    region:         input.region || "",
+    territory_id:   input.territory_id,
+    country_code:   input.country_code?.trim() || null,
+    metadata:       input.metadata,
+  };
+
+  const patient = await insertPatient(ctx.client, insertInput);
+
+  await insertAuditLog(ctx.client, {
+    user_id:      ctx.user.id,
+    action:       "create",
+    entity_type:  "Patient",
+    entity_id:    patient.id,
+    entity_after: { id: patient.id, status: patient.status, region: patient.region },
+    request_id:   ctx.requestId,
+  });
+
+  const leadId = input.lead_id?.trim();
+  if (leadId) {
+    // Same ctx.client / transaction as the insert above — the patient create
+    // and the lead conversion commit or roll back together.
+    await ConvertLeadCommand(ctx, leadId, {
+      converted_to_id:   patient.id,
+      converted_to_type: "patient",
+    });
+  }
+
+  return patient;
+}
+
+// ---------------------------------------------------------------------------
+// UPDATE PATIENT
+// ---------------------------------------------------------------------------
+
+export interface UpdatePatientPayload {
+  salutation?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+  gender?: string | null;
+  date_of_birth?: string | null;
+  practitioner_id?: string;
+  hcp_id?: string;
+  diagnosis_code?: Record<string, unknown>;
+  ahi_baseline?: number;
+  height_cm?: number | string | null;
+  cpap_device?: string;
+  medical_record?: string;
+  status?: string;
+  region?: string;
+  /** identities.language (CORE-261): mail and notification language. */
+  language?: string;
+  territory_id?: string | null;
+  country_code?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Updates a Patient. Returns null if not found.
+ */
+export async function UpdatePatientCommand(
+  ctx: TenantContext,
+  id: string,
+  input: UpdatePatientPayload
+): Promise<(Patient & { name: string }) | null> {
+  if (!id?.trim()) throw new ValidationError("patient id is required");
+
+  if (input.email !== undefined) {
+    const email = input.email?.trim() ?? "";
+    if (!email) throw new ValidationError("email cannot be blank", "email");
+    if (!EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format", "email");
+  }
+
+  if (input.phone !== undefined) {
+    const phone = input.phone?.trim() ?? "";
+    if (!phone) throw new ValidationError("phone cannot be blank", "phone");
+    if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits", "phone");
+  }
+
+  // Can be filled in on an older patient that lacks them, never cleared.
+  const gender = normalizeGender(input.gender);
+  if (gender === null) throw new ValidationError("gender cannot be blank", "gender");
+  const dateOfBirth = normalizeDateOfBirth(input.date_of_birth);
+  if (dateOfBirth === null) throw new ValidationError("date_of_birth cannot be blank", "date_of_birth");
+
+  if (input.language !== undefined && !(SUPPORTED_LANGUAGES as readonly string[]).includes(input.language)) {
+    throw new ValidationError("language must be one of: " + SUPPORTED_LANGUAGES.join(", "), "language");
+  }
+
+  const before = await getPatientById(ctx.client, id);
+  if (!before) return null;
+  // Region and language steer which language mail goes out in (CORE-261): only admin, manager and
+  // the patient's doctor change them. Re-sending the current values (the edit form does) is fine.
+  const changesLocale = (input.language !== undefined && input.language !== before.language)
+    || (input.region !== undefined && input.region !== before.region);
+  if (changesLocale && !["admin", "manager", "doctor"].includes(ctx.user.role)) {
+    throw new ForbiddenError("Only an admin, manager or the patient's doctor can change region and language");
+  }
+  // Same check as GetPatientByIdQuery — editing must not reach further than
+  // reading (CORE-104: a doctor only their own patients). A territory change is
+  // checked against the target too, so a patient can't be moved into a
+  // territory the caller doesn't cover.
+  await assertCanSeePatient(ctx, before);
+  if (input.territory_id && input.territory_id !== before.territory_id) {
+    await assertTerritoryAccessByTerritoryId(ctx, input.territory_id);
+  }
+
+  // Support legacy hcp_id → practitioner_id
+  const requestedPractitionerId = input.practitioner_id !== undefined
+    ? input.practitioner_id
+    : input.hcp_id !== undefined
+      ? input.hcp_id
+      : undefined;
+  // Re-sending the current primary doctor (the edit form always does) changes nothing.
+  // A doctor can't hand their patient to another doctor (or unassign it), and only an
+  // admin replaces a primary doctor already set (CORE-132 D5) — the previous one stays
+  // on the care team.
+  let practitionerId: string | undefined;
+  if (requestedPractitionerId !== undefined && (requestedPractitionerId || null) !== before.practitioner_id) {
+    practitionerId = (await practitionerIdForWrite(ctx, requestedPractitionerId)) ?? undefined;
+    if (practitionerId === before.practitioner_id) practitionerId = undefined;
+    if (practitionerId && before.practitioner_id && ctx.user.role !== "admin") {
+      throw new ForbiddenError("Only an admin can change the patient's primary doctor");
+    }
+  }
+
+  const updateInput: PatientUpdate = {
+    salutation:     input.salutation !== undefined ? (input.salutation || undefined) : undefined,
+    first_name:     input.first_name?.trim() || undefined,
+    last_name:      input.last_name?.trim() || undefined,
+    email:          input.email !== undefined ? input.email : undefined,
+    phone:          input.phone !== undefined ? input.phone : undefined,
+    gender,
+    date_of_birth:  dateOfBirth,
+    practitioner_id: practitionerId,
+    diagnosis_code: input.diagnosis_code,
+    ahi_baseline:   input.ahi_baseline,
+    height_cm:      normalizeHeight(input.height_cm),
+    cpap_device:    input.cpap_device !== undefined ? input.cpap_device : undefined,
+    medical_record: input.medical_record !== undefined ? input.medical_record : undefined,
+    status:         input.status,
+    region:         input.region,
+    language:       input.language,
+    territory_id:   input.territory_id,
+    country_code:   input.country_code,
+    metadata:       input.metadata,
+  };
+
+  const after = await updatePatient(ctx.client, id, updateInput);
+  if (!after) return null;
+
+  await insertAuditLog(ctx.client, {
+    user_id:       ctx.user.id,
+    action:        "update",
+    entity_type:   "Patient",
+    entity_id:     id,
+    entity_before: { status: before.status, region: before.region, language: before.language, practitioner_id: before.practitioner_id },
+    entity_after:  { status: after.status,  region: after.region, language: after.language, practitioner_id: after.practitioner_id },
+    request_id:    ctx.requestId,
+  });
+
+  if (practitionerId && before.practitioner_id) {
+    await addCareTeamMember(ctx, { patientId: id, practitionerId: before.practitioner_id, source: "former_primary" });
+  }
+
+  return after;
+}
+
+// ---------------------------------------------------------------------------
+// DELETE PATIENT (soft delete)
+// ---------------------------------------------------------------------------
+
+export async function DeletePatientCommand(ctx: TenantContext, id: string): Promise<void> {
+  if (!id?.trim()) throw new ValidationError("patient id is required");
+
+  // Admin-only route, but admins can be region-scoped too.
+  const before = await getPatientById(ctx.client, id);
+  if (before) await assertCanSeePatient(ctx, before);
+
+  await softDeletePatient(ctx.client, id);
+
+  await insertAuditLog(ctx.client, {
+    user_id:    ctx.user.id,
+    action:     "delete",
+    entity_type: "Patient",
+    entity_id:  id,
+    request_id: ctx.requestId,
+  });
+}

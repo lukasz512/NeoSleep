@@ -1,0 +1,228 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const apiFetch = vi.fn();
+vi.mock("../../composables/useApi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../composables/useApi")>()),
+  apiFetch: (...args: unknown[]) => apiFetch(...args),
+}));
+
+import { hcpFormFields, hcpFormDerive, isCreatingNewOrganization, resolveOrganizationIdForSubmit } from "./hcpForm";
+import type { FormFieldDef } from "../../types/formField";
+import { createPinia, setActivePinia } from "pinia";
+import { useAuthStore } from "../../stores/auth";
+
+function jsonResponse(ok: boolean, body: unknown) {
+  return { ok, json: async () => body } as Response;
+}
+
+describe("hcpFormFields", () => {
+  it("leads with the shared Identity block, prefix key renamed to 'salutation'", () => {
+    expect(hcpFormFields.slice(0, 5).map((f) => f.key)).toEqual([
+      "salutation", "first_name", "last_name", "email", "phone",
+    ]);
+    // The renamed field keeps the shared Identity label/type/row layout —
+    // only the payload key changes to match apps/api/src/db/practitioner.ts's
+    // JS-facing field name.
+    expect(hcpFormFields[0].labelKey).toBe("app.identity.form.prefix");
+    expect(hcpFormFields[0].type).toBe("combobox");
+  });
+
+  it("organization_id (clinic) is a combobox (free text allowed) with an async loader", () => {
+    const clinic = hcpFormFields.find((f) => f.key === "organization_id")!;
+    expect(clinic.type).toBe("combobox");
+    expect(typeof clinic.options).toBe("function");
+    expect(typeof clinic.labelKey).toBe("function");
+    expect(typeof clinic.color).toBe("function");
+  });
+
+  it("isCreatingNewOrganization: false when empty/unset, true for any typed value that matches nothing on the loaded clinic list", () => {
+    // organizationsCache only fills in once loadOrganizationOptions()'s
+    // network call resolves — until then (as here, a fresh module import)
+    // it's empty, so any non-blank typed/pre-filled value reads as "new".
+    // A real dialog re-renders once that load completes (see hcpForm.ts's
+    // loadSpecialtyOptionsInheritedFirst/resolvedOptions() reactivity), so
+    // this only shows as a brief flash, not a stuck wrong state.
+    expect(isCreatingNewOrganization({})).toBe(false);
+    expect(isCreatingNewOrganization({ organization_id: "" })).toBe(false);
+    expect(isCreatingNewOrganization({ organization_id: "Some Clinic" })).toBe(true);
+  });
+
+  it("clinic label/color flip to the 'new clinic' variant only when isCreatingNewOrganization(form) is true", () => {
+    const clinic = hcpFormFields.find((f) => f.key === "organization_id")!;
+    const labelKey = clinic.labelKey as (form: Record<string, unknown>) => string;
+    const color = clinic.color as (form: Record<string, unknown>) => string | undefined;
+
+    expect(labelKey({})).toBe("user.hcp.form.clinic");
+    expect(color({})).toBeUndefined();
+
+    expect(labelKey({ organization_id: "Brand New Clinic" })).toBe("user.hcp.form.clinicNew");
+    expect(color({ organization_id: "Brand New Clinic" })).toBe("success");
+  });
+
+  it("new_organization.* fields are hidden unless creating a new clinic, and share the new_organization payload bucket", () => {
+    const newOrgFields = hcpFormFields.filter((f) => f.nestUnder === "new_organization");
+    expect(newOrgFields.map((f) => f.key).sort()).toEqual(
+      ["org_address_line1", "org_city", "org_phone", "org_postal_code", "org_region", "org_type"].sort(),
+    );
+    for (const f of newOrgFields) {
+      expect(typeof f.hidden).toBe("function");
+      const hidden = f.hidden as (form: Record<string, unknown>) => boolean;
+      expect(hidden({})).toBe(true);
+      expect(hidden({ organization_id: "Brand New Clinic" })).toBe(false);
+    }
+  });
+
+  it("new_organization.* keys don't collide with the practitioner's own hidden region or identity phone", () => {
+    // useFormRenderer's form state is a flat object keyed by bare `key`
+    // regardless of `nestUnder` — a plain "region"/"phone" here would
+    // silently overwrite those two fields' slots.
+    const keys = hcpFormFields.map((f) => f.key);
+    const duplicates = keys.filter((k, i) => keys.indexOf(k) !== i);
+    expect(duplicates).toEqual([]);
+  });
+
+  it("primary_specialty depends on organization_id and auto-selects the first inherited option", () => {
+    const specialty = hcpFormFields.find((f) => f.key === "primary_specialty")!;
+    expect(specialty.dependsOn).toEqual(["organization_id"]);
+    expect(specialty.autoSelectFirstIfEmpty).toBe(true);
+  });
+
+  it("influence_tier defaults to A (not the DB's own default of C)", () => {
+    const tier = hcpFormFields.find((f) => f.key === "influence_tier")!;
+    expect(tier.default).toBe("A");
+  });
+
+  it("region is a visible, editable country field — populated live via hcpFormDerive, no static default (CORE-261)", () => {
+    setActivePinia(createPinia());
+    const region = hcpFormFields.find((f) => f.key === "region")!;
+    const hidden = region.hidden as (form: Record<string, unknown>) => boolean;
+    type AuthUser = NonNullable<ReturnType<typeof useAuthStore>["user"]>;
+    useAuthStore().user = { role: "admin" } as AuthUser;
+    expect(hidden({})).toBe(false);
+    useAuthStore().user = { role: "rep" } as AuthUser;
+    expect(hidden({})).toBe(true);
+    expect(region.default).toBeUndefined();
+  });
+
+  it("language is a visible select with a function default, hidden from roles that may not change it (CORE-261)", () => {
+    setActivePinia(createPinia());
+    const language = hcpFormFields.find((f) => f.key === "language")!;
+    const hidden = language.hidden as (form: Record<string, unknown>) => boolean;
+    type AuthUser = NonNullable<ReturnType<typeof useAuthStore>["user"]>;
+    useAuthStore().user = { role: "manager" } as AuthUser;
+    expect(hidden({})).toBe(false);
+    useAuthStore().user = { role: "rep" } as AuthUser;
+    expect(hidden({})).toBe(true);
+    expect(language.type).toBe("select");
+    expect(typeof language.default).toBe("function");
+  });
+
+  it("licence number: PWZ shown only for PL, cédula only for MX, both nested under national_ids (NEO-51)", () => {
+    const ids = hcpFormFields.filter((f) => f.nestUnder === "national_ids");
+    expect(ids.map((f) => f.key)).toEqual(["pwz", "cedula"]);
+    const [pwz, cedula] = ids as [FormFieldDef, FormFieldDef];
+    const isHidden = (f: FormFieldDef, form: Record<string, unknown>) =>
+      typeof f.hidden === "function" ? f.hidden(form) : Boolean(f.hidden);
+    expect(isHidden(pwz, { region: "PL" })).toBe(false);
+    expect(isHidden(cedula, { region: "PL" })).toBe(true);
+    expect(isHidden(pwz, { region: "MX" })).toBe(true);
+    expect(isHidden(cedula, { region: "MX" })).toBe(false);
+    // No region on the form and no signed-in user → nothing to decide by.
+    setActivePinia(createPinia());
+    expect(isHidden(pwz, { region: "" })).toBe(true);
+    // No region on the form yet (no clinic picked) → falls back to the user's own region.
+    useAuthStore().user = { region: "PL" } as NonNullable<ReturnType<typeof useAuthStore>["user"]>;
+    expect(isHidden(pwz, { region: "" })).toBe(false);
+    expect(isHidden(cedula, { region: "" })).toBe(true);
+  });
+
+  it("licence number rules reject a bad PWZ checksum and accept a valid one", () => {
+    const pwz = hcpFormFields.find((f) => f.key === "pwz")!;
+    const rule = pwz.rules![0]!;
+    expect(rule("3123456")).toBe(true);
+    expect(rule("4123456")).toBe("app.identity.form.validation.pwzInvalid");
+    expect(rule("")).toBe(true);
+  });
+
+  it("social links (linkedin/instagram/facebook/google) all nest under social_links with icons", () => {
+    const social = hcpFormFields.filter((f) => f.nestUnder === "social_links");
+    expect(social.map((f) => f.key).sort()).toEqual(["facebook", "google", "instagram", "linkedin"]);
+    for (const f of social) expect(f.icon).toBeTruthy();
+  });
+
+  it("hcpFormDerive returns nothing when no clinic is selected yet", () => {
+    expect(hcpFormDerive({})).toBeUndefined();
+    expect(hcpFormDerive({ organization_id: "" })).toBeUndefined();
+  });
+
+  it("hcpFormDerive follows new_organization.org_region while typing a brand new clinic (no id to look up yet)", () => {
+    expect(hcpFormDerive({
+      organization_id: "Brand New Clinic",
+      new_organization: { org_region: "PL" },
+    })).toEqual({ region: "PL" });
+
+    expect(hcpFormDerive({
+      organization_id: "Brand New Clinic",
+      new_organization: {},
+    })).toBeUndefined();
+  });
+});
+
+describe("resolveOrganizationIdForSubmit", () => {
+  beforeEach(() => {
+    apiFetch.mockReset();
+  });
+
+  // Regression test: HCPView.vue/HCPDetailView.vue used to send the
+  // combobox's raw typed clinic name straight through as organization_id
+  // (a UUID FK column), crashing the backend with Postgres error 22P02
+  // "invalid input syntax for type uuid" — see apps/api/src/db/practitioner.ts's
+  // insertPractitioner/updatePractitioner, which trust organization_id as-is.
+  // This is the same "create org first" resolution createPractitionerFromLead
+  // (leadConversion.ts) already did for the lead-conversion form — now shared.
+
+  it("returns null without calling apiFetch when no clinic is selected (not 'creating new')", async () => {
+    const result = await resolveOrganizationIdForSubmit({});
+    expect(result).toBeNull();
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("creates the organization first and returns its real id when the typed clinic matches nothing on file", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, { id: "org-new-1" }));
+
+    const result = await resolveOrganizationIdForSubmit({
+      organization_id: "Brand New Clinic",
+      new_organization: { org_type: "clinic", org_region: "PL", org_city: "Warsaw" },
+    });
+
+    expect(result).toBe("org-new-1");
+    expect(apiFetch).toHaveBeenCalledTimes(1);
+    const [url, init] = apiFetch.mock.calls[0]!;
+    expect(url).toBe("/api/v1/organization");
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body).toMatchObject({ name: "Brand New Clinic", type: "clinic", region: "PL", city: "Warsaw" });
+  });
+
+  it("returns undefined without ever building a payload when organization creation fails", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(false, { error: "duplicate name" }));
+
+    const result = await resolveOrganizationIdForSubmit({ organization_id: "Brand New Clinic" });
+
+    expect(result).toBeUndefined();
+  });
+});
+
+describe("status field (docs/stories/practitioner-invite-resend.md — admin-only manual override)", () => {
+  it("is hidden via a function (admin-gated), not a static boolean, same convention as hcoForm.ts's own status field", () => {
+    const status = hcpFormFields.find((f) => f.key === "status")!;
+    expect(status).toBeDefined();
+    expect(typeof status.hidden).toBe("function");
+    expect(status.default).toBe("pending_approval");
+  });
+
+  it("offers pending_approval/invited/active/inactive — the full practitioner.status enum, not a restricted subset", () => {
+    const status = hcpFormFields.find((f) => f.key === "status")!;
+    const values = (status.options as { value: string }[]).map((o) => o.value);
+    expect(values).toEqual(["pending_approval", "invited", "active", "inactive"]);
+  });
+});

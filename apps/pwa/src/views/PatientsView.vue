@@ -1,0 +1,325 @@
+<template>
+  <div class="patients-view">
+    <FormRenderer
+      v-model="showAddModal"
+      :fields="patientFormFields"
+      :derive="patientFormDerive"
+      title-key="app.patients.form.title"
+      submit-label-key="app.patients.form.submit"
+      avatar-entity-type="patient"
+      @submit="onPatientSubmit"
+    />
+    <FormRenderer
+      v-model="showEditModal"
+      :fields="patientFormFields"
+      :derive="patientFormDerive"
+      :initial-data="selectedPatient ?? undefined"
+      title-key="app.patients.form.title"
+      edit-title-key="app.patients.form.editTitle"
+      submit-label-key="app.patients.form.submit"
+      edit-submit-label-key="app.patients.form.editSubmit"
+      avatar-entity-type="patient"
+      @submit="onEditSubmit"
+    />
+    <AppointmentDialog
+      v-model="showAppointmentDialog"
+      :patient="appointmentPatient"
+    />
+    <AppEntityList
+      view-id="patients"
+      api-endpoint="/api/v1/patient"
+      :cacheable="false"
+      :headers="tableHeaders"
+      :filter-definitions="patientFilterDefinitions"
+      :i18n="patientsI18n"
+      :show-add-button="canAdd"
+      detail-route-name="patient-detail"
+      :filter-param-keys="['status', 'region']"
+      @add="onAddPatient"
+    >
+      <template #item.name="{ item }">
+        <EntityLink
+          :to="null"
+          entity-type="patient"
+          :label="(item as PatientListItem).name"
+          :first-name="(item as PatientListItem).first_name"
+          :last-name="(item as PatientListItem).last_name"
+          :details="patientDetails(item as PatientListItem).details"
+          :avatar-size="32"
+        />
+      </template>
+      <template #feed-card-avatar="{ item }">
+        <AppAvatar v-bind="personAvatarProps(item as PatientListItem)" entity-type="patient" :size="55" />
+      </template>
+      <template #feed-card-title="{ item }">
+        {{ shortPersonName((item as PatientListItem).name, (item as PatientListItem).first_name, (item as PatientListItem).last_name) }}
+      </template>
+      <template #item.practitioner_name="{ item }">
+        <EntityLink
+          :to="hcpDetailLink((item as PatientListItem).practitioner_id)"
+          entity-type="hcp"
+          :specialty="(item as PatientListItem).practitioner_specialty"
+          :label="(item as PatientListItem).practitioner_name"
+          :first-name="(item as PatientListItem).practitioner_first_name"
+          :last-name="(item as PatientListItem).practitioner_last_name"
+          :details="doctorOf(item as PatientListItem).details"
+          :more-details="doctorOf(item as PatientListItem).more"
+          :avatar-size="32"
+        />
+      </template>
+      <!-- Doctor's own list: every patient is theirs, so the column that
+           would repeat their name shows when the record last changed. -->
+      <template #item.updated_at="{ item }">
+        <span class="patients-view__updated">
+          <span>{{ formatDateShort((item as PatientListItem).updated_at, dateLocale) }}</span>
+          <span class="patients-view__updated-ago">{{ formatRelativeToNow((item as PatientListItem).updated_at, dateLocale) }}</span>
+        </span>
+      </template>
+      <!-- NEO-221: Documents and Studies split the patient's checklist items; Next step replaces Status. -->
+      <template #item.documents="{ item }">
+        <PatientIntakeForms :forms="formsOf(item as PatientListItem, 'document')" />
+      </template>
+      <template #item.studies="{ item }">
+        <PatientIntakeForms kind="studies" :forms="formsOf(item as PatientListItem, 'study')" />
+      </template>
+      <template #item.next_step="{ item }">
+        <PatientNextStep :patient-id="(item as PatientListItem).id" :forms="(item as PatientListItem).intake_forms ?? []" :device-order="(item as PatientListItem).device_order" />
+      </template>
+      <template #feed-card-meta="{ item }">
+        <!-- Mobile card (NEO-57): the patient's quiet line incl. date of
+             birth, then the doctor as a small identity (name only) — or, in
+             the doctor's own list, when the record last changed. -->
+        <span class="patients-view__card-stack">
+          <IdentityDetails :details="patientDetails(item as PatientListItem, { withDob: true }).details" />
+          <span v-if="isDoctor" class="patients-view__card-meta">
+            {{ formatRelativeToNow((item as PatientListItem).updated_at, dateLocale) }}
+          </span>
+          <EntityLink
+            v-else-if="(item as PatientListItem).practitioner_name"
+            :to="hcpDetailLink((item as PatientListItem).practitioner_id)"
+            entity-type="hcp"
+            :specialty="(item as PatientListItem).practitioner_specialty"
+            :label="(item as PatientListItem).practitioner_name"
+            :first-name="(item as PatientListItem).practitioner_first_name"
+            :last-name="(item as PatientListItem).practitioner_last_name"
+            :avatar-size="24"
+          />
+        </span>
+      </template>
+      <template #feed-card-status="{ item }">
+        <PatientNextStep compact :patient-id="(item as PatientListItem).id" :forms="(item as PatientListItem).intake_forms ?? []" :device-order="(item as PatientListItem).device_order" />
+      </template>
+      <template #feed-card-actions="{ item }">
+        <AppListItemMenu :aria-label="t('app.common.moreActions')">
+          <VListItem :title="t('user.detail.bookAppointment')" @click="onBookAppointment(item as PatientListItem)">
+            <template #prepend><AppIcon :name="entityActionIcon('bookAppointment')" :class="entityActionMenuIconClass('bookAppointment')" /></template>
+          </VListItem>
+          <VListItem v-if="canEditPatients" :title="t('app.patients.detail.edit')" @click="onEditPatient(item as PatientListItem)">
+            <template #prepend><AppIcon :name="entityActionIcon('edit')" :class="entityActionMenuIconClass('edit')" /></template>
+          </VListItem>
+        </AppListItemMenu>
+      </template>
+    </AppEntityList>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, defineAsyncComponent } from "vue";
+import { useI18n } from "vue-i18n";
+import AppEntityList from "../components/AppEntityList.vue";
+import AppAvatar from "../components/AppAvatar.vue";
+import PatientIntakeForms from "../components/patient/PatientIntakeForms.vue";
+import PatientNextStep from "../components/patient/PatientNextStep.vue";
+import type { PatientIntakeFormStatus, PatientDeviceOrder } from "../types/patientIntakeForm";
+import EntityLink from "../components/EntityLink.vue";
+import { intlLocale } from "@i18n/language-options";
+import IdentityDetails from "../components/IdentityDetails.vue";
+import { shortPersonName } from "../utils/shortPersonName";
+import { useIdentity } from "../composables/useIdentity";
+import { formatDateShort, formatRelativeToNow } from "../utils/relativeDate";
+import { hcpDetailLink } from "../utils/entityLinks";
+import { personAvatarProps } from "../utils/personAvatarProps";
+import AppIcon from "../components/AppIcon.vue";
+import AppListItemMenu from "../components/AppListItemMenu.vue";
+import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
+import { type FilterDefinition } from "../composables/useFilters";
+import { useAuthStore } from "../stores/auth";
+import { usePermissions } from "../composables/usePermissions";
+import { useConfigStore } from "../stores/config";
+import { apiFetch } from "../composables/useApi";
+import { useEntitySubmit } from "../composables/useEntitySubmit";
+import { patientFormFields, patientFormDerive } from "../config/forms/patientForm";
+
+const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
+const AppointmentDialog = defineAsyncComponent(() => import("../components/AppointmentDialog.vue"));
+
+interface PatientListItem {
+  id: string;
+  name?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string | null;
+  phone?: string | null;
+  practitioner_id?: string | null;
+  practitioner_name?: string | null;
+  practitioner_first_name?: string | null;
+  practitioner_last_name?: string | null;
+  practitioner_specialty?: string | null;
+  practitioner_specialties?: string[] | null;
+  gender?: string | null;
+  date_of_birth?: string | null;
+  updated_at?: string;
+  status?: string;
+  region?: string;
+  territory_name?: string | null;
+  intake_forms?: PatientIntakeFormStatus[];
+  device_order?: PatientDeviceOrder | null;
+  ahi_baseline?: number | null;
+  cpap_device?: string | null;
+  medical_record?: string | null;
+}
+
+const { t, locale } = useI18n();
+const configStore = useConfigStore();
+const { patientDetails, specialtySet } = useIdentity();
+const dateLocale = computed(() => intlLocale(locale.value));
+function doctorOf(p: PatientListItem) {
+  return specialtySet(p.practitioner_specialty, p.practitioner_specialties);
+}
+const { submit } = useEntitySubmit();
+const authStore = useAuthStore();
+// Direct add: admin/manager, and a doctor for their own practice (NEO-223 — the API assigns the
+// patient to them, CORE-104). Reps still add patients through the lead pipeline.
+const canAdd = computed(() => ["admin", "manager", "doctor"].includes(authStore.user?.role ?? ""));
+const isDoctor = computed(() => authStore.user?.role === "doctor");
+const { canEditPatients } = usePermissions();
+const showAddModal = ref(false);
+const showEditModal = ref(false);
+const showAppointmentDialog = ref(false);
+/** Row menu "Umów wizytę" books a patient↔doctor appointment (NEO-34) for that patient. */
+const appointmentPatient = ref<{ id: string; name: string; practitioner_id: string | null } | null>(null);
+const selectedPatient = ref<PatientListItem | null>(null);
+
+const patientFilterDefs: FilterDefinition[] = [
+  { key: "status", labelKey: "app.patients.filters.status", type: "select", default: "" },
+  { key: "region", labelKey: "app.patients.filters.region", type: "select", default: "" },
+];
+
+const statusOptions = computed(() => [
+  { title: t("app.patients.filters.all"), value: "" },
+  { title: t("app.patients.filters.statusActive"),     value: "active" },
+  { title: t("app.patients.filters.statusFollowUp"),   value: "follow_up" },
+  { title: t("app.patients.filters.statusDischarged"), value: "discharged" },
+]);
+
+const regionOptions = computed(() => [
+  { title: t("app.patients.filters.all"), value: "" },
+  ...configStore.regionItems,
+]);
+
+const patientFilterDefinitions = computed<FilterDefinition[]>(() => [
+  { ...patientFilterDefs[0], options: statusOptions.value },
+  { ...patientFilterDefs[1], options: regionOptions.value },
+]);
+
+const tableHeaders = computed(() => [
+  { title: t("app.patients.table.name"),             key: "name",              sortable: true },
+  isDoctor.value
+    ? { title: t("app.patients.table.lastUpdated"),  key: "updated_at",        sortable: true }
+    : { title: t("app.patients.table.practitioner"), key: "practitioner_name", sortable: false },
+  { title: t("app.patients.table.documents"),        key: "documents",         sortable: false },
+  { title: t("app.patients.table.studies"),          key: "studies",           sortable: false },
+  { title: t("app.patients.table.nextStep"),         key: "next_step",         sortable: false },
+]);
+
+/** An item without a category (an older API) counts as a document, so nothing disappears mid-deploy. */
+function formsOf(patient: PatientListItem, category: "document" | "study"): PatientIntakeFormStatus[] {
+  return (patient.intake_forms ?? []).filter((f) => (f.category ?? "document") === category);
+}
+
+const patientsI18n = computed(() => ({
+  searchPlaceholder:            "app.patients.searchPlaceholder",
+  filtersTitle:                 "app.patients.filters.title",
+  filtersClear:                 "app.patients.filters.clear",
+  add:                          "app.patients.add",
+  emptyTitle:                   "app.patients.emptyTitle",
+  emptySubtitle:                "app.patients.emptySubtitle",
+  countNoun: "patients" as const,
+  noResultsForCriteria:         "app.patients.noResultsForCriteria",
+  noResultsForCriteriaSubtitle: "app.patients.noResultsForCriteriaSubtitle",
+  tableNoResults:               "app.patients.table.noResults",
+  errorLoad:                    "app.patients.errorLoad",
+}));
+
+function onAddPatient() {
+  showAddModal.value = true;
+}
+
+async function onPatientSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+  await submit(
+    {
+      request: () =>
+        apiFetch("/api/v1/patient", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
+      successMessage: t("app.patients.form.success"),
+      openCreated: "patient-detail",
+      icon: "nav-patients",
+      errorMessage: t("app.patients.form.errorSave"),
+    },
+    done,
+  );
+}
+
+function onEditPatient(patient: PatientListItem) {
+  selectedPatient.value = patient;
+  showEditModal.value = true;
+}
+
+async function onEditSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+  const id = selectedPatient.value?.id;
+  if (!id) { done(false); return; }
+  await submit(
+    {
+      request: () =>
+        apiFetch(`/api/v1/patient/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
+      successMessage: t("app.patients.form.editSuccess"),
+      icon: "nav-patients",
+      errorMessage: t("app.patients.form.errorSave"),
+    },
+    done,
+  );
+}
+
+function onBookAppointment(patient: PatientListItem) {
+  appointmentPatient.value = { id: patient.id, name: patient.name ?? "", practitioner_id: patient.practitioner_id ?? null };
+  showAppointmentDialog.value = true;
+}
+</script>
+
+<style scoped>
+.patients-view__updated {
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.patients-view__card-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.patients-view__updated-ago,
+.patients-view__card-meta {
+  font-size: 0.78125rem;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+</style>

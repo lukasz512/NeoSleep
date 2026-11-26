@@ -1,0 +1,363 @@
+import type { TenantContext } from "../context/TenantContext.js";
+import {
+  insertOrganization,
+  updateOrganization,
+  getOrganizationById,
+  getOrganizationIdByName,
+  getTerritoryCountry,
+  softDeleteOrganization,
+  type InsertOrganizationInput,
+  type UpdateOrganizationInput,
+  type Organization,
+} from "../db.js";
+import { insertAuditLog } from "../db.js";
+import { ConflictError, ValidationError } from "../errors.js";
+import { assertTerritoryWriteAccess } from "../middleware/requireScope.js";
+
+/**
+ * Whether the organization appears on the public website's find-a-specialist
+ * map is a tenant-level publishing decision, so only an admin can change it
+ * (NEO-79). The PWA form hides the switch from everyone else, but it still
+ * submits the loaded value with every save, so a non-admin's value is
+ * silently ignored rather than rejected — rejecting would break every
+ * ordinary HCO edit by a rep.
+ */
+function publicMapFlagFor(ctx: TenantContext, value: boolean | undefined): boolean | undefined {
+  if (value === undefined || ctx.user.role !== "admin") return undefined;
+  return value;
+}
+import { geocodeAddress } from "../services/geocoding.js";
+
+/**
+ * COMMANDS — Organization (HCO) domain.
+ *
+ * Each command:
+ *   1. Validates input
+ *   2. Executes the DB write via ctx.client (tenant-scoped, same transaction as audit)
+ *   3. Writes to audit_log (GDPR Art. 30 compliance)
+ *   4. Returns the result
+ *
+ * Commands never touch `req` or `res`. Independently testable.
+ */
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// DB CHECK constraint organization_type_check — see infrastructure/db/schema-snapshot.sql.
+const ORG_TYPES = ["clinic", "hospital", "pharmacy", "practice", "other"] as const;
+// DB CHECK constraint organization_status_check — see infrastructure/db/schema-snapshot.sql.
+const ORG_STATUSES = ["pending_approval", "active", "inactive"] as const;
+
+function normalizeOrgType(input: string | undefined): string {
+  if (input === undefined) return "other";
+  const v = input.trim().toLowerCase();
+  if (!ORG_TYPES.includes(v as (typeof ORG_TYPES)[number])) {
+    throw new ValidationError(`Invalid organization type: "${input}"`);
+  }
+  return v;
+}
+
+function normalizeOrgStatus(input: string | undefined): string {
+  if (input === undefined) return "active";
+  const v = input.trim().toLowerCase();
+  if (!ORG_STATUSES.includes(v as (typeof ORG_STATUSES)[number])) {
+    throw new ValidationError(`Invalid organization status: "${input}"`);
+  }
+  return v;
+}
+
+// ---------------------------------------------------------------------------
+// CREATE ORGANIZATION
+// ---------------------------------------------------------------------------
+
+export interface CreateOrganizationInput {
+  name: string;
+  type?: string;
+  status?: string;
+  address_line1?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country_code?: string | null;
+  region?: string;
+  territory_id?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  google_link?: string | null;
+  /** “What to bring” in the patient's appointment email (CORE-25). */
+  visit_instructions?: string | null;
+  /** The clinic's own aviso de privacidad (https URL), CORE-113. */
+  privacy_notice_url?: string | null;
+  specialties?: string[];
+  /** Admin-only (NEO-79) — ignored for any other role, see publicMapFlagFor(). */
+  show_on_public_map?: boolean;
+  metadata?: Record<string, unknown> | null;
+}
+
+/** Plain text the patient reads in the appointment email — trimmed, empty = none, at most 500 characters. */
+export const VISIT_INSTRUCTIONS_MAX = 500;
+function normalizeVisitInstructions(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  const text = value?.trim() ?? "";
+  if (text.length > VISIT_INSTRUCTIONS_MAX) {
+    throw new ValidationError(`Visit instructions can be at most ${VISIT_INSTRUCTIONS_MAX} characters`, "visit_instructions");
+  }
+  return text || null;
+}
+
+/** The clinic's aviso de privacidad — a public https page patients open before signing; empty = none. */
+function normalizePrivacyNoticeUrl(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  const text = value?.trim() ?? "";
+  if (!text) return null;
+  let url: URL;
+  try {
+    url = new URL(/^https?:\/\//i.test(text) ? text : `https://${text}`);
+  } catch {
+    throw new ValidationError("The privacy notice must be a web address", "privacy_notice_url");
+  }
+  if (url.protocol !== "https:" || !url.hostname.includes(".")) {
+    throw new ValidationError("The privacy notice must be an https web address", "privacy_notice_url");
+  }
+  return url.toString();
+}
+
+/**
+ * Creates a new Organization (HCO).
+ * Rejects a case-insensitive duplicate name with a ConflictError — an
+ * explicit "Create Organization" action must not silently merge into an
+ * existing org just because the name string matches (unlike
+ * resolveOrganizationId()'s freetext auto-vivify helper in db/practitioner.ts,
+ * which is a different, intentionally lenient UX flow).
+ */
+export async function CreateOrganizationCommand(
+  ctx: TenantContext,
+  input: CreateOrganizationInput
+): Promise<Organization> {
+  const name = input.name?.trim() ?? "";
+  if (!name) throw new ValidationError("name is required");
+  await assertTerritoryWriteAccess(ctx, input.territory_id);
+
+  const email = input.email?.trim() ?? "";
+  if (!email) throw new ValidationError("email is required");
+  if (!EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
+
+  const phone = input.phone?.trim() ?? "";
+  if (!phone) throw new ValidationError("phone is required");
+  if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits");
+
+  const type = normalizeOrgType(input.type);
+  const status = normalizeOrgStatus(input.status);
+
+  const existingId = await getOrganizationIdByName(ctx.client, name);
+  if (existingId) throw new ConflictError(`An organization named "${name}" already exists`);
+
+  const address_line1 = input.address_line1?.trim() ?? null;
+  const city = input.city?.trim() ?? null;
+  const state = input.state?.trim() ?? null;
+  const postal_code = input.postal_code?.trim() ?? null;
+  const territory_id = input.territory_id ?? null;
+
+  // Best-effort — never blocks the save (see services/geocoding.ts). The
+  // address decides the country (NEO-210 D1); the territory only biases it.
+  const region_hint = territory_id ? await getTerritoryCountry(ctx.client, territory_id) : null;
+  const coordinates = await geocodeAddress({ address_line1, city, state, postal_code, region_hint });
+  const addressCountry = coordinates?.countryCode ?? null;
+
+  const insertInput: InsertOrganizationInput = {
+    name,
+    type,
+    status,
+    address_line1,
+    city,
+    state,
+    postal_code,
+    // Address country first; else the db layer falls back to the territory's, else what was sent.
+    country_code:  addressCountry ?? input.country_code?.trim() ?? null,
+    country_from_address: addressCountry !== null,
+    region:        input.region?.trim() ?? "",
+    territory_id:  input.territory_id ?? null,
+    phone,
+    email,
+    website:       input.website?.trim() ?? null,
+    google_link:   input.google_link?.trim() ?? null,
+    visit_instructions: normalizeVisitInstructions(input.visit_instructions) ?? null,
+    privacy_notice_url: normalizePrivacyNoticeUrl(input.privacy_notice_url) ?? null,
+    latitude:      coordinates?.lat ?? null,
+    longitude:     coordinates?.lng ?? null,
+    specialties:   input.specialties,
+    show_on_public_map: publicMapFlagFor(ctx, input.show_on_public_map),
+    metadata:      input.metadata ?? null,
+  };
+
+  const organization = await insertOrganization(ctx.client, insertInput);
+
+  await insertAuditLog(ctx.client, {
+    user_id:      ctx.user.id,
+    action:       "create",
+    entity_type:  "Organization",
+    entity_id:    organization.id,
+    entity_after: {
+      id:     organization.id,
+      name:   organization.name,
+      type:   organization.type,
+      status: organization.status,
+      region: organization.region,
+      show_on_public_map: organization.show_on_public_map,
+    },
+    request_id: ctx.requestId,
+  });
+
+  return organization;
+}
+
+// ---------------------------------------------------------------------------
+// UPDATE ORGANIZATION
+// ---------------------------------------------------------------------------
+
+export interface UpdateOrganizationPayload {
+  name?: string;
+  type?: string;
+  status?: string;
+  address_line1?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postal_code?: string | null;
+  country_code?: string | null;
+  region?: string;
+  territory_id?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  website?: string | null;
+  google_link?: string | null;
+  /** “What to bring” in the patient's appointment email (CORE-25). */
+  visit_instructions?: string | null;
+  /** The clinic's own aviso de privacidad (https URL), CORE-113. */
+  privacy_notice_url?: string | null;
+  specialties?: string[];
+  /** Admin-only (NEO-79) — ignored for any other role, see publicMapFlagFor(). */
+  show_on_public_map?: boolean;
+  metadata?: Record<string, unknown> | null;
+}
+
+/**
+ * Updates an Organization. Returns null if the organization does not exist.
+ * Rejects a rename onto a case-insensitive duplicate of another org's name.
+ */
+export async function UpdateOrganizationCommand(
+  ctx: TenantContext,
+  id: string,
+  input: UpdateOrganizationPayload
+): Promise<Organization | null> {
+  if (!id?.trim()) throw new ValidationError("organization id is required");
+
+  if (input.email !== undefined) {
+    const email = input.email?.trim() ?? "";
+    if (!email) throw new ValidationError("email cannot be blank");
+    if (!EMAIL_REGEX.test(email)) throw new ValidationError("Invalid email format");
+  }
+
+  if (input.phone !== undefined) {
+    const phone = input.phone?.trim() ?? "";
+    if (!phone) throw new ValidationError("phone cannot be blank");
+    if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits");
+  }
+
+  const before = await getOrganizationById(ctx.client, id);
+  if (!before) return null;
+  await assertTerritoryWriteAccess(ctx, before.territory_id, input.territory_id);
+
+  let name: string | undefined;
+  if (input.name !== undefined) {
+    name = input.name.trim();
+    if (!name) throw new ValidationError("name cannot be blank");
+    const existingId = await getOrganizationIdByName(ctx.client, name, id);
+    if (existingId) throw new ConflictError(`An organization named "${name}" already exists`);
+  }
+
+  // Only re-geocode when an address field actually changed — an unrelated
+  // edit (e.g. phone number) shouldn't spend an API call re-resolving coordinates
+  // that haven't moved. Best-effort — never blocks the save.
+  const addressChanged =
+    input.address_line1 !== undefined ||
+    input.city !== undefined ||
+    input.state !== undefined ||
+    input.postal_code !== undefined ||
+    input.country_code !== undefined;
+
+  const territoryId = input.territory_id !== undefined ? input.territory_id : before.territory_id;
+  const coordinates = addressChanged
+    ? await geocodeAddress({
+        address_line1: input.address_line1 !== undefined ? input.address_line1 : before.address_line1,
+        city:          input.city !== undefined ? input.city : before.city,
+        state:         input.state !== undefined ? input.state : before.state,
+        postal_code:   input.postal_code !== undefined ? input.postal_code : before.postal_code,
+        region_hint:   territoryId ? await getTerritoryCountry(ctx.client, territoryId) : null,
+      })
+    : undefined;
+  // The address decides the country (NEO-210 D1); without one the db layer falls back to the territory's.
+  const addressCountry = coordinates?.countryCode ?? null;
+
+  const updateInput: UpdateOrganizationInput = {
+    name,
+    type:          input.type !== undefined ? normalizeOrgType(input.type) : undefined,
+    status:        input.status !== undefined ? normalizeOrgStatus(input.status) : undefined,
+    address_line1: input.address_line1,
+    city:          input.city,
+    state:         input.state,
+    postal_code:   input.postal_code,
+    country_code:  addressCountry ?? input.country_code,
+    country_from_address: addressCountry !== null,
+    region:        input.region,
+    territory_id:  input.territory_id,
+    phone:         input.phone,
+    email:         input.email,
+    website:       input.website,
+    google_link:   input.google_link,
+    visit_instructions: normalizeVisitInstructions(input.visit_instructions),
+    privacy_notice_url: normalizePrivacyNoticeUrl(input.privacy_notice_url),
+    // A failed/unconfigured geocode leaves the existing coordinates untouched
+    // (undefined) rather than nulling them out — a transient API hiccup on an
+    // unrelated address tweak shouldn't erase a pin that already worked.
+    latitude:      coordinates ? coordinates.lat : undefined,
+    longitude:     coordinates ? coordinates.lng : undefined,
+    specialties:   input.specialties,
+    show_on_public_map: publicMapFlagFor(ctx, input.show_on_public_map),
+    metadata:      input.metadata,
+  };
+
+  const after = await updateOrganization(ctx.client, id, updateInput);
+  if (!after) return null;
+
+  await insertAuditLog(ctx.client, {
+    user_id:       ctx.user.id,
+    action:        "update",
+    entity_type:   "Organization",
+    entity_id:     id,
+    entity_before: { name: before.name, type: before.type, status: before.status, region: before.region, show_on_public_map: before.show_on_public_map },
+    entity_after:  { name: after.name,  type: after.type,  status: after.status,  region: after.region,  show_on_public_map: after.show_on_public_map },
+    request_id:    ctx.requestId,
+  });
+
+  return after;
+}
+
+// ---------------------------------------------------------------------------
+// DELETE ORGANIZATION (soft delete)
+// ---------------------------------------------------------------------------
+
+export async function DeleteOrganizationCommand(ctx: TenantContext, id: string): Promise<void> {
+  if (!id?.trim()) throw new ValidationError("organization id is required");
+
+  const before = await getOrganizationById(ctx.client, id);
+  if (before) await assertTerritoryWriteAccess(ctx, before.territory_id);
+  await softDeleteOrganization(ctx.client, id);
+
+  await insertAuditLog(ctx.client, {
+    user_id:    ctx.user.id,
+    action:     "delete",
+    entity_type: "Organization",
+    entity_id:  id,
+    request_id: ctx.requestId,
+  });
+}

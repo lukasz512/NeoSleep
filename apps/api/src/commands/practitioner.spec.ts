@@ -1,0 +1,558 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import bcrypt from "bcrypt";
+import {
+  withTenant,
+  insertStaffUser,
+  getGlobalTerritoryId,
+  getCountryTerritoryId,
+  insertPractitioner,
+  getUserIdByEmail,
+  getUserRoleScopes,
+  getInviteTokenByHash,
+  updatePractitionerStatus,
+  getPractitionerById,
+  getUsersWithoutPassword,
+  resolveGoogleSignInUser,
+} from "../db.js";
+import { hashToken } from "../utils/hashToken.js";
+import type { TenantContext } from "../context/TenantContext.js";
+import { ConflictError, PartnerDocumentsNotReadyError, ValidationError } from "../errors.js";
+import { CreatePractitionerCommand, ActivatePractitionerCommand, UpdatePractitionerCommand } from "./practitioner.js";
+import { setApprovedPartnerVersion } from "../db/partnerSignatories.js";
+import { insertOrganization } from "../db/organization.js";
+import { ensurePartnerDocumentsReady } from "../testing/partnerDocumentsFixture.js";
+
+// mailer.ts is the external boundary (Resend, see ADR-016) — mocked here, same
+// pattern as commands/leadOffer.spec.ts. Only sendPartnerInviteEmail is used by
+// this file's commands, but the mock still spreads the real module so any other
+// export practitioner.ts pulls from mailer.js in the future doesn't silently
+// break by being missing from an incomplete mock (see leadOffer.spec.ts's
+// history for exactly that failure mode).
+const { sendPartnerInviteEmailMock } = vi.hoisted(() => ({
+  sendPartnerInviteEmailMock: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock("../mailer.js", async (importActual) => ({
+  ...(await importActual<typeof import("../mailer.js")>()),
+  sendPartnerInviteEmail: sendPartnerInviteEmailMock,
+}));
+
+const TENANT_SLUG = process.env.DEFAULT_TENANT_SLUG ?? "neosleep";
+
+function uniqueSuffix(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+async function buildTestContext(client: Parameters<typeof CreatePractitionerCommand>[0]["client"]): Promise<TenantContext> {
+  const email = `qa-practitioner-cmd-${uniqueSuffix()}@neosleepcare.com`;
+  const hash = await bcrypt.hash("irrelevant-not-logged-in-with", 4);
+  const user = await insertStaffUser(client, email, "QA", "Pilot", "admin", hash, false);
+  // Activation refuses to send an invite unless the partner documents are
+  // ready (NEO-51) — set them up (content, signatory, approvals) per test.
+  await ensurePartnerDocumentsReady(client, user!.id);
+  return {
+    slug: TENANT_SLUG,
+    client,
+    user: { id: user!.id, email, role: "admin", roles: [{ role: "admin", territory_id: await getGlobalTerritoryId(client) }] },
+    requestId: `test-${uniqueSuffix()}`,
+  };
+}
+
+beforeEach(() => {
+  sendPartnerInviteEmailMock.mockClear();
+});
+
+describe("ActivatePractitionerCommand", () => {
+  // Regression test companion to leadOffer.spec.ts's — "send offer to the
+  // doctor" and "invite this practitioner" are both meant to look like they
+  // came from the admin/manager who triggered them, not a faceless system
+  // sender (see mailer.ts's EmailSender doc comment).
+  // Longer timeout: this does several sequential DB round trips
+  // (create practitioner, activate, insert staff user, create invite token)
+  // against the shared dev Supabase — the default 5s can be tight over a
+  // real network connection, unlike a local Postgres.
+  it("passes the activating admin/manager's own identity as the invite email sender", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const practitionerEmail = `qa-hcp-${uniqueSuffix()}@example.com`;
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Jan",
+        last_name: "Nowak",
+        email: practitionerEmail,
+        phone: "600100200",
+        region: "PL",
+      });
+
+      const result = await ActivatePractitionerCommand(ctx, practitioner.id, "https://pwa-dev.neosleepcare.com");
+
+      // Not "active" — that now only happens once the doctor actually
+      // completes registration via AcceptPractitionerInviteCommand (see
+      // docs/stories/practitioner-invite-resend.md). Activate/Resend only
+      // ever gets the practitioner as far as "invited".
+      expect(result?.status).toBe("invited");
+      expect(sendPartnerInviteEmailMock).toHaveBeenCalledTimes(1);
+      const [to, , , sender] = sendPartnerInviteEmailMock.mock.calls[0]!;
+      expect(to).toBe(practitionerEmail);
+      expect(sender).toEqual({ name: "NeoSleep", email: ctx.user.email });
+      // Exactly one origin — never the raw comma-separated FRONTEND_URL.
+      const link = sendPartnerInviteEmailMock.mock.calls[0]![1] as string;
+      expect(link).toMatch(/^https:\/\/pwa-dev\.neosleepcare\.com\/partner-register\?token=[0-9a-f]{64}$/);
+    });
+  }, 15000);
+
+  it("resend (calling Activate again while still 'invited') mints a fresh token, invalidates the previous one, and sends another email", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const practitionerEmail = `qa-hcp-${uniqueSuffix()}@example.com`;
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Resend",
+        last_name: "Case",
+        email: practitionerEmail,
+        phone: "600100200",
+        region: "PL",
+      });
+
+      const first = await ActivatePractitionerCommand(ctx, practitioner.id);
+      expect(first?.status).toBe("invited");
+      const second = await ActivatePractitionerCommand(ctx, practitioner.id);
+      expect(second?.status).toBe("invited");
+
+      expect(sendPartnerInviteEmailMock).toHaveBeenCalledTimes(2);
+      const firstToken = new URL(sendPartnerInviteEmailMock.mock.calls[0]![1] as string).searchParams.get("token")!;
+      const secondToken = new URL(sendPartnerInviteEmailMock.mock.calls[1]![1] as string).searchParams.get("token")!;
+      expect(secondToken).not.toBe(firstToken);
+
+      // The first email's link must no longer work — resend invalidates it,
+      // not just leaves it to expire 7 days later alongside a second valid one.
+      expect(await getInviteTokenByHash(client, hashToken(firstToken))).toBeNull();
+      expect(await getInviteTokenByHash(client, hashToken(secondToken))).not.toBeNull();
+    });
+  }, 20000);
+
+  it("returns null for a non-existent practitioner and never calls the mailer", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+
+      const result = await ActivatePractitionerCommand(ctx, "00000000-0000-0000-0000-000000000000");
+
+      expect(result).toBeNull();
+      expect(sendPartnerInviteEmailMock).not.toHaveBeenCalled();
+    });
+  });
+
+  it("throws ConflictError when the practitioner is already active (doctor actually completed registration)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Already",
+        last_name: "Active",
+        email: `qa-hcp-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
+      });
+      // Simulate the doctor having actually finished registration (the real
+      // trigger is AcceptPractitionerInviteCommand, exercised end-to-end in
+      // invitePractitioner.spec.ts — forcing the status directly here keeps
+      // this test focused on ActivatePractitionerCommand's own guard, same
+      // "insert directly to reach a state the command flow itself can't
+      // produce" precedent as the no-email test below).
+      await updatePractitionerStatus(client, practitioner.id, "active");
+      sendPartnerInviteEmailMock.mockClear();
+
+      await expect(ActivatePractitionerCommand(ctx, practitioner.id)).rejects.toThrow(ConflictError);
+      expect(sendPartnerInviteEmailMock).not.toHaveBeenCalled();
+    });
+  }, 15000);
+
+  it("throws ConflictError when the practitioner has been manually deactivated", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Manually",
+        last_name: "Deactivated",
+        email: `qa-hcp-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
+      });
+      await updatePractitionerStatus(client, practitioner.id, "inactive");
+
+      await expect(ActivatePractitionerCommand(ctx, practitioner.id)).rejects.toThrow(ConflictError);
+      expect(sendPartnerInviteEmailMock).not.toHaveBeenCalled();
+    });
+  }, 15000);
+
+  it("throws ValidationError when the practitioner has no email", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      // CreatePractitionerCommand now requires email/phone (HCO/HCP/Patient
+      // data-quality refactor), so a no-email row can no longer be produced
+      // through the command — insert directly to simulate legacy data that
+      // predates that requirement, which ActivatePractitionerCommand's own
+      // defensive check still has to guard against.
+      const practitioner = await insertPractitioner(client, {
+        first_name: "No",
+        last_name: "Email",
+      });
+
+      await expect(ActivatePractitionerCommand(ctx, practitioner.id)).rejects.toThrow(ValidationError);
+      expect(sendPartnerInviteEmailMock).not.toHaveBeenCalled();
+    });
+  });
+
+  // Regression test for a real bug this thread's own test-writing caught:
+  // insertPractitioner selected identities.country_code but never wrote it,
+  // so every activated doctor silently got scope='global' instead of their
+  // actual country — see db/practitioner.ts's INSERT and commands/
+  // invitePractitioner.ts's insertPractitioner call (both now pass
+  // country_code through from the originating lead).
+  it("provisions the doctor-role user scoped to the practitioner's own country_code, not global", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const email = `qa-hcp-${uniqueSuffix()}@example.com`;
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Maria",
+        last_name: "Gonzalez",
+        email,
+        phone: "600100200",
+        country_code: "MX",
+        region: "MX",
+      });
+      expect(practitioner.country_code).toBe("MX");
+
+      await ActivatePractitionerCommand(ctx, practitioner.id);
+
+      const userId = await getUserIdByEmail(client, email);
+      expect(userId).not.toBeNull();
+      const roles = await getUserRoleScopes(client, userId!);
+      const mxTerritoryId = await getCountryTerritoryId(client, "MX");
+      expect(roles).toContainEqual({ role: "doctor", territory_id: mxTerritoryId });
+    });
+  }, 15000);
+
+  it("reuses an existing users account (does not re-provision a duplicate) but still sends the invite, since the practitioner itself isn't active/inactive yet", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const email = `qa-hcp-${uniqueSuffix()}@example.com`;
+
+      // Pre-existing account for this email, unrelated to this practitioner
+      // record — mirrors a doctor who already has a login (e.g. from a
+      // different practitioner record sharing the same email) before this
+      // HCP row is activated. insertStaffUser would throw a unique-email
+      // conflict if the command incorrectly tried to create a second one —
+      // that's the real regression this test guards against now, not
+      // whether an email gets sent (it should: this practitioner's own
+      // status is still "pending_approval", so nothing blocks it).
+      const hash = await bcrypt.hash("irrelevant", 4);
+      const existingUser = await insertStaffUser(client, email, "Existing", "Doctor", "doctor", hash, false);
+
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Existing",
+        last_name: "Doctor",
+        email,
+        phone: "600100200",
+        region: "PL",
+      });
+      // Region lives on the shared identity (migration 010) and the upsert by
+      // email keeps the pre-existing identity's (empty) region — set it the way
+      // a rep editing this HCP would, since activation needs a PL/MX
+      // jurisdiction for the partner documents (NEO-51).
+      await client.query(`UPDATE identities SET region = 'PL' WHERE lower(email) = lower($1)`, [email]);
+
+      const result = await ActivatePractitionerCommand(ctx, practitioner.id);
+
+      expect(result?.status).toBe("invited");
+      expect(sendPartnerInviteEmailMock).toHaveBeenCalledTimes(1);
+      expect(await getUserIdByEmail(client, email)).toBe(existingUser!.id);
+    });
+  }, 15000);
+
+  it("keeps the new doctor login inactive and out of the startup initial-password bootstrap until registration", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const email = `qa-hcp-${uniqueSuffix()}@example.com`;
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Not",
+        last_name: "Yet",
+        email,
+        phone: "600100200",
+        region: "PL",
+      });
+      await ActivatePractitionerCommand(ctx, practitioner.id);
+
+      const userId = await getUserIdByEmail(client, email);
+      const { rows } = await client.query<{ status: string }>(`SELECT status FROM users WHERE id = $1`, [userId]);
+      expect(rows[0]?.status).toBe("inactive");
+      const pending = await getUsersWithoutPassword(client);
+      expect(pending.map((u) => u.id)).not.toContain(userId);
+    });
+  }, 15000);
+
+  it("startup bootstrap only picks seeded staff: never a doctor or a Google sign-in account", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const seeded = await insertStaffUser(client, `qa-seed-${uniqueSuffix()}@example.com`, "Seed", "Staff", "rep", null, true);
+      const noForce = await insertStaffUser(client, `qa-noforce-${uniqueSuffix()}@example.com`, "No", "Force", "rep", null, false);
+      const doctor = await insertStaffUser(client, `qa-doc-${uniqueSuffix()}@example.com`, "Admin", "Made", "doctor", null, true);
+      // Google sign-in never creates accounts (NEO-78): a seeded account that got
+      // linked to Google on its first Google sign-in must still be skipped.
+      const googleEmail = `qa-google-${uniqueSuffix()}@example.com`;
+      await insertStaffUser(client, googleEmail, "Goo", "Gle", "rep", null, true);
+      const linked = await resolveGoogleSignInUser(client, `qa-sub-${uniqueSuffix()}`, googleEmail, true);
+      if (linked.kind !== "ok") throw new Error(`expected a linked Google account, got ${linked.kind}`);
+      const google = linked.user;
+
+      const pending = (await getUsersWithoutPassword(client)).map((u) => u.id);
+      expect(pending).toContain(seeded!.id);
+      expect(pending).not.toContain(noForce!.id);
+      expect(pending).not.toContain(doctor!.id);
+      expect(pending).not.toContain(google.id);
+    });
+  }, 15000);
+
+  // NEO-51 — activation is NeoSleep's countersignature moment.
+  it("stamps the invite token with the countersignature date and jurisdiction", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Stamp",
+        last_name: "Check",
+        email: `qa-hcp-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
+        region: "MX",
+      });
+      const before = Date.now();
+      await ActivatePractitionerCommand(ctx, practitioner.id);
+      const token = new URL(sendPartnerInviteEmailMock.mock.calls.at(-1)![1] as string).searchParams.get("token")!;
+      const invite = await getInviteTokenByHash(client, hashToken(token));
+      expect(invite?.metadata?.jurisdiction).toBe("MX");
+      expect(new Date(invite!.metadata!.counterparty_signed_at!).getTime()).toBeGreaterThanOrEqual(before - 1000);
+    });
+  }, 15000);
+
+  // Łukasz, 2026-09-25: a global admin inviting a doctor whose region text
+  // wasn't literally PL/MX got "only available for PL or MX". The country can
+  // also come from the doctor's country code, territory, or clinic.
+  async function activatedJurisdiction(
+    ctx: TenantContext,
+    client: TenantContext["client"],
+    input: Parameters<typeof CreatePractitionerCommand>[1],
+  ): Promise<string | undefined> {
+    const practitioner = await CreatePractitionerCommand(ctx, input);
+    await ActivatePractitionerCommand(ctx, practitioner.id);
+    const token = new URL(sendPartnerInviteEmailMock.mock.calls.at(-1)![1] as string).searchParams.get("token")!;
+    return (await getInviteTokenByHash(client, hashToken(token)))?.metadata?.jurisdiction;
+  }
+
+  const noRegionDoctor = () => ({
+    first_name: "No",
+    last_name: "Region",
+    email: `qa-hcp-${uniqueSuffix()}@example.com`,
+    phone: "600100200",
+    region: "",
+  });
+
+  it("finds the jurisdiction from the doctor's country code when region is blank", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      expect(await activatedJurisdiction(ctx, client, { ...noRegionDoctor(), country_code: "MX" })).toBe("MX");
+    });
+  }, 15000);
+
+  it("finds the jurisdiction from the doctor's territory (country above it)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const territoryId = await getCountryTerritoryId(client, "PL");
+      expect(territoryId).not.toBeNull();
+      expect(await activatedJurisdiction(ctx, client, { ...noRegionDoctor(), territory_id: territoryId })).toBe("PL");
+    });
+  }, 15000);
+
+  it("finds the jurisdiction from the doctor's clinic when the doctor has none", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const clinic = await insertOrganization(client, { name: `QA Clinic ${uniqueSuffix()}`, region: "MX" });
+      expect(await activatedJurisdiction(ctx, client, { ...noRegionDoctor(), organization_id: clinic.id })).toBe("MX");
+    });
+  }, 15000);
+
+  it("still refuses, with a hint, when no country can be found anywhere", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const practitioner = await CreatePractitionerCommand(ctx, noRegionDoctor());
+      await expect(ActivatePractitionerCommand(ctx, practitioner.id)).rejects.toThrow(/set the doctor's or their clinic's country/);
+      expect(sendPartnerInviteEmailMock).not.toHaveBeenCalled();
+    });
+  }, 15000);
+
+  it("refuses to send an invite when the current agreement version isn't approved by the signatory", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      await setApprovedPartnerVersion(client, "partnerAgreement", "pl", "00000000-0000-0000-0000-000000000000");
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Not",
+        last_name: "Approved",
+        email: `qa-hcp-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
+        region: "PL",
+      });
+      sendPartnerInviteEmailMock.mockClear();
+
+      await expect(ActivatePractitionerCommand(ctx, practitioner.id)).rejects.toThrow(PartnerDocumentsNotReadyError);
+      expect(sendPartnerInviteEmailMock).not.toHaveBeenCalled();
+    });
+  }, 15000);
+
+  it("refuses to activate a practitioner outside PL/MX", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "No",
+        last_name: "Country",
+        email: `qa-hcp-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
+        region: "TH",
+      });
+      await expect(ActivatePractitionerCommand(ctx, practitioner.id)).rejects.toThrow(ValidationError);
+    });
+  }, 15000);
+});
+
+describe("UpdatePractitionerCommand", () => {
+  // Regression test: editing a practitioner's email to one already used by
+  // another identity used to bubble up as an opaque DatabaseError/503
+  // ("duplicate key value violates unique constraint identities_email_key")
+  // instead of a clean, user-facing conflict — see errors.ts's DatabaseError.
+  it("throws ConflictError, not a raw DatabaseError, when the new email is already taken by another identity", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const takenEmail = `qa-hcp-${uniqueSuffix()}@example.com`;
+      await CreatePractitionerCommand(ctx, {
+        first_name: "Existing",
+        last_name: "Owner",
+        email: takenEmail,
+        phone: "600100200",
+      });
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Being",
+        last_name: "Edited",
+        email: `qa-hcp-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
+      });
+
+      await expect(
+        UpdatePractitionerCommand(ctx, practitioner.id, { email: takenEmail })
+      ).rejects.toThrow(ConflictError);
+    });
+  }, 15000);
+
+  // Admin-only manual status override — the recovery tool for a
+  // practitioner stuck in a state the normal Activate/Resend/Accept flow
+  // can't get them out of (see docs/stories/practitioner-invite-resend.md
+  // and apps/pwa/src/config/forms/hcpForm.ts's STATUS_OPTIONS).
+  it("lets an admin directly override status (e.g. resetting a stuck 'active' test record back to pending_approval)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Stuck",
+        last_name: "Active",
+        email: `qa-hcp-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
+      });
+      await updatePractitionerStatus(client, practitioner.id, "active");
+
+      const after = await UpdatePractitionerCommand(ctx, practitioner.id, { status: "pending_approval" });
+
+      expect(after?.status).toBe("pending_approval");
+    });
+  }, 15000);
+
+  it("lets a manager override the status directly (NEO-266)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const adminCtx = await buildTestContext(client);
+      const practitioner = await CreatePractitionerCommand(adminCtx, {
+        first_name: "Guarded",
+        last_name: "ByRole",
+        email: `qa-hcp-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
+      });
+
+      const managerEmail = `qa-practitioner-cmd-mgr-${uniqueSuffix()}@neosleepcare.com`;
+      const managerHash = await bcrypt.hash("irrelevant", 4);
+      const managerUser = await insertStaffUser(client, managerEmail, "QA", "Manager", "manager", managerHash, false);
+      const managerCtx: TenantContext = {
+        slug: TENANT_SLUG,
+        client,
+        user: {
+          id: managerUser!.id,
+          email: managerEmail,
+          role: "manager",
+          roles: [{ role: "manager", territory_id: await getGlobalTerritoryId(client) }],
+        },
+        requestId: `test-${uniqueSuffix()}`,
+      };
+
+      await UpdatePractitionerCommand(managerCtx, practitioner.id, { status: "active" });
+
+      const updated = await getPractitionerById(client, practitioner.id);
+      expect(updated?.status).toBe("active");
+    });
+  }, 15000);
+});
+
+describe("Practitioner licence number (national_ids.pwz / cedula, NEO-51)", () => {
+  it("stores a valid PWZ and a cédula normalized to digits only", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const pl = await CreatePractitionerCommand(ctx, {
+        first_name: "Anna",
+        last_name: "Kowalska",
+        email: `qa-hcp-pwz-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
+        region: "PL",
+        // 1·1+2·2+3·3+4·4+5·5+6·6 = 91 → 91 mod 11 = 3
+        national_ids: { pwz: "3123456" },
+      });
+      expect(pl.national_ids).toEqual({ pwz: "3123456" });
+
+      const mx = await CreatePractitionerCommand(ctx, {
+        first_name: "Luis",
+        last_name: "García",
+        email: `qa-hcp-cedula-${uniqueSuffix()}@example.com`,
+        phone: "5512345678",
+        region: "MX",
+        national_ids: { cedula: "AE-1234567" },
+      });
+      expect(mx.national_ids).toEqual({ cedula: "1234567" });
+    });
+  }, 15000);
+
+  it("rejects an invalid PWZ checksum on create and on update", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      await expect(
+        CreatePractitionerCommand(ctx, {
+          first_name: "Anna",
+          last_name: "Kowalska",
+          email: `qa-hcp-badpwz-${uniqueSuffix()}@example.com`,
+          phone: "600100200",
+          region: "PL",
+          national_ids: { pwz: "4123456" },
+        }),
+      ).rejects.toBeInstanceOf(ValidationError);
+
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Anna",
+        last_name: "Kowalska",
+        email: `qa-hcp-updpwz-${uniqueSuffix()}@example.com`,
+        phone: "600100200",
+        region: "PL",
+      });
+      await expect(
+        UpdatePractitionerCommand(ctx, practitioner.id, { national_ids: { pwz: "1234567" } }),
+      ).rejects.toBeInstanceOf(ValidationError);
+      // NEO-109: names the form's own field key, so the HCP form marks the PWZ field.
+      await expect(
+        UpdatePractitionerCommand(ctx, practitioner.id, { national_ids: { pwz: "1234567" } }),
+      ).rejects.toMatchObject({ field: "pwz" });
+      await expect(
+        UpdatePractitionerCommand(ctx, practitioner.id, { national_ids: { cedula: "12" } }),
+      ).rejects.toMatchObject({ field: "cedula" });
+    });
+  }, 15000);
+});

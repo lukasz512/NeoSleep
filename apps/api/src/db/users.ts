@@ -1,0 +1,574 @@
+import type { PoolClient } from "pg";
+import { toArray } from "./helpers.js";
+import { AppError, DatabaseError } from "../errors.js";
+import { displayNameSql } from "../utils/personName.js";
+import { localeForCountry } from "../utils/patientEmailLocale.js";
+import { getTerritoryCountryCode } from "./territory.js";
+
+export type StaffRole = "admin" | "manager" | "kam" | "msl" | "rep" | "doctor" | "support";
+
+export interface User {
+  id: string;
+  identity_id: string;
+  // From identities JOIN
+  email: string;
+  /** Sign-in address when it differs from the contact email above (CORE-173, migration 057). */
+  login_email: string | null;
+  salutation: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  /** Computed display name — salutation (Dr./Dra./Prof. only) + first_name + last_name, see utils/personName.ts. */
+  name: string | null;
+  // From user_roles JOIN — matches the user_roles.role CHECK constraint.
+  // "Primary" role/scope (earliest-granted user_roles row) — a user can hold
+  // more than one {role, scope} pair (see getUserRoleScopes); most of the app
+  // only needs the primary one, mirroring how session/UI treat role today.
+  role: StaffRole;
+  /** RBAC access scope of `role` above — a territory node (migration 022):
+   *  either a country, or the reserved 'global' root meaning "every country
+   *  in the tenant". Null only for a user with zero user_roles rows (a stale
+   *  pre-migration session kept alive server-side) — every real staff user
+   *  always has >=1; treat null as fail-secure (matches all previous scope
+   *  logic's own documented behavior), never as "unrestricted". */
+  scope_territory_id: string | null;
+  scope_territory_name: string | null;
+  scope_territory_kind: string | null;
+  // From users table
+  google_sub: string | null;
+  region: string | null;
+  country_code: string | null;
+  // From identities JOIN
+  language: string | null;
+  territory_id: string | null;
+  status: string;
+  token_version: number;
+  /** Whether the account can sign in with a password (Google-only accounts can't),
+   *  so the app only offers "Change password" where it would work. */
+  has_password: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface StaffUser extends User {
+  password_hash: string | null;
+  force_password_change: boolean;
+}
+
+// LATERAL + LIMIT 1 (not a plain LEFT JOIN) so a user with more than one
+// user_roles row never fans out the outer query into duplicate result rows —
+// it always returns exactly one (earliest-granted) role/scope pair here.
+// Use getUserRoleScopes() when the full set is needed (session/RBAC).
+const USER_JOIN = `
+  FROM users u
+  JOIN identities i ON u.identity_id = i.id
+  LEFT JOIN LATERAL (
+    SELECT role, territory_id FROM user_roles WHERE user_id = u.id ORDER BY created_at ASC LIMIT 1
+  ) ur ON true
+  LEFT JOIN territory st ON ur.territory_id = st.id
+  LEFT JOIN territory it ON i.territory_id = it.id`.trim();
+
+// country_code falls back to the user's own territory (NEO-226): a doctor
+// invited without one still gets their country's phone code and patient country.
+const USER_COLS = `
+  u.id, u.identity_id, i.email, i.title AS salutation, i.first_name, i.last_name, i.phone,
+  ${displayNameSql("i")} AS name,
+  COALESCE(ur.role, 'rep') AS role,
+  ur.territory_id AS scope_territory_id, st.name AS scope_territory_name, st.kind AS scope_territory_kind,
+  u.login_email, u.google_sub, i.region, COALESCE(i.country_code, it.country_code) AS country_code, i.language, i.territory_id, u.status, u.token_version,
+  (u.password_hash IS NOT NULL) AS has_password,
+  u.created_at, u.updated_at`.trim();
+
+const STAFF_AUTH_COLS = `${USER_COLS}, u.password_hash, u.force_password_change`;
+
+/**
+ * All functions below take a tenant-scoped PoolClient (from withTenant()) as the
+ * first argument — table names are unqualified because SET LOCAL search_path is
+ * already in effect on that client. Never call these with a pool-level client.
+ */
+
+/** Outcome of matching a Google identity to an existing staff account (NEO-78). */
+export type GoogleSignInResult =
+  | { kind: "ok"; user: User }
+  /** No usable account: unknown email, unverified Google email, or the matching
+   *  account is already linked to a different Google account. Never auto-created:
+   *  accounts are created only by an admin. */
+  | { kind: "no_account" }
+  /** An account exists but its status is not 'active' (inactive / suspended / pending invite). */
+  | { kind: "inactive" };
+
+/**
+ * Resolves the staff user a Google sign-in belongs to. Never creates an account:
+ * before NEO-78 this auto-provisioned a global-scope 'rep' for any Google email,
+ * which would have let anyone with a Google account into the CRM.
+ *
+ * 1. A user already linked to this Google `sub` wins (an email change on the
+ *    Google side doesn't lock them out).
+ * 2. Otherwise only a Google-verified email is matched against identities.email
+ *    (UNIQUE, and users.identity_id is UNIQUE, so at most one user), and that
+ *    user's google_sub is linked on first sign-in, unless it is already linked
+ *    to a different Google account.
+ */
+export async function resolveGoogleSignInUser(
+  client: PoolClient,
+  googleSub: string,
+  email: string,
+  emailVerified: boolean
+): Promise<GoogleSignInResult> {
+  try {
+    const bySub = await client.query<User>(
+      `SELECT ${USER_COLS} ${USER_JOIN} WHERE u.google_sub = $1 AND u.deleted_at IS NULL`,
+      [googleSub]
+    );
+    const linked = bySub.rows[0];
+    if (linked) return linked.status === "active" ? { kind: "ok", user: linked } : { kind: "inactive" };
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!emailVerified || !normalizedEmail) return { kind: "no_account" };
+
+    const byEmail = await client.query<User>(
+      `SELECT ${USER_COLS} ${USER_JOIN} WHERE (lower(i.email) = $1 OR lower(u.login_email) = $1) AND u.deleted_at IS NULL`,
+      [normalizedEmail]
+    );
+    const candidate = byEmail.rows[0];
+    if (!candidate || byEmail.rows.length > 1) return { kind: "no_account" };
+    if (candidate.google_sub && candidate.google_sub !== googleSub) return { kind: "no_account" };
+    if (candidate.status !== "active") return { kind: "inactive" };
+
+    await client.query(
+      `UPDATE users SET google_sub = $1, updated_at = now() WHERE id = $2 AND google_sub IS NULL`,
+      [googleSub, candidate.id]
+    );
+    return { kind: "ok", user: { ...candidate, google_sub: googleSub } };
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("resolveGoogleSignInUser", err);
+  }
+}
+
+export async function getUserById(client: PoolClient, id: string): Promise<User | null> {
+  try {
+    const r = await client.query<User>(
+      `SELECT ${USER_COLS} ${USER_JOIN} WHERE u.id = $1 AND u.deleted_at IS NULL`,
+      [id]
+    );
+    return r.rows[0] ?? null;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getUserById", err);
+  }
+}
+
+export async function getStaffUserByEmail(client: PoolClient, email: string): Promise<StaffUser | null> {
+  try {
+    const r = await client.query<StaffUser>(
+      `SELECT ${STAFF_AUTH_COLS} ${USER_JOIN} WHERE (i.email = $1 OR lower(u.login_email) = $1) AND u.deleted_at IS NULL`,
+      [email.trim().toLowerCase()]
+    );
+    return r.rows[0] ?? null;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getStaffUserByEmail", err);
+  }
+}
+
+export async function setUserPassword(
+  client: PoolClient,
+  userId: string,
+  passwordHash: string,
+  forcePasswordChange = false
+): Promise<void> {
+  try {
+    await client.query(
+      `UPDATE users SET password_hash = $1, force_password_change = $2, updated_at = now() WHERE id = $3`,
+      [passwordHash, forcePasswordChange, userId]
+    );
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("setUserPassword", err);
+  }
+}
+
+/** Shallow-merges into identities.metadata JSONB — used to record clinic/invoice data collected at partner-invite acceptance. */
+export async function mergeIdentityMetadataForUser(
+  client: PoolClient,
+  userId: string,
+  patch: Record<string, unknown>
+): Promise<void> {
+  try {
+    await client.query(
+      `UPDATE identities i SET metadata = COALESCE(i.metadata, '{}'::jsonb) || $1::jsonb, updated_at = now()
+       FROM users u WHERE u.identity_id = i.id AND u.id = $2`,
+      [JSON.stringify(patch), userId]
+    );
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("mergeIdentityMetadataForUser", err);
+  }
+}
+
+export async function insertStaffUser(
+  client: PoolClient,
+  email: string,
+  firstName: string | null,
+  lastName: string | null,
+  role: StaffRole,
+  passwordHash: string | null,
+  forcePasswordChange: boolean,
+  salutation?: string | null,
+  phone?: string | null,
+  scopeTerritoryId?: string | null,
+  grantedBy?: string | null,
+  countryCode?: string | null
+): Promise<User | null> {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  try {
+    // CORE-261: the assigned territory is the only source of the initial region and language.
+    // An explicit country wins; both stay editable afterwards (identities.region / .language).
+    const territoryCountry = scopeTerritoryId ? await getTerritoryCountryCode(client, scopeTerritoryId) : null;
+    const region = countryCode ?? territoryCountry;
+    const identityResult = await client.query<{ id: string }>(
+      `INSERT INTO identities (email, title, first_name, last_name, phone, country_code, region, language)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (email) WHERE NOT email_shared DO UPDATE SET email = EXCLUDED.email
+       RETURNING id`,
+      [
+        normalizedEmail,
+        salutation?.trim() || null,
+        firstName,
+        lastName,
+        phone ?? null,
+        countryCode ?? null,
+        region,
+        localeForCountry(region),
+      ]
+    );
+    const identityId = identityResult.rows[0]!.id;
+
+    // identity_id is UNIQUE on users, so a previously soft-deleted staff user
+    // (deleted_at set) still occupies this slot and would otherwise make this
+    // email permanently unreusable. Reactivate it instead of no-op'ing — but
+    // only when the conflicting row is actually soft-deleted: if it's a live
+    // active/suspended user, the WHERE clause below leaves it untouched and
+    // this still returns no row, so the caller's "already exists" check fires.
+    const userResult = await client.query<{ id: string }>(
+      `INSERT INTO users (identity_id, password_hash, force_password_change, status)
+       VALUES ($1, $2, $3, 'active')
+       ON CONFLICT (identity_id) DO UPDATE SET
+         password_hash = EXCLUDED.password_hash,
+         force_password_change = EXCLUDED.force_password_change,
+         status = 'active',
+         deleted_at = NULL,
+         updated_at = now()
+       WHERE users.deleted_at IS NOT NULL
+       RETURNING id`,
+      [identityId, passwordHash, forcePasswordChange]
+    );
+    if (!userResult.rows[0]) return null;
+    const userId = userResult.rows[0].id;
+
+    // Delete-then-insert (rather than ON CONFLICT) since reactivation may need
+    // to replace roles left over from before the account was deleted, and
+    // user_roles' only unique constraint is the composite (user_id, role,
+    // scope) — not user_id alone — so ON CONFLICT (user_id) has no matching
+    // constraint to target.
+    await client.query(`DELETE FROM user_roles WHERE user_id = $1`, [userId]);
+    await client.query(
+      `INSERT INTO user_roles (user_id, role, territory_id, granted_by)
+       VALUES ($1, $2, COALESCE($3, (SELECT id FROM territory WHERE kind = 'global' LIMIT 1)), $4)`,
+      [userId, role, scopeTerritoryId ?? null, grantedBy ?? null]
+    );
+
+    const r = await client.query<User>(
+      `SELECT ${USER_COLS} ${USER_JOIN} WHERE u.id = $1`,
+      [userId]
+    );
+    return r.rows[0] ?? null;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("insertStaffUser", err);
+  }
+}
+
+export interface UserRoleScope {
+  role: StaffRole;
+  territory_id: string;
+}
+
+/**
+ * Full {role, scope} set for a user (unlike User.role/scope_territory_id on
+ * USER_COLS, which only surface the earliest-granted pair). Used at login/
+ * session-refresh time to build the RBAC scope set requireScope() checks
+ * against.
+ */
+export async function getUserRoleScopes(client: PoolClient, userId: string): Promise<UserRoleScope[]> {
+  try {
+    const r = await client.query<UserRoleScope>(
+      `SELECT role, territory_id FROM user_roles WHERE user_id = $1 ORDER BY created_at ASC`,
+      [userId]
+    );
+    return r.rows;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getUserRoleScopes", err);
+  }
+}
+
+/**
+ * Seeded staff accounts with no password set yet (bootstrapped on startup — see auth.ts).
+ * Never an invited partner/doctor account: those set their own password when they accept
+ * the invite, and giving them the shared initial password would let anyone who knows their
+ * email log in before they've signed anything (found while verifying NEO-51). Invited
+ * accounts are excluded both by status (they stay 'inactive' until acceptance) and by
+ * having an invite token at all.
+ *
+ * Opt-in, not "everyone without a password": only rows a seed migration explicitly
+ * created with force_password_change = true (the column defaults to false). Accounts
+ * linked to Google sign-in (resolveGoogleSignInUser above) sign in through Google and
+ * must never get the shared password either, hence also google_sub IS NULL.
+ * Doctors never get it, however they were created (invite, lead conversion, or an
+ * admin adding a 'doctor' user without a password): they set their own password.
+ */
+export async function getUsersWithoutPassword(client: PoolClient): Promise<{ id: string; email: string }[]> {
+  try {
+    const r = await client.query<{ id: string; email: string }>(
+      `SELECT u.id, i.email FROM users u JOIN identities i ON u.identity_id = i.id
+       WHERE u.password_hash IS NULL AND u.deleted_at IS NULL
+         AND u.status = 'active'
+         AND u.force_password_change = true
+         AND u.google_sub IS NULL
+         AND NOT EXISTS (SELECT 1 FROM invite_tokens it WHERE it.user_id = u.id)
+         AND NOT EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id AND ur.role = 'doctor')`
+    );
+    return r.rows;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getUsersWithoutPassword", err);
+  }
+}
+
+export async function getUserIdByEmail(client: PoolClient, email: string): Promise<string | null> {
+  try {
+    const r = await client.query<{ id: string }>(
+      `SELECT u.id FROM users u JOIN identities i ON u.identity_id = i.id WHERE (i.email = $1 OR lower(u.login_email) = $1) AND u.deleted_at IS NULL`,
+      [email.trim().toLowerCase()]
+    );
+    return r.rows[0]?.id ?? null;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getUserIdByEmail", err);
+  }
+}
+
+/** Single-column read for TenantContext.buildContext()'s per-request token_version check —
+ *  cheaper than getUserById's full identities/user_roles join. */
+export async function getUserTokenVersion(client: PoolClient, userId: string): Promise<number | null> {
+  try {
+    const r = await client.query<{ token_version: number }>(
+      `SELECT token_version FROM users WHERE id = $1 AND deleted_at IS NULL`,
+      [userId]
+    );
+    return r.rows[0]?.token_version ?? null;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getUserTokenVersion", err);
+  }
+}
+
+export async function incrementUserTokenVersion(client: PoolClient, userId: string): Promise<void> {
+  try {
+    await client.query(
+      "UPDATE users SET token_version = token_version + 1 WHERE id = $1",
+      [userId]
+    );
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("incrementUserTokenVersion", err);
+  }
+}
+
+export interface GetUsersFilters {
+  search?: string;
+  role?: string | string[];
+  status?: string | string[];
+  /** RBAC scope filter (ltree paths, migration 022): undefined/null =
+   *  unrestricted, [] = matches nothing, otherwise restrict to users whose
+   *  own identities.country_code resolves to a territory inside one of
+   *  these paths. */
+  scopePaths?: string[] | null;
+}
+
+const USER_SORT_COLUMNS = ["first_name", "last_name", "email", "status", "created_at"] as const;
+function isUserSortColumn(s: string): s is (typeof USER_SORT_COLUMNS)[number] {
+  return USER_SORT_COLUMNS.includes(s as (typeof USER_SORT_COLUMNS)[number]);
+}
+
+export async function getUsersPaginated(
+  client: PoolClient,
+  filters: GetUsersFilters,
+  page: number,
+  limit: number,
+  sortBy: string,
+  sortOrder: "asc" | "desc"
+): Promise<{ rows: User[]; total: number }> {
+  const conditions: string[] = ["u.deleted_at IS NULL"];
+  const params: unknown[] = [];
+  let paramIndex = 1;
+
+  if (filters.search?.trim()) {
+    conditions.push(
+      `(LOWER(i.first_name) LIKE $${paramIndex} OR LOWER(i.last_name) LIKE $${paramIndex} OR LOWER(i.email) LIKE $${paramIndex})`
+    );
+    params.push(`%${filters.search.trim().toLowerCase()}%`);
+    paramIndex++;
+  }
+  const roleArr = toArray(filters.role);
+  if (roleArr.length > 0) {
+    conditions.push(`ur.role = ANY($${paramIndex}::text[])`);
+    params.push(roleArr);
+    paramIndex++;
+  }
+  if (filters.scopePaths !== undefined && filters.scopePaths !== null) {
+    conditions.push(
+      `i.country_code IN (SELECT country_code FROM territory WHERE kind = 'country' AND path <@ ANY($${paramIndex}::extensions.ltree[]))`
+    );
+    params.push(filters.scopePaths);
+    paramIndex++;
+  }
+  const statusArr = toArray(filters.status);
+  if (statusArr.length > 0) {
+    conditions.push(`u.status = ANY($${paramIndex}::text[])`);
+    params.push(statusArr);
+    paramIndex++;
+  }
+
+  const whereClause = `WHERE ${conditions.join(" AND ")}`;
+  const orderCol = isUserSortColumn(sortBy) ? sortBy : "created_at";
+  const orderDir = sortOrder === "asc" ? "ASC" : "DESC";
+  // created_at and status live on users; the name and email columns on identities.
+  const safeOrder = orderCol === "created_at" || orderCol === "status" ? `u.${orderCol}` : `i."${orderCol}"`;
+
+  try {
+    const countResult = await client.query<{ count: string }>(
+      `SELECT COUNT(DISTINCT u.id) AS count ${USER_JOIN} ${whereClause}`,
+      params
+    );
+    const total = Number(countResult.rows[0]?.count ?? 0);
+
+    const offset = (page - 1) * limit;
+    params.push(limit, offset);
+    const dataResult = await client.query<User>(
+      `SELECT ${USER_COLS} ${USER_JOIN} ${whereClause}
+       ORDER BY ${safeOrder} ${orderDir} LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      params
+    );
+    return { rows: dataResult.rows, total };
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getUsersPaginated", err);
+  }
+}
+
+export interface UpdateUserInput {
+  salutation?: string | null;
+  first_name?: string;
+  last_name?: string;
+  phone?: string | null;
+  status?: "active" | "inactive" | "suspended";
+  country_code?: string | null;
+  /** Country the identity belongs to (PL, MX…). Stored on identities, shared by user/HCP/patient. */
+  region?: string | null;
+  /** Language of every mail and notification to this identity (en, pl, mx). */
+  language?: string;
+  role?: StaffRole;
+  /** RBAC access scope for `role` — a territory id (country or global root).
+   *  Defaults to the existing scope, or the global root for a brand-new role. */
+  territory_id?: string;
+}
+
+export async function updateUser(
+  client: PoolClient,
+  id: string,
+  input: UpdateUserInput,
+  grantedBy?: string | null
+): Promise<User | null> {
+  const existing = await getUserById(client, id);
+  if (!existing) return null;
+
+  try {
+    if (
+      input.salutation !== undefined ||
+      input.first_name !== undefined ||
+      input.last_name !== undefined ||
+      input.phone !== undefined
+    ) {
+      // Unconditional write per field (not COALESCE) so an explicit null
+      // (e.g. clearing the salutation combobox) actually clears it, while a
+      // field simply absent from the payload falls back to its current value.
+      const salutation = input.salutation !== undefined ? (input.salutation?.trim() || null) : existing.salutation;
+      const firstName  = input.first_name !== undefined ? input.first_name : existing.first_name;
+      const lastName   = input.last_name  !== undefined ? input.last_name  : existing.last_name;
+      const phone      = input.phone      !== undefined ? input.phone      : existing.phone;
+      await client.query(
+        `UPDATE identities i SET
+           title      = $1,
+           first_name = $2,
+           last_name  = $3,
+           phone      = $4,
+           updated_at = now()
+         FROM users u
+         WHERE u.identity_id = i.id AND u.id = $5`,
+        [salutation, firstName, lastName, phone, id]
+      );
+    }
+    if (input.status !== undefined) {
+      await client.query(`UPDATE users SET status = $1, updated_at = now() WHERE id = $2`, [input.status, id]);
+    }
+    if (input.country_code !== undefined) {
+      await client.query(`UPDATE identities SET country_code = $1, updated_at = now() WHERE id = $2`, [input.country_code, existing.identity_id]);
+    }
+    if (input.region !== undefined || input.language !== undefined) {
+      // One identity row feeds every mail and notification, so a doctor who
+      // is also a user changes language here and on the HCP screen at once.
+      await client.query(
+        `UPDATE identities SET
+           region     = CASE WHEN $1::boolean THEN $2 ELSE region END,
+           language   = CASE WHEN $3::boolean THEN $4 ELSE language END,
+           updated_at = now()
+         WHERE id = $5`,
+        [input.region !== undefined, input.region?.trim().toUpperCase() || null, input.language !== undefined, input.language, existing.identity_id]
+      );
+    }
+    if (input.role !== undefined || input.territory_id !== undefined) {
+      // Single {role, scope} pair per user for now (no multi-role assignment
+      // UI yet) — replace rather than upsert so a role change doesn't leave
+      // a stale row behind under the old role.
+      const role = input.role ?? existing.role;
+      const territoryId = input.territory_id ?? existing.scope_territory_id;
+      await client.query(`DELETE FROM user_roles WHERE user_id = $1`, [id]);
+      await client.query(
+        `INSERT INTO user_roles (user_id, role, territory_id, granted_by)
+         VALUES ($1, $2, COALESCE($3, (SELECT id FROM territory WHERE kind = 'global' LIMIT 1)), $4)`,
+        [id, role, territoryId, grantedBy ?? null]
+      );
+    }
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("updateUser", err);
+  }
+
+  return getUserById(client, id);
+}
+
+export async function softDeleteUser(client: PoolClient, id: string): Promise<void> {
+  try {
+    await client.query(
+      `UPDATE users SET deleted_at = now(), status = 'inactive' WHERE id = $1`,
+      [id]
+    );
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("softDeleteUser", err);
+  }
+}

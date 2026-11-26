@@ -1,0 +1,15 @@
+Options -Indexes
+
+# SPA fallback — wszystkie ścieżki które nie są plikiem/katalogiem → index.html
+# Bez tego Apache zwraca 404 przy bezpośrednim wejściu na /for-professionals itp.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Nie przepisuj istniejących plików (JS, CSS, obrazki...)
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+
+  # Wszystko inne → index.html, Vue Router obsługuje resztę
+  RewriteRule ^ index.html [L]
+</IfModule>

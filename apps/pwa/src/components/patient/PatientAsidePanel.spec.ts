@@ -1,0 +1,242 @@
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
+import { setActivePinia, createPinia } from "pinia";
+import { createI18n } from "vue-i18n";
+import { createVuetify } from "vuetify";
+import { createRouter, createMemoryHistory } from "vue-router";
+import * as vuetifyComponents from "vuetify/components";
+import * as vuetifyDirectives from "vuetify/directives";
+import en from "@i18n/en.json";
+
+const apiFetch = vi.fn();
+vi.mock("../../composables/useApi", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  apiFetch: (...args: unknown[]) => apiFetch(...args),
+}));
+vi.mock("../../composables/useNotifications", () => ({ useNotifications: () => ({ show: vi.fn() }) }));
+
+import PatientAsidePanel from "./PatientAsidePanel.vue";
+import DoctorSignatureDialog from "./DoctorSignatureDialog.vue";
+import { useAuthStore } from "../../stores/auth";
+
+const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as Response;
+const actions = (qr: boolean) => ({ qr, fill: null, form: null, print: true, upload: true });
+const item = (key: string, group: string, status: string, qr = true) => ({
+  key, templateKey: key, label: key, fillMode: group, group, category: group === "results" ? "study" : "document", status, completed_at: null, history: [], pending_request_id: null, actions: actions(qr),
+});
+
+let checklistItems: ReturnType<typeof item>[];
+
+beforeEach(() => {
+  checklistItems = [item("informedConsent", "consent", "missing"), item("medicalHistory", "patient", "done"), item("polysomnography", "results", "done", false)];
+  apiFetch.mockImplementation(async (path: string) => {
+    if (path.startsWith("/api/v1/note?")) {
+      return ok({ items: [{ id: "n1", entity_type: "patient", entity_id: "p-1", author_id: "u-1", author_name: "Rep One", body: "Latest note", created_at: "2026-09-24T10:00:00Z" }] });
+    }
+    if (path === "/api/v1/patient/p-1/checklist") {
+      return ok({ items: checklistItems, other_uploads: [], pending_requests: [], expired_request: null, summary: { done: 2, total: 3 } });
+    }
+    return { ok: false, status: 404, json: async () => ({}) } as Response;
+  });
+});
+
+const mounted: VueWrapper[] = [];
+afterEach(() => {
+  for (const w of mounted.splice(0)) w.unmount();
+  apiFetch.mockReset();
+});
+
+async function mountPanel(props: Record<string, unknown> = {}): Promise<VueWrapper> {
+  setActivePinia(createPinia());
+  const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
+  const vuetify = createVuetify({ components: vuetifyComponents, directives: vuetifyDirectives });
+  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: "/", component: { template: "<div />" } }, { path: "/hcp/:id", name: "hcp-detail", component: { template: "<div />" } }] });
+  const wrapper = mount(PatientAsidePanel, {
+    props: {
+      patient: { id: "p-1", status: "active", ahi_baseline: 32, cpap_device: null, practitioner_id: "h-1", practitioner_name: "Dr Marta Nowak", diagnosis_code: { code: "G47.33", label: "OSA" } },
+      canSeeStudies: true,
+      activeTab: "details",
+      ...props,
+    },
+    global: { plugins: [i18n, vuetify, router] },
+  });
+  mounted.push(wrapper);
+  await flushPromises();
+  return wrapper;
+}
+
+const qrButton = (w: VueWrapper) => w.find(".patient-aside__qr");
+
+describe("PatientAsidePanel — the doctor's own name", () => {
+  it("a doctor does not see the practitioner (their own name) in the key facts; other roles get the link", async () => {
+    const doctor = await mountPanel();
+    useAuthStore().user = { id: "u-1", email: "doc@x.mx", role: "doctor" };
+    await flushPromises();
+    expect(doctor.find(".patient-aside__facts").text()).not.toContain("Dr Marta Nowak");
+    expect(doctor.find(".patient-aside__facts a").exists()).toBe(false);
+
+    const manager = await mountPanel();
+    useAuthStore().user = { id: "u-2", email: "mgr@x.mx", role: "manager" };
+    await flushPromises();
+    expect(manager.find(".patient-aside__facts a").text()).toBe("Dr Marta Nowak");
+  });
+});
+
+describe("PatientAsidePanel (NEO-153, NEO-203)", () => {
+  it("opens with the next-step card, the QR button inside it", async () => {
+    const wrapper = await mountPanel();
+    const first = wrapper.find(".patient-aside").element.firstElementChild;
+    expect(first?.classList.contains("patient-aside__next")).toBe(true);
+    expect(wrapper.find(".patient-aside__next .patient-aside__qr").exists()).toBe(true);
+  });
+
+  it("names what the patient still has to fill in", async () => {
+    const next = (await mountPanel()).find(".patient-aside__next");
+    expect(next.text()).toContain("Waiting on the patient: 1");
+    expect(next.find(".patient-aside__next-items").text()).toBe("Informed consent");
+  });
+
+  it("'QR for the patient' emits qr; with nothing left for the patient it is disabled and says All done", async () => {
+    const wrapper = await mountPanel();
+    await qrButton(wrapper).trigger("click");
+    expect(wrapper.emitted("qr")).toHaveLength(1);
+
+    checklistItems = [item("informedConsent", "consent", "done"), item("polysomnography", "results", "missing", false)];
+    const done = await mountPanel();
+    expect(qrButton(done).attributes("disabled")).toBeDefined();
+    expect(qrButton(done).text()).toContain("All done");
+    expect(done.find(".patient-aside__next").text()).toContain("Nothing left for the patient");
+  });
+
+  it("keeps its QR button on every tab — on desktop the Documentos tab drops its own instead (NEO-203)", async () => {
+    for (const activeTab of ["details", "documents", "studies"]) {
+      expect(qrButton(await mountPanel({ activeTab })).exists()).toBe(true);
+    }
+  });
+
+  it("does not show the OrthoApnea card nor load the order", async () => {
+    const wrapper = await mountPanel();
+    expect(wrapper.find(".patient-aside__oa").exists()).toBe(false);
+    expect(apiFetch.mock.calls.some(([p]) => String(p).includes("/treatment-plan"))).toBe(false);
+  });
+
+  it("shows the key facts as one line under the next-step card", async () => {
+    const wrapper = await mountPanel();
+    const facts = wrapper.find(".patient-aside__facts");
+    expect(facts.element.previousElementSibling?.classList.contains("patient-aside__next")).toBe(true);
+    expect(facts.find(".patient-aside__diagnosis").text()).toBe("G47.33 · OSA");
+    // NEO-247: status and IAH live on Details only.
+    expect(facts.text()).not.toContain("AHI");
+    expect(facts.find(".v-chip").exists()).toBe(false);
+    expect(facts.find("a").text()).toBe("Dr Marta Nowak");
+
+    const empty = await mountPanel({ patient: { id: "p-1", diagnosis_code: null } });
+    expect(empty.find(".patient-aside__diagnosis").exists()).toBe(false);
+  });
+
+  it("lists unfinished documents first and cuts the list at 6 rows with a link to the rest", async () => {
+    checklistItems = [
+      item("medicalHistory", "patient", "done"),
+      item("stopBang", "patient", "done"),
+      item("oralExam", "doctor", "done"),
+      item("historiaEndo", "doctor", "done"),
+      item("polysomnography", "results", "done", false),
+      item("extra1", "results", "done", false),
+      item("informedConsent", "consent", "missing"),
+      item("extra2", "results", "missing", false),
+    ];
+    const wrapper = await mountPanel();
+    const rows = wrapper.findAll(".patient-aside__docs li");
+    // NEO-231 D2: the three Historia clínica sections + the printable HC are one row.
+    expect(rows.map((r) => r.text())).toEqual(["Informed consent", "extra2", "Clinical history · 3/3", "Polysomnography", "extra1"]);
+    await rows[0]!.find("button").trigger("click");
+    expect(wrapper.emitted("open-study")).toEqual([["informedConsent", "document"]]);
+
+    await wrapper.find(".patient-aside__docs .patient-aside__all").trigger("click");
+    expect(wrapper.emitted("open-tab")).toEqual([["documents"]]);
+  });
+
+  it("with 6 documents or fewer shows them all and no 'see all' link", async () => {
+    const wrapper = await mountPanel();
+    expect(wrapper.findAll(".patient-aside__docs li")).toHaveLength(3);
+    expect(wrapper.find(".patient-aside__docs .patient-aside__all").exists()).toBe(false);
+  });
+
+  it("hides the next step and the documents from roles without access to health data", async () => {
+    const wrapper = await mountPanel({ canSeeStudies: false });
+    expect(wrapper.find(".patient-aside__next").exists()).toBe(false);
+    expect(wrapper.find(".patient-aside__docs").exists()).toBe(false);
+    expect(wrapper.find(".patient-aside__facts").exists()).toBe(true);
+    expect(apiFetch.mock.calls.some(([p]) => String(p).includes("/checklist"))).toBe(false);
+  });
+
+  it("shows the latest note only", async () => {
+    const wrapper = await mountPanel();
+    expect(wrapper.findAll(".patient-aside__note")).toHaveLength(1);
+    expect(wrapper.find(".patient-aside__note-body").text()).toBe("Latest note");
+  });
+});
+
+describe("PatientAsidePanel — Siguiente paso after the patient's part (NEO-258)", () => {
+  const hc = (oral: string, tmj: string) => [
+    item("informedConsent", "consent", "done"),
+    item("medicalHistory", "patient", "done"),
+    item("stopBang", "patient", "done"),
+    item("oralExam", "doctor", oral, false),
+    item("tmjExam", "doctor", tmj, false),
+    item("historiaEndo", "doctor", "missing", false),
+  ];
+
+  it("D2: patient done, exploration open → 'Complete exploration' opens the first open section", async () => {
+    checklistItems = hc("done", "missing");
+    const wrapper = await mountPanel();
+    expect(wrapper.find("[data-testid=next-step-title]").text()).toBe("To complete in the clinic: 1");
+    await wrapper.find("[data-testid=next-step-complete]").trigger("click");
+    expect(wrapper.emitted("open-study")).toEqual([["tmjExam", "document"]]);
+  });
+
+  it("every section done → print and (doctor only) email the Historia clínica; no email on file disables it with the reason", async () => {
+    checklistItems = hc("done", "done");
+    const manager = await mountPanel({ patient: { id: "p-1", email: "lucia@example.mx" } });
+    useAuthStore().user = { id: "u-2", email: "mgr@x.mx", role: "manager" };
+    await flushPromises();
+    expect(manager.find("[data-testid=next-step-title]").text()).toBe("Clinical history complete");
+    expect(manager.find("[data-testid=next-step-print]").exists()).toBe(true);
+    expect(manager.find("[data-testid=next-step-email]").exists()).toBe(false);
+
+    const noEmail = await mountPanel({ patient: { id: "p-1", email: null } });
+    useAuthStore().user = { id: "u-1", email: "doc@x.mx", role: "doctor" };
+    await flushPromises();
+    expect(noEmail.find("[data-testid=next-step-email]").attributes("disabled")).toBeDefined();
+    expect(noEmail.find("[data-testid=next-step-no-email]").text()).toBe("Add the patient's email to send it");
+  });
+
+  it("D3: the doctor signs, then the signed Historia clínica is emailed — the signature goes with the request", async () => {
+    checklistItems = hc("done", "done");
+    const wrapper = await mountPanel({ patient: { id: "p-1", email: "lucia@example.mx" } });
+    useAuthStore().user = { id: "u-1", email: "doc@x.mx", role: "doctor" };
+    await flushPromises();
+    const sent = vi.fn();
+    const base = apiFetch.getMockImplementation()!;
+    apiFetch.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === "/api/v1/patient/p-1/historia-clinica/email") {
+        sent(JSON.parse(String(init?.body)));
+        return { ok: true, status: 201, json: async () => ({ sent_to: "l***@example.mx" }) } as Response;
+      }
+      return base(path, init);
+    });
+
+    await wrapper.find("[data-testid=next-step-email]").trigger("click");
+    const dialog = wrapper.findComponent(DoctorSignatureDialog);
+    expect(dialog.props()).toMatchObject({ modelValue: true, purpose: "email" });
+    dialog.vm.$emit("print", "data:image/png;base64,AAAA");
+    await flushPromises();
+    expect(sent).toHaveBeenCalledWith({ doctorSignature: "data:image/png;base64,AAAA" });
+  });
+
+  it("a tenant without the Historia clínica keeps the old end state", async () => {
+    checklistItems = [item("informedConsent", "consent", "done")];
+    const wrapper = await mountPanel();
+    expect(qrButton(wrapper).text()).toContain("All done");
+  });
+});

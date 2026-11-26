@@ -1,0 +1,115 @@
+# Deploy marketing website to GoDaddy FTP
+# - PROD → neosleepcare.com         (secret GODADY_FTP_WEB_PROD)
+# - DEV  → dev.neosleepcare.com     (secret GODADY_FTP_WEB_DEV)
+#
+# The prod branch is protected by the requiere_PR_to_merge ruleset — no
+# direct pushes, no bypass, for anyone. So a push to prod here only ever
+# happens because a "Promote Dev → Prod" PR was reviewed and merged
+# (promote-dev-to-prod.yml opens that PR; it never pushes anything itself).
+#
+# NOTE: GODADY_FTP_WEB_* secrets must hold the FTP server-dir path (e.g.
+# /public_html/neosleepcare.com/web/prod), not the public https:// URL —
+# see secrets/deploy-notes.md for the exact paths.
+
+name: Deploy NeoSleepCare Site
+
+# Deploys only when something this site is built from changed (CORE-144):
+# its own code, the shared packages it imports, or the root build files. A
+# change elsewhere (API, docs, the other app) no longer rebuilds and re-uploads
+# it. Run it by hand (workflow_dispatch) to redeploy without a change.
+on:
+  push:
+    branches: [prod, dev]
+    paths:
+      - "apps/web/**"
+      - "packages/brand/**"
+      - "packages/i18n/**"
+      - "packages/stores/**"
+      - "packages/ui/**"
+      - "packages/vuetify/**"
+      - "packages/documents/**"
+      - "apps/api/client/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".nvmrc"
+      - "tsconfig.base.json"
+      - "tsconfig.json"
+      - ".github/workflows/deploy-web.yml"
+  workflow_dispatch:
+
+# A newer merge replaces a deploy that is still waiting for a runner, instead
+# of queueing behind it. A deploy that already started is never cancelled — a
+# half-finished FTP upload leaves the site pointing at missing assets.
+concurrency:
+  group: deploy-web-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # VITE_API_URL points the built site at the API (booking widget, find-a-specialist
+      # map). Without it apiFetch falls back to a same-origin relative path, which 404s on
+      # the static GoDaddy host — the secret never existed, so neither feature ever worked.
+      # Same per-branch secrets as deploy-pwa.yml: dev site -> dev API, prod site -> prod
+      # API, both on Cloud Run (NEO-45).
+      # VITE_GOOGLE_MAPS_BROWSER_API_KEY powers the /find-specialist map —
+      # an HTTP-referrer-restricted key, safe to ship in the bundle (see
+      # apps/web/src/composables/useGoogleMaps.ts).
+      - name: Set API URL for build
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/prod" ]; then
+            echo "VITE_API_URL=${{ secrets.API_URL_PROD }}" >> $GITHUB_ENV
+          else
+            echo "VITE_API_URL=${{ secrets.API_URL_DEV }}" >> $GITHUB_ENV
+          fi
+
+      - name: Build website
+        run: pnpm run build:web
+        env:
+          VITE_GOOGLE_MAPS_BROWSER_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_BROWSER_API_KEY }}
+          # Map ID for Advanced Markers (NEO-79). Optional: while the secret is
+          # unset the map falls back to Google's DEMO_MAP_ID (see
+          # apps/web/src/composables/useGoogleMaps.ts). Not a secret value, but
+          # kept next to the key so both are configured in one place.
+          VITE_GOOGLE_MAPS_MAP_ID: ${{ secrets.VITE_GOOGLE_MAPS_MAP_ID }}
+
+      - name: Deploy to PROD (neosleepcare.com)
+        if: github.ref == 'refs/heads/prod'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          local-dir: ./apps/web/dist/
+          server-dir: ${{ secrets.GODADY_FTP_WEB_PROD }}/
+          dangerous-clean-slate: false
+
+      - name: Deploy to DEV (dev.neosleepcare.com)
+        if: github.ref == 'refs/heads/dev'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          local-dir: ./apps/web/dist/
+          server-dir: ${{ secrets.GODADY_FTP_WEB_DEV }}/
+          dangerous-clean-slate: false

@@ -1,0 +1,30 @@
+{
+  "name": "@neo/ui",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "vue": "catalog:",
+    "vue-router": "catalog:",
+    "vue-i18n": "catalog:",
+    "vuetify": "catalog:",
+    "pinia": "catalog:",
+    "@vue/devtools-api": "catalog:",
+    "motion": "^13.4.4",
+    "@neo/stores": "workspace:*",
+    "@neo/api-client": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@vitejs/plugin-vue": "catalog:",
+    "@vue/test-utils": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

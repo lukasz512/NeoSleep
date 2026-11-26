@@ -1,0 +1,95 @@
+import { reportCaught, reportFailedResponse } from "@api";
+import { apiFetch } from "./useApi";
+import { retryAction, useNotifications } from "./useNotifications";
+import { i18n } from "../plugins/i18n";
+
+/**
+ * Generic "is this partner reachable" check, meant to be reused by every
+ * partner integration (OrthoApnea today; Biologix/WatchPAT later), not just
+ * OrthoApnea. Each partner backend exposes `GET /api/v1/partners/<partner>/status`
+ * (see routes/partners/orthoapnea-status.ts) — attempts a reconnect if
+ * needed, no-ops if already connected, never throws.
+ *
+ * Called from the router guard (router/index.ts) on navigation into any
+ * route tagged `meta.partner`, not from the views themselves — this is
+ * fire-and-forget, so it never blocks navigation, and the view's own load()
+ * still shows its own inline error state (with its own "report incident"
+ * CTA) regardless of this notification.
+ */
+
+
+interface ConnectionStatus {
+  connected: boolean;
+  attemptsExhausted: boolean;
+  /** Set by the API when not connected (see ConnectionFailureReason in services/partners/orthoapnea.ts). */
+  reason?: string;
+}
+
+/** Failures only a server-side config change fixes — telling the rep to reload would be wrong. */
+const CONFIG_FAILURE_REASONS = new Set(["credentials_rejected", "not_configured"]);
+
+/** One toast per partner per cooldown window — repeatedly bouncing between two OrthoApnea-tagged routes while it's down shouldn't spam a notification on every navigation. */
+const NOTIFY_COOLDOWN_MS = 30_000;
+const lastNotifiedAt = new Map<string, number>();
+
+async function checkPartnerConnection(partner: string): Promise<ConnectionStatus> {
+  try {
+    const res = await apiFetch(`/api/v1/partners/${partner}/status`, { handleErrors: false });
+    if (!res.ok) {
+      // The status route itself never fails for a down partner (it answers 200 + connected:false),
+      // so a non-2xx here is our own API failing — report it, the toast below still warns the user.
+      await reportFailedResponse(res, { where: "usePartnerConnection.checkPartnerConnection" });
+      return { connected: false, attemptsExhausted: false };
+    }
+    return (await res.json()) as ConnectionStatus;
+  } catch (err) {
+    reportCaught(err, { where: "usePartnerConnection.checkPartnerConnection" });
+    return { connected: false, attemptsExhausted: false };
+  }
+}
+
+/**
+ * Triggers the reconnect-if-needed check and shows a warning toast on
+ * failure (rate-limited per partner). Never throws, never blocks the
+ * caller. After repeated consecutive failures (attemptsExhausted, see
+ * orthoapnea.ts), the message switches from "still retrying" to "this
+ * looks like a real outage — try reloading" since a doctor bouncing
+ * between routes deserves to know the difference.
+ */
+export async function ensurePartnerConnection(partner: string, { fromRetry = false } = {}): Promise<void> {
+  const status = await checkPartnerConnection(partner);
+  // Partner names never reach the screen (NEO-212): the toast says "the lab", whichever partner it is.
+  const toast = { icon: "globe" as const, context: i18n.global.t("app.partners.label") };
+  if (status.connected) {
+    // Only a Retry the user clicked gets a confirmation — a silent pass on
+    // every navigation would be noise.
+    if (fromRetry) {
+      useNotifications().show(
+        i18n.global.t("app.partners.connectionRestored"),
+        "success",
+        undefined,
+        toast,
+      );
+    }
+    return;
+  }
+
+  const now = Date.now();
+  const last = lastNotifiedAt.get(partner) ?? 0;
+  // The cooldown is for navigation-triggered checks; an explicit Retry always answers.
+  if (!fromRetry && now - last < NOTIFY_COOLDOWN_MS) return;
+  lastNotifiedAt.set(partner, now);
+
+  const key =
+    status.reason && CONFIG_FAILURE_REASONS.has(status.reason)
+      ? "app.partners.connectionErrorConfig"
+      : status.attemptsExhausted
+        ? "app.partners.connectionErrorPersistent"
+        : "app.partners.connectionError";
+  useNotifications().show(
+    i18n.global.t(key),
+    "warning",
+    undefined,
+    { ...toast, action: retryAction(() => ensurePartnerConnection(partner, { fromRetry: true })) },
+  );
+}

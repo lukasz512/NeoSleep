@@ -1,0 +1,542 @@
+<template>
+  <div class="view-detail">
+    <AppointmentDialog
+      v-model="showAppointmentDialog"
+      :practitioner="hcp ? { id: hcp.id, name: hcp.name } : null"
+    />
+    <FormRenderer
+      v-model="showEditModal"
+      :fields="hcpFormFields"
+      :derive="hcpFormDerive"
+      :initial-data="hcpFormInitialData"
+      title-key="user.hcp.form.title"
+      edit-title-key="user.hcp.form.editTitle"
+      submit-label-key="user.hcp.form.submit"
+      edit-submit-label-key="user.hcp.form.editSubmit"
+      avatar-entity-type="hcp"
+      @submit="onContactSubmit"
+    />
+    <AppInlineAlert
+      v-if="isOffline"
+      type="warning"
+      class="view-detail__offline-banner"
+      :text="t('app.common.offlineShowingCached')"
+    />
+    <ItemDetailLayout
+      :has-content="!!hcp"
+      :loading="loading"
+      :load-error="loadFailed"
+      :load-error-cause="loadFailure"
+      :back-route="{ name: 'hcp' }"
+      :back-label="t('user.hcp.detail.back')"
+      :record-title="hcp?.name ?? ''"
+      :not-found-label="t('user.hcp.detail.notFound')"
+      @retry="loadHCP"
+    >
+      <template v-if="hcp" #header-actions>
+        <VTooltip
+          v-if="canActivate && (hcp.status === 'pending_approval' || hcp.status === 'invited')"
+          location="bottom"
+        >
+          <template #activator="{ props: tooltipProps }">
+            <AppButton
+              v-bind="tooltipProps"
+              icon
+              variant="flat"
+              size="large"
+              :loading="activateLoading"
+              :class="entityActionBtnClass('activatePractitioner')"
+              :aria-label="t(activateLabelKey)"
+              @click="onActivate"
+            >
+              <AppIcon
+                :name="entityActionIcon('activatePractitioner')"
+                class="view-item__action-icon"
+              />
+            </AppButton>
+          </template>
+          <span>{{ t(activateLabelKey) }}</span>
+        </VTooltip>
+        <VTooltip location="bottom">
+          <template #activator="{ props: tooltipProps }">
+            <AppButton
+              v-bind="tooltipProps"
+              icon
+              variant="flat"
+              size="large"
+              :class="entityActionBtnClass('bookAppointment')"
+              :aria-label="t('user.detail.bookPatient')"
+              data-testid="hcp-book-patient"
+              @click="showAppointmentDialog = true"
+            >
+              <AppIcon
+                :name="entityActionIcon('bookAppointment')"
+                class="view-item__action-icon"
+              />
+            </AppButton>
+          </template>
+          <span>{{ t("user.detail.bookPatient") }}</span>
+        </VTooltip>
+        <VTooltip v-if="canEditPractitioners" location="bottom">
+          <template #activator="{ props: tooltipProps }">
+            <AppButton
+              v-bind="tooltipProps"
+              icon
+              variant="flat"
+              size="large"
+              :class="entityActionBtnClass('edit')"
+              :aria-label="t('user.hcp.detail.edit')"
+              @click="onEdit"
+            >
+              <AppIcon
+                :name="entityActionIcon('edit')"
+                class="view-item__action-icon"
+              />
+            </AppButton>
+          </template>
+          <span>{{ t("user.hcp.detail.edit") }}</span>
+        </VTooltip>
+        <VTooltip v-if="isAdmin" location="bottom">
+          <template #activator="{ props: tooltipProps }">
+            <AppButton
+              v-bind="tooltipProps"
+              icon
+              variant="flat"
+              size="large"
+              :class="entityActionBtnClass('delete')"
+              :aria-label="t('user.hcp.actions.delete')"
+              @click="showDeleteConfirm = true"
+            >
+              <AppIcon
+                :name="entityActionIcon('delete')"
+                class="view-item__action-icon"
+              />
+            </AppButton>
+          </template>
+          <span>{{ t("user.hcp.actions.delete") }}</span>
+        </VTooltip>
+      </template>
+      <template v-if="hcp" #record-tile>
+        <AppAvatar :name="hcp.name" entity-type="hcp" :specialty="hcp.primary_specialty || hcp.specialty" :first-name="hcp.first_name" :last-name="hcp.last_name" :size="48" />
+      </template>
+      <template v-if="hcp?.status === 'invited'" #title-extra>
+        <span class="hcp-detail__status-badge">{{ t("user.hcp.detail.statusInvited") }}</span>
+      </template>
+      <template v-if="hcp" #record-details>
+        <IdentityDetails
+          :details="doctorDetails(hcp, { withClinic: true }).details"
+          :more="doctorDetails(hcp, { withClinic: true }).more"
+        />
+      </template>
+      <template v-if="hcp" #sections>
+        <DetailViewTabs v-model="activeTab" :tabs="hcpTabs">
+          <template #details>
+            <VRow>
+              <VCol cols="12" md="6">
+                <div class="view-item__row">
+                  <dt class="view-item__label view-item__label--icon"><AppIcon name="mail" />{{ t("user.hcp.detail.email") }}</dt>
+                  <dd class="view-item__value">
+                    <a v-if="hcp.email" :href="`mailto:${hcp.email}`" class="view-item__link">{{ hcp.email }}</a>
+                    <span v-else class="view-item__empty">—</span>
+                  </dd>
+                </div>
+                <div class="view-item__row">
+                  <dt class="view-item__label view-item__label--icon"><AppIcon name="phone" />{{ t("user.hcp.detail.phone") }}</dt>
+                  <dd class="view-item__value">
+                    <a v-if="hcp.phone" :href="`tel:${hcp.phone}`" class="view-item__link">{{ hcp.phone }}</a>
+                    <span v-else class="view-item__empty">—</span>
+                  </dd>
+                </div>
+                <div class="view-item__row">
+                  <dt class="view-item__label">{{ t("user.hcp.detail.specialty") }}</dt>
+                  <dd class="view-item__value">{{ specialtyLabel(hcp.specialty) }}</dd>
+                </div>
+                <div class="view-item__row">
+                  <dt class="view-item__label">{{ t("user.hcp.detail.institution") }}</dt>
+                  <dd class="view-item__value">
+                    <EntityLink
+                      :to="hcp.organization_id ? { name: 'hco-detail', params: { id: hcp.organization_id } } : null"
+                      :label="hcp.institution"
+                    />
+                  </dd>
+                </div>
+                <div class="view-item__row">
+                  <dt class="view-item__label">{{ t("user.hcp.detail.region") }}</dt>
+                  <dd class="view-item__value">{{ territoryLabel }}</dd>
+                </div>
+                <div class="view-item__row" data-testid="hcp-country">
+                  <dt class="view-item__label">{{ t("user.hcp.detail.country") }}</dt>
+                  <dd class="view-item__value">{{ hcp.region || "—" }}</dd>
+                </div>
+                <div class="view-item__row" data-testid="hcp-language">
+                  <dt class="view-item__label">{{ t("user.hcp.detail.language") }}</dt>
+                  <dd class="view-item__value">{{ hcp.language ? t(`app.language.${hcp.language}`) : "—" }}</dd>
+                </div>
+                <div v-if="licenseNumber" class="view-item__row">
+                  <dt class="view-item__label view-item__label--icon"><AppIcon name="id-card" />{{ t(licenseNumber.labelKey) }}</dt>
+                  <dd class="view-item__value">{{ licenseNumber.value }}</dd>
+                </div>
+              </VCol>
+              <VCol v-if="SHOW_CLINICS_PANEL" cols="12" md="6">
+                <h2 class="hcp-detail__clinics-title">{{ t("user.hcp.detail.clinics.title") }}</h2>
+                <PractitionerClinicsPanel
+                  :practitioner-id="hcp.id"
+                  :organizations="hcp.organizations ?? []"
+                  :my-primary-organization-id="hcp.my_primary_organization_id ?? null"
+                  @changed="loadHCP"
+                />
+              </VCol>
+            </VRow>
+          </template>
+          <template #notes>
+            <PatientNotesPanel entity-type="practitioner" :entity-id="hcp.id" />
+          </template>
+          <template #relatedPatients>
+            <RelatedEntityPanel
+              :endpoint="`/api/v1/patient?practitioner_id=${hcp.id}&limit=-1`"
+              detail-route-name="patient-detail"
+              :empty-label="t('user.hcp.detail.relatedPatientsEmpty')"
+            />
+          </template>
+          <template #documents>
+            <EntityDocumentsPanel :endpoint="`/api/v1/practitioner/${hcp.id}/documents`" />
+          </template>
+          <template #history>
+            <EntityHistoryPanel :endpoint="`/api/v1/practitioner/${hcp.id}/history`" />
+          </template>
+        </DetailViewTabs>
+      </template>
+    </ItemDetailLayout>
+
+    <AppConfirmDialog
+      v-model="showDeleteConfirm"
+      :text="t('user.hcp.actions.deleteConfirmText')"
+      :secondary-label="t('app.common.cancel')"
+      :secondary-color="null"
+      :primary-label="t('user.hcp.actions.delete')"
+      primary-color="error"
+      primary-variant="text"
+      :loading="deleteLoading"
+      max-width="360"
+      @secondary="showDeleteConfirm = false"
+      @primary="onDelete"
+    />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { isOfflineError, reportCaught, reportFailedResponse } from "@api";
+import { ref, computed, onMounted, watch, defineAsyncComponent } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
+import { useAuthStore } from "../stores/auth";
+import { usePermissions } from "../composables/usePermissions";
+import { apiFetch } from "../composables/useApi";
+import { useEntityCacheStore } from "../stores/entityCache";
+import { useNotifications } from "../composables/useNotifications";
+import { useEntitySubmit } from "../composables/useEntitySubmit";
+import { useAsyncAction } from "../composables/useAsyncAction";
+import ItemDetailLayout from "../components/ItemDetailLayout.vue";
+import AppButton from "../components/AppButton.vue";
+import AppConfirmDialog from "../components/AppConfirmDialog.vue";
+import AppIcon from "../components/AppIcon.vue";
+import AppAvatar from "../components/AppAvatar.vue";
+import IdentityDetails from "../components/IdentityDetails.vue";
+import { useIdentity } from "../composables/useIdentity";
+import DetailViewTabs from "../components/DetailViewTabs.vue";
+import EntityLink from "../components/EntityLink.vue";
+import EntityHistoryPanel from "../components/EntityHistoryPanel.vue";
+import RelatedEntityPanel from "../components/RelatedEntityPanel.vue";
+import EntityDocumentsPanel from "../components/EntityDocumentsPanel.vue";
+import PatientNotesPanel from "../components/patient/PatientNotesPanel.vue";
+import PractitionerClinicsPanel from "../components/practitioner/PractitionerClinicsPanel.vue";
+import type { OrganizationAffiliation } from "../types/practitionerOrganization";
+import { useConfigStore } from "../stores/config";
+import { hcpFormFields, hcpFormDerive, resolveOrganizationIdForSubmit } from "../config/forms/hcpForm";
+import {
+  entityActionIcon,
+  entityActionBtnClass,
+} from "../config/entityActions";
+import { AppInlineAlert } from "@ui";
+
+const FormRenderer = defineAsyncComponent(
+  () => import("../components/FormRenderer.vue"),
+);
+const AppointmentDialog = defineAsyncComponent(() => import("../components/AppointmentDialog.vue"));
+
+interface HCP {
+  id: string;
+  name: string;
+  salutation?: string | null;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+  specialty?: string;
+  primary_specialty?: string;
+  specialties?: string[];
+  organization_id?: string | null;
+  institution?: string;
+  region?: string;
+  territory_id?: string | null;
+  territory_name?: string | null;
+  territory_path?: { id: string; name: string; code: string | null; kind: string }[] | null;
+  influence_tier?: string;
+  language?: string | null;
+  national_ids?: Record<string, string> | null;
+  social_links?: Record<string, unknown> | null;
+  status?: string;
+  organizations?: OrganizationAffiliation[];
+  my_primary_organization_id?: string | null;
+}
+
+const { t } = useI18n();
+const { doctorDetails } = useIdentity();
+const route = useRoute();
+const router = useRouter();
+const authStore = useAuthStore();
+const notifications = useNotifications();
+const { submit } = useEntitySubmit();
+const configStore = useConfigStore();
+const { canEditPractitioners, isAdmin } = usePermissions();
+
+const hcpTabs = [
+  { value: "details", labelKey: "user.hcp.detail.tabs.details" },
+  { value: "notes", labelKey: "user.hcp.detail.tabs.notes" },
+  { value: "relatedPatients", labelKey: "user.hcp.detail.tabs.relatedPatients" },
+  { value: "documents", labelKey: "user.hcp.detail.tabs.documents" },
+  { value: "history", labelKey: "user.hcp.detail.tabs.history" },
+];
+const activeTab = ref((route.query.tab as string) || "details");
+watch(activeTab, (tab) => {
+  router.replace({ query: { ...route.query, tab } });
+});
+
+function specialtyLabel(code?: string): string {
+  if (!code) return "—";
+  return configStore.specialtyItems.find((o) => o.value === code)?.title ?? code;
+}
+
+/** Same territory_path-with-region-fallback pattern as PatientDetailView's regionBreadcrumb. */
+const territoryLabel = computed(() => {
+  const path = hcp.value?.territory_path;
+  if (path && path.length > 0) {
+    return path.map((node) => (node.code || node.name).toLowerCase()).join("/");
+  }
+  return hcp.value?.territory_name || hcp.value?.region || "—";
+});
+/** PL PWZ / MX cédula (NEO-51) — whichever the practitioner has on file. */
+const licenseNumber = computed<{ labelKey: string; value: string } | null>(() => {
+  const ids = hcp.value?.national_ids;
+  if (ids?.pwz) return { labelKey: "app.identity.form.pwz", value: ids.pwz };
+  if (ids?.cedula) return { labelKey: "app.identity.form.cedula", value: ids.cedula };
+  return null;
+});
+const canActivate = computed(
+  () => authStore.user?.role === "admin" || authStore.user?.role === "manager",
+);
+/** Same button/action either way (ActivatePractitionerCommand IS the resend — see docs/stories/practitioner-invite-resend.md); only the label changes once an invite has already gone out once. */
+const activateLabelKey = computed(() =>
+  hcp.value?.status === "invited" ? "user.hcp.detail.resendInvite" : "user.hcp.detail.activate",
+);
+
+const hcpCache = useEntityCacheStore("hcp");
+/**
+ * Clinics panel (NEO-17): admin only (NEO-210 — the primary clinic is the
+ * device delivery address, so admin must be able to set it). Other roles stay
+ * hidden until the "newly added clinic disappears" report is re-checked.
+ */
+const SHOW_CLINICS_PANEL = computed(() => isAdmin.value);
+
+const hcp = ref<HCP | null>(null);
+const showAppointmentDialog = ref(false);
+const loading = ref(true);
+/** True while `hcp` is being served from the offline cache — see docs/ADR-013-offline-read-cache.md. */
+const isOffline = ref(false);
+/** True when loadHCP() failed for a reason other than a genuine 404 (network/server) — see loadHCP(). */
+const loadFailed = ref(false);
+/** The error behind loadFailed (NEO-81) — lets the error state say offline vs. server problem. */
+const loadFailure = ref<unknown>(null);
+const showEditModal = ref(false);
+const showDeleteConfirm = ref(false);
+
+/**
+ * Must stay a computed (stable reference until `hcp.value` itself changes),
+ * not an inline object literal in the template — FormRenderer's watch keys
+ * off this object's identity to decide when to call resetForm(). A fresh
+ * literal on every parent re-render (e.g. from unrelated reactive state like
+ * `loading` or tooltip hover) would silently reset the open form and its
+ * dirty snapshot together, making the discard-changes confirmation never
+ * trigger. See LeadDetailView/HCODetailView/PatientDetailView, which pass
+ * their entity ref directly for the same reason.
+ */
+const hcpFormInitialData = computed(() =>
+  hcp.value
+    ? {
+        id: hcp.value.id,
+        salutation: hcp.value.salutation ?? "",
+        first_name: hcp.value.first_name ?? "",
+        last_name: hcp.value.last_name ?? "",
+        email: hcp.value.email ?? "",
+        phone: hcp.value.phone ?? "",
+        primary_specialty:
+          hcp.value.primary_specialty ?? hcp.value.specialty ?? "",
+        organization_id: hcp.value.organization_id ?? "",
+        region: hcp.value.region ?? "",
+        territory_id: hcp.value.territory_id ?? "",
+        influence_tier: hcp.value.influence_tier ?? "A",
+        language: hcp.value.language ?? "",
+        national_ids: hcp.value.national_ids ?? null,
+        social_links: hcp.value.social_links ?? null,
+        status: hcp.value.status ?? "pending_approval",
+      }
+    : undefined,
+);
+
+function onEdit() {
+  showEditModal.value = true;
+}
+
+const { loading: activateLoading, run: onActivate } = useAsyncAction(
+  async () => {
+    const id = hcp.value?.id;
+    if (!id) return;
+    const isResend = hcp.value?.status === "invited";
+    const res = await apiFetch(`/api/v1/practitioner/${id}/activate`, {
+      method: "POST",
+    });
+    if (res.ok) {
+      notifications.show(
+        t(isResend ? "user.hcp.detail.resendInviteSuccess" : "user.hcp.detail.activateSuccess"),
+        "success",
+        undefined,
+        { icon: "mail", context: hcp.value?.name },
+      );
+      await loadHCP();
+      window.dispatchEvent(new Event("entity-list-refresh"));
+    }
+  },
+);
+
+async function onContactSubmit(
+  data: Record<string, unknown>,
+  done: (ok: boolean) => void,
+) {
+  const id = hcp.value?.id;
+  if (!id) {
+    done(false);
+    return;
+  }
+  await submit(
+    {
+      request: async () => {
+        const organizationId = await resolveOrganizationIdForSubmit(data);
+        if (organizationId === undefined) return { ok: false };
+        return apiFetch(`/api/v1/practitioner/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...data, organization_id: organizationId, new_organization: undefined }),
+        });
+      },
+      successMessage: t("user.hcp.form.editSuccess"),
+      icon: "nav-hcp",
+      context: hcp.value?.name,
+      errorMessage: t("user.hcp.form.errorSave"),
+      onSuccess: () => loadHCP(),
+    },
+    done,
+  );
+}
+
+const { loading: deleteLoading, run: onDelete } = useAsyncAction(async () => {
+  const id = hcp.value?.id;
+  if (!id) return;
+  const res = await apiFetch(`/api/v1/practitioner/${id}`, {
+    method: "DELETE",
+  });
+  if (res.ok) {
+    showDeleteConfirm.value = false;
+    notifications.show(t("user.hcp.actions.deleteSuccess"), "success", undefined, { icon: "nav-hcp", context: hcp.value?.name });
+    window.dispatchEvent(new Event("entity-list-refresh"));
+    router.push({ name: "hcp" });
+  }
+});
+
+async function loadHCP() {
+  const id = route.params.id as string;
+  if (!id) {
+    loading.value = false;
+    return;
+  }
+  loading.value = true;
+  hcp.value = null;
+  loadFailed.value = false;
+  try {
+    const res = await apiFetch(`/api/v1/practitioner/${id}`, {
+      handleErrors: false,
+    });
+    if (res.ok) {
+      hcp.value = (await res.json()) as HCP;
+      isOffline.value = false;
+      void hcpCache.cacheOne(hcp.value as unknown as Record<string, unknown>);
+    } else if (res.status !== 404) {
+      // Not a genuine 404 — ItemDetailLayout renders its own "connection
+      // problem" + retry state for this (see :load-error), so no separate
+      // toast on top of it.
+      loadFailure.value = await reportFailedResponse(res, { where: "HCPDetailView.load", path: "/api/v1/practitioner/:id" });
+      loadFailed.value = true;
+    }
+  } catch (err) {
+    reportCaught(err, { where: "HCPDetailView.load" });
+    loadFailure.value = err;
+    // Only a request that never reached the server may fall back to the cached record (ADR-013) —
+    // a bad response or a bug shows the real error instead of stale data.
+    const cached = isOfflineError(err) ? await hcpCache.readOne(id) : null;
+    if (cached) {
+      hcp.value = cached as unknown as HCP;
+      isOffline.value = true;
+    } else {
+      loadFailed.value = true;
+      hcp.value = null;
+    }
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(loadHCP);
+watch(() => route.params.id, loadHCP);
+</script>
+
+<style scoped>
+.view-detail {
+  min-height: 0;
+}
+
+.view-detail__offline-banner {
+  margin: 0 0 12px;
+}
+
+.view-item__title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hcp-detail__clinics-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin: 0 0 16px;
+}
+
+.hcp-detail__status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: rgba(var(--v-theme-warning), 0.12);
+  color: rgb(var(--v-theme-warning));
+}
+</style>

@@ -1,0 +1,60 @@
+{
+  "name": "neo-sleep-platform",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "apps/api/client",
+    "packages/*",
+    "clients/*/*"
+  ],
+  "scripts": {
+    "format": "prettier --write .",
+    "lint": "eslint .",
+    "typecheck": "tsc -b",
+    "i18n:extract": "node infrastructure/scripts/i18n/extract.mjs",
+    "i18n:unused": "node infrastructure/scripts/i18n/unused.mjs",
+    "i18n:parity": "node infrastructure/scripts/i18n/parity.mjs",
+    "i18n:prune": "node infrastructure/scripts/i18n/prune.mjs",
+    "build:web": "pnpm --filter @neo/web build",
+    "build:pwa": "pnpm --filter @neo/pwa build",
+    "lockfile:check": "./infrastructure/scripts/lockfile-check.sh",
+    "depcruise:pwa": "depcruise apps/pwa/src --config .dependency-cruiser.cjs --ts-config \"$PWD/apps/pwa/tsconfig.json\"",
+    "depcruise:web": "depcruise apps/web/src --config .dependency-cruiser.cjs --ts-config \"$PWD/apps/web/tsconfig.json\"",
+    "depcruise:api": "depcruise apps/api/src --config .dependency-cruiser.cjs --ts-config \"$PWD/apps/api/tsconfig.json\"",
+    "depcruise:packages": "depcruise packages apps --config .dependency-cruiser.cjs --ts-config \"$PWD/apps/pwa/tsconfig.json\"",
+    "depcruise": "pnpm depcruise:pwa && pnpm depcruise:web && pnpm depcruise:api && pnpm depcruise:packages",
+    "ci": "pnpm -r lint && pnpm -r typecheck && pnpm -r test",
+    "prepare": "husky || true",
+    "start": "./infrastructure/scripts/start.sh",
+    "worker:test": "./infrastructure/scripts/worker-test.sh",
+    "worktree:clean": "./infrastructure/scripts/worktree-clean.sh",
+    "board": "node infrastructure/scripts/board.mjs",
+    "worktree:clean:test": "./infrastructure/scripts/worktree-clean.test.sh",
+    "test-db": "./infrastructure/scripts/test-db.sh",
+    "test-db:test": "./infrastructure/scripts/test-db.test.sh",
+    "tooling:test": "node --test .claude/skills/ship-artifact/ticket.test.mjs .claude/skills/ship-artifact/index-rows.test.mjs .claude/skills/ship-artifact/pr-body.test.mjs .claude/skills/ship-artifact/handover.test.mjs infrastructure/scripts/board.test.mjs infrastructure/scripts/ci-failure-handoff.test.mjs infrastructure/scripts/ci-wait.test.mjs infrastructure/scripts/session-usage.test.mjs && bash .claude/hooks/pre-tool-linear-readonly.test.sh && bash .claude/hooks/post-push.test.sh && ./infrastructure/scripts/worktree-clean.test.sh && ./infrastructure/scripts/test-db.test.sh",
+    "dev": "pnpm exec concurrently --names api,pwa,web -c blue,green,magenta \"pnpm --filter @neo/api dev\" \"pnpm --filter @neo/pwa dev\" \"pnpm --filter @neo/web dev\"",
+    "db:seed": "pnpm --filter @neo/api seed:demo",
+    "guide:shots": "node docs/user-guide/shots.mjs",
+    "guide:build": "node docs/user-guide/build.mjs"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.70.1",
+    "@typescript-eslint/parser": "^8.70.1",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "concurrently": "^10.0.5",
+    "dependency-cruiser": "^18.4.0",
+    "eslint": "catalog:",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "catalog:",
+    "husky": "^9.1.7",
+    "prettier": "^3.9.9",
+    "typescript": "^5.9.3",
+    "vite": "catalog:",
+    "vue-eslint-parser": "^10.4.1"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": 40902,
+  "name": "patient test",
+  "email": "",
+  "identityNumber": "",
+  "insuranceNumber": "",
+  "birthDate": "2000-01-01T00:00:00",
+  "male": true,
+  "phone": "",
+  "countryId": 29,
+  "province": null,
+  "city": "",
+  "address": "",
+  "postalCode": "",
+  "observations": "",
+  "profession": "",
+  "clinicId": null
+}

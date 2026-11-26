@@ -1,0 +1,264 @@
+import { ref, computed, watch, type Ref } from "vue";
+import { useI18n } from "vue-i18n";
+import type { FormDerive, FormFieldDef, FormFieldOption } from "../types/formField";
+
+/**
+ * Generic form-state engine behind FormRenderer.vue.
+ *
+ * Mirrors the state/validation/payload/dirty-check shape every hand-authored
+ * use<Entity>Form.ts composable already implements (see useOrganizationForm.ts,
+ * usePatientForm.ts) but driven entirely by a FormFieldDef[] array instead of
+ * a hand-written interface + template. No entity-specific logic belongs here —
+ * that lives only in apps/pwa/src/config/forms/<entity>Form.ts.
+ *
+ * Dialog-open/close UX (the confirm-discard interaction) is owned by
+ * FormRenderer.vue itself, exactly like every other form component — this
+ * composable only exposes the primitives (`resetForm`, `hasChanged`) it needs.
+ */
+export function useFormRenderer(
+  fields: FormFieldDef[],
+  initialData: Ref<Record<string, unknown> | undefined>,
+  derive?: FormDerive,
+) {
+  const { t } = useI18n();
+
+  const formRef = ref<{ validate: () => Promise<{ valid: boolean }>; $el?: Element } | null>(null);
+  const form = ref<Record<string, unknown>>({});
+  const snapshot = ref<Record<string, unknown>>({});
+  const optionsCache = ref<Record<string, FormFieldOption[]>>({});
+  const loadingOptions = ref<Record<string, boolean>>({});
+
+  const isEditMode = computed(() => !!initialData.value?.id);
+
+  /**
+   * VSelect/VAutocomplete/VCombobox treat an empty *string* as a real chosen
+   * value (they synthesize a one-item selection from it), not as "nothing
+   * selected" — only `null`/`undefined` collapse their internal model to an
+   * empty array. Label-floating and dirty-state both key off that array's
+   * length, so seeding these fields with `""` left their label permanently
+   * floated even when empty, unlike a plain text field. `null` is the actual
+   * "empty" value for this trio of picker types.
+   */
+  function isPickerField(field: FormFieldDef): boolean {
+    return !field.multiple
+      && (field.type === "select" || field.type === "autocomplete" || field.type === "combobox");
+  }
+
+  function defaultValueFor(field: FormFieldDef): unknown {
+    if (typeof field.default === "function") return (field.default as () => unknown)();
+    if (field.default !== undefined) return field.default;
+    if (field.type === "chips" || field.multiple) return [];
+    return isPickerField(field) ? null : "";
+  }
+
+  function buildFormState(source?: Record<string, unknown>): Record<string, unknown> {
+    const next: Record<string, unknown> = {};
+    for (const f of fields) {
+      const container = f.nestUnder
+        ? (source?.[f.nestUnder] as Record<string, unknown> | undefined)
+        : source;
+      const raw = container ? container[f.key] : undefined;
+      if (raw === undefined || raw === null || (raw === "" && isPickerField(f))) {
+        next[f.key] = defaultValueFor(f);
+      } else if (f.type === "chips" || f.multiple) {
+        next[f.key] = Array.isArray(raw) ? [...raw] : [];
+      } else if (f.type === "number") {
+        next[f.key] = raw === "" ? "" : String(raw);
+      } else if (typeof raw === "string") {
+        next[f.key] = raw.trim();
+      } else {
+        next[f.key] = raw;
+      }
+    }
+    return next;
+  }
+
+  /** Snapshot on open — call when the host dialog transitions to open. */
+  function resetForm() {
+    form.value = buildFormState(initialData.value);
+    snapshot.value = { ...form.value };
+    lastSeen = { ...form.value };
+  }
+
+  /** Whether one field differs from its value when the dialog opened (trimmed strings, arrays by content). */
+  function isFieldChanged(key: string): boolean {
+    const a = form.value[key];
+    const b = snapshot.value[key];
+    if (Array.isArray(a) || Array.isArray(b)) {
+      return JSON.stringify(Array.isArray(a) ? a : []) !== JSON.stringify(Array.isArray(b) ? b : []);
+    }
+    if (typeof a === "string" || typeof b === "string") {
+      return (a ?? "").toString().trim() !== (b ?? "").toString().trim();
+    }
+    return a !== b;
+  }
+
+  /** Keys of the fields changed since the dialog opened — the folder's section dots and change counter (NEO-92). */
+  const changedKeys = computed(() => fields.filter((f) => isFieldChanged(f.key)).map((f) => f.key));
+
+  /** Dirty-check on close attempt — call before letting the dialog close. */
+  function hasChanged(): boolean {
+    return fields.some((f) => isFieldChanged(f.key));
+  }
+
+  function resolvedOptions(field: FormFieldDef): FormFieldOption[] {
+    if (Array.isArray(field.options)) {
+      // Static options: `title` is an i18n key (see formField.ts's doc
+      // comment on FormFieldOption) — resolve it here so it stays reactive
+      // to locale switches without the config file needing a translator.
+      const filter = field.optionFilter;
+      const options = filter ? field.options.filter((o) => filter(o, form.value)) : field.options;
+      return options.map((o) => ({ ...o, title: t(o.title) }));
+    }
+    // Async-loaded options (API-fetched names, etc.) are already final
+    // display strings — never routed through t().
+    return optionsCache.value[field.key] ?? [];
+  }
+
+  async function loadOptionsFor(field: FormFieldDef, force = false) {
+    if (typeof field.options !== "function") return;
+    if (!force && optionsCache.value[field.key]) return; // cached — loaded once
+    loadingOptions.value = { ...loadingOptions.value, [field.key]: true };
+    try {
+      const loader = field.options;
+      const opts = await loader(form.value);
+      optionsCache.value = { ...optionsCache.value, [field.key]: opts };
+      if (field.autoSelectFirstIfEmpty && !form.value[field.key] && opts[0]) {
+        form.value = { ...form.value, [field.key]: opts[0].value };
+      }
+    } finally {
+      loadingOptions.value = { ...loadingOptions.value, [field.key]: false };
+    }
+  }
+
+  // Fields with `dependsOn` reload (and force-refresh, bypassing the cache)
+  // whenever any of the depended-on fields' values change. Registered once —
+  // this composable instance lives for the dialog's whole lifetime.
+  //
+  // Each depended-on key is passed as its OWN getter (Vue's multi-source
+  // watch form) rather than one getter returning `keys.map(...)` — a single
+  // getter would return a brand-new array every run, which is always
+  // "changed" by reference, so the callback would spuriously refire on
+  // every unrelated `form.value` reassignment (e.g. another field's
+  // autoSelectFirstIfEmpty or the `derive` hook below). The multi-source
+  // form compares each key's own value individually.
+  for (const f of fields) {
+    if (f.dependsOn?.length) {
+      const sources = f.dependsOn.map((k) => () => form.value[k]);
+      watch(sources, () => { loadOptionsFor(f, true); });
+    }
+  }
+
+  // Optional entity-specific derived-fields hook (e.g. a hidden field synced
+  // live from another field's value, like HCP.region from the selected clinic).
+  // `lastSeen` is the form as of the previous run — fields are edited in
+  // place, so the deep watcher's own oldValue is the same object as the new
+  // one and can't say WHICH field just changed; two-way syncs (patient
+  // salutation <-> sex) need exactly that. resetForm() re-seeds it so a
+  // freshly opened record never reads as "both fields just changed".
+  let lastSeen: Record<string, unknown> = {};
+  if (derive) {
+    watch(
+      form,
+      (val) => {
+        const patch = derive(val, lastSeen);
+        let next = val;
+        if (patch) {
+          const merged = { ...val };
+          let changed = false;
+          for (const k in patch) {
+            if (merged[k] !== patch[k]) { merged[k] = patch[k]; changed = true; }
+          }
+          if (changed) { next = merged; form.value = merged; }
+        }
+        lastSeen = { ...next };
+      },
+      { deep: true },
+    );
+  }
+
+  /** Loads every async ('autocomplete') field's options — call on dialog open. */
+  async function loadAllAsyncOptions() {
+    await Promise.all(
+      fields
+        .filter((f) => typeof f.options === "function")
+        .map((f) => loadOptionsFor(f)),
+    );
+  }
+
+  function isFieldRequired(field: FormFieldDef): boolean {
+    return typeof field.required === "function" ? field.required(form.value) : !!field.required;
+  }
+
+  function rulesFor(field: FormFieldDef): ((v: unknown) => true | string)[] {
+    const rules: ((v: unknown) => true | string)[] = [];
+    if (isFieldRequired(field)) {
+      rules.push((v: unknown) => {
+        const empty = v === undefined || v === null
+          || (Array.isArray(v) ? v.length === 0 : String(v).trim() === "");
+        return !empty || t("app.formRenderer.validation.required");
+      });
+    }
+    for (const rule of field.rules ?? []) {
+      rules.push((v: unknown) => {
+        const result = rule(v);
+        return result === true ? true : t(result);
+      });
+    }
+    return rules;
+  }
+
+  async function validate(): Promise<boolean> {
+    const result = await formRef.value?.validate();
+    return !!result?.valid;
+  }
+
+  /** Builds the plain-object payload from current form state (trims/filters, drops blanks to undefined). */
+  function buildPayload(): Record<string, unknown> {
+    const payload: Record<string, unknown> = {};
+    for (const f of fields) {
+      const v = form.value[f.key];
+      let out: unknown;
+      if (f.type === "chips") {
+        out = Array.isArray(v) ? v.map((s) => String(s).trim()).filter(Boolean) : [];
+      } else if (f.type === "number") {
+        const s = String(v ?? "").trim();
+        out = s === "" ? undefined : Number(s);
+      } else if (typeof v === "string") {
+        const trimmed = v.trim();
+        out = trimmed === "" ? undefined : trimmed;
+      } else {
+        out = v;
+      }
+
+      if (f.nestUnder) {
+        const bucket = (payload[f.nestUnder] ??= {}) as Record<string, unknown>;
+        if (out !== undefined) bucket[f.key] = out;
+      } else {
+        payload[f.key] = out;
+      }
+    }
+    if (initialData.value?.id) payload.id = initialData.value.id;
+    return payload;
+  }
+
+  // Seed initial state synchronously (mirrors every hand-authored
+  // use<Entity>Form.ts composable initializing `form` at creation time) —
+  // the host's own watch(modelValue) re-calls resetForm() for later opens.
+  resetForm();
+
+  return {
+    formRef,
+    form,
+    isEditMode,
+    resolvedOptions,
+    loadingOptions,
+    loadAllAsyncOptions,
+    rulesFor,
+    validate,
+    buildPayload,
+    resetForm,
+    hasChanged,
+    changedKeys,
+  };
+}

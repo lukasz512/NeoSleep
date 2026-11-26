@@ -1,0 +1,794 @@
+[
+  {
+    "id": 15,
+    "code": "DE",
+    "es": "Alemania",
+    "en": "Germany",
+    "de": "Deutschland",
+    "fr": "Allemagne",
+    "locale": "de"
+  },
+  {
+    "id": 2,
+    "code": "AD",
+    "es": "Andorra",
+    "en": "Andorra",
+    "de": "Andorra",
+    "fr": "Andorre",
+    "locale": "es"
+  },
+  {
+    "id": 67,
+    "code": "SA",
+    "es": "Arabia Saudí",
+    "en": "Saudi Arabia",
+    "de": " \tSaudi-Arabien",
+    "fr": "Arabie Saoudite",
+    "locale": "en"
+  },
+  {
+    "id": 74,
+    "code": "DZ",
+    "es": "Argelia",
+    "en": "Algeria",
+    "de": "Algerien",
+    "fr": "Algérie",
+    "locale": "en"
+  },
+  {
+    "id": 4,
+    "code": "AR",
+    "es": "Argentina",
+    "en": "Argentina",
+    "de": "Argentinien",
+    "fr": "Argentine",
+    "locale": "es"
+  },
+  {
+    "id": 6,
+    "code": "AU",
+    "es": "Australia",
+    "en": "Australia",
+    "de": "Australien",
+    "fr": "Australie",
+    "locale": "en"
+  },
+  {
+    "id": 5,
+    "code": "AT",
+    "es": "Austria",
+    "en": "Austria",
+    "de": "Österreich",
+    "fr": "Autriche",
+    "locale": "en"
+  },
+  {
+    "id": 7,
+    "code": "BH",
+    "es": "Bahréin",
+    "en": "Bahrein",
+    "de": "Bahrain",
+    "fr": "Bahreïn",
+    "locale": "en"
+  },
+  {
+    "id": 71,
+    "code": "BB",
+    "es": "Barbados",
+    "en": "Barbados",
+    "de": "Barbados",
+    "fr": "Barbade",
+    "locale": "en"
+  },
+  {
+    "id": 49,
+    "code": "BE",
+    "es": "Bélgica",
+    "en": "Belgium",
+    "de": "Belgien",
+    "fr": "Belgique",
+    "locale": "en"
+  },
+  {
+    "id": 70,
+    "code": "BM",
+    "es": "Bermudas",
+    "en": "Bermuda",
+    "de": "Bermuda",
+    "fr": "Bermudes",
+    "locale": "en"
+  },
+  {
+    "id": 8,
+    "code": "BR",
+    "es": "Brasil",
+    "en": "Brazil",
+    "de": "Brasilien",
+    "fr": "Brésil",
+    "locale": "pt"
+  },
+  {
+    "id": 50,
+    "code": "BG",
+    "es": "Bulgaria",
+    "en": "Bulgaria",
+    "de": "Bulgarien",
+    "fr": "Bulgarie",
+    "locale": "en"
+  },
+  {
+    "id": 47,
+    "code": "CA",
+    "es": "Canadá",
+    "en": "Canada",
+    "de": "Kanada",
+    "fr": "Canada",
+    "locale": "en"
+  },
+  {
+    "id": 57,
+    "code": "QA",
+    "es": "Catar",
+    "en": "Qatar",
+    "de": "Katar",
+    "fr": "Qatar",
+    "locale": "en"
+  },
+  {
+    "id": 64,
+    "code": "CZ",
+    "es": "Chequia",
+    "en": "Czechia",
+    "de": "Czechia",
+    "fr": "Tchéquie",
+    "locale": "en"
+  },
+  {
+    "id": 10,
+    "code": "CL",
+    "es": "Chile",
+    "en": "Chile",
+    "de": "Chile",
+    "fr": "Chili",
+    "locale": "es"
+  },
+  {
+    "id": 11,
+    "code": "CN",
+    "es": "China",
+    "en": "China",
+    "de": "China",
+    "fr": "Chine",
+    "locale": "en"
+  },
+  {
+    "id": 14,
+    "code": "CY",
+    "es": "Chipre",
+    "en": "Cyprus",
+    "de": "Zypern",
+    "fr": "Chypre",
+    "locale": "en"
+  },
+  {
+    "id": 12,
+    "code": "CO",
+    "es": "Colombia",
+    "en": "Colombia",
+    "de": "Kolumbien",
+    "fr": "Colombie",
+    "locale": "es"
+  },
+  {
+    "id": 13,
+    "code": "CR",
+    "es": "Costa Rica",
+    "en": "Costa Rica",
+    "de": "Costa Rica",
+    "fr": "Costa Rica",
+    "locale": "es"
+  },
+  {
+    "id": 69,
+    "code": "HR",
+    "es": "Croacia",
+    "en": "Croatia",
+    "de": "Kroatien",
+    "fr": "Croatie",
+    "locale": "en"
+  },
+  {
+    "id": 51,
+    "code": "DK",
+    "es": "Dinamarca",
+    "en": "Denmark",
+    "de": "Dänemark",
+    "fr": "Danemark",
+    "locale": "en"
+  },
+  {
+    "id": 17,
+    "code": "EC",
+    "es": "Ecuador",
+    "en": "Ecuador",
+    "de": "Ecuador",
+    "fr": "Équateur",
+    "locale": "es"
+  },
+  {
+    "id": 87,
+    "code": "EG",
+    "es": "Egipto",
+    "en": "Egypt",
+    "de": "Ägypten",
+    "fr": "Égypte",
+    "locale": "en"
+  },
+  {
+    "id": 59,
+    "code": "SV",
+    "es": "El Salvador",
+    "en": "El Salvador",
+    "de": "El Salvador",
+    "fr": "Salvador",
+    "locale": "es"
+  },
+  {
+    "id": 3,
+    "code": "AE",
+    "es": "Emiratos Árabes Unidos",
+    "en": "United Arabian Emirates",
+    "de": "Vereinigte Arabische Emirate ",
+    "fr": "Émirats arabes unis",
+    "locale": "en"
+  },
+  {
+    "id": 48,
+    "code": "SK",
+    "es": "Eslovaquia",
+    "en": "Slovakia",
+    "de": "Slowakei",
+    "fr": "Slovaquie",
+    "locale": "en"
+  },
+  {
+    "id": 1,
+    "code": "ES",
+    "es": "España",
+    "en": "Spain",
+    "de": "Spanien",
+    "fr": "Espagne",
+    "locale": "es"
+  },
+  {
+    "id": 53,
+    "code": "US",
+    "es": "Estados Unidos",
+    "en": "USA",
+    "de": "Vereinigte Staaten von Amerika",
+    "fr": "États-Unis",
+    "locale": "en"
+  },
+  {
+    "id": 90,
+    "code": "EE",
+    "es": "Estonia",
+    "en": "Estonia",
+    "de": "Estland",
+    "fr": "Estonie",
+    "locale": "en"
+  },
+  {
+    "id": 75,
+    "code": "PH",
+    "es": "Filipinas",
+    "en": "Philippines",
+    "de": "Philippinen",
+    "fr": "Philippines",
+    "locale": "en"
+  },
+  {
+    "id": 18,
+    "code": "FI",
+    "es": "Finlandia",
+    "en": "Finland",
+    "de": "Finnland",
+    "fr": "Finlande",
+    "locale": "en"
+  },
+  {
+    "id": 19,
+    "code": "FR",
+    "es": "Francia",
+    "en": "France",
+    "de": "Frankreich",
+    "fr": "France",
+    "locale": "fr"
+  },
+  {
+    "id": 63,
+    "code": "GE",
+    "es": "Georgia",
+    "en": "Georgia",
+    "de": "Georgien",
+    "fr": "Géorgie",
+    "locale": "en"
+  },
+  {
+    "id": 21,
+    "code": "GI",
+    "es": "Gibraltar",
+    "en": "Gibraltar",
+    "de": "Gibraltar",
+    "fr": "Gibraltar",
+    "locale": "en"
+  },
+  {
+    "id": 20,
+    "code": "GB",
+    "es": "Gran Bretaña",
+    "en": "Great Britain",
+    "de": "Grossbritannien",
+    "fr": "Grande-Bretagne",
+    "locale": "en"
+  },
+  {
+    "id": 22,
+    "code": "GR",
+    "es": "Grecia",
+    "en": "Greece",
+    "de": "Griechenland",
+    "fr": "Grèce",
+    "locale": "en"
+  },
+  {
+    "id": 76,
+    "code": "GG",
+    "es": "Guernsey",
+    "en": "Guernsey",
+    "de": "Guernsey",
+    "fr": "Guernsey",
+    "locale": "en"
+  },
+  {
+    "id": 23,
+    "code": "HN",
+    "es": "Honduras",
+    "en": "Honduras",
+    "de": "Honduras",
+    "fr": "Honduras",
+    "locale": "es"
+  },
+  {
+    "id": 24,
+    "code": "HU",
+    "es": "Hungría",
+    "en": "Hungary",
+    "de": "Ungarn",
+    "fr": "Hongrie",
+    "locale": "en"
+  },
+  {
+    "id": 73,
+    "code": "IN",
+    "es": "India",
+    "en": "India",
+    "de": "Indien",
+    "fr": "Inde",
+    "locale": "en"
+  },
+  {
+    "id": 82,
+    "code": "ID",
+    "es": "Indonesia",
+    "en": "Indonesia",
+    "de": "Indonesien",
+    "fr": "Indonésie",
+    "locale": "en"
+  },
+  {
+    "id": 79,
+    "code": "IR",
+    "es": "Iran",
+    "en": "Iran",
+    "de": "Iran",
+    "fr": "Iran",
+    "locale": "en"
+  },
+  {
+    "id": 78,
+    "code": "IQ",
+    "es": "Iraq",
+    "en": "Iraq",
+    "de": "Iraq",
+    "fr": "Iraq",
+    "locale": "en"
+  },
+  {
+    "id": 25,
+    "code": "IE",
+    "es": "Irlanda",
+    "en": "Ireland",
+    "de": "Irland",
+    "fr": "Irlande",
+    "locale": "en"
+  },
+  {
+    "id": 56,
+    "code": "IS",
+    "es": "Islandia",
+    "en": "Iceland",
+    "de": "Island",
+    "fr": "Islande",
+    "locale": "en"
+  },
+  {
+    "id": 46,
+    "code": "IL",
+    "es": "Israel",
+    "en": "Israel",
+    "de": "Israel",
+    "fr": "Israël",
+    "locale": "en"
+  },
+  {
+    "id": 26,
+    "code": "IT",
+    "es": "Italia",
+    "en": "Italy",
+    "de": "Italien",
+    "fr": "Italie",
+    "locale": "it"
+  },
+  {
+    "id": 86,
+    "code": "JP",
+    "es": "Japon",
+    "en": "Japan",
+    "de": "Japan",
+    "fr": "Japon",
+    "locale": "en"
+  },
+  {
+    "id": 65,
+    "code": "JO",
+    "es": "Jordania",
+    "en": "Jordan",
+    "de": "Jordan",
+    "fr": "Jordanie",
+    "locale": "en"
+  },
+  {
+    "id": 83,
+    "code": "KZ",
+    "es": "Kazakhstan",
+    "en": "Kazakhstan",
+    "de": "Kazakhstan",
+    "fr": "Kazakhstan",
+    "locale": "en"
+  },
+  {
+    "id": 61,
+    "code": "KE",
+    "es": "Kenia",
+    "en": "Kenya",
+    "de": "Kenia",
+    "fr": "Kenya",
+    "locale": "en"
+  },
+  {
+    "id": 68,
+    "code": "XK",
+    "es": "Kosovo",
+    "en": "Kosovo",
+    "de": "Kosovo",
+    "fr": "Kosovo",
+    "locale": "en"
+  },
+  {
+    "id": 66,
+    "code": "KW",
+    "es": "Kuwait",
+    "en": "Kuwait",
+    "de": "Kuwait",
+    "fr": "Koweït",
+    "locale": "en"
+  },
+  {
+    "id": 27,
+    "code": "LB",
+    "es": "Líbano",
+    "en": "Lebannon",
+    "de": "Libanon",
+    "fr": "Liban",
+    "locale": "en"
+  },
+  {
+    "id": 85,
+    "code": "LT",
+    "es": "Lituania",
+    "en": "Lithuania",
+    "de": "Litauen",
+    "fr": "Lituanie",
+    "locale": "en"
+  },
+  {
+    "id": 54,
+    "code": "LU",
+    "es": "Luxemburgo",
+    "en": "Luxembourg",
+    "de": "Luxemburg",
+    "fr": "Luxembourg",
+    "locale": "en"
+  },
+  {
+    "id": 62,
+    "code": "MY",
+    "es": "Malasia",
+    "en": "Malaysia",
+    "de": "Malaysia",
+    "fr": "Malaisie",
+    "locale": "en"
+  },
+  {
+    "id": 58,
+    "code": "MT",
+    "es": "Malta",
+    "en": "Malta",
+    "de": "Malta",
+    "fr": "Malte",
+    "locale": "en"
+  },
+  {
+    "id": 28,
+    "code": "MA",
+    "es": "Marruecos",
+    "en": "Morocco",
+    "de": "Marokko",
+    "fr": "Maroc",
+    "locale": "en"
+  },
+  {
+    "id": 29,
+    "code": "MX",
+    "es": "México",
+    "en": "Mexico",
+    "de": "Mexiko",
+    "fr": "Mexique",
+    "locale": "es"
+  },
+  {
+    "id": 31,
+    "code": "NO",
+    "es": "Noruega",
+    "en": "Norway",
+    "de": "Norwegen",
+    "fr": "Norvège",
+    "locale": "en"
+  },
+  {
+    "id": 32,
+    "code": "NZ",
+    "es": "Nueva Zelanda",
+    "en": "New Zealand",
+    "de": "Neuseeland",
+    "fr": "Nouvelle-Zélande",
+    "locale": "en"
+  },
+  {
+    "id": 88,
+    "code": "OM",
+    "es": "Omán",
+    "en": "Oman",
+    "de": "Oman",
+    "fr": "Oman",
+    "locale": "es"
+  },
+  {
+    "id": 30,
+    "code": "NL",
+    "es": "Países Bajos",
+    "en": "Netherland",
+    "de": "Niederlande",
+    "fr": "Pays-Bas",
+    "locale": "en"
+  },
+  {
+    "id": 52,
+    "code": "PA",
+    "es": "Panamá",
+    "en": "Panama",
+    "de": "Panama",
+    "fr": "Panama",
+    "locale": "es"
+  },
+  {
+    "id": 36,
+    "code": "PY",
+    "es": "Paraguay",
+    "en": "Paraguay",
+    "de": "Paraguay",
+    "fr": "Paraguay",
+    "locale": "es"
+  },
+  {
+    "id": 33,
+    "code": "PE",
+    "es": "Perú",
+    "en": "Peru",
+    "de": "Peru",
+    "fr": "Pérou",
+    "locale": "es"
+  },
+  {
+    "id": 34,
+    "code": "PL",
+    "es": "Polonia",
+    "en": "Poland",
+    "de": "Polen",
+    "fr": "Pologne",
+    "locale": "en"
+  },
+  {
+    "id": 35,
+    "code": "PT",
+    "es": "Portugal",
+    "en": "Portugal",
+    "de": "Portugal",
+    "fr": "Portugal",
+    "locale": "pt"
+  },
+  {
+    "id": 84,
+    "code": "SN",
+    "es": "República del Senegal",
+    "en": "Republic of Senegal",
+    "de": "Republik Senegal ",
+    "fr": "République du Sénégal",
+    "locale": "fr"
+  },
+  {
+    "id": 16,
+    "code": "DO",
+    "es": "República Dominicana",
+    "en": "Dominican Republic",
+    "de": "Dominikanische Republik",
+    "fr": "République dominicaine",
+    "locale": "es"
+  },
+  {
+    "id": 37,
+    "code": "RO",
+    "es": "Rumanía",
+    "en": "Romania",
+    "de": "Rumänien",
+    "fr": "Roumanie",
+    "locale": "en"
+  },
+  {
+    "id": 38,
+    "code": "RU",
+    "es": "Rusia",
+    "en": "Russia",
+    "de": "Russland",
+    "fr": "Russie",
+    "locale": "en"
+  },
+  {
+    "id": 40,
+    "code": "SG",
+    "es": "Singapur",
+    "en": "Singapore",
+    "de": "Singapur",
+    "fr": "Singapour",
+    "locale": "en"
+  },
+  {
+    "id": 89,
+    "code": "LK",
+    "es": "Sri Lanka",
+    "en": "Sri Lanka",
+    "de": "Sri Lanka",
+    "fr": "Sri Lanka",
+    "locale": "en"
+  },
+  {
+    "id": 45,
+    "code": "ZA",
+    "es": "Sudáfrica",
+    "en": "South Africa",
+    "de": "Südafrika",
+    "fr": "Afrique du Sud",
+    "locale": "en"
+  },
+  {
+    "id": 41,
+    "code": "SE",
+    "es": "Suecia",
+    "en": "Sweden",
+    "de": "Schweden",
+    "fr": "Suède",
+    "locale": "en"
+  },
+  {
+    "id": 9,
+    "code": "CH",
+    "es": "Suiza",
+    "en": "Switzerland",
+    "de": "Schweiz",
+    "fr": "Suisse",
+    "locale": "en"
+  },
+  {
+    "id": 60,
+    "code": "TH",
+    "es": "Tailandia",
+    "en": "Thailand",
+    "de": "Thailand",
+    "fr": "Thaïlande",
+    "locale": "en"
+  },
+  {
+    "id": 77,
+    "code": "TT",
+    "es": "Trinidad y Tobago",
+    "en": "Trinidad and Tobago",
+    "de": "Trinidad and Tobago",
+    "fr": "Trinité-et-Tobago",
+    "locale": "en"
+  },
+  {
+    "id": 39,
+    "code": "TR",
+    "es": "Turquía",
+    "en": "Turkey",
+    "de": "Türkei",
+    "fr": "Turquie",
+    "locale": "en"
+  },
+  {
+    "id": 42,
+    "code": "UA",
+    "es": "Ucrania",
+    "en": "Ukraine",
+    "de": "Ukraine",
+    "fr": "Ukraine",
+    "locale": "en"
+  },
+  {
+    "id": 43,
+    "code": "UY",
+    "es": "Uruguay",
+    "en": "Uruguay",
+    "de": "Uruguay",
+    "fr": "Uruguay",
+    "locale": "es"
+  },
+  {
+    "id": 44,
+    "code": "VE",
+    "es": "Venezuela",
+    "en": "Venezuela",
+    "de": "Venezuela",
+    "fr": "Venezuela",
+    "locale": "es"
+  },
+  {
+    "id": 72,
+    "code": "VN",
+    "es": "Vietnam",
+    "en": "Vietnam",
+    "de": "Vietnam",
+    "fr": "Vietnam",
+    "locale": "en"
+  },
+  {
+    "id": 55,
+    "code": "ZW",
+    "es": "Zimbawe",
+    "en": "Zimbabwe",
+    "de": "Simbabwe",
+    "fr": "Zimbabwe",
+    "locale": "en"
+  }
+]

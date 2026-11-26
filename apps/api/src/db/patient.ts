@@ -1,0 +1,454 @@
+import type { PoolClient } from "pg";
+import { AppError, DatabaseError } from "../errors.js";
+import { formatDisplayName, formatOptionalDisplayName } from "../utils/personName.js";
+import { careTeamCondition } from "./careTeam.js";
+
+function isoDate(val: Date | string | null | undefined): string {
+  if (!val) return "";
+  return val instanceof Date ? val.toISOString() : String(val);
+}
+
+/** pg returns NUMERIC columns as strings (avoids float precision loss on its end) — the
+ *  Patient/PatientRow types say `number`, but ahi_baseline needs converting to actually be one. */
+function optNum(val: string | number | null): number | null {
+  return val === null ? null : Number(val);
+}
+
+export interface Patient {
+  id: string;
+  identity_id: string;
+  // From identities JOIN
+  salutation: string | null;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+  /** identities.gender: male | female | other | prefer_not_to_say | null */
+  gender: string | null;
+  /** identities.date_of_birth as a plain YYYY-MM-DD string (no time zone shift) */
+  date_of_birth: string | null;
+  // From patient table
+  practitioner_id: string | null;
+  diagnosis_code: Record<string, unknown> | null;
+  ahi_baseline: number | null;
+  /** Height in cm (NEO-231): entered once here, STOP-Bang measures the weight against it. */
+  height_cm: number | null;
+  cpap_device: string | null;
+  medical_record: string | null;
+  /** identities.language: the one source of this patient's mail and notification language (CORE-261). */
+  language: string;
+  region: string;
+  territory_id: string | null;
+  territory_name: string | null;
+  status: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+  // Computed from practitioner + identities JOIN (resolved display name, mirrors
+  // practitioner.ts's own organization.name AS institution join for the same need)
+  practitioner_name: string | null;
+  /** Name parts for the PWA's short list name (first given name + first surname). */
+  practitioner_first_name: string | null;
+  practitioner_last_name: string | null;
+  /** Assigned practitioner's primary_specialty lookup key (e.g. "dentist"),
+   *  shown under the doctor's name in lists (NEO-57). */
+  practitioner_specialty: string | null;
+  /** All of the assigned practitioner's specialties (for the "+N" tooltip). */
+  practitioner_specialties: string[];
+}
+
+export interface GetPatientsFilters {
+  search?: string;
+  status?: string;
+  region?: string;
+  practitioner_id?: string;
+  /** RBAC territory scope (migration 022, requireScope.ts): undefined/null =
+   *  unrestricted, [] = matches nothing, otherwise restrict to patients whose
+   *  own territory falls inside one of these ltree paths. A patient with no
+   *  territory_id assigned yet stays visible regardless — see this file's
+   *  own note on the "unassigned = visible" rollout-safety fallback (zero
+   *  patients have territory_id populated as of this writing). */
+  scopePaths?: string[] | null;
+}
+
+export interface PatientInsert {
+  salutation?: string;
+  first_name: string;
+  last_name: string;
+  email?: string;
+  phone?: string;
+  gender?: string | null;
+  date_of_birth?: string | null;
+  practitioner_id?: string;
+  diagnosis_code?: Record<string, unknown>;
+  ahi_baseline?: number;
+  height_cm?: number | null;
+  cpap_device?: string;
+  medical_record?: string;
+  status?: string;
+  region?: string;
+  territory_id?: string | null;
+  /** RBAC scope (see middleware/requireScope.ts) — distinct from `region` above, see migration 013's comment. */
+  country_code?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PatientUpdate {
+  salutation?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone?: string;
+  gender?: string | null;
+  date_of_birth?: string | null;
+  practitioner_id?: string;
+  diagnosis_code?: Record<string, unknown>;
+  ahi_baseline?: number;
+  height_cm?: number | null;
+  cpap_device?: string;
+  medical_record?: string;
+  status?: string;
+  language?: string;
+  region?: string;
+  territory_id?: string | null;
+  country_code?: string | null;
+  metadata?: Record<string, unknown>;
+}
+
+function buildName(p: { salutation: string | null; first_name: string; last_name: string }): string {
+  return formatDisplayName(p);
+}
+
+const PATIENT_SELECT_COLS = `
+  p.id, p.identity_id, p.practitioner_id, p.diagnosis_code, p.ahi_baseline, p.height_cm,
+  p.cpap_device, p.medical_record, p.status, p.metadata,
+  p.created_at, p.updated_at,
+  i.title AS salutation, i.first_name, i.last_name, i.email, i.phone,
+  i.gender, to_char(i.date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
+  pr.primary_specialty AS practitioner_specialty, pr.specialties AS practitioner_specialties,
+  COALESCE(i.region, '') AS region, i.language, i.territory_id, t.name AS territory_name,
+  pi.title AS practitioner_salutation, pi.first_name AS practitioner_first_name, pi.last_name AS practitioner_last_name`.trim();
+
+// Shared FROM/JOIN fragment for the two read queries below — resolves the
+// assigned practitioner's display name via practitioner + identities, mirroring
+// how practitioner.ts's own list/detail queries LEFT JOIN organization for
+// "institution" (same resolved-display-name need, same no-deleted_at-filter shape).
+// territory: immediate assigned node's own name only (not the full ancestor
+// path — that's getTerritoryPath's job, used by the single-record detail
+// query only, same no-N+1-on-the-list-query reasoning as practitioner/organization).
+const PATIENT_JOIN = `
+  FROM patient p
+  JOIN identities i ON p.identity_id = i.id
+  LEFT JOIN practitioner pr ON p.practitioner_id = pr.id
+  LEFT JOIN identities pi ON pr.identity_id = pi.id
+  LEFT JOIN territory t ON i.territory_id = t.id`.trim();
+
+type PatientRow = {
+  id: string;
+  identity_id: string;
+  salutation: string | null;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  phone: string | null;
+  gender: string | null;
+  date_of_birth: string | null;
+  practitioner_specialty: string | null;
+  practitioner_specialties: string[] | null;
+  practitioner_id: string | null;
+  diagnosis_code: Record<string, unknown> | null;
+  // NUMERIC(6,2) column — pg driver returns it as a string, not a number.
+  ahi_baseline: string | null;
+  height_cm: string | null;
+  cpap_device: string | null;
+  medical_record: string | null;
+  language: string;
+  region: string;
+  territory_id: string | null;
+  territory_name: string | null;
+  status: string;
+  metadata: Record<string, unknown> | null;
+  created_at: Date;
+  updated_at: Date;
+  practitioner_salutation: string | null;
+  practitioner_first_name: string | null;
+  practitioner_last_name: string | null;
+};
+
+function buildPractitionerName(row: {
+  practitioner_salutation: string | null;
+  practitioner_first_name: string | null;
+  practitioner_last_name: string | null;
+}): string | null {
+  return formatOptionalDisplayName({
+    salutation: row.practitioner_salutation,
+    first_name: row.practitioner_first_name,
+    last_name: row.practitioner_last_name,
+  });
+}
+
+function serialize(row: PatientRow): Patient & { name: string } {
+  return {
+    id: row.id,
+    identity_id: row.identity_id,
+    salutation: row.salutation,
+    first_name: row.first_name,
+    last_name: row.last_name,
+    email: row.email,
+    phone: row.phone,
+    gender: row.gender,
+    date_of_birth: row.date_of_birth,
+    practitioner_id: row.practitioner_id,
+    diagnosis_code: row.diagnosis_code,
+    ahi_baseline: optNum(row.ahi_baseline),
+    height_cm: optNum(row.height_cm),
+    cpap_device: row.cpap_device,
+    medical_record: row.medical_record,
+    region: row.region,
+    language: row.language,
+    territory_id: row.territory_id,
+    territory_name: row.territory_name,
+    status: row.status,
+    metadata: row.metadata,
+    created_at: isoDate(row.created_at),
+    updated_at: isoDate(row.updated_at),
+    practitioner_name: buildPractitionerName(row),
+    practitioner_first_name: row.practitioner_first_name,
+    practitioner_last_name: row.practitioner_last_name,
+    practitioner_specialty: row.practitioner_specialty,
+    practitioner_specialties: row.practitioner_specialties ?? [],
+    name: buildName(row),
+  };
+}
+
+export async function getPatientsPaginated(
+  client: PoolClient,
+  filters: GetPatientsFilters,
+  page: number,
+  limit: number,
+  sortBy = "created_at",
+  sortOrder: "asc" | "desc" = "desc"
+): Promise<{ rows: (Patient & { name: string })[]; total: number }> {
+  const allowed = ["created_at", "updated_at", "last_name", "first_name", "status", "region"];
+  const col = allowed.includes(sortBy) ? sortBy : "created_at";
+  const dir = sortOrder === "asc" ? "ASC" : "DESC";
+  const safeCol = ["first_name", "last_name", "region"].includes(col) ? `i.${col}` : `p.${col}`;
+
+  const conditions: string[] = ["p.deleted_at IS NULL"];
+  const params: unknown[] = [];
+
+  if (filters.search?.trim()) {
+    params.push(`%${filters.search.trim().toLowerCase()}%`);
+    conditions.push(
+      `(LOWER(i.first_name || ' ' || i.last_name) LIKE $${params.length}
+       OR LOWER(COALESCE(i.region,'')) LIKE $${params.length})`
+    );
+  }
+  if (filters.status?.trim()) {
+    params.push(filters.status.trim());
+    conditions.push(`p.status = $${params.length}`);
+  }
+  if (filters.region?.trim()) {
+    params.push(filters.region.trim());
+    conditions.push(`i.region = $${params.length}`);
+  }
+  if (filters.practitioner_id?.trim()) {
+    // Primary doctor or care team (CORE-132): a doctor's own list and the staff "by doctor" filter alike.
+    params.push(filters.practitioner_id.trim());
+    conditions.push(careTeamCondition("p", `$${params.length}`));
+  }
+  if (filters.scopePaths !== undefined && filters.scopePaths !== null) {
+    params.push(filters.scopePaths);
+    conditions.push(`(i.territory_id IS NULL OR t.path <@ ANY($${params.length}::extensions.ltree[]))`);
+  }
+
+  const where = `WHERE ${conditions.join(" AND ")}`;
+
+  try {
+    const countResult = await client.query<{ count: string }>(
+      `SELECT COUNT(*) AS count
+       FROM patient p
+       JOIN identities i ON p.identity_id = i.id
+       LEFT JOIN territory t ON i.territory_id = t.id
+       ${where}`,
+      params
+    );
+    const total = parseInt(countResult.rows[0]?.count ?? "0", 10);
+
+    const offset = (page - 1) * limit;
+    params.push(limit, offset);
+    const dataResult = await client.query<PatientRow>(
+      `SELECT ${PATIENT_SELECT_COLS}
+       ${PATIENT_JOIN}
+       ${where}
+       ORDER BY ${safeCol} ${dir}
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+    return { rows: dataResult.rows.map(serialize), total };
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getPatientsPaginated", err);
+  }
+}
+
+export async function getPatientById(client: PoolClient, id: string): Promise<(Patient & { name: string }) | null> {
+  try {
+    const result = await client.query<PatientRow>(
+      `SELECT ${PATIENT_SELECT_COLS}
+       ${PATIENT_JOIN}
+       WHERE p.id = $1 AND p.deleted_at IS NULL`,
+      [id]
+    );
+    if (!result.rows[0]) return null;
+    return serialize(result.rows[0]);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getPatientById", err);
+  }
+}
+
+/**
+ * Inserts a patient + identity record using the provided client.
+ * The client must already be in a transaction (withTenant handles this).
+ * No BEGIN/COMMIT here — the caller owns the transaction boundary.
+ */
+export async function insertPatient(client: PoolClient, data: PatientInsert): Promise<Patient & { name: string }> {
+  try {
+    const identityResult = await client.query<{ id: string }>(
+      // email_shared: patients may share an email (families) — excluded from
+      // the unique index that keeps users/doctors/leads one-per-email (NEO-111).
+      `INSERT INTO identities (title, first_name, last_name, email, phone, region, territory_id, country_code, gender, date_of_birth, email_shared)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
+       RETURNING id`,
+      [
+        data.salutation ?? null,
+        data.first_name,
+        data.last_name,
+        data.email ?? null,
+        data.phone ?? null,
+        data.region ?? null,
+        data.territory_id ?? null,
+        data.country_code ?? null,
+        data.gender ?? null,
+        data.date_of_birth ?? null,
+      ]
+    );
+    const identityId = identityResult.rows[0]!.id;
+
+    const patientResult = await client.query<{ id: string }>(
+      `INSERT INTO patient (identity_id, practitioner_id, diagnosis_code, ahi_baseline, cpap_device, medical_record, status, metadata, height_cm)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING id`,
+      [
+        identityId,
+        data.practitioner_id ?? null,
+        data.diagnosis_code ? JSON.stringify(data.diagnosis_code) : null,
+        data.ahi_baseline ?? null,
+        data.cpap_device ?? null,
+        data.medical_record ?? null,
+        data.status ?? "active",
+        data.metadata ? JSON.stringify(data.metadata) : null,
+        data.height_cm ?? null,
+      ]
+    );
+    const patientId = patientResult.rows[0]!.id;
+
+    const row = await getPatientById(client, patientId);
+    if (!row) throw new DatabaseError("insertPatient", new Error("Insert returned no rows"));
+    return row;
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("insertPatient", err);
+  }
+}
+
+/**
+ * Updates patient + identity fields using the provided client.
+ * The client must already be in a transaction (withTenant handles this).
+ */
+export async function updatePatient(
+  client: PoolClient,
+  id: string,
+  data: PatientUpdate
+): Promise<(Patient & { name: string }) | null> {
+  const existing = await getPatientById(client, id);
+  if (!existing) return null;
+
+  try {
+    // Update identities row
+    const identitySets: string[] = ["updated_at = now()"];
+    const identityParams: unknown[] = [];
+    let idx = 1;
+
+    // JS field name -> actual identities column name (identities.title stores what the app calls "salutation")
+    const identityFieldToColumn: Partial<Record<keyof PatientUpdate, string>> = {
+      salutation: "title",
+      first_name: "first_name",
+      last_name: "last_name",
+      email: "email",
+      phone: "phone",
+      region: "region",
+      language: "language",
+      territory_id: "territory_id",
+      country_code: "country_code",
+      gender: "gender",
+      date_of_birth: "date_of_birth",
+    };
+    for (const [field, column] of Object.entries(identityFieldToColumn) as [keyof PatientUpdate, string][]) {
+      if (data[field] !== undefined) {
+        identityParams.push(data[field] ?? null);
+        identitySets.push(`${column} = $${idx++}`);
+      }
+    }
+    identityParams.push(existing.identity_id);
+    await client.query(
+      `UPDATE identities SET ${identitySets.join(", ")} WHERE id = $${idx}`,
+      identityParams
+    );
+
+    // Update patient row
+    const patientSets: string[] = ["updated_at = now()"];
+    const patientParams: unknown[] = [];
+    let pidx = 1;
+
+    const patientFields: (keyof PatientUpdate)[] = [
+      "practitioner_id", "diagnosis_code", "ahi_baseline", "height_cm",
+      "cpap_device", "medical_record", "status", "metadata",
+    ];
+    for (const field of patientFields) {
+      if (data[field] !== undefined) {
+        const val = ["diagnosis_code", "metadata"].includes(field) && data[field] != null
+          ? JSON.stringify(data[field])
+          : (data[field] ?? null);
+        patientParams.push(val);
+        patientSets.push(`${field} = $${pidx++}`);
+      }
+    }
+    patientParams.push(id);
+    await client.query(
+      `UPDATE patient SET ${patientSets.join(", ")} WHERE id = $${pidx}`,
+      patientParams
+    );
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("updatePatient", err);
+  }
+
+  return getPatientById(client, id);
+}
+
+/**
+ * Soft-deletes a patient by setting deleted_at — status is left untouched:
+ * the patient status CHECK doesn't even have an 'inactive' value
+ * ('active'|'follow_up'|'discharged'), and every read query already filters
+ * deleted_at IS NULL, so deleted_at alone is sufficient for visibility.
+ */
+export async function softDeletePatient(client: PoolClient, id: string): Promise<void> {
+  try {
+    await client.query(`UPDATE patient SET deleted_at = now() WHERE id = $1`, [id]);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("softDeletePatient", err);
+  }
+}

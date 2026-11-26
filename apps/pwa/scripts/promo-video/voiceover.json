@@ -1,0 +1,27 @@
+{
+  "_comment": "NEO-204 voice-over. Each line is [start s, latest end s, text]; the 25–26 s gap is the pause before the logo line. Draft voices are macOS system voices; the final pass swaps them for ElevenLabs.",
+  "draftVoice": { "en": "Samantha", "pl": "Zosia", "mx": "Paulina" },
+  "lines": {
+    "en": [
+      [0.4, 3.9, "Better sleep. More energy, every day."],
+      [4.5, 11.0, "NeoSleep keeps every patient's path in one place: questionnaires, sleep studies and treatment."],
+      [11.6, 17.8, "Every visit, on schedule."],
+      [18.5, 24.8, "And the know-how your team needs, always at hand."],
+      [26.0, 29.4, "NeoSleep. Designed with sleep specialists."]
+    ],
+    "pl": [
+      [0.4, 3.9, "Lepszy sen. Więcej energii, każdego dnia."],
+      [4.5, 11.0, "NeoSleep łączy całą ścieżkę pacjenta: ankiety, badania snu i leczenie, w jednym miejscu."],
+      [11.6, 17.8, "Każda wizyta na czas."],
+      [18.5, 24.8, "A wiedza, której potrzebuje Twój zespół, zawsze pod ręką."],
+      [26.0, 29.4, "NeoSleep. Zaprojektowane ze specjalistami snu."]
+    ],
+    "mx": [
+      [0.4, 3.9, "Dormir mejor. Más energía, cada día."],
+      [4.5, 11.0, "NeoSleep reúne todo el camino del paciente: cuestionarios, estudios de sueño y tratamiento, en un solo lugar."],
+      [11.6, 17.8, "Cada cita, a tiempo."],
+      [18.5, 24.8, "Y el conocimiento que tu equipo necesita, siempre a la mano."],
+      [26.0, 29.4, "NeoSleep. Diseñado con especialistas del sueño."]
+    ]
+  }
+}

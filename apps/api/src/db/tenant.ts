@@ -1,0 +1,177 @@
+import type { PoolClient } from "pg";
+import { getDb } from "./connection.js";
+import { AppError, DatabaseError, ValidationError } from "../errors.js";
+
+/**
+ * Validates that a tenant slug can safely be used in a SET search_path statement.
+ * Slugs must be lowercase alphanumeric + underscores (e.g. "neosleep_pl").
+ * This prevents search_path injection via a crafted Host header.
+ */
+/**
+ * Is this a Postgres or connection failure? Only those become DatabaseError
+ * ("Database error: withTenant", 503). Anything else thrown inside a
+ * transaction — a rejected email, a bug in a command — keeps its own type,
+ * so it is neither shown nor logged as a broken database (NEO-202: 7 of 8
+ * "Database error: withTenant" toasts in two weeks weren't the database).
+ * pg errors carry a 5-character SQLSTATE `code`; socket errors an E… code.
+ */
+export function isPostgresError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  const code = (err as { code?: unknown }).code;
+  if (typeof code === "string" && (/^[0-9A-Z]{5}$/.test(code) || /^E[A-Z]{3,}$/.test(code))) return true;
+  return isConnectionError(err);
+}
+
+/** The pool couldn't hand out a working connection (dropped, timed out, refused). */
+export function isConnectionError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  return /Connection terminated|timeout exceeded when trying to connect|connect ECONN|ECONNRESET|server closed the connection/i.test(err.message);
+}
+
+/**
+ * Takes a pool connection and opens the transaction, retrying once when the
+ * connection itself fails. Only this step is retried — never the caller's
+ * work, which may already have sent an email or written a file.
+ */
+async function connectAndBegin(): Promise<PoolClient> {
+  for (let attempt = 1; ; attempt++) {
+    let client: PoolClient | null = null;
+    try {
+      client = await getDb().connect();
+      await client.query("BEGIN");
+      return client;
+    } catch (err) {
+      client?.release(true);
+      if (attempt >= 2 || !isConnectionError(err)) throw new DatabaseError("connect", err);
+    }
+  }
+}
+
+function sanitizeSlug(slug: string): string {
+  if (!/^[a-z0-9_][a-z0-9_]*$/.test(slug)) {
+    throw new ValidationError(`Invalid tenant slug: "${slug}"`);
+  }
+  return slug;
+}
+
+/**
+ * Executes fn inside a transaction with search_path scoped to the tenant schema.
+ *
+ * HOW TENANT ISOLATION WORKS HERE:
+ * Instead of SET search_path (session-level), we use SET LOCAL inside a transaction.
+ * SET LOCAL reverts automatically when the transaction ends (COMMIT or ROLLBACK).
+ * This means a connection returned to the pool is always clean — no leaked tenant context.
+ *
+ * RELEASE, NOT DESTROY, UNLESS ROLLBACK ITSELF FAILS:
+ * Only a failed ROLLBACK destroys the connection (release(true)) — that's
+ * the one case where the session's state is actually unknown. A *successful*
+ * ROLLBACK already fully resets the transaction (including the SET LOCAL above),
+ * so the connection is clean and safe to return to the pool — destroying it here
+ * too was needlessly forcing a fresh connection to Supabase's pooler on every
+ * ordinary business-logic error (e.g. a routine 401), which measurably stalls the
+ * very next withTenant() call.
+ *
+ * SLUG INJECTION PROTECTION:
+ * sanitizeSlug() enforces a strict allowlist of characters before the slug
+ * is interpolated into the SET LOCAL statement.
+ */
+export async function withTenant<T>(
+  tenantSlug: string,
+  fn: (client: PoolClient) => Promise<T>
+): Promise<T> {
+  const slug = sanitizeSlug(tenantSlug);
+  const client = await connectAndBegin();
+
+  try {
+    // SET LOCAL reverts when the transaction ends — no session-level contamination.
+    // `extensions` (Supabase's convention for installed extensions — pgcrypto,
+    // uuid-ossp, ltree) is appended last, after the tenant schema and public,
+    // so it never shadows a real table — it only resolves extension-provided
+    // types/operators/functions (e.g. ltree's `<@`) that aren't reachable
+    // otherwise: unlike a column DEFAULT (resolved once, at CREATE TABLE time),
+    // a type/operator referenced directly in a query is re-resolved against
+    // search_path on every call.
+    await client.query(`SET LOCAL search_path TO "${slug}", public, extensions`);
+    const result = await fn(client);
+    await client.query("COMMIT");
+    client.release();
+    return result;
+  } catch (err) {
+    let rollbackFailed = false;
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      rollbackFailed = true;
+    }
+    client.release(rollbackFailed);
+    if (err instanceof AppError || !isPostgresError(err)) throw err;
+    throw new DatabaseError("withTenant", err);
+  }
+}
+
+/**
+ * Executes fn inside a transaction against the shared `platform` schema —
+ * no SET LOCAL search_path (platform tables are always accessed fully
+ * schema-qualified, e.g. `platform.document_content_version`, never added
+ * to any connection's search_path — see db/lookup.ts's platform.lookups
+ * reads for the existing read-side precedent, and db/diagnostic.ts's
+ * getDb().query() for the existing single-statement write precedent).
+ * This is the multi-statement equivalent of those: a genuine transaction
+ * (BEGIN/COMMIT/ROLLBACK) for callers that need more than one platform-schema
+ * statement to succeed or fail together — e.g. document_content_version's
+ * "flip the old is_current row to false, then insert the new current row"
+ * (apps/api/src/db/documentContent.ts). Mirrors withTenant()'s own
+ * release-vs-destroy-on-rollback-failure discipline for the same reason
+ * documented there.
+ */
+export async function withPlatform<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
+  const client = await connectAndBegin();
+  try {
+    const result = await fn(client);
+    await client.query("COMMIT");
+    client.release();
+    return result;
+  } catch (err) {
+    let rollbackFailed = false;
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      rollbackFailed = true;
+    }
+    client.release(rollbackFailed);
+    if (err instanceof AppError || !isPostgresError(err)) throw err;
+    throw new DatabaseError("withPlatform", err);
+  }
+}
+
+/**
+ * Tenant is chosen at login via a picker, not by subdomain (ADR-002) — there is
+ * no hostname convention this can reliably parse. Any 3-label host (Render's
+ * own <service>.onrender.com, or a future api.neosleepcare.com) would otherwise
+ * be misread as "<service>" or "api" being the tenant slug. Single-tenant for
+ * now, so always resolve to DEFAULT_TENANT_SLUG.
+ */
+export function tenantSlugFromHost(_hostname: string): string {
+  return process.env.DEFAULT_TENANT_SLUG ?? "neosleep";
+}
+
+/**
+ * All tenant slugs currently marked 'active' in the platform schema —
+ * queried directly against the pool (no tenant search_path to set, this IS
+ * the platform-level lookup). Used by machine-to-machine job routes that
+ * must run their work for every tenant rather than assuming a single one
+ * (see routes/partners/orthoapnea-treatments.ts's sync-statuses job — that
+ * route used to rely on tenantSlugFromHost(), which is a single-tenant stub
+ * and silently only ever synced one tenant).
+ */
+export async function getActiveTenantSlugs(): Promise<string[]> {
+  try {
+    const { rows } = await getDb().query<{ slug: string }>(
+      `SELECT slug FROM platform.tenants WHERE status = 'active' ORDER BY slug`
+    );
+    return rows.map((r) => r.slug);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DatabaseError("getActiveTenantSlugs", err);
+  }
+}

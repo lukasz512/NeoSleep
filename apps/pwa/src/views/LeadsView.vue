@@ -1,0 +1,532 @@
+<template>
+  <div class="leads-view">
+    <FormRenderer
+      v-model="showAddModal"
+      :fields="leadFormFields"
+      title-key="user.leads.form.title"
+      submit-label-key="user.leads.form.submit"
+      avatar-entity-type="lead"
+      @submit="onLeadSubmit"
+    />
+    <FormRenderer
+      v-model="showEditModal"
+      :fields="leadFormFields"
+      :initial-data="selectedLead ?? undefined"
+      title-key="user.leads.form.title"
+      edit-title-key="user.leads.form.editTitle"
+      submit-label-key="user.leads.form.submit"
+      edit-submit-label-key="user.leads.form.editSubmit"
+      avatar-entity-type="lead"
+      @submit="onLeadEditSubmit"
+    />
+    <FormRenderer
+      v-model="showMoveToDoctorsModal"
+      :fields="hcpFormFields"
+      :derive="hcpFormDerive"
+      :initial-data="moveToDoctorsInitialData"
+      title-key="user.hcp.form.title"
+      submit-label-key="user.hcp.form.submit"
+      verify-info-key="user.leads.form.verifyDataInfo"
+      avatar-entity-type="hcp"
+      @submit="onContactSubmit"
+    />
+    <FormRenderer
+      v-model="showInviteModal"
+      :fields="partnerInviteFormFields"
+      :initial-data="inviteInitialData"
+      title-key="user.leads.form.inviteTitle"
+      submit-label-key="user.leads.form.inviteSubmit"
+      avatar-entity-type="lead"
+      @submit="onInviteSubmit"
+    />
+    <FormRenderer
+      v-model="showConvertToPatientModal"
+      :fields="patientFormFields"
+      :derive="patientFormDerive"
+      :initial-data="convertToPatientInitialData"
+      title-key="app.patients.form.title"
+      submit-label-key="app.patients.form.submit"
+      verify-info-key="user.leads.form.verifyDataInfo"
+      avatar-entity-type="patient"
+      @submit="onConvertToPatientSubmit"
+    />
+    <EventForm
+      v-model="showEventForm"
+      :initial-data="eventFormInitial"
+      @submit="onEventFormSubmit"
+    />
+    <AppEntityList
+      view-id="leads"
+      api-endpoint="/api/v1/lead"
+      :headers="tableHeaders"
+      :filter-definitions="leadFilterDefinitions"
+      :i18n="leadsI18n"
+      :show-add-button="canAdd"
+      detail-route-name="lead-detail"
+      :filter-param-keys="['status', 'region', 'type']"
+      @add="onAddLead"
+    >
+    <template #item.name="{ item }">
+      <EntityLink
+        :to="null"
+        entity-type="lead"
+        :label="getLeadFromItem(item).name"
+        :first-name="getLeadFromItem(item).first_name"
+        :last-name="getLeadFromItem(item).last_name"
+        :lead-source="getLeadFromItem(item).source"
+        :avatar-size="32"
+      >
+        <GenderIcon :gender="getGenderFromName(getLeadFromItem(item).name)" />
+      </EntityLink>
+    </template>
+    <template #feed-card-avatar="{ item }">
+      <AppAvatar v-bind="personAvatarProps(getLeadFromItem(item))" entity-type="lead" :lead-source="getLeadFromItem(item).source" :size="55" />
+    </template>
+    <template #feed-card-title="{ item }">
+      <span class="leads-name-cell">
+        <GenderIcon :gender="getGenderFromName(getLeadFromItem(item).name)" />
+        {{ shortPersonName(getLeadFromItem(item).name, getLeadFromItem(item).first_name, getLeadFromItem(item).last_name) }}
+      </span>
+    </template>
+    <template #item.email="{ item }">
+      <span v-if="isInactive(getLeadFromItem(item))" class="app-entity-list__cell-empty">—</span>
+      <span v-else>{{ getLeadFromItem(item).email || "—" }}</span>
+    </template>
+    <template #item.status="{ item }">
+      <div class="leads-status-cell">
+        <span
+          :class="['pwa-lead-status-chip', `pwa-lead-status-chip--${leadStatusClass(getLeadFromItem(item).status)}`]"
+        >
+          {{ statusLabel(getLeadFromItem(item).status) }}
+        </span>
+      </div>
+    </template>
+    <template #item.type="{ item }">
+      {{ typeLabel(getLeadFromItem(item).type) }}
+    </template>
+    <!-- Second tile line: specialty when known, else the clinic the lead came in through. -->
+    <template #feed-card-meta="{ item }">
+      <span v-if="getLeadFromItem(item).specialty" class="leads-feed-meta">
+        {{ getLeadFromItem(item).specialty }}
+      </span>
+      <EntityLink
+        v-else-if="leadInstitution(getLeadFromItem(item))"
+        :to="hcoListLink(leadInstitution(getLeadFromItem(item)))"
+        :label="leadInstitution(getLeadFromItem(item))"
+        entity-type="hco"
+      />
+    </template>
+    <template #feed-card-status="{ item }">
+      <span
+        :class="['pwa-lead-status-chip', `pwa-lead-status-chip--${leadStatusClass(getLeadFromItem(item).status)}`]"
+      >
+        {{ statusLabel(getLeadFromItem(item).status) }}
+      </span>
+    </template>
+    <template #item.institution="{ item }">
+      <EntityLink
+        :to="leadInstitution(getLeadFromItem(item)) ? hcoListLink(leadInstitution(getLeadFromItem(item))) : null"
+        :label="leadInstitution(getLeadFromItem(item))"
+        entity-type="hco"
+      />
+    </template>
+    <template #feed-card-actions="{ item }">
+      <AppListItemMenu :aria-label="t('app.common.moreActions')">
+        <VListItem :title="t('user.detail.scheduleVisit')" @click="onScheduleVisit()">
+          <template #prepend><AppIcon :name="entityActionIcon('scheduleVisit')" :class="entityActionMenuIconClass('scheduleVisit')" /></template>
+        </VListItem>
+        <VListItem
+          v-if="getLeadFromItem(item).type === 'doctor' && !isConverted(getLeadFromItem(item))"
+          :title="t('user.leads.detail.inviteToPartner')"
+          @click="onInvitePartner(getLeadFromItem(item))"
+        >
+          <template #prepend><AppIcon :name="entityActionIcon('inviteToPartner')" :class="entityActionMenuIconClass('inviteToPartner')" /></template>
+        </VListItem>
+        <VListItem
+          v-if="getLeadFromItem(item).type === 'doctor' && !isConverted(getLeadFromItem(item))"
+          :title="t('user.leads.detail.moveToDoctors')"
+          @click="onMoveToDoctors(getLeadFromItem(item))"
+        >
+          <template #prepend><AppIcon :name="entityActionIcon('moveToDoctors')" :class="entityActionMenuIconClass('moveToDoctors')" /></template>
+        </VListItem>
+        <VListItem
+          v-if="getLeadFromItem(item).type === 'patient' && !isConverted(getLeadFromItem(item))"
+          :title="t('user.leads.detail.convertToPatient')"
+          @click="onConvertToPatient(getLeadFromItem(item))"
+        >
+          <template #prepend><AppIcon :name="entityActionIcon('convertToPatient')" :class="entityActionMenuIconClass('convertToPatient')" /></template>
+        </VListItem>
+        <VListItem v-if="isAdmin" :title="t('user.leads.detail.edit')" @click="onEditLead(getLeadFromItem(item))">
+          <template #prepend><AppIcon :name="entityActionIcon('edit')" :class="entityActionMenuIconClass('edit')" /></template>
+        </VListItem>
+      </AppListItemMenu>
+    </template>
+    </AppEntityList>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { toEncounterBody } from "../utils/encounterMapping";
+import { ref, computed, defineAsyncComponent } from "vue";
+import { useI18n } from "vue-i18n";
+import AppEntityList from "../components/AppEntityList.vue";
+import AppAvatar from "../components/AppAvatar.vue";
+import EntityLink from "../components/EntityLink.vue";
+import { shortPersonName } from "../utils/shortPersonName";
+import { personAvatarProps } from "../utils/personAvatarProps";
+import GenderIcon from "../components/GenderIcon.vue";
+import AppIcon from "../components/AppIcon.vue";
+import AppListItemMenu from "../components/AppListItemMenu.vue";
+import { entityActionIcon, entityActionMenuIconClass } from "../config/entityActions";
+
+const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
+const EventForm = defineAsyncComponent(() => import("../components/EventForm.vue"));
+import { leadFormFields } from "../config/forms/leadForm";
+import { hcpFormFields, hcpFormDerive } from "../config/forms/hcpForm";
+import { patientFormFields, patientFormDerive } from "../config/forms/patientForm";
+import { partnerInviteFormFields } from "../config/forms/partnerInviteForm";
+import { createPractitionerFromLead } from "../utils/leadConversion";
+import { apiFetch } from "../composables/useApi";
+import { useEntitySubmit } from "../composables/useEntitySubmit";
+import { type FilterDefinition } from "../composables/useFilters";
+import { useAuthStore } from "../stores/auth";
+import { useConfigStore } from "../stores/config";
+import { getGenderFromName } from "../utils/genderFromName";
+import { leadStatusClass, leadStatusI18nKey, leadInstitution, leadNationalIds } from "../utils/leadStatus";
+import { hcoListLink } from "../utils/entityLinks";
+
+export interface Lead {
+  id: string;
+  name: string;
+  salutation?: string | null;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone?: string;
+  status: string;
+  type?: string;
+  region: string;
+  /** Channel the lead came in through (utils/leadSource.ts) — its avatar badge. */
+  source?: string | null;
+  metadata?: Record<string, unknown> | null;
+  specialty?: string;
+  notes?: string;
+  country_code?: string | null;
+  converted_to_id?: string | null;
+  converted_to_type?: string | null;
+  converted_at?: string | null;
+}
+
+const { t } = useI18n();
+const authStore = useAuthStore();
+const configStore = useConfigStore();
+const isAdmin = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
+const canAdd = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
+const showAddModal = ref(false);
+const showEditModal = ref(false);
+const showMoveToDoctorsModal = ref(false);
+const showConvertToPatientModal = ref(false);
+const showInviteModal = ref(false);
+const showEventForm = ref(false);
+const selectedLead = ref<Lead | null>(null);
+const eventFormInitial = ref<{ start_at: string; end_at: string } | undefined>(undefined);
+const { submit } = useEntitySubmit();
+
+/** Stable reference — see LeadDetailView.vue's identical computed for why an
+ *  inline object literal would silently reset FormRenderer's open form. */
+const moveToDoctorsInitialData = computed(() => (selectedLead.value ? {
+  first_name: selectedLead.value.first_name,
+  last_name: selectedLead.value.last_name,
+  email: selectedLead.value.email ?? "",
+  phone: selectedLead.value.phone ?? "",
+  // Pre-fills the clinic combobox with the lead's own institution name —
+  // isCreatingNewOrganization() resolves it against the loaded clinic list
+  // once options finish loading (see hcpForm.ts).
+  organization_id: leadInstitution(selectedLead.value),
+  national_ids: leadNationalIds(selectedLead.value),
+} : undefined));
+
+/** Same stable-reference reasoning as moveToDoctorsInitialData above. */
+const inviteInitialData = computed(() => (selectedLead.value ? {
+  first_name: selectedLead.value.first_name,
+  last_name: selectedLead.value.last_name,
+  email: selectedLead.value.email ?? "",
+  region: selectedLead.value.region,
+  national_ids: leadNationalIds(selectedLead.value),
+} : undefined));
+
+/** Same stable-reference reasoning as moveToDoctorsInitialData above. */
+const convertToPatientInitialData = computed(() => (selectedLead.value ? {
+  first_name: selectedLead.value.first_name,
+  last_name: selectedLead.value.last_name,
+  email: selectedLead.value.email ?? "",
+  phone: selectedLead.value.phone ?? "",
+  region: selectedLead.value.region,
+} : undefined));
+
+const leadFilterDefs: FilterDefinition[] = [
+  { key: "status", labelKey: "user.leads.filters.status", type: "select", default: "" },
+  { key: "region", labelKey: "user.leads.filters.region", type: "select", default: "" },
+  { key: "type", labelKey: "user.leads.filters.type", type: "select", default: "" },
+];
+
+// 'declined' is admin-only visibility (enforced server-side too — see
+// GetLeadListQuery's hideDeclined filter) — hiding it from the filter for
+// non-admins is a UX nicety here, not the actual access control.
+const statusOptions = computed(() => [
+  { title: t("user.leads.filters.all"), value: "" },
+  { title: t("user.leads.filters.statusNew"), value: "new", chipClass: "pwa-lead-status-chip--new" },
+  { title: t("user.leads.filters.statusContacted"), value: "contacted", chipClass: "pwa-lead-status-chip--contacted" },
+  { title: t("user.leads.filters.statusFollowUpNeeded"), value: "follow_up_needed", chipClass: "pwa-lead-status-chip--follow_up_needed" },
+  { title: t("user.leads.filters.statusMeetingScheduled"), value: "meeting_scheduled", chipClass: "pwa-lead-status-chip--meeting_scheduled" },
+  { title: t("user.leads.filters.statusConverted"), value: "converted", chipClass: "pwa-lead-status-chip--converted" },
+  ...(isAdmin.value
+    ? [{ title: t("user.leads.filters.statusDeclined"), value: "declined", chipClass: "pwa-lead-status-chip--declined" }]
+    : []),
+]);
+const regionOptions = computed(() => configStore.regionItems);
+
+const typeOptions = computed(() => [
+  { title: t("user.leads.filters.all"), value: "" },
+  { title: t("user.leads.filters.typeDoctor"), value: "doctor" },
+  { title: t("user.leads.filters.typeHospital"), value: "hospital" },
+  { title: t("user.leads.filters.typePharmacy"), value: "pharmacy" },
+  { title: t("user.leads.filters.typePatient"), value: "patient" },
+  { title: t("user.leads.filters.typeOther"), value: "other" },
+]);
+
+const leadFilterDefinitions = computed<FilterDefinition[]>(() => [
+  { ...leadFilterDefs[0], options: statusOptions.value },
+  { ...leadFilterDefs[1], options: regionOptions.value },
+  { ...leadFilterDefs[2], options: typeOptions.value },
+]);
+
+const tableHeaders = computed(() => [
+  { title: t("user.leads.table.name"), key: "name", sortable: true },
+  { title: t("user.leads.table.email"), key: "email", sortable: true },
+  { title: t("user.leads.table.status"), key: "status", sortable: true },
+  { title: t("user.leads.table.type"), key: "type", sortable: false },
+  { title: t("user.leads.table.region"), key: "region", sortable: true },
+  { title: t("user.leads.table.institution"), key: "institution", sortable: false },
+]);
+
+
+const leadsI18n = computed(() => ({
+  searchPlaceholder: "user.leads.searchPlaceholder",
+  filtersTitle: "user.leads.filters.title",
+  filtersClear: "user.leads.filters.clear",
+  add: "user.leads.add",
+  emptyTitle: "user.leads.emptyTitle",
+  emptySubtitle: "user.leads.emptySubtitle",
+  countNoun: "leads" as const,
+  noResultsForCriteria: "user.leads.noResultsForCriteria",
+  noResultsForCriteriaSubtitle: "user.leads.noResultsForCriteriaSubtitle",
+  tableNoResults: "user.leads.table.noResults",
+  errorLoad: "user.leads.errorLoad",
+}));
+
+function statusLabel(status: string): string {
+  const key = leadStatusI18nKey(status);
+  return key ? t(key) : status || t("user.leads.filters.statusNew");
+}
+
+const TYPE_LABEL_KEYS: Record<string, string> = {
+  doctor: "user.leads.filters.typeDoctor",
+  hospital: "user.leads.filters.typeHospital",
+  pharmacy: "user.leads.filters.typePharmacy",
+  patient: "user.leads.filters.typePatient",
+  other: "user.leads.filters.typeOther",
+};
+
+function typeLabel(type: string | undefined): string {
+  const key = TYPE_LABEL_KEYS[type ?? "other"];
+  return key ? t(key) : t("user.leads.filters.typeOther");
+}
+
+function isInactive(lead: Lead): boolean {
+  return (lead.status || "").toLowerCase() === "inactive";
+}
+
+function isConverted(lead: Lead): boolean {
+  return (lead.status || "").toLowerCase() === "converted";
+}
+
+function onScheduleVisit() {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const date = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  eventFormInitial.value = {
+    start_at: new Date(`${date} 09:00`).toISOString(),
+    end_at: new Date(`${date} 10:00`).toISOString(),
+  };
+  showEventForm.value = true;
+}
+
+async function onEventFormSubmit(
+  payload: import("../components/EventForm.vue").EventSubmitPayload,
+  done: (ok: boolean) => void,
+) {
+  await submit(
+    {
+      request: () =>
+        apiFetch("/api/v1/encounter", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(toEncounterBody(payload)),
+        }),
+      successMessage: t("user.planner.form.success"),
+      icon: "nav-planner",
+      errorMessage: t("user.planner.form.errorSave"),
+      refresh: false,
+    },
+    done,
+  );
+}
+
+function onMoveToDoctors(lead: Lead) {
+  selectedLead.value = lead;
+  showMoveToDoctorsModal.value = true;
+}
+
+function onConvertToPatient(lead: Lead) {
+  selectedLead.value = lead;
+  showConvertToPatientModal.value = true;
+}
+
+async function onConvertToPatientSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+  const leadId = selectedLead.value?.id;
+  if (!leadId) { done(false); return; }
+  await submit(
+    {
+      request: () =>
+        apiFetch("/api/v1/patient", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...data, lead_id: leadId }),
+        }),
+      successMessage: t("app.patients.form.success"),
+      icon: "nav-patients",
+      errorMessage: t("app.patients.form.errorSave"),
+    },
+    done,
+  );
+}
+
+function onInvitePartner(lead: Lead) {
+  selectedLead.value = lead;
+  showInviteModal.value = true;
+}
+
+async function onInviteSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+  const leadId = selectedLead.value?.id;
+  if (!leadId) { done(false); return; }
+  await submit(
+    {
+      request: () =>
+        apiFetch(`/api/v1/lead/${leadId}/invite`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
+      successMessage: t("user.leads.form.inviteSuccess"),
+      icon: "mail",
+      errorMessage: t("user.leads.form.inviteError"),
+    },
+    done,
+  );
+}
+
+async function onContactSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+  const leadId = selectedLead.value?.id;
+  if (!leadId) { done(false); return; }
+  await submit(
+    {
+      request: async () => ({ ok: await createPractitionerFromLead(data, leadId) }),
+      successMessage: t("user.hcp.form.contactCreated"),
+      icon: "nav-hcp",
+      errorMessage: t("user.hcp.form.contactError"),
+    },
+    done,
+  );
+}
+
+function onEditLead(lead: Lead) {
+  selectedLead.value = lead;
+  showEditModal.value = true;
+}
+
+async function onLeadEditSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+  const id = selectedLead.value?.id;
+  if (!id) { done(false); return; }
+  await submit(
+    {
+      request: () =>
+        apiFetch(`/api/v1/lead/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
+      successMessage: t("user.leads.form.editSuccess"),
+      icon: "nav-leads",
+      errorMessage: t("user.leads.form.errorSave"),
+    },
+    done,
+  );
+}
+
+/** Unwrap Vuetify's internal item wrapper (VDataTable provides `{ raw: T }` via slot). */
+function getLeadFromItem(item: unknown): Lead {
+  const o = item as { raw?: Lead };
+  return (o?.raw ?? item) as Lead;
+}
+
+
+function onAddLead() {
+  showAddModal.value = true;
+}
+
+async function onLeadSubmit(data: Record<string, unknown>, done: (ok: boolean) => void) {
+  await submit(
+    {
+      request: () =>
+        apiFetch("/api/v1/lead", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        }),
+      successMessage: t("user.leads.form.success"),
+      openCreated: "lead-detail",
+      icon: "nav-leads",
+      errorMessage: t("user.leads.form.errorSave"),
+    },
+    done,
+  );
+}
+</script>
+
+<style scoped>
+.leads-status-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.leads-feed-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.leads-feed-meta-rest {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.leads-name-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+</style>
+

@@ -1,0 +1,1910 @@
+import { ORTHOAPNEA_BASE_URL, ORTHOAPNEA_EMAIL, ORTHOAPNEA_PASSWORD } from "../../env.js";
+import { PartnerServiceError, ConflictError, PartnerOrderAlreadySubmittedError } from "../../errors.js";
+import { getPatientById, type Patient } from "../../db/patient.js";
+import { getTreatmentPlanById } from "../../db/treatmentPlan.js";
+import { withTenant } from "../../db/tenant.js";
+import {
+  getPartnerLink,
+  ensurePendingPartnerLink,
+  markPartnerLinkSynced,
+  markPartnerLinkFailed,
+  claimPartnerLink,
+  setPartnerLinkError,
+  updatePartnerLinkStatus,
+  insertPartnerTransaction,
+  type PartnerLink,
+  type InsertPartnerTransactionInput,
+} from "../../db/partnerLink.js";
+import type { PartnerResourceItem } from "./types.js";
+
+/**
+ * OrthoApnea (apneadock.es) partner integration. One shared NeoSleep account,
+ * used server-side only — the frontend never sees ORTHOAPNEA_EMAIL/PASSWORD
+ * or the session token (CLAUDE.md Architecture Rule #1).
+ *
+ * Session is a module-level singleton: every NeoSleep rep/doctor using this
+ * feature shares the one OrthoApnea login, so there is exactly one token to
+ * manage per apps/api process, not one per NeoSleep user.
+ *
+ * Scope of this file: resources (documents/videos) below, plus order
+ * submission (patient + treatment create, status polling) further down.
+ * Every mutating call is serialized through enqueueOrthoApneaMutation() —
+ * OrthoApnea's shared-account session behaves like a stateful cart, so two
+ * concurrent creates could race on it. Every create/poll call is also logged
+ * to `partner_transaction` (migration 018) with the exact request/response
+ * JSON and a validation report — see validatePartnerResponse() below — since
+ * this whole integration is reverse-engineered against production with no
+ * official docs, and every call needs to be auditable end-to-end.
+ *
+ * Login (LOGIN_PATH, Basic-auth scheme, JWT response) is confirmed from a
+ * captured request/response pair — see below. Resource + media paths
+ * (RESOURCES_PATH, DOCUMENT_MEDIA_PATH, TUTORIAL_VIDEO_MEDIA_PATH,
+ * DOC_VIDEO_MEDIA_PATH) are confirmed too, from captured page renders.
+ * Every login attempt (success/failure) is still logged via console —
+ * useful once order submission is built against the same session.
+ */
+
+const LOGIN_PATH = "/api/login";
+
+/**
+ * Integration specs point this module at the in-process OA replica
+ * (test/oa-replica/server.ts), which listens on a random port chosen after
+ * this module is loaded — env.ts reads ORTHOAPNEA_BASE_URL once at import, so
+ * the replica's URL is injected here instead. Always null in production.
+ */
+let baseUrlOverrideForTests: string | null = null;
+
+function oaBaseUrl(): string {
+  return baseUrlOverrideForTests ?? ORTHOAPNEA_BASE_URL;
+}
+
+/** Test-only: route every OrthoApnea call to `url` (the replica), or back to ORTHOAPNEA_BASE_URL with null. */
+export function __setOrthoApneaBaseUrlForTests(url: string | null): void {
+  baseUrlOverrideForTests = url;
+}
+const RESOURCES_PATH = "/api/resources";
+/** Confirmed from captured page renders — apneadock.es serves documents from exactly this path (e.g. /media/doc/OA010.pdf). */
+const DOCUMENT_MEDIA_PATH = "/media/doc";
+/**
+ * Videos are split across (at least) two folders and the JSON alone doesn't
+ * reliably say which one a given row uses — ids 56–58 ("Recursos gráficos"
+ * category) are confirmed under DOC_VIDEO_MEDIA_PATH, while the "Tutoriales"
+ * webinar-style videos are confirmed under TUTORIAL_VIDEO_MEDIA_PATH. Rather
+ * than hardcode a row → folder rule we don't actually have, tryVideoPaths()
+ * below attempts both and caches whichever one 200s per resource id.
+ */
+const TUTORIAL_VIDEO_MEDIA_PATH = "/media/video/tutorials";
+const DOC_VIDEO_MEDIA_PATH = "/media/doc/videos";
+const VIDEO_TYPE = 2;
+
+interface OrthoApneaSession {
+  token: string;
+  /** From the JWT's `exp` claim (unix seconds -> ms). Falls back to a conservative 30min if the token has no exp for some reason. */
+  expiresAt: number;
+}
+
+/** JWTs are `header.payload.signature` — the payload is base64url JSON, no verification needed since we're only reading our own freshly-issued token. */
+function decodeJwtExpiry(token: string): number | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const json = Buffer.from(payload, "base64url").toString("utf-8");
+    const { exp } = JSON.parse(json) as { exp?: number };
+    return typeof exp === "number" ? exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+const FALLBACK_SESSION_TTL_MS = 30 * 60 * 1000;
+/** After a failed login, don't hammer OrthoApnea again for this long — a rep bouncing between routes while OrthoApnea is down shouldn't trigger a login attempt on every navigation. */
+const RECONNECT_COOLDOWN_MS = 15_000;
+/** After this many consecutive failed logins, checkConnection() reports `attemptsExhausted` so the frontend can switch from "retrying" to "this looks like a real outage" messaging. Still keeps retrying on the same cooldown — a doctor's reload can't fix a server-side outage, but OrthoApnea coming back on its own shouldn't require one either. */
+const MAX_CONSECUTIVE_FAILURES = 3;
+
+/** Same budget as FETCH_TIMEOUT_MS below. Without it a hung login never settles, loginInFlight is never cleared, and every later caller awaits the same dead promise — "disconnected" until the process restarts. */
+const LOGIN_TIMEOUT_MS = 20_000;
+
+/**
+ * Why the last login failed — reported by checkConnection() so "OrthoApnea
+ * is down" and "this server has the wrong password" stop looking identical
+ * from the PWA; they need completely different fixes.
+ */
+export type ConnectionFailureReason =
+  | "not_configured"
+  | "credentials_rejected"
+  | "unreachable"
+  | "timeout"
+  | "unexpected_response";
+
+class OrthoApneaLoginError extends PartnerServiceError {
+  constructor(
+    readonly reason: ConnectionFailureReason,
+    message: string,
+    cause?: unknown
+  ) {
+    super("orthoapnea", message, cause);
+  }
+}
+
+let session: OrthoApneaSession | null = null;
+let loginInFlight: Promise<OrthoApneaSession> | null = null;
+let lastLoginFailureAt: number | null = null;
+let lastFailureReason: ConnectionFailureReason | null = null;
+let consecutiveFailures = 0;
+
+function isSessionValid(s: OrthoApneaSession): boolean {
+  return s.expiresAt > Date.now();
+}
+
+async function login(): Promise<OrthoApneaSession> {
+  if (!ORTHOAPNEA_EMAIL || !ORTHOAPNEA_PASSWORD) {
+    throw new OrthoApneaLoginError("not_configured", "ORTHOAPNEA_EMAIL / ORTHOAPNEA_PASSWORD not configured");
+  }
+
+  // Confirmed from a captured request: POST with no body, credentials via
+  // HTTP Basic auth (not a JSON body) — matches apneadock.es's Angular client.
+  const basicAuth = Buffer.from(`${ORTHOAPNEA_EMAIL}:${ORTHOAPNEA_PASSWORD}`).toString("base64");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), LOGIN_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(`${oaBaseUrl()}${LOGIN_PATH}`, {
+      method: "POST",
+      headers: { Authorization: `Basic ${basicAuth}` },
+      signal: controller.signal,
+    });
+  } catch (cause) {
+    if (controller.signal.aborted) {
+      console.error(`[orthoapnea] login timed out after ${LOGIN_TIMEOUT_MS}ms`);
+      throw new OrthoApneaLoginError("timeout", `login timed out after ${LOGIN_TIMEOUT_MS}ms`, cause);
+    }
+    console.error("[orthoapnea] login request failed (network error):", cause);
+    throw new OrthoApneaLoginError("unreachable", "login request failed (network error)", cause);
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (!res.ok) {
+    // 401/403 from /api/login = OrthoApnea rejected ORTHOAPNEA_EMAIL/PASSWORD
+    // as configured on this server (e.g. the password was changed on
+    // apneadock.es but not in the Render environment).
+    const reason = res.status === 401 || res.status === 403 ? "credentials_rejected" : "unexpected_response";
+    console.error(`[orthoapnea] login failed with status ${res.status} (${reason})`);
+    throw new OrthoApneaLoginError(reason, `login failed with status ${res.status}`);
+  }
+
+  let data: { token?: string };
+  try {
+    data = (await res.json()) as { token?: string };
+  } catch (cause) {
+    console.error("[orthoapnea] login response was not JSON");
+    throw new OrthoApneaLoginError("unexpected_response", "login response was not JSON", cause);
+  }
+  if (!data.token) {
+    console.error("[orthoapnea] login response did not contain a token field");
+    throw new OrthoApneaLoginError("unexpected_response", "login response did not contain a token field");
+  }
+  const expiresAt = decodeJwtExpiry(data.token) ?? Date.now() + FALLBACK_SESSION_TTL_MS;
+  console.log(`[orthoapnea] login succeeded, session valid until ${new Date(expiresAt).toISOString()}`);
+  return { token: data.token, expiresAt };
+}
+
+/**
+ * De-duped: concurrent callers during a cold start all await the same
+ * in-flight login instead of triggering N logins. Also the single place
+ * that decides "are we connected" — checkConnection() below just wraps this.
+ */
+async function ensureSession(): Promise<OrthoApneaSession> {
+  if (session && isSessionValid(session)) return session;
+  session = null;
+
+  if (lastLoginFailureAt && Date.now() - lastLoginFailureAt < RECONNECT_COOLDOWN_MS) {
+    throw new PartnerServiceError("orthoapnea", "connection recently failed — cooling down before retrying");
+  }
+
+  if (!loginInFlight) {
+    loginInFlight = login()
+      .then((s) => {
+        session = s;
+        lastLoginFailureAt = null;
+        lastFailureReason = null;
+        consecutiveFailures = 0;
+        return s;
+      })
+      .catch((err: unknown) => {
+        lastLoginFailureAt = Date.now();
+        lastFailureReason = err instanceof OrthoApneaLoginError ? err.reason : "unexpected_response";
+        consecutiveFailures += 1;
+        throw err;
+      })
+      .finally(() => {
+        loginInFlight = null;
+      });
+  }
+  return loginInFlight;
+}
+
+/**
+ * Test-only: clears the module-level session/cooldown state. session,
+ * lastLoginFailureAt etc. are deliberately process-wide singletons in
+ * production (one real Node process talks to OrthoApnea through one cached
+ * session/circuit-breaker) — but that same singleton leaks across test
+ * cases within a single spec file that statically imports this module once,
+ * since vitest doesn't reset module state between `it()` blocks on its own.
+ * orthoapnea.spec.ts avoids this by dynamically re-importing the module
+ * (with vi.resetModules()) per test; orthoapnea-order.spec.ts's tests are
+ * DB-integration tests that can't cheaply do that (the DB-touching command
+ * functions are imported statically alongside this), so they call this
+ * instead. Not imported or called anywhere in production code.
+ */
+export function __resetOrthoApneaStateForTests(): void {
+  session = null;
+  loginInFlight = null;
+  lastLoginFailureAt = null;
+  lastFailureReason = null;
+  consecutiveFailures = 0;
+  countriesCache = null;
+  productsCache = null;
+  clinicsCache = null;
+  currentUserIdCache = null;
+  currentUserCache = null;
+  manufacturingDateCache.clear();
+}
+
+export interface ConnectionStatus {
+  connected: boolean;
+  /** True once MAX_CONSECUTIVE_FAILURES has been hit without a successful login in between — signals "this isn't a blip" rather than "still trying". */
+  attemptsExhausted: boolean;
+  /** Why the last login failed; only set when not connected. Names which side to fix, never contains a credential. */
+  reason?: ConnectionFailureReason;
+}
+
+/**
+ * Cheap, non-throwing connection check — attempts a (re)connect if not
+ * already connected (a no-op if the cached token is still valid), reports
+ * success/failure rather than propagating the error. Meant to be polled on
+ * navigation into any OrthoApnea-dependent view (see routes/partners/
+ * orthoapnea-status.ts) — the same shape any future partner's status check
+ * should follow: attempt-if-needed, never throw, just report connected.
+ */
+export async function checkConnection(): Promise<ConnectionStatus> {
+  try {
+    await ensureSession();
+    return { connected: true, attemptsExhausted: false };
+  } catch {
+    return {
+      connected: false,
+      attemptsExhausted: consecutiveFailures >= MAX_CONSECUTIVE_FAILURES,
+      reason: lastFailureReason ?? "unexpected_response",
+    };
+  }
+}
+
+/**
+ * OrthoApnea's own uptime/latency is entirely outside our control — a hung
+ * connection with no timeout would block the calling request (or, for the
+ * sync job, that one link's iteration) indefinitely. 20s is generous enough
+ * for a slow real response but short enough that a rep isn't left staring at
+ * a spinner forever. Deliberately NOT tied to holding a DB transaction open
+ * (see the transaction-decoupling comments on ensureOrthoApneaPatient et al.
+ * below) — this matters on its own even with a clean split between DB work
+ * and the HTTP call.
+ */
+const FETCH_TIMEOUT_MS = 20_000;
+
+/** The request was sent and OA did not answer in time — it may or may not have acted on it. */
+class OrthoApneaTimeoutError extends PartnerServiceError {}
+
+/** Connection never opened, so the lab cannot have received the request. */
+const NOT_SENT_CODES = new Set(["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "EHOSTUNREACH", "ENETUNREACH", "BAD_PORT"]);
+
+/** undici's fetch wraps the socket error: TypeError("fetch failed") with `cause.code`. */
+function networkErrorCode(err: unknown): string {
+  const cause = err instanceof Error && err.cause instanceof Error ? err.cause : err;
+  const code = cause instanceof Error ? (cause as Error & { code?: unknown }).code : undefined;
+  if (typeof code === "string") return code;
+  // fetch refuses a blocked port before opening any socket, with no code.
+  return cause instanceof Error && cause.message === "bad port" ? "BAD_PORT" : "";
+}
+
+async function authedFetch(path: string, init: RequestInit = {}, isRetry = false, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
+  const { token } = await ensureSession();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let res: Response;
+  try {
+    res = await fetch(`${oaBaseUrl()}${path}`, {
+      ...init,
+      headers: { ...init.headers, Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    });
+  } catch (cause) {
+    if (controller.signal.aborted) {
+      throw new OrthoApneaTimeoutError("orthoapnea", `request to ${path} timed out after ${timeoutMs}ms`, cause);
+    }
+    // NEO-210: a raw network failure used to escape as a generic 500. When the
+    // connection never opened, the lab never saw the request → a plain 502.
+    // Anything else (reset mid-request) may have reached the lab, so it's as
+    // ambiguous as a timeout and must keep the order pending, not "failed".
+    if (NOT_SENT_CODES.has(networkErrorCode(cause))) {
+      throw new PartnerServiceError("orthoapnea", `request to ${path} could not connect`, cause);
+    }
+    throw new OrthoApneaTimeoutError("orthoapnea", `request to ${path} lost its connection`, cause);
+  } finally {
+    clearTimeout(timeout);
+  }
+  // apneadock.es answers an invalid/expired/revoked JWT with 403, not 401
+  // (verified 2026-09-25 against production). Retrying on 401 only left a
+  // stale cached token failing every call until its `exp` (~12h later).
+  if ((res.status === 401 || res.status === 403) && !isRetry) {
+    console.warn(`[orthoapnea] ${res.status} on ${path} — session likely stale, re-logging in and retrying once`);
+    session = null; // force a fresh login and retry exactly once
+    return authedFetch(path, init, true, timeoutMs);
+  }
+  return res;
+}
+
+/**
+ * Raw authenticated call for hand-run scripts only (scripts/oa-test-order.ts,
+ * NEO-210) — returns the untouched Response so the script can record status,
+ * headers and body verbatim. Mutations still go through the same queue as the
+ * app, so a script can never race a real order on the shared account.
+ */
+export function orthoApneaRawRequest(path: string, init: RequestInit = {}): Promise<Response> {
+  const method = (init.method ?? "GET").toUpperCase();
+  return method === "GET" ? authedFetch(path, init) : enqueueOrthoApneaMutation(() => authedFetch(path, init));
+}
+
+interface RawOrthoApneaResource {
+  id: number;
+  type: number;
+  category: number;
+  weight: number;
+  deleted: boolean;
+  titleEs?: string;
+  titleEn?: string;
+  titleDe?: string;
+  titleFr?: string;
+  titlePt?: string;
+  titleNl?: string;
+  descriptionEs?: string;
+  descriptionEn?: string;
+  descriptionDe?: string;
+  descriptionFr?: string;
+  descriptionPt?: string;
+  descriptionNl?: string;
+  url?: string;
+  urlEs?: string;
+  urlEn?: string;
+  urlDe?: string;
+  urlFr?: string;
+  urlPt?: string;
+  urlNl?: string;
+}
+
+type LocaleSuffix = "Es" | "En" | "De" | "Fr" | "Pt" | "Nl";
+
+/**
+ * Our locale keys (en/pl/mx, th planned per CLAUDE.md) don't map 1:1 to
+ * OrthoApnea's (Es/En/De/Fr/Pt/Nl — confirmed from a captured document list,
+ * richer than the resources-list sample we designed the first version of
+ * this file around). Each chain tries the closest language first, then
+ * falls through the rest of OrthoApnea's languages rather than giving up —
+ * showing *something* beats showing nothing for a resource that exists but
+ * not in the user's own language. Revisit if a real th-speaking partner
+ * appears and none of this fallback chain is acceptable to them.
+ */
+const LOCALE_FALLBACK: Record<string, LocaleSuffix[]> = {
+  en: ["En", "Es", "De", "Fr", "Pt", "Nl"],
+  mx: ["Es", "En", "Pt", "De", "Fr", "Nl"],
+  pl: ["En", "Es", "De", "Fr", "Pt", "Nl"],
+  th: ["En", "Es", "De", "Fr", "Pt", "Nl"],
+};
+
+/** Some rows have an empty string for a given language, not a missing key — falls through to the next language in the chain rather than accepting "". */
+function pickLocalized(row: RawOrthoApneaResource, field: "title" | "description" | "url", locale: string): string {
+  const chain = LOCALE_FALLBACK[locale] ?? LOCALE_FALLBACK.en;
+  for (const suffix of chain) {
+    const value = row[`${field}${suffix}` as keyof RawOrthoApneaResource];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  if (field === "url" && row.url?.trim()) return row.url;
+  return "";
+}
+
+/**
+ * apneadock.es's own category/subcategory labels are NOT in the /api/resources
+ * JSON (that only has numeric `category`/`subcategory` fields with no name
+ * anywhere in the response) — they're baked into the Angular template as
+ * plain text. This table was built by cross-referencing captured page HTML
+ * (which has the labels) against the JSON dump (which has stable `id`s) —
+ * every id below is a confirmed match by title, not a guess. Keyed by id
+ * rather than the numeric category/subcategory fields because we never
+ * captured what those numbers mean, only which id sits under which visible
+ * heading. New resources OrthoApnea adds later won't be in this table until
+ * someone adds them — they fall back to UNKNOWN_CATEGORY rather than being
+ * hidden.
+ */
+const UNKNOWN_CATEGORY = "Otros";
+const RESOURCE_CATEGORY_BY_ID: Record<number, { category: string; subcategory?: string }> = {
+  1: { category: "Documentación de interés" },
+  2: { category: "Documentación de interés" },
+  36: { category: "Manuales" },
+  3: { category: "Protocolos" },
+  4: { category: "Protocolos" },
+  5: { category: "Protocolos" },
+  6: { category: "Protocolos" },
+  35: { category: "Protocolos" },
+  33: { category: "Protocolos" }, // "Ficha de Paciente para Supervisión Previa a Solicitud del tratamiento OrthoApnea NOA"
+  37: { category: "Protocolos" },
+  44: { category: "Protocolos" }, // "Protocolo Clínico para la Selección de Pacientes Candidatos al Uso de Dispositivos de Avance Mandibular"
+  53: { category: "Dispositivos", subcategory: "OrthoApnea" },
+  7: { category: "Dispositivos", subcategory: "OrthoApnea NOA" },
+  8: { category: "Dispositivos", subcategory: "OrthoApnea NOA" },
+  9: { category: "Dispositivos", subcategory: "OrthoApnea NOA" },
+  10: { category: "Dispositivos", subcategory: "OrthoApnea NOA" },
+  11: { category: "Dispositivos", subcategory: "OrthoApnea NOA" },
+  39: { category: "Dispositivos", subcategory: "OrthoApnea NOA" },
+  12: { category: "Dispositivos", subcategory: "OrthoApnea Classic" },
+  13: { category: "Dispositivos", subcategory: "OrthoApnea Classic" },
+  40: { category: "Dispositivos", subcategory: "OrthoApnea Classic" },
+  14: { category: "Dispositivos", subcategory: "Morning aligner" },
+  15: { category: "Dispositivos", subcategory: "Morning aligner" },
+  41: { category: "Dispositivos", subcategory: "Morning aligner" },
+  16: { category: "Dispositivos", subcategory: "Orthobrux" },
+  17: { category: "Dispositivos", subcategory: "Orthobrux" },
+  18: { category: "Dispositivos", subcategory: "Orthobrux" },
+  19: { category: "Dispositivos", subcategory: "Orthobrux" },
+  20: { category: "Dispositivos", subcategory: "Orthobrux" },
+  42: { category: "Dispositivos", subcategory: "Orthobrux" },
+  21: { category: "Recursos gráficos" },
+  22: { category: "Recursos gráficos" },
+  23: { category: "Recursos gráficos" },
+  24: { category: "Recursos gráficos" },
+  56: { category: "Recursos gráficos" },
+  57: { category: "Recursos gráficos" },
+  58: { category: "Recursos gráficos" },
+  25: { category: "Recursos gráficos", subcategory: "Branding" },
+  // "Webinar" — the Videos-tab label the whole tutorial/webinar set sits
+  // under (per direct confirmation, not the HTML cross-reference above).
+  26: { category: "Webinar" },
+  27: { category: "Webinar" },
+  28: { category: "Webinar" },
+  29: { category: "Webinar" },
+  30: { category: "Webinar" },
+  31: { category: "Webinar" },
+  32: { category: "Webinar" },
+  47: { category: "Webinar" },
+  48: { category: "Webinar" },
+  49: { category: "Webinar" },
+  50: { category: "Webinar" },
+  51: { category: "Webinar" },
+  52: { category: "Webinar" },
+  55: { category: "Webinar" },
+  59: { category: "Webinar" },
+};
+
+const LANGUAGE_SUFFIXES: LocaleSuffix[] = ["Es", "En", "De", "Fr", "Pt", "Nl"];
+
+const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "svg", "gif", "webp"]);
+const VIDEO_EXTENSIONS = new Set(["mp4", "m4v", "mov", "webm"]);
+
+/** Extension of the *default resolved* file — a resource with different file types per language would be unusual for this catalog and isn't worth modeling. */
+function detectFileType(filename: string): PartnerResourceItem["fileType"] {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  if (ext === "pdf") return "pdf";
+  if (ext === "zip") return "zip";
+  if (IMAGE_EXTENSIONS.has(ext)) return "image";
+  if (VIDEO_EXTENSIONS.has(ext)) return "video";
+  return "other";
+}
+
+/** Every language this specific row actually has content in — drives the flag/language-chip row, independent of the app-locale-resolved default (pickLocalized). */
+function collectLanguageVariants(row: RawOrthoApneaResource, resourceId: number): PartnerResourceItem["languages"] {
+  return LANGUAGE_SUFFIXES.filter((suffix) => row[`url${suffix}` as keyof RawOrthoApneaResource]?.toString().trim())
+    .map((suffix) => ({
+      code: suffix.toLowerCase(),
+      mediaUrl: `/api/v1/partners/orthoapnea/resources/${resourceId}/media?lang=${suffix}`,
+    }));
+}
+
+/**
+ * The resources catalog (documents/videos) barely changes — no need to hit
+ * OrthoApnea on every request. Cached in memory with a TTL and refreshed
+ * lazily on the first request after it expires, not on a background timer
+ * (simpler, and this process may not stay warm between requests anyway on
+ * Render's free tier). If the refresh itself fails, a stale cache is served
+ * rather than surfacing an error — the catalog being an hour stale is a
+ * non-event; OrthoApnea being briefly unreachable shouldn't take the whole
+ * Resources tab down with it.
+ */
+const RESOURCES_CACHE_TTL_MS = 60 * 60 * 1000;
+let rawResourcesCache: { rows: RawOrthoApneaResource[]; fetchedAt: number } | null = null;
+
+async function fetchRawResources(): Promise<RawOrthoApneaResource[]> {
+  if (rawResourcesCache && Date.now() - rawResourcesCache.fetchedAt < RESOURCES_CACHE_TTL_MS) {
+    return rawResourcesCache.rows;
+  }
+
+  try {
+    const res = await authedFetch(RESOURCES_PATH);
+    if (!res.ok) throw new PartnerServiceError("orthoapnea", `resources fetch failed with status ${res.status}`);
+    const rows = (await res.json()) as RawOrthoApneaResource[];
+    rawResourcesCache = { rows, fetchedAt: Date.now() };
+    return rows;
+  } catch (err) {
+    if (rawResourcesCache) {
+      console.warn(
+        `[orthoapnea] resources refresh failed, serving cache from ${new Date(rawResourcesCache.fetchedAt).toISOString()}:`,
+        err
+      );
+      return rawResourcesCache.rows;
+    }
+    throw err;
+  }
+}
+
+/**
+ * Where a video sits in a dentist's work with a patient (NEO-151, Łukasz picked
+ * "topics by stage" over subject topics). OrthoApnea sends no topics, so like
+ * RESOURCE_CATEGORY_BY_ID this is our own table, keyed by resource id; a video
+ * added later lands in "other" until someone places it. The frontend labels
+ * the keys (user.resources.topic.*) and shows them in this order.
+ */
+export const VIDEO_TOPICS = ["detect", "diagnose", "records", "order", "followup", "other"] as const;
+export type VideoTopic = (typeof VIDEO_TOPICS)[number];
+const VIDEO_TOPIC_BY_ID: Record<number, VideoTopic> = {
+  26: "detect", // Introducción a la Medicina Dental del Sueño
+  27: "detect", // Cómo detectar pacientes con AOS en la clínica dental
+  28: "detect", // Prevalencia, diagnóstico y tratamiento en la AOS
+  32: "diagnose", // Diagnóstico y pruebas del sueño
+  31: "diagnose", // WatchPAT: diagnóstico domiciliario
+  47: "records", // Galga de George (ES; its EN/DE twins are merged into it)
+  48: "records",
+  49: "records",
+  59: "records", // Registros con galga y cera de mordida
+  50: "records", // Impresiones digitales
+  51: "records", // Impresiones tradicionales
+  55: "order", // OrthoApnea NOA and how to request it in Apneadock
+  30: "order", // Apneadock: plataforma de gestión de tratamientos
+  52: "followup", // Colocación OrthoApnea NOA
+  29: "followup", // Tratamiento con DAM: de los registros al seguimiento
+};
+
+/**
+ * One video recorded once per language arrives as separate resources (the
+ * George Gauge clip: 47 ES, 48 EN, 49 DE). Łukasz, NEO-151: show it once with
+ * all its flags. The first id is the entry's stable id; its default file and
+ * title follow the app locale's fallback chain, like every other resource.
+ */
+const LANGUAGE_TWINS: string[][] = [["47", "48", "49"]];
+
+export function mergeLanguageTwins(items: PartnerResourceItem[], locale: string): PartnerResourceItem[] {
+  const chain = (LOCALE_FALLBACK[locale] ?? LOCALE_FALLBACK.en).map((s) => s.toLowerCase());
+  const dropped = new Set<string>();
+  const merged = new Map<string, PartnerResourceItem>();
+  for (const group of LANGUAGE_TWINS) {
+    const members = group
+      .map((id) => items.find((i) => i.id === id))
+      .filter((i): i is PartnerResourceItem => Boolean(i));
+    if (members.length < 2) continue;
+    const rank = (m: PartnerResourceItem) =>
+      Math.min(99, ...m.languages.map((l) => chain.indexOf(l.code)).filter((n) => n >= 0));
+    const best = [...members].sort((a, b) => rank(a) - rank(b))[0]!;
+    merged.set(members[0]!.id, {
+      ...best,
+      id: members[0]!.id,
+      languages: members.flatMap((m) => m.languages),
+      weight: Math.min(...members.map((m) => m.weight)),
+    });
+    for (const m of members.slice(1)) dropped.add(m.id);
+  }
+  return items.filter((i) => !dropped.has(i.id)).map((i) => merged.get(i.id) ?? i);
+}
+
+/**
+ * Partner names never reach the screen (Łukasz, 2026-10-03, NEO-212): the
+ * partner's own titles say "OrthoApnea NOA", the app says "DAM" (dispositivo
+ * de avance mandibular). Applied to every user-visible resource text.
+ */
+export function withoutPartnerBrand(text: string): string;
+export function withoutPartnerBrand(text: string | null): string | null;
+export function withoutPartnerBrand(text: string | null): string | null {
+  return text === null ? null : text.replace(/ortho\s?apnea(\s+noa\b)?/gi, "DAM");
+}
+
+export async function fetchResources(locale: string): Promise<PartnerResourceItem[]> {
+  const rows = await fetchRawResources();
+
+  const items = rows
+    .filter((row) => !row.deleted)
+    .map((row): PartnerResourceItem => {
+      const labels = RESOURCE_CATEGORY_BY_ID[row.id];
+      const defaultFilename = pickLocalized(row, "url", locale);
+      return {
+        id: String(row.id),
+        partner: "orthoapnea",
+        kind: row.type === VIDEO_TYPE ? "video" : "document",
+        title: withoutPartnerBrand(pickLocalized(row, "title", locale)),
+        description: withoutPartnerBrand(pickLocalized(row, "description", locale)),
+        mediaUrl: `/api/v1/partners/orthoapnea/resources/${row.id}/media?locale=${locale}`,
+        fileType: row.type === VIDEO_TYPE ? "video" : detectFileType(defaultFilename),
+        languages: collectLanguageVariants(row, row.id),
+        category: labels?.category ?? UNKNOWN_CATEGORY,
+        subcategory: withoutPartnerBrand(labels?.subcategory ?? null),
+        weight: row.weight,
+        ...(row.type === VIDEO_TYPE ? { topic: VIDEO_TOPIC_BY_ID[row.id] ?? "other" } : {}),
+      };
+    })
+    .filter((item) => item.title) // no usable title in any language — not worth showing
+    .sort((a, b) => a.weight - b.weight);
+  return curateResources(mergeLanguageTwins(items, locale), locale);
+}
+
+/**
+ * Our editorial layer over the partner's list (Łukasz, 2026-10-03, NEO-214).
+ * Hidden: WatchPAT (31), and the two ordering videos (55, 30) that show the
+ * partner's own platform instead of NeoSleep's — "Pedir el dispositivo" stays
+ * empty until our own walkthrough (NEO-215) exists. Retitled: video 52, whose
+ * partner title names the device brand.
+ */
+const HIDDEN_RESOURCE_IDS = new Set(["31", "55", "30"]);
+const TITLE_BY_ID: Record<string, Record<string, string>> = {
+  "52": { mx: "Colocación de DAM", en: "Fitting the DAM", pl: "Zakładanie DAM" },
+};
+
+export function curateResources(items: PartnerResourceItem[], locale: string): PartnerResourceItem[] {
+  return items
+    .filter((item) => !HIDDEN_RESOURCE_IDS.has(item.id))
+    .map((item) => {
+      const titles = TITLE_BY_ID[item.id];
+      const title = titles?.[locale] ?? titles?.en;
+      return title ? { ...item, title } : item;
+    });
+}
+
+/** Resource id -> the video media path that actually worked, so repeat requests for the same video don't pay the two-path probe again. */
+const resolvedVideoPathCache = new Map<string, string>();
+
+async function tryVideoPaths(resourceId: string, filename: string, init: RequestInit): Promise<Response> {
+  const encoded = encodeURIComponent(filename);
+  const cached = resolvedVideoPathCache.get(resourceId);
+  const candidates = cached
+    ? [cached]
+    : [`${TUTORIAL_VIDEO_MEDIA_PATH}/${encoded}`, `${DOC_VIDEO_MEDIA_PATH}/${encoded}`];
+
+  let lastRes: Response | null = null;
+  for (const path of candidates) {
+    const res = await authedFetch(path, init);
+    if (res.ok && res.body) {
+      resolvedVideoPathCache.set(resourceId, path);
+      return res;
+    }
+    lastRes = res;
+  }
+  console.error(`[orthoapnea] video fetch failed for resource '${resourceId}' on all known paths: ${candidates.join(", ")}`);
+  throw new PartnerServiceError(
+    "orthoapnea",
+    `media fetch failed with status ${lastRes?.status} — tried ${candidates.join(", ")}`
+  );
+}
+
+/**
+ * Streams the underlying file for one resource. `lang`, when given, is one
+ * of OrthoApnea's own suffixes (Es/En/De/Fr/Pt/Nl — from a language chip
+ * click) and picks that exact variant; otherwise falls back through
+ * `locale` (app-locale resolution, for the default tile click). Document
+ * path confirmed (DOCUMENT_MEDIA_PATH); video path resolved via
+ * tryVideoPaths (see its comment).
+ */
+export interface ResourceMedia {
+  body: ReadableStream<Uint8Array>;
+  /** 200, or 206 when a `range` was asked for and honoured. */
+  status: number;
+  /** Only the headers a browser needs to play/seek — passed through as-is. */
+  headers: Record<"content-type" | "content-length" | "content-range" | "accept-ranges", string | null>;
+}
+
+function mediaFrom(res: Response): ResourceMedia {
+  const h = (name: keyof ResourceMedia["headers"]) => res.headers.get(name);
+  return {
+    body: res.body as ReadableStream<Uint8Array>,
+    status: res.status,
+    headers: {
+      "content-type": h("content-type"),
+      "content-length": h("content-length"),
+      "content-range": h("content-range"),
+      "accept-ranges": h("accept-ranges"),
+    },
+  };
+}
+
+/**
+ * Upper bound for one media response. Cloud Run rejects a non-streamed
+ * response over 32 MiB ("Response size was too large" → 500), and Chrome
+ * opens a `<video>` with `Range: bytes=0-` — i.e. "the whole 580 MB". A 206
+ * for a shorter slice is valid HTTP; the player just asks for the next one,
+ * and apneadock.es never streams more than a slice nobody may watch.
+ */
+export const MAX_MEDIA_SLICE_BYTES = 8 * 1024 * 1024;
+
+/** Caps a single `bytes=` range to MAX_MEDIA_SLICE_BYTES; anything else (no range, multi-range) passes through. */
+export function boundedRange(range: string | undefined): string | undefined {
+  if (!range) return range;
+  const open = /^bytes=(\d+)-(\d*)$/.exec(range.trim());
+  if (open) {
+    const start = Number(open[1]);
+    const lastAllowed = start + MAX_MEDIA_SLICE_BYTES - 1;
+    const end = open[2] === "" ? lastAllowed : Math.min(Number(open[2]), lastAllowed);
+    return `bytes=${start}-${end}`;
+  }
+  const suffix = /^bytes=-(\d+)$/.exec(range.trim());
+  if (suffix) return `bytes=-${Math.min(Number(suffix[1]), MAX_MEDIA_SLICE_BYTES)}`;
+  return range;
+}
+
+/**
+ * `range` is the browser's own Range header, capped by boundedRange(): webinars
+ * are hundreds of MB (id 26 is ~580 MB), Safari/iPadOS refuses to play
+ * `<video>` without 206 responses, and seeking must not re-download from
+ * byte 0. apneadock.es answers Range with 206 (verified 2026-09-25).
+ */
+export async function fetchResourceMedia(
+  resourceId: string,
+  locale: string,
+  lang?: string,
+  range?: string
+): Promise<ResourceMedia> {
+  const rows = await fetchRawResources();
+  const raw = rows.find((r) => String(r.id) === resourceId && !r.deleted);
+  if (!raw) {
+    throw new PartnerServiceError("orthoapnea", `resource '${resourceId}' not found`);
+  }
+
+  const requestedSuffix = LANGUAGE_SUFFIXES.find((s) => s.toLowerCase() === lang?.toLowerCase());
+  const filename = requestedSuffix
+    ? raw[`url${requestedSuffix}` as keyof RawOrthoApneaResource]?.toString().trim()
+    : pickLocalized(raw, "url", locale);
+  if (!filename) {
+    throw new PartnerServiceError(
+      "orthoapnea",
+      `resource '${resourceId}' has no media file for ${requestedSuffix ? `language '${lang}'` : `locale '${locale}'`}`
+    );
+  }
+
+  const upstreamRange = boundedRange(range);
+  const init: RequestInit = upstreamRange ? { headers: { Range: upstreamRange } } : {};
+
+  if (raw.type === VIDEO_TYPE) {
+    return mediaFrom(await tryVideoPaths(resourceId, filename, init));
+  }
+
+  const mediaPath = `${DOCUMENT_MEDIA_PATH}/${encodeURIComponent(filename)}`;
+  const mediaRes = await authedFetch(mediaPath, init);
+  if (!mediaRes.ok || !mediaRes.body) {
+    console.error(`[orthoapnea] document fetch failed with status ${mediaRes.status} for '${mediaPath}'`);
+    throw new PartnerServiceError("orthoapnea", `media fetch failed with status ${mediaRes.status} for '${mediaPath}'`);
+  }
+  return mediaFrom(mediaRes);
+}
+
+/**
+ * Where a video really lives upstream, for server-side tools that need to
+ * seek in it themselves (the poster grabber, NEO-151). ffmpeg does its own
+ * Range requests, so it gets apneadock.es's URL plus the session header —
+ * both stay inside apps/api. `version` changes whenever OrthoApnea swaps the
+ * file (different name or size), so a cached poster is never stale.
+ */
+export interface VideoSource {
+  url: string;
+  headers: Record<string, string>;
+  version: string;
+}
+
+export async function resolveVideoSource(resourceId: string, locale: string): Promise<VideoSource> {
+  const rows = await fetchRawResources();
+  const raw = rows.find((r) => String(r.id) === resourceId && !r.deleted && r.type === VIDEO_TYPE);
+  if (!raw) throw new PartnerServiceError("orthoapnea", `video '${resourceId}' not found`);
+  const filename = pickLocalized(raw, "url", locale);
+  if (!filename) throw new PartnerServiceError("orthoapnea", `video '${resourceId}' has no file for locale '${locale}'`);
+
+  // One byte is enough to learn which folder serves it and the file's total size.
+  const probe = await tryVideoPaths(resourceId, filename, { headers: { Range: "bytes=0-0" } });
+  await probe.body?.cancel();
+  const total = /\/(\d+)$/.exec(probe.headers.get("content-range") ?? "")?.[1] ?? probe.headers.get("content-length") ?? "?";
+  const path = resolvedVideoPathCache.get(resourceId);
+  if (!path) throw new PartnerServiceError("orthoapnea", `video '${resourceId}' path not resolved`);
+
+  const { token } = await ensureSession();
+  return {
+    url: `${oaBaseUrl()}${path}`,
+    headers: { Authorization: `Bearer ${token}` },
+    version: `${filename}:${total}`,
+  };
+}
+
+// =============================================================================
+// Order submission — patient create, treatment create, status polling.
+// =============================================================================
+
+const PARTNER_NAME = "orthoapnea";
+const PATIENT_CREATE_PATH = "/api/patient";
+const TREATMENT_CREATE_PATH = "/api/treatments";
+/**
+ * OrthoApnea's own literal path segment — "DTO" is their route naming
+ * (confirmed verbatim from a captured network request during the live
+ * reverse-engineering session), not ours; kept out of our own function and
+ * variable names on purpose so it doesn't propagate as unexplained jargon.
+ */
+const TREATMENT_DETAIL_PATH = "/api/treatments/DTO";
+const COUNTRIES_PATH = "/api/countries";
+
+/**
+ * Serializes every mutating OrthoApnea call (patient/treatment create)
+ * through a single in-process chain — see the file header comment for why.
+ * Read-only calls (resources, status polls) are NOT queued.
+ *
+ * Open door: this only works because Render runs exactly one instance of
+ * this process. If that ever changes (horizontal scaling), this in-memory
+ * queue stops being sufficient and would need to become DB-backed — not
+ * solved here, just flagged.
+ */
+let mutationQueue: Promise<unknown> = Promise.resolve();
+
+function enqueueOrthoApneaMutation<T>(fn: () => Promise<T>): Promise<T> {
+  const result = mutationQueue.then(fn, fn);
+  // Swallow so one failed mutation doesn't poison the chain for the next caller.
+  mutationQueue = result.then(
+    () => undefined,
+    () => undefined
+  );
+  return result;
+}
+
+export interface OrthoApneaCountry {
+  id: number;
+  code: string;
+  es?: string;
+  en?: string;
+}
+
+const COUNTRIES_CACHE_TTL_MS = 60 * 60 * 1000;
+let countriesCache: { rows: OrthoApneaCountry[]; fetchedAt: number } | null = null;
+
+/** Exported for the wizard's "Dirección alternativa" country select — resolveCountryId() below is the internal (patient-ensure) consumer. */
+export async function fetchCountries(): Promise<OrthoApneaCountry[]> {
+  if (countriesCache && Date.now() - countriesCache.fetchedAt < COUNTRIES_CACHE_TTL_MS) {
+    return countriesCache.rows;
+  }
+  const res = await authedFetch(COUNTRIES_PATH);
+  if (!res.ok) throw new PartnerServiceError(PARTNER_NAME, `countries fetch failed with status ${res.status}`);
+  const rows = (await res.json()) as OrthoApneaCountry[];
+  countriesCache = { rows, fetchedAt: Date.now() };
+  return rows;
+}
+
+/** Maps an ISO2 country code to OrthoApnea's own internal countryId (their ids don't match dropdown position — see fetchCountries()). Returns null (silently) if unmapped rather than failing the whole patient-create call over a non-required field. */
+async function resolveCountryId(isoCode: string | null | undefined): Promise<number | null> {
+  if (!isoCode) return null;
+  try {
+    const rows = await fetchCountries();
+    return rows.find((c) => c.code?.toUpperCase() === isoCode.toUpperCase())?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Per-action baseline of top-level fields we expect back from OrthoApnea.
+ * `create_patient` is now confirmed via a real POST /api/patient capture
+ * (id 42824, "Test Integration DO NOT USE" — same shape as GET /api/patient/:id).
+ * `status_poll` is the fully confirmed 106-field treatment DTO.
+ */
+const EXPECTED_RESPONSE_FIELDS: Record<string, string[]> = {
+  create_patient: [
+    "id", "name", "email", "identityNumber", "insuranceNumber", "signupDate", "birthDate",
+    "male", "phone", "countryId", "province", "city", "address", "postalCode", "observations",
+    "user", "creator", "treatments", "diagnosis", "profession", "observer",
+    "userDiagnosis", "userDiagnosisSignupDate", "customerId", "clinicId",
+  ],
+  // Confirmed by order 454012 (2026-10-03): create returns the full treatment
+  // (91 keys) with `patient` as an object and no patientId/patientName.
+  create_treatment: [
+    "id", "statusId", "product", "requestDate", "expectedDeliveryDate", "deliveryAddress",
+  ],
+  add_comment: [
+    "id", "action", "type", "note", "receiverRole", "creationDate", "treatmentId", "emailed",
+  ],
+  status_poll: [
+    "id", "user", "creator", "responsible", "observer", "customerId", "customerCountryId",
+    "clinic", "customerName", "patientName", "clinicName", "product", "statusId",
+    "lastActivity", "desiredDate", "teethStatus", "observations", "requestDate",
+    "expectedDeliveryDate", "multimedias", "collectionRequest", "notifications",
+    "histories", "promotionCode", "editable", "patientId", "camType", "verticalDimension",
+    "retrusionMax", "protrusionMax", "startingPoint", "theramonNeeded", "maxOpening",
+    "sequenceTypeStandard", "sequenceTypePersonalized", "sequenceUnitInMM", "sequence",
+    "collectionAddress", "deliveryAddress", "facialBiotype", "deviationRight",
+    "deviationAdvanceRight", "deviationLeft", "deviationAdvanceLeft", "laterality",
+    "limitOpening", "anteriorFrontalOpening", "mixedSplintDesign",
+    "scallopedSplintDesign", "slotsForElasticBands", "upperBandSplintDesign",
+    "lowerBandSplintDesign", "scannerPlatform", "scannerTreatment", "fsDoctorId",
+    "sendByMRW", "collectByMRW", "sendByUPS", "collectByUPS", "parentTreatmentId",
+    "archived", "estimate", "modelPrintStatusId", "digitalFiles", "invoiceId", "paid",
+    "billed", "doctorFirstTreatment", "insuranceNumber", "morningAligner",
+    "noContactDoctorForRedesign", "repairCauseUpperId", "repairCauseLowerId",
+    "michiganTypeOfGuide", "michiganMaterial", "upperSplint", "lowerSplint", "rate",
+    "attachments", "doctorCriteria", "commercialCriteria", "paymentOption",
+    "accessories", "total",
+  ],
+};
+
+export interface PartnerValidationReport {
+  missingFields: string[];
+  unexpectedTopLevelFields: string[];
+  // Index signature so this is directly assignable to the JSONB-backed
+  // Record<string, unknown> fields on InsertPartnerTransactionInput.
+  [key: string]: unknown;
+}
+
+/**
+ * Compares a captured response against the expected-fields baseline for that
+ * action. `missingFields` is the real red flag (OrthoApnea silently renamed
+ * or removed something we depend on); `unexpectedTopLevelFields` is purely
+ * informational (they added something new). Stored on every
+ * `partner_transaction` row rather than just logged, so a discrepancy is
+ * queryable after the fact, not just visible in server logs at the moment it
+ * happened.
+ */
+export function validatePartnerResponse(
+  action: string,
+  payload: Record<string, unknown> | null | undefined
+): PartnerValidationReport {
+  const expected = EXPECTED_RESPONSE_FIELDS[action];
+  if (!expected || !payload) return { missingFields: [], unexpectedTopLevelFields: [] };
+  const actualKeys = Object.keys(payload);
+  return {
+    missingFields: expected.filter((f) => !actualKeys.includes(f)),
+    unexpectedTopLevelFields: actualKeys.filter((k) => !expected.includes(k)),
+  };
+}
+
+/** Reads and JSON-parses a response body defensively — a non-JSON or empty body must not throw past the transaction-logging code below. */
+async function safeJson(response: Response): Promise<Record<string, unknown> | null> {
+  try {
+    return (await response.json()) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Records one partner_transaction row and logs it — the log line is a
+ * deliberate, structured breadcrumb (action / link id / success / http
+ * status) so a manual test session can watch these happen live in server
+ * logs, not just query the DB after the fact (see ADR-017). Every call site
+ * below the transaction-decoupling boundary funnels through this one
+ * function precisely so that breadcrumb can't be forgotten on a new call
+ * site.
+ */
+async function logPartnerTransaction(
+  client: Parameters<typeof insertPartnerTransaction>[0],
+  input: InsertPartnerTransactionInput
+) {
+  const row = await insertPartnerTransaction(client, input);
+  console.log(
+    `[orthoapnea] partner_transaction action=${input.action} partner_link_id=${input.partner_link_id} success=${input.success} http_status=${input.http_status ?? "n/a"}`
+  );
+  return row;
+}
+
+/**
+ * POST /api/patient body, field set confirmed verbatim from a live capture
+ * and from shot S1 (2026-10-03, rules "Results"): OA stored every field sent.
+ * OA's own form requires birthDate ("YYYY-MM-DDT00:00:00") and a country, so
+ * both are sent whenever our record has them. We hold no patient postal
+ * address, ID or insurance number, so those go as "" — OA's own form sends
+ * "" for an empty field, not a missing key. `male` is null when the gender
+ * is other / not stated (OA's form allows null).
+ */
+export function buildOrthoApneaPatientPayload(
+  patient: Pick<Patient, "first_name" | "last_name" | "email" | "phone" | "gender" | "date_of_birth">,
+  countryId: number | null,
+  userId: string | null
+): Record<string, unknown> {
+  const male = patient.gender === "male" ? true : patient.gender === "female" ? false : null;
+  return {
+    name: [patient.first_name, patient.last_name].filter(Boolean).join(" "),
+    email: patient.email ?? "",
+    identityNumber: "",
+    insuranceNumber: "",
+    birthDate: patient.date_of_birth ? `${patient.date_of_birth.slice(0, 10)}T00:00:00` : "",
+    male,
+    phone: patient.phone ?? "",
+    countryId: countryId ?? undefined,
+    province: "",
+    city: "",
+    address: "",
+    postalCode: "",
+    // The captured payload has userId as a JSON number, not a numeric string.
+    userId: userId != null ? Number(userId) : undefined,
+    profession: "",
+  };
+}
+
+/**
+ * Ensures a NeoSleep patient has a corresponding OrthoApnea patient, creating
+ * one if needed. Idempotent — safe to call every time the order wizard
+ * opens, per the product requirement that opening the form is what creates
+ * the OA-side patient. Returns the OrthoApnea patient id either way.
+ *
+ * TRANSACTION SHAPE (see ADR-017): this used to run entirely inside one
+ * withTenant() transaction, holding a pooled Postgres connection open for the
+ * full duration of the OrthoApnea HTTP round-trip. Now it's three phases —
+ * short transaction (read/ensure-pending-link) → the HTTP call with NO
+ * transaction open → short transaction (record the outcome) — so a slow or
+ * hung partner API never pins a DB connection.
+ */
+export interface EnsureOrthoApneaPatientOptions {
+  /** ISO2 country used when the patient's own region doesn't map to an OA country (OA's patient form requires one). */
+  fallbackCountryCode?: string | null;
+}
+
+export async function ensureOrthoApneaPatient(
+  tenantSlug: string,
+  patientId: string,
+  options: EnsureOrthoApneaPatientOptions = {}
+): Promise<string> {
+  const setup = await withTenant(tenantSlug, async (client) => {
+    const existing = await getPartnerLink(client, PARTNER_NAME, "patient", patientId);
+    if (existing?.external_id) return { done: true as const, externalId: existing.external_id };
+
+    const link = await ensurePendingPartnerLink(client, PARTNER_NAME, "patient", patientId);
+    const patient = await getPatientById(client, patientId);
+    if (!patient) throw new PartnerServiceError(PARTNER_NAME, `local patient '${patientId}' not found`);
+    return { done: false as const, link, patient };
+  });
+
+  if (setup.done) return setup.externalId;
+  const { link, patient } = setup;
+
+  // `patient.region` is a territory code ("PL"/"MX"), used as the ISO2 guess
+  // for OA's countryId; the ordering doctor's HCO country is the fallback
+  // (OA's create-patient form requires a country, rules §1.1).
+  const countryId = (await resolveCountryId(patient.region)) ?? (await resolveCountryId(options.fallbackCountryCode));
+  const userId = await resolveCurrentUserId().catch(() => null);
+
+  const requestPayload = buildOrthoApneaPatientPayload(patient, countryId, userId);
+
+  let response: Response;
+  try {
+    response = await enqueueOrthoApneaMutation(() =>
+      authedFetch(PATIENT_CREATE_PATH, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestPayload),
+      })
+    );
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    await withTenant(tenantSlug, async (client) => {
+      await logPartnerTransaction(client, {
+        partner_link_id: link.id,
+        action: "create_patient",
+        request_payload: requestPayload,
+        success: false,
+        error_message: message,
+      });
+      await markPartnerLinkFailed(client, link.id, message);
+    });
+    throw cause;
+  }
+
+  const httpStatus = response.status;
+  const responsePayload = await safeJson(response);
+  const success = response.ok && typeof responsePayload?.id !== "undefined";
+  const validationReport = validatePartnerResponse("create_patient", responsePayload);
+
+  const externalId = await withTenant(tenantSlug, async (client) => {
+    await logPartnerTransaction(client, {
+      partner_link_id: link.id,
+      action: "create_patient",
+      request_payload: requestPayload,
+      response_payload: responsePayload,
+      http_status: httpStatus,
+      success,
+      validation_report: validationReport,
+      error_message: success ? null : `unexpected response (status ${httpStatus})`,
+    });
+
+    if (!success) {
+      await markPartnerLinkFailed(client, link.id, `create_patient failed with status ${httpStatus}`);
+      return null;
+    }
+
+    const id = String(responsePayload!.id);
+    await markPartnerLinkSynced(client, link.id, id, null);
+    return id;
+  });
+
+  if (externalId === null) {
+    throw new PartnerServiceError(PARTNER_NAME, `patient creation failed with status ${httpStatus}`);
+  }
+  return externalId;
+}
+
+export interface CreateOrthoApneaTreatmentResult {
+  externalId: string;
+  externalStatus: string | null;
+  /** The exact DTO sent (also stored on the partner_transaction row). */
+  requestPayload: Record<string, unknown>;
+  responsePayload: Record<string, unknown> | null;
+}
+
+/** The order DTO in OA's own format, or a builder that runs only once this caller holds the submission claim. */
+export type OrthoApneaTreatmentPayload = Record<string, unknown> | (() => Promise<Record<string, unknown>>);
+
+/**
+ * A scan makes the order request big: on top of the usual budget, one second
+ * per MB (a conservative 1 MB/s to Spain), so a slow upload isn't cut off and
+ * left as an ambiguous "pending" order.
+ */
+export function orderUploadTimeoutMs(files: readonly OrthoApneaModelFile[]): number {
+  const bytes = files.reduce((sum, f) => sum + f.bytes.byteLength, 0);
+  return FETCH_TIMEOUT_MS + Math.ceil(bytes / 1_000_000) * 1000;
+}
+
+/** A scan file to send with an order as OA's multimedia type MODEL (NEO-262). */
+export interface OrthoApneaModelFile {
+  name: string;
+  bytes: Uint8Array<ArrayBuffer>;
+}
+
+/** OA's `lo.MODEL` multimedia type (rules §3.2 `ro`). */
+const OA_MULTIMEDIA_MODEL = 4;
+
+/**
+ * The prefix OA's portal puts on a model file's name: moment's
+ * "DD-MM-YY h:mm " (12-hour clock, no AM/PM, trailing space), in OA's
+ * server zone since the portal runs in Spain.
+ */
+export function oaModelStamp(now: Date, timeZone = OA_SERVER_TIME_ZONE): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", { timeZone, day: "2-digit", month: "2-digit", year: "2-digit", hour: "numeric", minute: "2-digit", hour12: true })
+      .formatToParts(now)
+      .map((p) => [p.type, p.value])
+  );
+  return `${parts.day}-${parts.month}-${parts.year} ${Number(parts.hour)}:${parts.minute} `;
+}
+
+/**
+ * POST /api/treatments body exactly as OA's portal sends it (rules §3.2):
+ * multipart/form-data with one text field `treatmentDTO` holding the JSON
+ * string, plus one `file` part per scan. Shot S3 (order 454012, 2026-10-03)
+ * was sent this way and stored field for field. A scan's part name is the
+ * portal's (`add()` in bundle main.ee94d3f18b000128.js, 2026-11-10):
+ * `S + "/model" + S + "/4"` with S = stamp + file name.
+ */
+export function orthoApneaTreatmentForm(
+  dto: Record<string, unknown>,
+  modelFiles: readonly OrthoApneaModelFile[] = [],
+  now: Date = new Date()
+): FormData {
+  const form = new FormData();
+  const stamp = oaModelStamp(now);
+  for (const file of modelFiles) {
+    const s = stamp + file.name;
+    form.append("file", new Blob([file.bytes]), `${s}/model${s}/${OA_MULTIMEDIA_MODEL}`);
+  }
+  form.append("treatmentDTO", JSON.stringify(dto));
+  return form;
+}
+
+/**
+ * Takes the one right to submit an order for this treatment_plan, or throws
+ * 409. The check and the "submitting" marker are one conditional upsert
+ * (claimPartnerLink), run under a transaction-level advisory lock keyed by
+ * the plan: two concurrent submits serialize here, and the second one sees
+ * the first one's marker and stops before any OA call.
+ *
+ * The marker is partner_link.sync_status = 'pending' (no new status value
+ * needed): on a treatment_plan link it only ever means "a submit is running
+ * or was interrupted". A link left 'pending' (process died, or OA timed out
+ * after the request may have reached it) is never blindly retried — OA might
+ * already hold the order, and a second one would be a second billable
+ * device. Once it is older than RECONCILE_AFTER_MS, a submit first looks the
+ * order up in OA (reconcilePendingTreatment, Łukasz D3 2026-10-03). A link in
+ * 'failed' (OA answered with an error, or we never got as far as sending)
+ * can be submitted again.
+ */
+type ClaimOutcome = { kind: "claimed"; link: PartnerLink } | { kind: "pending"; link: PartnerLink };
+
+function planLockKey(treatmentPlanId: string): string {
+  return `partner_link:${PARTNER_NAME}:treatment_plan:${treatmentPlanId}`;
+}
+
+function alreadySubmitted(treatmentPlanId: string, externalId: string): PartnerOrderAlreadySubmittedError {
+  return new PartnerOrderAlreadySubmittedError(
+    `treatment_plan '${treatmentPlanId}' was already submitted to OrthoApnea (external id '${externalId}')`,
+    externalId
+  );
+}
+
+function submissionPending(treatmentPlanId: string): ConflictError {
+  return new ConflictError(
+    `treatment_plan '${treatmentPlanId}' has an OrthoApnea submission in progress or interrupted — check OrthoApnea before retrying`,
+    "PARTNER_ORDER_SUBMISSION_PENDING"
+  );
+}
+
+/** Claims, or reports the 'pending' link someone else holds; throws 409 when the plan is already synced. Caller holds the plan lock. */
+async function claimOrReport(client: Parameters<typeof claimPartnerLink>[0], treatmentPlanId: string): Promise<ClaimOutcome> {
+  const claimed = await claimPartnerLink(client, PARTNER_NAME, "treatment_plan", treatmentPlanId);
+  if (claimed) return { kind: "claimed", link: claimed };
+  const existing = await getPartnerLink(client, PARTNER_NAME, "treatment_plan", treatmentPlanId);
+  if (existing?.external_id) throw alreadySubmitted(treatmentPlanId, existing.external_id);
+  if (!existing) throw submissionPending(treatmentPlanId);
+  return { kind: "pending", link: existing };
+}
+
+async function claimTreatmentSubmission(tenantSlug: string, treatmentPlanId: string): Promise<ClaimOutcome> {
+  return withTenant(tenantSlug, async (client) => {
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [planLockKey(treatmentPlanId)]);
+    return claimOrReport(client, treatmentPlanId);
+  });
+}
+
+// ── Reconcile of an interrupted submit (Łukasz D3, 2026-10-03) ──────────────
+
+/** A treatment_plan link left 'pending' longer than this is looked up in OA before a submit answers "pending". */
+export const RECONCILE_AFTER_MS = 10 * 60_000;
+/** An OA order may carry a requestDate up to this much before our claim and still be ours (clock skew, the claim → send gap). */
+const RECONCILE_CLOCK_SLACK_MS = 60_000;
+/**
+ * OA writes requestDate in its server's local time with no zone. Measured on
+ * shot S3 (2026-10-03): OA stored 17:33:13.049 for a request sent at
+ * 15:33:12.8Z, i.e. CEST — Spain's zone.
+ */
+export const OA_SERVER_TIME_ZONE = "Europe/Madrid";
+const TREATMENTS_BY_PATIENT_PATH = "/api/treatments/byPatient";
+const RECONCILE_PAGE_SIZE = 50;
+/** 20 × 50 orders for one patient is far beyond any real case; stops a misbehaving pager. */
+const RECONCILE_MAX_PAGES = 20;
+
+const zoneFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/** The zone's UTC offset (ms) at an instant. */
+function zoneOffsetMs(instant: number, timeZone: string): number {
+  let fmt = zoneFormatters.get(timeZone);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+    zoneFormatters.set(timeZone, fmt);
+  }
+  const part = (type: Intl.DateTimeFormatPartTypes) => Number(fmt.formatToParts(new Date(instant)).find((p) => p.type === type)?.value);
+  const wallAsUtc = Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), part("second"));
+  return wallAsUtc - Math.floor(instant / 1000) * 1000;
+}
+
+/** OA's zone-less "YYYY-MM-DDTHH:mm:ss(.SSS)" in OA_SERVER_TIME_ZONE → epoch ms, or null when it isn't one. */
+export function oaLocalTimeToEpochMs(value: unknown, timeZone = OA_SERVER_TIME_ZONE): number | null {
+  if (typeof value !== "string") return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3})\d*)?$/.exec(value);
+  if (!m) return null;
+  const n = m.slice(1, 7).map(Number) as [number, number, number, number, number, number];
+  const wall = Date.UTC(n[0], n[1] - 1, n[2], n[3], n[4], n[5], m[7] ? Number(m[7].padEnd(3, "0")) : 0);
+  // Two passes settle the offset on the right side of a DST switch.
+  const first = wall - zoneOffsetMs(wall, timeZone);
+  return wall - zoneOffsetMs(first, timeZone);
+}
+
+/** The parts of OA's treatment DTO the reconcile reads (GET /api/treatments/byPatient/{id} content[]). */
+export interface OaTreatmentSummary {
+  id: number | string;
+  statusId?: number | string | null;
+  requestDate?: string | null;
+  product?: { code?: string | null } | null;
+}
+
+export interface ReconcileCriteria {
+  productCode: string;
+  /** When our claim was made (epoch ms). */
+  claimedAt: number;
+  /** OA order ids already linked to another plan — never ours. */
+  excludeIds: readonly string[];
+}
+
+/**
+ * The interrupted submit's order among a patient's OA orders: same product,
+ * requestDate no earlier than the claim minus RECONCILE_CLOCK_SLACK_MS, not
+ * linked to another plan; the earliest such order. Null when none.
+ */
+export function findReconcileMatch<T extends OaTreatmentSummary>(content: readonly T[], criteria: ReconcileCriteria): T | null {
+  const from = criteria.claimedAt - RECONCILE_CLOCK_SLACK_MS;
+  const candidates = content
+    .map((t) => ({ t, at: oaLocalTimeToEpochMs(t.requestDate) }))
+    .filter(
+      ({ t, at }) => t.product?.code === criteria.productCode && at !== null && at >= from && !criteria.excludeIds.includes(String(t.id))
+    )
+    .sort((a, b) => (a.at ?? 0) - (b.at ?? 0));
+  return candidates[0]?.t ?? null;
+}
+
+type OaLookup = { kind: "found"; order: OaTreatmentSummary & Record<string, unknown> } | { kind: "notFound" } | { kind: "unreachable"; error: string };
+
+/** Reads every page of the patient's OA orders and picks the match. Read-only; never throws. */
+async function lookUpOaOrder(oaPatientId: string, criteria: ReconcileCriteria): Promise<OaLookup> {
+  const content: (OaTreatmentSummary & Record<string, unknown>)[] = [];
+  try {
+    for (let page = 0; page < RECONCILE_MAX_PAGES; page++) {
+      const res = await authedFetch(
+        `${TREATMENTS_BY_PATIENT_PATH}/${encodeURIComponent(oaPatientId)}?page=${page}&size=${RECONCILE_PAGE_SIZE}`
+      );
+      if (!res.ok) return { kind: "unreachable", error: `byPatient answered ${res.status}` };
+      const body = await safeJson(res);
+      if (!body || !Array.isArray(body.content)) return { kind: "unreachable", error: "byPatient answered without a content list" };
+      for (const item of body.content as unknown[]) {
+        if (typeof item === "object" && item !== null && "id" in item) content.push(item as OaTreatmentSummary & Record<string, unknown>);
+      }
+      const totalPages = typeof body.totalPages === "number" ? body.totalPages : 1;
+      if (page + 1 >= totalPages || body.content.length === 0) break;
+    }
+  } catch (cause) {
+    return { kind: "unreachable", error: cause instanceof Error ? cause.message : String(cause) };
+  }
+  const order = findReconcileMatch(content, criteria);  return order ? { kind: "found", order } : { kind: "notFound" };
+}
+
+export interface ReconcileOptions {
+  /** OA product code of the order being submitted (enum `an`, e.g. "002"). */
+  productCode: string;
+}
+
+/**
+ * A submit found the plan's link 'pending'. Younger than RECONCILE_AFTER_MS:
+ * a submit may still be running — 409 SUBMISSION_PENDING, OA isn't asked.
+ * Older: asks OA (read-only) whether the interrupted submit reached it.
+ * - found → the link is synced to that order (+ a 'reconcile' transaction
+ *   with OA's DTO) and the caller gets 409 ALREADY_SUBMITTED with its id;
+ * - not found → the link is marked failed (transaction 'reconcile',
+ *   not_found) and re-claimed for this submit, under the same lock — the
+ *   doctor's one click sends the order exactly once;
+ * - OA unreachable → the link stays pending, 409 SUBMISSION_PENDING.
+ * The outcome is written only if the link is still the one we looked at
+ * (same updated_at, still pending), so two racing reconciles can't both
+ * re-claim it.
+ */
+async function reconcilePendingTreatment(
+  tenantSlug: string,
+  treatmentPlanId: string,
+  pending: PartnerLink,
+  options: ReconcileOptions
+): Promise<PartnerLink> {
+  const claimedAt = new Date(pending.updated_at).getTime();
+  if (Date.now() - claimedAt < RECONCILE_AFTER_MS) throw submissionPending(treatmentPlanId);
+
+  const lookup = await withTenant(tenantSlug, async (client) => {
+    const plan = await getTreatmentPlanById(client, treatmentPlanId);
+    const patientLink = plan ? await getPartnerLink(client, PARTNER_NAME, "patient", plan.patient_id) : null;
+    const { rows } = await client.query<{ external_id: string }>(
+      `SELECT external_id FROM partner_link
+       WHERE partner = $1 AND entity_type = 'treatment_plan' AND entity_id <> $2 AND external_id IS NOT NULL`,
+      [PARTNER_NAME, treatmentPlanId]
+    );
+    return { oaPatientId: patientLink?.external_id ?? null, excludeIds: rows.map((r) => r.external_id) };
+  });
+
+  // No OA patient → the interrupted submit never got as far as the order POST.
+  const outcome: OaLookup = lookup.oaPatientId
+    ? await lookUpOaOrder(lookup.oaPatientId, { productCode: options.productCode, claimedAt, excludeIds: lookup.excludeIds })
+    : { kind: "notFound" };
+
+  // The transaction returns its verdict and the 409s are thrown after it
+  // commits — a throw inside withTenant would roll the recorded outcome back.
+  const verdict = await withTenant(
+    tenantSlug,
+    async (client): Promise<{ kind: "claimed"; link: PartnerLink } | { kind: "pending" } | { kind: "submitted"; externalId: string }> => {
+      await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [planLockKey(treatmentPlanId)]);
+      const current = await getPartnerLink(client, PARTNER_NAME, "treatment_plan", treatmentPlanId);
+      const unchanged =
+        current?.id === pending.id && current.sync_status === "pending" && new Date(current.updated_at).getTime() === claimedAt;
+      if (!unchanged) {
+        // Someone else moved the link while OA was being asked: the usual rules decide.
+        const again = await claimOrReport(client, treatmentPlanId);
+        return again.kind === "claimed" ? again : { kind: "pending" };
+      }
+
+      const request = { oaPatientId: lookup.oaPatientId, productCode: options.productCode, claimedAt: new Date(claimedAt).toISOString() };
+      if (outcome.kind === "unreachable") {
+        await logPartnerTransaction(client, {
+          partner_link_id: pending.id,
+          action: "reconcile",
+          request_payload: request,
+          success: false,
+          error_message: outcome.error,
+        });
+        return { kind: "pending" };
+      }
+      if (outcome.kind === "found") {
+        const externalId = String(outcome.order.id);
+        const externalStatus = outcome.order.statusId != null ? String(outcome.order.statusId) : null;
+        await logPartnerTransaction(client, {
+          partner_link_id: pending.id,
+          action: "reconcile",
+          request_payload: request,
+          response_payload: outcome.order,
+          success: true,
+        });
+        await markPartnerLinkSynced(client, pending.id, externalId, externalStatus);
+        return { kind: "submitted", externalId };
+      }
+
+      await logPartnerTransaction(client, {
+        partner_link_id: pending.id,
+        action: "reconcile",
+        request_payload: request,
+        success: true,
+        error_message: "not_found",
+      });
+      await markPartnerLinkFailed(client, pending.id, "reconcile: the interrupted submit never reached OrthoApnea");
+      const reclaimed = await claimOrReport(client, treatmentPlanId);
+      return reclaimed.kind === "claimed" ? reclaimed : { kind: "pending" };
+    }
+  );
+
+  if (verdict.kind === "claimed") return verdict.link;
+  if (verdict.kind === "submitted") throw alreadySubmitted(treatmentPlanId, verdict.externalId);
+  throw submissionPending(treatmentPlanId);
+}
+
+/**
+ * Creates a treatment order in OrthoApnea for the local treatment_plan.
+ * The payload is OA's own DTO, built by the device-order adapter
+ * (services/deviceOrders/orthoapnea/toOaTreatmentDto.ts) — this function is
+ * the transport: claim, send, record. The exact DTO sent is stored on the
+ * partner_transaction row.
+ *
+ * Double submit: OA's create is not idempotent (two calls = two real,
+ * billable orders). claimTreatmentSubmission() makes the "already sent?"
+ * check atomic, so a second concurrent caller gets a 409 and never reaches
+ * OA. A builder payload runs after the claim, so a rejected duplicate never
+ * creates an OA patient either.
+ *
+ * TRANSACTION SHAPE (see ADR-017): short transaction (claim) → payload build
+ * and HTTP call with no transaction open → short transaction (record the
+ * outcome).
+ *
+ * `reconcile` (the device-order path passes it): a link left 'pending' past
+ * RECONCILE_AFTER_MS is looked up in OA first (reconcilePendingTreatment).
+ * Without it, a pending link is always 409 SUBMISSION_PENDING.
+ *
+ * `modelFiles` (NEO-262): loads the scan files after the claim, like a
+ * builder payload; a failed load means nothing reached OA, so the link is
+ * marked failed and a retry is allowed.
+ */
+export async function createOrthoApneaTreatment(
+  tenantSlug: string,
+  treatmentPlanId: string,
+  payload: OrthoApneaTreatmentPayload,
+  reconcile?: ReconcileOptions,
+  modelFiles?: () => Promise<OrthoApneaModelFile[]>
+): Promise<CreateOrthoApneaTreatmentResult> {
+  const claim = await claimTreatmentSubmission(tenantSlug, treatmentPlanId);
+  let link: PartnerLink;
+  if (claim.kind === "claimed") link = claim.link;
+  else if (reconcile) link = await reconcilePendingTreatment(tenantSlug, treatmentPlanId, claim.link, reconcile);
+  else throw submissionPending(treatmentPlanId);
+
+  let requestPayload: Record<string, unknown>;
+  let files: OrthoApneaModelFile[];
+  try {
+    requestPayload = typeof payload === "function" ? await payload() : payload;
+    files = modelFiles ? await modelFiles() : [];
+  } catch (cause) {
+    // Nothing reached OA's order endpoint — safe to allow a retry.
+    const message = cause instanceof Error ? cause.message : String(cause);
+    await withTenant(tenantSlug, (client) => markPartnerLinkFailed(client, link.id, `order not sent: ${message}`));
+    throw cause;
+  }
+
+  let response: Response;
+  try {
+    response = await enqueueOrthoApneaMutation(() =>
+      authedFetch(TREATMENT_CREATE_PATH, { method: "POST", body: orthoApneaTreatmentForm(requestPayload, files) }, false, orderUploadTimeoutMs(files))
+    );
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    // A timeout means the request may have reached OA and created the order:
+    // keep the link 'pending' (blocks a silent retry), only record why.
+    const ambiguous = cause instanceof OrthoApneaTimeoutError;
+    await withTenant(tenantSlug, async (client) => {
+      await logPartnerTransaction(client, {
+        partner_link_id: link.id,
+        action: "create_treatment",
+        request_payload: requestPayload,
+        success: false,
+        error_message: message,
+      });
+      if (ambiguous) await setPartnerLinkError(client, link.id, `${message} — OrthoApnea may have created the order; check before retrying`);
+      else await markPartnerLinkFailed(client, link.id, message);
+    });
+    throw cause;
+  }
+
+  const httpStatus = response.status;
+  const responsePayload = await safeJson(response);
+  const success = response.ok && typeof responsePayload?.id !== "undefined";
+  const validationReport = validatePartnerResponse("create_treatment", responsePayload);
+
+  const outcome = await withTenant(tenantSlug, async (client) => {
+    await logPartnerTransaction(client, {
+      partner_link_id: link.id,
+      action: "create_treatment",
+      request_payload: requestPayload,
+      response_payload: responsePayload,
+      http_status: httpStatus,
+      success,
+      validation_report: validationReport,
+      error_message: success ? null : `unexpected response (status ${httpStatus})`,
+    });
+
+    if (!success) {
+      await markPartnerLinkFailed(client, link.id, `create_treatment failed with status ${httpStatus}`);
+      return null;
+    }
+
+    const externalId = String(responsePayload!.id);
+    const externalStatus = responsePayload!.statusId != null ? String(responsePayload!.statusId) : null;
+    await markPartnerLinkSynced(client, link.id, externalId, externalStatus);
+    return { externalId, externalStatus, requestPayload, responsePayload } satisfies CreateOrthoApneaTreatmentResult;
+  });
+
+  if (!outcome) {
+    throw new PartnerServiceError(PARTNER_NAME, `treatment creation failed with status ${httpStatus}`);
+  }
+  return outcome;
+}
+
+const NOTIFICATIONS_PATH = "/api/notifications";
+
+/**
+ * Posts a comment to an ALREADY-SUBMITTED OrthoApnea order (their own
+ * "Mensaje para OrthoApnea sobre el tratamiento" box on the order's recap
+ * page — a `notifications` row, not part of the treatment object itself).
+ *
+ * CONFIRMED REAL SIDE EFFECT (live-capture session, response `emailed: true`):
+ * this sends an actual email to OrthoApnea's technical team (`receiverRole:
+ * "ROLE_TECHNICAL"`). It is NOT a silent internal note — every call here
+ * notifies a human on their side. Callers (the route below) must treat this
+ * as a deliberate, explicit action, never an automatic side effect of
+ * saving a local note.
+ *
+ * Throws if the treatment_plan was never actually submitted to OrthoApnea
+ * (no external_id yet) — there is nothing on their side to comment on.
+ *
+ * TRANSACTION SHAPE (see ADR-017): same three-phase split as the two
+ * functions above — short transaction (look up the link), HTTP call with no
+ * transaction open, short transaction (record the outcome).
+ */
+export async function addOrthoApneaComment(
+  tenantSlug: string,
+  treatmentPlanId: string,
+  note: string
+): Promise<{ notificationId: string; emailed: boolean }> {
+  const link = await withTenant(tenantSlug, async (client) => {
+    const found = await getPartnerLink(client, PARTNER_NAME, "treatment_plan", treatmentPlanId);
+    if (!found?.external_id) {
+      throw new PartnerServiceError(
+        PARTNER_NAME,
+        `treatment_plan '${treatmentPlanId}' has not been submitted to OrthoApnea yet — nothing to comment on`
+      );
+    }
+    return found;
+  });
+
+  const userId = await resolveCurrentUserId();
+  // Confirmed verbatim from a live capture (POST /api/notifications).
+  const requestPayload: Record<string, unknown> = {
+    id: null,
+    userReceiverId: null,
+    userSenderId: Number(userId),
+    action: "MESSAGE",
+    type: "MESSAGE_DOCTOR_TO_TECHNICAL",
+    note,
+    receiverRole: "ROLE_TECHNICAL",
+    creationDate: null,
+    readDate: null,
+    readUserId: null,
+    url: null,
+    treatmentId: Number(link.external_id),
+    files: false,
+  };
+
+  let response: Response;
+  try {
+    response = await enqueueOrthoApneaMutation(() =>
+      authedFetch(NOTIFICATIONS_PATH, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestPayload),
+      })
+    );
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    await withTenant(tenantSlug, (client) =>
+      logPartnerTransaction(client, {
+        partner_link_id: link.id,
+        action: "add_comment",
+        request_payload: requestPayload,
+        success: false,
+        error_message: message,
+      })
+    );
+    throw cause;
+  }
+
+  const httpStatus = response.status;
+  const responsePayload = await safeJson(response);
+  const success = response.ok && typeof responsePayload?.id !== "undefined";
+  const validationReport = validatePartnerResponse("add_comment", responsePayload);
+
+  const outcome = await withTenant(tenantSlug, async (client) => {
+    await logPartnerTransaction(client, {
+      partner_link_id: link.id,
+      action: "add_comment",
+      request_payload: requestPayload,
+      response_payload: responsePayload,
+      http_status: httpStatus,
+      success,
+      validation_report: validationReport,
+      error_message: success ? null : `unexpected response (status ${httpStatus})`,
+    });
+
+    if (!success) return null;
+    return {
+      notificationId: String(responsePayload!.id),
+      emailed: responsePayload!.emailed === true,
+    };
+  });
+
+  if (!outcome) {
+    throw new PartnerServiceError(PARTNER_NAME, `comment failed with status ${httpStatus}`);
+  }
+  return outcome;
+}
+
+/**
+ * OrthoApnea `statusId` values known to mean "nothing more will ever change"
+ * — deliberately left empty until the consolidated live-capture round (or
+ * enough observed orders) confirms which numeric statuses are actually
+ * terminal (delivered/cancelled/etc. — only statusId 1, "Solicitud enviada",
+ * has been observed so far). An empty list just means the sync job keeps
+ * polling every linked treatment forever, which is safe (if wasteful) —
+ * better than prematurely stopping status updates for a live order.
+ */
+export const ORTHOAPNEA_TERMINAL_STATUSES: string[] = [];
+
+/**
+ * Polls OrthoApnea for one treatment's current status, updates `partner_link`,
+ * and records a `partner_transaction` row regardless of outcome (read-only —
+ * not queued, only mutating calls need serialization). Returns whether the
+ * status actually changed since the last poll, so the caller (the sync job)
+ * knows whether to fire notifications.
+ *
+ * TRANSACTION SHAPE (see ADR-017): the HTTP call runs with no transaction
+ * open; only recording the outcome (partner_transaction insert + partner_link
+ * update) is wrapped in a short transaction. This matters even more here than
+ * for the mutating calls above — SyncOrthoApneaTreatmentStatusesCommand calls
+ * this once per linked treatment in a loop, and a transaction held across
+ * that whole loop (the bug this fixes) would pin one DB connection for as
+ * long as N sequential OrthoApnea round-trips take.
+ */
+export async function fetchOrthoApneaTreatmentStatus(
+  tenantSlug: string,
+  link: PartnerLink
+): Promise<{ externalStatus: string | null; changed: boolean }> {
+  if (!link.external_id) {
+    throw new PartnerServiceError(PARTNER_NAME, "cannot poll status: partner_link has no external_id");
+  }
+
+  let response: Response;
+  try {
+    response = await authedFetch(
+      `${TREATMENT_DETAIL_PATH}/${encodeURIComponent(link.external_id)}?updateDeliveryNote=false`
+    );
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    await withTenant(tenantSlug, (client) =>
+      logPartnerTransaction(client, {
+        partner_link_id: link.id,
+        action: "status_poll",
+        success: false,
+        error_message: message,
+      })
+    );
+    throw cause;
+  }
+
+  const httpStatus = response.status;
+  const responsePayload = await safeJson(response);
+  const success = response.ok && responsePayload != null;
+  const validationReport = validatePartnerResponse("status_poll", responsePayload);
+
+  const outcome = await withTenant(tenantSlug, async (client) => {
+    await logPartnerTransaction(client, {
+      partner_link_id: link.id,
+      action: "status_poll",
+      response_payload: responsePayload,
+      http_status: httpStatus,
+      success,
+      validation_report: validationReport,
+      error_message: success ? null : `unexpected response (status ${httpStatus})`,
+    });
+
+    if (!success) return null;
+
+    const externalStatus = responsePayload!.statusId != null ? String(responsePayload!.statusId) : null;
+    // Compared with the stored status under a row lock, not with `link` (read when the sync
+    // started): a concurrent sync may have written the new status since (CORE-67).
+    const { previousStatus } = await updatePartnerLinkStatus(client, link.id, externalStatus);
+    return { externalStatus, changed: externalStatus !== previousStatus };
+  });
+
+  if (!outcome) {
+    throw new PartnerServiceError(PARTNER_NAME, `status poll failed with status ${httpStatus}`);
+  }
+  return outcome;
+}
+
+// =============================================================================
+// Read-through catalog data for the order wizard (products, clinics) — same
+// TTL-cache pattern as fetchRawResources()/fetchCountries() above. Not
+// queued: read-only.
+// =============================================================================
+
+const PRODUCTS_PATH = "/api/products";
+const CLINICS_PATH = "/api/clinics";
+const CURRENT_USER_PATH = "/api/user/me";
+
+/**
+ * OA's product and clinic objects. The order DTO carries both as the FULL
+ * object OA returned (rules §3.2), so every other key is kept as-is.
+ */
+export interface OrthoApneaProduct {
+  id: number;
+  code: string;
+  nameEs: string;
+  category: string;
+  [key: string]: unknown;
+}
+
+export interface OrthoApneaClinic {
+  id: number;
+  name: string;
+  [key: string]: unknown;
+}
+
+/** GET /api/user/me — the shared account. `customers[0]` is the invoice customer, `fsDoctorId` goes on every order. */
+export interface OrthoApneaCurrentUser {
+  id: number;
+  fsDoctorId?: number;
+  customers?: { id: number; name: string; [key: string]: unknown }[];
+  [key: string]: unknown;
+}
+
+const CATALOG_CACHE_TTL_MS = 60 * 60 * 1000;
+/** The minimum desired date moves daily (today + manufacturingDays), so it is cached only briefly. */
+const MANUFACTURING_DATE_CACHE_TTL_MS = 10 * 60 * 1000;
+let productsCache: { rows: OrthoApneaProduct[]; fetchedAt: number } | null = null;
+let clinicsCache: { rows: OrthoApneaClinic[]; fetchedAt: number } | null = null;
+let currentUserIdCache: { id: string; fetchedAt: number } | null = null;
+let currentUserCache: { user: OrthoApneaCurrentUser; fetchedAt: number } | null = null;
+const manufacturingDateCache = new Map<number, { date: string; fetchedAt: number }>();
+
+export async function fetchOrthoApneaProducts(): Promise<OrthoApneaProduct[]> {
+  if (productsCache && Date.now() - productsCache.fetchedAt < CATALOG_CACHE_TTL_MS) return productsCache.rows;
+  const res = await authedFetch(`${PRODUCTS_PATH}?page=0&size=1000`);
+  if (!res.ok) throw new PartnerServiceError(PARTNER_NAME, `products fetch failed with status ${res.status}`);
+  const body = (await res.json()) as { content?: OrthoApneaProduct[] } | OrthoApneaProduct[];
+  const rows = Array.isArray(body) ? body : (body.content ?? []);
+  productsCache = { rows, fetchedAt: Date.now() };
+  return rows;
+}
+
+/** The OA product object for one of our product codes ("002" NOA, "003" NOA TMJ), or null if OA doesn't list it. */
+export async function findOrthoApneaProduct(code: string): Promise<OrthoApneaProduct | null> {
+  return (await fetchOrthoApneaProducts()).find((p) => p.code === code) ?? null;
+}
+
+/** The shared account's own user record (GET /api/user/me), cached like the catalog. */
+export async function fetchOrthoApneaCurrentUser(): Promise<OrthoApneaCurrentUser> {
+  if (currentUserCache && Date.now() - currentUserCache.fetchedAt < CATALOG_CACHE_TTL_MS) return currentUserCache.user;
+  const res = await authedFetch(CURRENT_USER_PATH);
+  if (!res.ok) throw new PartnerServiceError(PARTNER_NAME, `current user fetch failed with status ${res.status}`);
+  const body = (await res.json()) as Partial<OrthoApneaCurrentUser>;
+  if (body.id == null) throw new PartnerServiceError(PARTNER_NAME, "current user response has no id field");
+  const user = { ...body, id: Number(body.id) } as OrthoApneaCurrentUser;
+  currentUserCache = { user, fetchedAt: Date.now() };
+  currentUserIdCache = { id: String(user.id), fetchedAt: currentUserCache.fetchedAt };
+  return user;
+}
+
+/**
+ * The shared account represents one fixed OrthoApnea user/doctor persona —
+ * `/api/clinics` and the patient/notification bodies need that persona's own
+ * userId (not anything of ours).
+ */
+async function resolveCurrentUserId(): Promise<string> {
+  if (currentUserIdCache && Date.now() - currentUserIdCache.fetchedAt < CATALOG_CACHE_TTL_MS) {
+    return currentUserIdCache.id;
+  }
+  return String((await fetchOrthoApneaCurrentUser()).id);
+}
+
+/**
+ * OA's earliest desired date for a product, as YYYY-MM-DD
+ * (GET /api/products/manufacturingDate?productId=, which answers
+ * "2026-10-19T00:00:00"; rules "Live read results"). Throws when OA is
+ * unreachable — callers that must not fail on it catch and use null.
+ */
+export async function fetchOrthoApneaManufacturingDate(productId: number): Promise<string> {
+  const cached = manufacturingDateCache.get(productId);
+  if (cached && Date.now() - cached.fetchedAt < MANUFACTURING_DATE_CACHE_TTL_MS) return cached.date;
+  const res = await authedFetch(`${PRODUCTS_PATH}/manufacturingDate?productId=${encodeURIComponent(String(productId))}`);
+  if (!res.ok) throw new PartnerServiceError(PARTNER_NAME, `manufacturing date fetch failed with status ${res.status}`);
+  const body: unknown = await res.json();
+  if (typeof body !== "string" || !/^\d{4}-\d{2}-\d{2}/.test(body)) {
+    throw new PartnerServiceError(PARTNER_NAME, "manufacturing date response is not a date string");
+  }
+  const date = body.slice(0, 10);
+  manufacturingDateCache.set(productId, { date, fetchedAt: Date.now() });
+  return date;
+}
+
+export async function fetchOrthoApneaClinics(): Promise<OrthoApneaClinic[]> {
+  if (clinicsCache && Date.now() - clinicsCache.fetchedAt < CATALOG_CACHE_TTL_MS) return clinicsCache.rows;
+  const userId = await resolveCurrentUserId();
+  const res = await authedFetch(`${CLINICS_PATH}?userId=${encodeURIComponent(userId)}&deleted=false`);
+  if (!res.ok) throw new PartnerServiceError(PARTNER_NAME, `clinics fetch failed with status ${res.status}`);
+  const body = (await res.json()) as { content?: OrthoApneaClinic[] } | OrthoApneaClinic[];
+  const rows = Array.isArray(body) ? body : (body.content ?? []);
+  clinicsCache = { rows, fetchedAt: Date.now() };
+  return rows;
+}
+
+const TREATMENT_LIST_PAGE_SIZE = 100;
+/** A runaway guard, not a business limit: 100 pages × 100 orders. */
+const TREATMENT_LIST_MAX_PAGES = 100;
+
+/**
+ * Every order on the shared account, as OA's own order list returns them
+ * (GET /api/treatments/DTO?treatmentSearchForm={}&page=&size= — a Spring page
+ * of full treatment DTOs, read live on 2026-10-03, NEO-218). Read-only: a GET,
+ * so it skips the mutation queue. Throws PartnerServiceError when OA answers
+ * anything but a page, so the reconciliation records a failed run instead of
+ * reporting every order as missing.
+ */
+export async function listOrthoApneaTreatments(): Promise<Record<string, unknown>[]> {
+  const form = encodeURIComponent(JSON.stringify({}));
+  const all: Record<string, unknown>[] = [];
+  for (let page = 0; page < TREATMENT_LIST_MAX_PAGES; page++) {
+    const res = await authedFetch(`${TREATMENT_DETAIL_PATH}?treatmentSearchForm=${form}&page=${page}&size=${TREATMENT_LIST_PAGE_SIZE}`, {
+      method: "GET",
+    });
+    if (!res.ok) throw new PartnerServiceError(PARTNER_NAME, `order list answered ${res.status}`);
+    const body = await safeJson(res);
+    const content = body?.content;
+    if (!body || !Array.isArray(content)) throw new PartnerServiceError(PARTNER_NAME, "order list answered without a content list");
+    all.push(...(content as Record<string, unknown>[]));
+    const totalPages = typeof body.totalPages === "number" ? body.totalPages : null;
+    if (body.last === true || content.length < TREATMENT_LIST_PAGE_SIZE || (totalPages !== null && page + 1 >= totalPages)) return all;
+  }
+  throw new PartnerServiceError(PARTNER_NAME, `order list has more than ${TREATMENT_LIST_MAX_PAGES} pages`);
+}

@@ -1,0 +1,536 @@
+import { existsSync } from "node:fs";
+import puppeteer, { type Browser, type Page } from "puppeteer-core";
+import { AppError, DocumentRenderError } from "../errors.js";
+
+/**
+ * Single seam for HTML→PDF rendering. Every document generator in the
+ * codebase (GDPR consent, collaboration agreement, patient informed
+ * consent) must call only renderHtmlToPdf() and never touch
+ * Puppeteer/Chromium directly — see
+ * docs/stories/partner-registration-legal-documents.md. Keeping this the
+ * one seam means the rendering approach stays swappable (e.g. to an
+ * external rendering service) without touching any caller, if Render's
+ * hosting turns out not to support headless Chrome reliably.
+ *
+ * Uses puppeteer-core + @sparticuz/chromium rather than full `puppeteer`:
+ * the Chromium binary ships compressed inside the npm package itself, so
+ * there's no postinstall download step — pnpm 9 blocks arbitrary
+ * postinstall scripts by default and this repo has no approve-builds
+ * allowlist configured, so a package that needs one would silently fail to
+ * fetch its browser on `pnpm install --frozen-lockfile` (Render's build
+ * command). Versions are pinned to a matched Chromium build (puppeteer-core
+ * 25.11.0 ships Chromium 153.0.8010.36; @sparticuz/chromium 153.0.0 is the
+ * same major — mismatched pairs are a common source of launch failures).
+ * When bumping either, read puppeteer-core's Chromium version from its
+ * lib/puppeteer/revisions.js (or pptr.dev/chromium-support) and pick the
+ * @sparticuz/chromium release with that same major. Both packages are
+ * ESM-only and need Node >=22.12 / ^22.17 respectively (.nvmrc: 22).
+ */
+
+const MAX_CONCURRENT_RENDERS = 2;
+
+let browserPromise: Promise<Browser> | null = null;
+let activeRenders = 0;
+const renderQueue: Array<() => void> = [];
+
+/** Well-known local browser installs — only used off Linux (dev machines), where @sparticuz/chromium's Linux-only binary can't run at all (spawn ENOEXEC on macOS). */
+const LOCAL_BROWSER_PATHS: Record<string, string[]> = {
+  darwin: [
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+  ],
+  win32: [
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+  ],
+};
+
+export interface BrowserLaunch {
+  executablePath: string;
+  args: string[];
+}
+
+/**
+ * Picks the Chromium binary to launch:
+ * 1. CHROME_EXECUTABLE_PATH, when set (explicit override, any platform).
+ * 2. Off Linux: a locally installed Chrome/Chromium/Edge/Brave.
+ * 3. On Linux (Render, CI): @sparticuz/chromium's bundled binary.
+ *
+ * @sparticuz/chromium only unpacks its bundled shared libraries (libnss3,
+ * libnspr4, fonts — the al2023 pack) when it believes it runs on AWS
+ * Lambda, and it decides that once, at module import time. Render's native
+ * Node runtime isn't Lambda and lacks those system libraries, so without
+ * this the launch dies with "libnspr4.so: cannot open shared object file"
+ * — the actual cause of NEO-36's "Database error: withTenant" on pwa-dev.
+ * Setting AWS_LAMBDA_JS_RUNTIME before a *dynamic* import makes it unpack
+ * them into /tmp and set LD_LIBRARY_PATH itself (verified in a
+ * node:20-bookworm amd64 container).
+ */
+export async function resolveBrowserLaunch(): Promise<BrowserLaunch> {
+  const override = process.env.CHROME_EXECUTABLE_PATH;
+  if (override) return { executablePath: override, args: ["--no-sandbox", "--disable-dev-shm-usage"] };
+
+  if (process.platform !== "linux") {
+    const found = (LOCAL_BROWSER_PATHS[process.platform] ?? []).find((path) => existsSync(path));
+    if (!found) {
+      throw new DocumentRenderError(
+        `no local Chrome/Chromium found on ${process.platform} — install Google Chrome or set CHROME_EXECUTABLE_PATH`
+      );
+    }
+    return { executablePath: found, args: [] };
+  }
+
+  // @sparticuz/chromium (checked up to 153) only substring-tests this for
+  // "20.x"/"22.x"/"24.x", so the value needn't track the real Node version.
+  process.env.AWS_LAMBDA_JS_RUNTIME ??= "nodejs20.x";
+  const { default: chromium } = await import("@sparticuz/chromium");
+  return { executablePath: await chromium.executablePath(), args: chromium.args };
+}
+
+/**
+ * The one shared browser. Exported for the renderer spec only (it kills the
+ * process to prove a crashed browser is replaced, not reused).
+ */
+export async function getRenderBrowser(): Promise<Browser> {
+  if (browserPromise) {
+    const cached = await browserPromise.catch(() => null);
+    // A browser that crashed / was OOM-killed stays cached as a dead
+    // connection ("Connection closed" on every render until a restart) —
+    // drop it and launch a fresh one.
+    if (cached && !cached.connected) browserPromise = null;
+  }
+  if (!browserPromise) {
+    const current: Promise<Browser> = (async () => {
+      const { executablePath, args } = await resolveBrowserLaunch();
+      const browser = await puppeteer.launch({ args, executablePath, headless: true });
+      browser.once("disconnected", () => {
+        if (browserPromise === current) browserPromise = null;
+      });
+      return browser;
+    })().catch((err: unknown) => {
+      // Don't cache a rejected launch — let the next call retry instead of
+      // every future render failing forever off one transient error.
+      if (browserPromise === current) browserPromise = null;
+      throw err;
+    });
+    browserPromise = current;
+  }
+  return browserPromise;
+}
+
+// Caps how many PDF renders run at once against the one shared browser — a
+// burst of invite-accepts or patient-document generations shouldn't be able
+// to open unbounded concurrent pages on Render's single-process free-tier
+// service. Callers beyond the cap just wait their turn.
+function acquireRenderSlot(): Promise<void> {
+  if (activeRenders < MAX_CONCURRENT_RENDERS) {
+    activeRenders += 1;
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => renderQueue.push(resolve));
+}
+
+function releaseRenderSlot(): void {
+  const next = renderQueue.shift();
+  if (next) {
+    next();
+  } else {
+    activeRenders = Math.max(0, activeRenders - 1);
+  }
+}
+
+/** A blank set of tick-boxes (just the options), or a recorded answer (options + the selected one). */
+export type ChoiceField = readonly string[] | { options: readonly string[]; selected?: string | null };
+
+function toChoice(field: ChoiceField): { options: readonly string[]; selected: string | null } {
+  return "options" in field ? { options: field.options, selected: field.selected ?? null } : { options: field, selected: null };
+}
+
+export interface RenderHtmlToPdfOptions {
+  /** Puppeteer footerTemplate HTML — page.pdf() only paginates a real per-page footer via this option, not repeated CSS in the document body. */
+  footerTemplate?: string;
+  /** headerTemplate HTML — defaults to an empty header (the templates carry their own in-body header instead). */
+  headerTemplate?: string;
+  marginTop?: string;
+  marginBottom?: string;
+  marginLeft?: string;
+  marginRight?: string;
+  /**
+   * Per-instance dynamic values (a specific patient's name, a specific
+   * doctor's clinic, ...) keyed by the template's `data-field="key"`
+   * attribute — see e.g. packages/documents/templates/informedConsent.html's
+   * own header comment, which has always documented this as "filled via
+   * page.evaluate() + element.textContent inside the real Chrome DOM," not
+   * string substitution on the HTML before it gets here. This is the first
+   * real implementation of that documented step (nothing called
+   * renderHtmlToPdf in production before this). Applied via
+   * element.textContent (auto-escaping, safer than a string .replace() on
+   * raw HTML) to every matching `[data-field="key"]` element right after
+   * page.setContent, before page.pdf() runs. Callers never get a Puppeteer
+   * Page handle directly — this file's own header comment requires every
+   * generator to go through renderHtmlToPdf() only.
+   */
+  dataFields?: Record<string, string>;
+  /**
+   * Tick-boxes keyed by data-field: each option becomes a small rounded box
+   * + its label (e.g. ["Sí", "No"]). A plain list is a blank paper form (all
+   * boxes empty); `{ options, selected }` is a recorded answer — every
+   * option is still printed, the selected one filled and bold, so a filled
+   * form reads the same way as a blank one (document system, 2026-09-26).
+   * Drawn with CSS, not a "☐" character — Poppins has no such glyph and the
+   * PDF showed a missing-glyph box instead.
+   */
+  choiceFields?: Record<string, ChoiceField>;
+  /**
+   * Visual states keyed by `data-state-field="key"`: each matching element
+   * gets `data-state="<value>"`, which the template's CSS turns into a
+   * drawing (the Historia clínica's ATM skull glow per side, the STOP-Bang
+   * gauge needle). Page scripts are disabled (lockDownPage), so this is how
+   * a template shows a computed level. Values are short tokens only.
+   */
+  stateFields?: Record<string, string>;
+  /**
+   * Images placed into `[data-field="key"]` elements — a drawn signature
+   * (data:image/png;base64 only: the page lockdown allows data: URLs and
+   * nothing else, and callers validate the format first). The element's
+   * content is replaced by one <img>.
+   */
+  dataImages?: Record<string, string>;
+  /**
+   * Partner documents (NEO-51): PNG data URLs placed into `[data-image="key"]`
+   * elements — the doctor's and NeoSleep signatory's signatures. Same rules as
+   * the PWA preview's applyDocumentFields (packages/documents), so the preview
+   * and the signed PDF match.
+   */
+  imageFields?: Record<string, string>;
+  /** Keeps only `[data-variant]` elements with this value (e.g. the agreement's "owner"/"staff" party clause). */
+  variant?: string | null;
+}
+
+const PNG_DATA_URL_RE = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
+
+/** Exported for the spec; callers go through renderHtmlToPdf(). */
+export async function applyDataImages(
+  page: Page,
+  images: Record<string, string>,
+  attribute: "data-field" | "data-image" = "data-field"
+): Promise<void> {
+  for (const [key, url] of Object.entries(images)) {
+    if (!PNG_DATA_URL_RE.test(url)) throw new DocumentRenderError(`data image for "${key}" must be a PNG data URL`);
+  }
+  await page.evaluate((values, attr) => {
+    for (const [key, src] of Object.entries(values)) {
+      document.querySelectorAll<HTMLElement>(`[${attr}="${CSS.escape(key)}"]`).forEach((el) => {
+        const img = document.createElement("img");
+        img.src = src;
+        img.alt = "";
+        // Fit the box: a phone canvas is ~2-3x the box's size at device pixel
+        // ratio, and an unconstrained image spills out and across a page break.
+        // Partner templates (data-image) size their own .sig-area img (docFields.css), matching the PWA preview.
+        if (attr === "data-field") img.style.cssText = "display:block;width:100%;height:100%;object-fit:contain;";
+        el.style.breakInside = "avoid";
+        el.replaceChildren(img);
+      });
+    }
+  }, images, attribute);
+}
+
+/** Removes `[data-variant]` elements whose value differs — exported for the spec. */
+export async function applyVariant(page: Page, variant: string): Promise<void> {
+  await page.evaluate((value) => {
+    document.querySelectorAll("[data-variant]").forEach((el) => {
+      if (el.getAttribute("data-variant") !== value) el.remove();
+    });
+  }, variant);
+}
+
+/** The only hosts a template may load from — the Poppins webfont the templates link. */
+const ALLOWED_REQUEST_HOSTS = new Set(["fonts.googleapis.com", "fonts.gstatic.com"]);
+
+/**
+ * Rendered HTML includes admin-authored content (document_content_version)
+ * and Chromium runs unsandboxed on Render (@sparticuz/chromium's args carry
+ * --no-sandbox): page scripts are disabled and every request other than
+ * data:/about: and the webfont hosts is aborted, so a template can't make
+ * the API host fetch arbitrary URLs. Data fields are still filled —
+ * page.evaluate goes through CDP, unaffected by the page's own JS switch
+ * (covered by documentRenderer.spec.ts).
+ */
+export async function lockDownPage(page: Page): Promise<void> {
+  await page.setJavaScriptEnabled(false);
+  await page.setRequestInterception(true);
+  page.on("request", (request) => {
+    const url = request.url();
+    if (url.startsWith("data:") || url.startsWith("about:")) return void request.continue();
+    try {
+      const { protocol, hostname } = new URL(url);
+      if (protocol === "https:" && ALLOWED_REQUEST_HOSTS.has(hostname)) return void request.continue();
+    } catch {
+      // unparseable → abort below
+    }
+    void request.abort();
+  });
+}
+
+/**
+ * Fills every `[data-field="key"]` element — not just the first; a
+ * template can repeat a field (e.g. the patient name in the header and
+ * again in the signature block). textContent, so values are auto-escaped.
+ * Exported only so the spec can assert on the live DOM; callers go through
+ * renderHtmlToPdf().
+ */
+export async function applyDataFields(page: Page, fields: Record<string, string>): Promise<void> {
+  await page.evaluate((values) => {
+    for (const [key, value] of Object.entries(values)) {
+      document.querySelectorAll(`[data-field="${CSS.escape(key)}"]`).forEach((el) => {
+        el.textContent = value;
+      });
+    }
+  }, fields);
+}
+
+/**
+ * Fills `[data-field="key"]` elements with empty tick-boxes, one per option
+ * — see RenderHtmlToPdfOptions.choiceFields. Labels via textContent, so
+ * they are escaped like data fields. Box colour follows the template's
+ * --primary brand token. Exported for the spec.
+ */
+export async function applyChoiceFields(page: Page, fields: Record<string, ChoiceField>): Promise<void> {
+  const normalized = Object.fromEntries(Object.entries(fields).map(([key, field]) => [key, toChoice(field)]));
+  await page.evaluate((values) => {
+    for (const [key, { options, selected }] of Object.entries(values)) {
+      const answered = selected != null && options.includes(selected);
+      document.querySelectorAll(`[data-field="${CSS.escape(key)}"]`).forEach((el) => {
+        const choices = options.map((option) => {
+          const on = answered && option === selected;
+          const choice = document.createElement("span");
+          choice.className = on ? "choice choice--on" : "choice";
+          // Fixed-width slots (fit "III" / "Sí"): in a right-aligned answer column each row's
+          // last option shares one x, so "I / II / III" sits in the same grid as "Sí / No"
+          // (III under No, II under Sí, I one slot further left).
+          choice.style.cssText = "display:inline-flex;align-items:center;gap:6px;vertical-align:middle;width:52px;";
+          const box = document.createElement("span");
+          box.className = "choice-box";
+          box.style.cssText = on
+            ? "display:inline-block;width:14px;height:14px;border:1.5px solid var(--primary, #128F83);border-radius:3.5px;background:var(--primary, #128F83);box-shadow:inset 0 0 0 2px #fff;flex:none;"
+            : "display:inline-block;width:14px;height:14px;border:1.5px solid #8fa29e;border-radius:3.5px;background:#fff;flex:none;";
+          const label = document.createElement("span");
+          label.className = "choice-label";
+          label.textContent = option;
+          label.style.cssText = on
+            ? "font-weight:600;color:var(--text, #1a1a1a);"
+            : `font-weight:400;color:${answered ? "#9aa5a3" : "var(--secondary, #474747)"};`;
+          choice.append(box, label);
+          return choice;
+        });
+        (el as HTMLElement).style.whiteSpace = "nowrap"; // narrow answer cells (STOP-Bang) must not stack the boxes
+        el.replaceChildren(...choices);
+      });
+    }
+  }, normalized);
+}
+
+const STATE_VALUE_RE = /^[a-z0-9_-]{1,32}$/;
+
+/** Sets `data-state` on `[data-state-field="key"]` elements — see RenderHtmlToPdfOptions.stateFields. Exported for the spec. */
+export async function applyStateFields(page: Page, fields: Record<string, string>): Promise<void> {
+  const safe = Object.fromEntries(Object.entries(fields).filter(([, value]) => STATE_VALUE_RE.test(value)));
+  await page.evaluate((values) => {
+    for (const [key, value] of Object.entries(values)) {
+      document.querySelectorAll(`[data-state-field="${CSS.escape(key)}"]`).forEach((el) => el.setAttribute("data-state", value));
+    }
+  }, safe);
+}
+
+const RENDER_READY_TIMEOUT_MS = 10_000;
+
+/**
+ * Waits until the page is safe to print: every webfont face in use is
+ * loaded and every image (including data: signatures) is decoded.
+ *
+ * Replaces setContent's old waitUntil "networkidle0", which puppeteer-core
+ * >=24.43 no longer accepts for setContent. "load" alone is not enough: it
+ * fires once the Google Fonts stylesheet is in, but the font files it
+ * points to are only fetched when layout needs a glyph — and data fields
+ * filled after load can pull in another unicode-range subset (e.g. "ó" ->
+ * latin-ext). So this runs after all DOM mutations: force a layout so font
+ * loads get scheduled, await document.fonts.ready, then decode every image
+ * (a broken/aborted image rejects decode() and is ignored — lockDownPage
+ * aborts foreign requests on purpose). Works with page JS disabled:
+ * page.evaluate goes through CDP. Exported for the spec.
+ */
+export async function waitForRenderReady(page: Page, timeoutMs = RENDER_READY_TIMEOUT_MS): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new DocumentRenderError(`fonts/images not ready after ${timeoutMs} ms`)), timeoutMs);
+  });
+  try {
+    await Promise.race([
+      page.evaluate(async () => {
+        void document.body?.offsetHeight;
+        await document.fonts.ready;
+        await Promise.all(Array.from(document.images).map((img) => img.decode().catch(() => undefined)));
+        await document.fonts.ready;
+      }),
+      timeout,
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Pages in a Chrome-generated PDF: one "/Type /Page" object per page (the "/Pages" tree node doesn't match). Exported for the spec. */
+export function countPdfPages(pdf: Uint8Array): number {
+  return Buffer.from(pdf).toString("latin1").match(/\/Type\s*\/Page(?![s\w])/g)?.length ?? 0;
+}
+
+const PX_PER_MM = 96 / 25.4;
+const A4_MM = { width: 210, height: 297 };
+/** How many extra print passes the signature push may take on a multi-page document, where the DOM estimate can overshoot. */
+const SIGNATURE_PUSH_ATTEMPTS = 5;
+
+/**
+ * Page-aware layout (Łukasz, 2026-09-26), applied to every generated PDF:
+ * - fits on one page → keep the compact layout;
+ * - runs onto more pages → switch to the roomier layout (`doc-roomy` on
+ *   <html>: more air around the title, see docTheme.css) unless that adds
+ *   a page;
+ * - then every signature block moves to the bottom of its page (NEO-252).
+ * Orphan control (a heading never ends a page, question rows and signature
+ * blocks never split) is plain CSS in the templates.
+ *
+ * Chrome has no DOM API for where page breaks fall, so the space left on
+ * the last page is estimated from the laid-out height in print media at
+ * the printable width, and every change is checked against the real page
+ * count of a fresh print: a push that would add a page is shrunk, and if
+ * none fits the signatures stay where they were. Returns the final PDF.
+ * Exported for the spec.
+ */
+export async function fitPageLayout(
+  page: Page,
+  print: () => Promise<Uint8Array>,
+  margin: { top: string; bottom: string; left: string; right: string },
+): Promise<Uint8Array> {
+  let pdf = await print();
+  let pages = countPdfPages(pdf);
+  if (pages > 1) {
+    await page.evaluate(() => document.documentElement.classList.add("doc-roomy"));
+    const roomy = await print();
+    // The extra air must never cost a page: a consent that fits on 2 compact pages left only its signature on a 3rd (2026-09-29).
+    if (countPdfPages(roomy) === pages) pdf = roomy;
+    else await page.evaluate(() => document.documentElement.classList.remove("doc-roomy"));
+  }
+
+  const mm = (value: string) => parseFloat(value);
+  await page.setViewport({ width: Math.round((A4_MM.width - mm(margin.left) - mm(margin.right)) * PX_PER_MM), height: 1000 });
+  await page.emulateMediaType("print");
+  const pageHeight = (A4_MM.height - mm(margin.top) - mm(margin.bottom)) * PX_PER_MM;
+  // Every signature block goes to the bottom of its own page (NEO-252: the Historia clínica's doctor
+  // on page 2 and patient on the consent's last page). Where a block lands is estimated from the
+  // laid-out position inside its section — the run since the last forced page break — so a section
+  // that starts on a fresh page is measured from that page's top, not from the document's.
+  const blocks = await page.evaluate((height) => {
+    const origins = Array.from(document.querySelectorAll<HTMLElement>("body *"))
+      .filter((el) => getComputedStyle(el).breakBefore === "page")
+      .map((el) => el.getBoundingClientRect().top + window.scrollY);
+    const placed = Array.from(document.querySelectorAll<HTMLElement>(".sig-panels")).map((block) => {
+      const box = block.getBoundingClientRect();
+      const top = box.top + window.scrollY;
+      const origin = Math.max(0, ...origins.filter((o) => o <= top));
+      const offset = (top - origin) % height;
+      // A block that doesn't fit where it is moves whole to the next page (break-inside: avoid).
+      const bottom = offset + box.height <= height ? offset + box.height : box.height;
+      return { origin, pageIndex: Math.floor((top - origin) / height), marginTop: parseFloat(getComputedStyle(block).marginTop) || 0, free: height - bottom };
+    });
+    // Only the last block on a page moves; one above it on the same page stays put.
+    return placed.map((b, i) => ({ ...b, pinned: !placed.slice(i + 1).some((n) => n.origin === b.origin && n.pageIndex === b.pageIndex) }));
+  }, pageHeight);
+
+  const setPush = (index: number, push: number) =>
+    page.evaluate(
+      (i, top) => {
+        document.querySelectorAll<HTMLElement>(".sig-panels")[i].style.marginTop = `${top}px`;
+      },
+      index,
+      blocks[index].marginTop + push
+    );
+  const tryPush = async (index: number, push: number) => {
+    await setPush(index, push);
+    const candidate = await print();
+    return countPdfPages(candidate) === pages ? candidate : null;
+  };
+
+  // Exact on a section without inner break rules; some slack for rounding. If that overshoots
+  // (a page count change), binary-search the largest push that keeps the page count.
+  for (const [index, block] of blocks.entries()) {
+    const estimate = Math.floor(block.free - 12);
+    if (!block.pinned || estimate <= 8) continue;
+    const full = await tryPush(index, estimate);
+    if (full) {
+      pdf = full;
+      continue;
+    }
+    let best = 0;
+    let low = 0;
+    let high = estimate;
+    for (let attempt = 0; attempt < SIGNATURE_PUSH_ATTEMPTS; attempt++) {
+      const mid = Math.floor((low + high) / 2);
+      const candidate = await tryPush(index, mid);
+      if (candidate) {
+        pdf = candidate;
+        best = mid;
+        low = mid;
+      } else {
+        high = mid;
+      }
+    }
+    await setPush(index, best); // the DOM keeps the push the kept PDF was printed with
+  }
+  return pdf;
+}
+
+export async function renderHtmlToPdf(html: string, options: RenderHtmlToPdfOptions = {}): Promise<Uint8Array> {
+  await acquireRenderSlot();
+  try {
+    const browser = await getRenderBrowser();
+    const page = await browser.newPage();
+    try {
+      await lockDownPage(page);
+      await page.setContent(html, { waitUntil: "load" });
+      if (options.dataFields) await applyDataFields(page, options.dataFields);
+      if (options.choiceFields) await applyChoiceFields(page, options.choiceFields);
+      if (options.stateFields) await applyStateFields(page, options.stateFields);
+      if (options.variant) await applyVariant(page, options.variant);
+      if (options.dataImages) await applyDataImages(page, options.dataImages);
+      if (options.imageFields) await applyDataImages(page, options.imageFields, "data-image");
+      // After every DOM mutation above: webfonts settled, every image decoded.
+      await waitForRenderReady(page);
+      const displayHeaderFooter = Boolean(options.headerTemplate || options.footerTemplate);
+      const margin = {
+        top: options.marginTop ?? "18mm",
+        bottom: options.marginBottom ?? "14mm",
+        left: options.marginLeft ?? "14mm",
+        right: options.marginRight ?? "14mm",
+      };
+      const print = () =>
+        page.pdf({
+          format: "A4",
+          printBackground: true,
+          displayHeaderFooter,
+          headerTemplate: options.headerTemplate ?? "<div></div>",
+          footerTemplate: options.footerTemplate ?? "<div></div>",
+          margin,
+        });
+      return await fitPageLayout(page, print, margin);
+    } finally {
+      await page.close();
+    }
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    throw new DocumentRenderError((err as Error)?.message?.split("\n")[0] ?? "unknown error", err);
+  } finally {
+    releaseRenderSlot();
+  }
+}

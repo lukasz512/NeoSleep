@@ -1,0 +1,151 @@
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
+import { useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
+import { useTheme } from "vuetify";
+import { useDebounceFn } from "@vueuse/core";
+import { useThemeStore, type ThemePreference } from "@stores";
+import { SIDEBAR_DEFAULT_COLLAPSED, SIDEBAR_COLLAPSE_ENABLED, MOBILE_BREAKPOINT } from "../config/layout";
+import { getUserSettings, setUserSettings } from "../utils/user-settings";
+import { getInitials } from "../utils/initials";
+import { lightTheme, darkTheme } from "../plugins/vuetify";
+import { useAuthStore } from "../stores/auth";
+import { useConfigStore } from "../stores/config";
+import { loadLocale } from "../plugins/i18n";
+import { getPrefsIdentity } from "@prefs";
+import { saveUserLocale } from "../utils/prefsSession";
+
+export function useLayoutState() {
+  const router = useRouter();
+  const { t, locale } = useI18n();
+  const authStore = useAuthStore();
+  const configStore = useConfigStore();
+  const vuetifyTheme = useTheme();
+
+  // All resolution/persistence lives in the shared store (packages/stores/theme.ts)
+  // — including data-theme on <html>. Only the Vuetify-specific side effect
+  // (pwa only, not shared) lives here.
+  const themeStore = useThemeStore();
+  const theme = computed(() => themeStore.mode);
+
+  watch(
+    theme,
+    (mode) => vuetifyTheme.change(mode === "dark" ? darkTheme : lightTheme),
+    { immediate: true, flush: "sync" }
+  );
+
+  /** Light / Dark / Auto ("system") — what the account menu's segment shows. */
+  const themePreference = computed(() => themeStore.preference);
+
+  function setThemePreference(preference: ThemePreference) {
+    themeStore.setPreference(preference);
+  }
+
+  const sidebarCollapsed = ref(SIDEBAR_DEFAULT_COLLAPSED);
+
+  function toggleSidebar() {
+    sidebarCollapsed.value = !sidebarCollapsed.value;
+    setUserSettings({ sidebarCollapsed: sidebarCollapsed.value });
+  }
+
+  // Read synchronously on setup: starting at false and flipping after the
+  // debounced resize check made phones render the desktop account chip
+  // (avatar + name) for a moment, so the app bar jumped on every launch.
+  const isMobile = ref(typeof window !== "undefined" && window.innerWidth < MOBILE_BREAKPOINT);
+  const mobileDrawerOpen = ref(false);
+
+  const updateMobile = useDebounceFn(() => {
+    if (typeof window === "undefined") return;
+    isMobile.value = window.innerWidth < MOBILE_BREAKPOINT;
+    if (!isMobile.value) {
+      mobileDrawerOpen.value = false;
+    }
+  }, 150);
+
+  const userDisplayName = computed(
+    () => authStore.displayName ?? authStore.user?.email ?? t("user.user.placeholderName"),
+  );
+
+  const userRole = computed(() => {
+    const role = authStore.user?.role;
+    if (role === "admin") return t("user.user.roleAdmin");
+    if (role === "manager") return t("user.user.roleManager");
+    if (role === "kam") return t("user.user.roleKam");
+    if (role === "msl") return t("user.user.roleMsl");
+    if (role === "rep") return t("user.user.roleRep");
+    if (role === "doctor") return t("user.user.roleDoctor");
+    if (role === "support") return t("user.user.roleSupport");
+    return t("user.user.role");
+  });
+
+  const userInitials = computed(() => getInitials(userDisplayName.value));
+
+  const localeTransitioning = ref(false);
+
+  async function setLocale(lang: "en" | "pl" | "mx") {
+    localeTransitioning.value = true;
+    await new Promise<void>((r) => setTimeout(r, 180));
+    await loadLocale(lang);
+    locale.value = lang;
+    setUserSettings({ locale: lang });
+    // Language is per person (CORE-45): it follows this user on this device after sign-in.
+    const id = getPrefsIdentity();
+    if (id) saveUserLocale(id, lang);
+    await nextTick();
+    localeTransitioning.value = false;
+  }
+
+  async function onLogout() {
+    mobileDrawerOpen.value = false;
+    await authStore.logout();
+    router.push("/login");
+  }
+
+  function focusMainContent() {
+    const el = document.getElementById("main-content");
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      el.focus({ preventScroll: false });
+    }
+  }
+
+  onMounted(async () => {
+    const settings = getUserSettings();
+    if (SIDEBAR_COLLAPSE_ENABLED && typeof settings.sidebarCollapsed === "boolean") {
+      sidebarCollapsed.value = settings.sidebarCollapsed;
+    }
+    const [cfg] = await Promise.all([configStore.load(), configStore.loadOptions(), configStore.loadI18nOverrides()]);
+    configStore.applyToDom(cfg);
+    // configStore.load() already feeds cfg.color_scheme into the theme store's
+    // tenant-default tier — no setTheme() call here. Calling it would override
+    // the user's own explicit choice on every mount, so a personal theme
+    // preference would never actually persist across reloads.
+    updateMobile();
+    window.addEventListener("resize", updateMobile);
+  });
+
+  onUnmounted(() => {
+    window.removeEventListener("resize", updateMobile);
+  });
+
+  const user = computed(() => ({
+    displayName: userDisplayName.value,
+    email: authStore.user?.email,
+    role: userRole.value,
+    /** The raw role code (role badge on the avatar, CORE-114); `role` is its label. */
+    roleKey: authStore.user?.role ?? null,
+    initials: userInitials.value,
+    region: authStore.user?.country_code,
+    // Google-only accounts have no password to change (NEO-102).
+    canChangePassword: authStore.user?.hasPassword === true,
+  }));
+
+  return {
+    theme, themePreference, setThemePreference,
+    sidebarCollapsed, toggleSidebar,
+    isMobile, mobileDrawerOpen,
+    user,
+    locale, localeTransitioning, setLocale,
+    onLogout,
+    focusMainContent,
+  };
+}

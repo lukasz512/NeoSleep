@@ -1,0 +1,52 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Dependency upgrades as scheduled PRs into dev. Nothing is merged automatically — every PR waits for Łukasz, same as any other PR.",
+  "extends": ["config:recommended", ":dependencyDashboard", ":semanticCommitTypeAll(chore)"],
+  "timezone": "Europe/Warsaw",
+  "schedule": ["before 7am on monday"],
+  "prConcurrentLimit": 4,
+  "prHourlyLimit": 2,
+  "rangeStrategy": "bump",
+  "labels": ["dependencies"],
+  "automerge": false,
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 7am on monday"]
+  },
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["dependencies", "security"],
+    "schedule": ["at any time"]
+  },
+  "packageRules": [
+    {
+      "description": "All minor + patch updates in one weekly PR instead of dozens.",
+      "matchUpdateTypes": ["minor", "patch"],
+      "matchCurrentVersion": "!/^0/",
+      "groupName": "non-major dependencies",
+      "groupSlug": "non-major"
+    },
+    {
+      "description": "Majors need a tick in the Dependency Dashboard issue first — no surprise breaking-change PRs.",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "puppeteer-core and @sparticuz/chromium must ship the same Chromium major (see apps/api/src/services/documentRenderer.ts).",
+      "matchPackageNames": ["puppeteer-core", "@sparticuz/chromium"],
+      "groupName": "PDF renderer (puppeteer-core + @sparticuz/chromium)",
+      "groupSlug": "pdf-renderer"
+    },
+    {
+      "description": "@types/node follows the Node version we run (.nvmrc = 22), not the newest Node.",
+      "matchPackageNames": ["@types/node"],
+      "allowedVersions": "<23"
+    },
+    {
+      "description": "GitHub Actions versions in one PR.",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "groupSlug": "github-actions"
+    }
+  ]
+}

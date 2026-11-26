@@ -1,0 +1,59 @@
+node_modules/
+**/node_modules/
+dist
+.DS_Store
+.env
+.env.*
+!.env.example
+coverage
+playwright-report
+test-results
+.vite
+
+# Transpiled TS artifacts — source is .ts, ignore siblings
+apps/**/src/**/*.js
+apps/**/src/**/*.d.ts
+!apps/*/src/vite-env.d.ts
+packages/*/src/**/*.js
+packages/*/src/**/*.d.ts
+**/i18n/*.js
+**/i18n/*.d.ts
+# Packages without a src/ folder (brand, i18n) — same rule, one level up (CORE-77)
+packages/*/*.js
+packages/*/*.d.ts
+# i18n:prune script output
+packages/i18n/_*
+
+# Build output
+apps/*/tsconfig.tsbuildinfo
+packages/*/tsconfig.tsbuildinfo
+
+# Editor-local config (not shared with the team) — tasks.json is the one exception:
+# it's the shared "1-click" dev-stack launcher every completion Artifact references
+# (docs/stories/linear-worker-pipeline-hardening.md), so it has to actually be
+# versioned for anyone (including the worker's own environment) to use it.
+.vscode/*
+!.vscode/tasks.json
+
+# Secrets and keys (never commit)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+.secrets/
+*.secret
+*.credentials
+.env.local
+.env.*.local
+.env.production
+.env.uat
+.env.development.local
+.env.test.local
+.env.production.local
+.env.uat.local
+.claude/worktrees/
+.claude/projects/
+.claude/settings.local.json
+.claude/local/

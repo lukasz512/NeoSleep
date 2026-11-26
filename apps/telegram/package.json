@@ -1,0 +1,20 @@
+{
+  "name": "@neo/telegram",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx --env-file=../../.env --watch src/index.ts",
+    "build": "tsc",
+    "start": "node --env-file=../../.env dist/index.js"
+  },
+  "dependencies": {
+    "grammy": "^1.46.0",
+    "openai": "^7.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:"
+  }
+}

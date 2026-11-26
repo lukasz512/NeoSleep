@@ -1,0 +1,269 @@
+/**
+ * Generic, config-driven form field contract.
+ *
+ * This is the shared contract behind FormRenderer.vue / useFormRenderer.ts —
+ * instead of hand-authoring a bespoke <Entity>Form.vue + .types.ts +
+ * use<Entity>Form.ts triad per entity (the pattern used for Lead/Practitioner/
+ * Organization/Patient), an entity describes its create/edit form as a plain
+ * array of FormFieldDef and hands it to the shared <FormRenderer>. This
+ * directly extends the already-accepted pattern of `pcf_template` storing
+ * form schema in DB/config rather than in hand-written code.
+ *
+ * Keep this file free of any entity-specific knowledge — field lists, labels,
+ * validation, and option sources for a given entity live in
+ * apps/pwa/src/config/forms/<entity>Form.ts, never here.
+ */
+
+// Named type-only re-exports aren't resolvable from a `*.vue` module's ambient
+// declaration (only the default export is declared there) — extract the
+// prop's type via the component's instance type instead, which IS visible
+// through the default export.
+import type AppIcon from "../components/AppIcon.vue";
+import type AppAvatar from "../components/AppAvatar.vue";
+type AppIconName = InstanceType<typeof AppIcon>["$props"]["name"];
+export type AppAvatarEntityType = NonNullable<InstanceType<typeof AppAvatar>["$props"]["entityType"]>;
+
+/** Supported input types the renderer knows how to draw. */
+export type FormFieldType =
+  | "text"
+  | "email"
+  | "phone"
+  | "textarea"
+  | "number"
+  | "select"
+  | "autocomplete"
+  | "combobox"
+  | "chips"
+  | "combobox"
+  | "date"
+  | "boolean"
+  /** A few large tappable chips instead of a dropdown — see ChoiceChipsField.vue. */
+  | "choice"
+  /** AHI in events/h with the AASM severity scale under it — see AhiField.vue (NEO-228). */
+  | "ahi"
+  /** One tile that is either on or off, off by default — see ToggleTileField.vue (NEO-241). */
+  | "toggle";
+
+/**
+ * One selectable option for 'select'/'autocomplete'/'combobox' fields.
+ *
+ * `title` means different things depending on where the option came from:
+ * - In a **static** array (e.g. a status/locale dropdown baked into a config
+ *   file), `title` is an i18n KEY — FormRenderer resolves it via t(), the
+ *   same convention as `labelKey`. This keeps entity config files plain,
+ *   locale-agnostic data with no dependency on a translator function.
+ * - In options returned by an **async loader** (e.g. practitioner/organization
+ *   names fetched from the API, mirroring useEventForm.ts's loadHcp()),
+ *   `title` is already the final display string and is used as-is, never
+ *   passed through t() — it's real data, not a translation key.
+ */
+export interface FormFieldOption {
+  title: string;
+  value: unknown;
+  /**
+   * Vuetify color token (e.g. "success"/"warning", or "default" for a
+   * neutral tonal chip with no color prop). When set on any option of a
+   * 'select' field, FormRenderer renders that field's value as a colored
+   * pill instead of plain text — see FormRenderer's `hasColorOptions()`.
+   */
+  color?: string;
+  /**
+   * Secondary line under the title in the dropdown list (e.g. a doctor's
+   * specialty · clinic) — only drawn by the avatar item slot
+   * (FormFieldDef.avatarEntityType). Already-resolved text, not an i18n key.
+   */
+  subtitle?: string;
+  /** 'choice' fields: a short symbol drawn before the label (e.g. "♀"). Not copy — never translated. */
+  symbol?: string;
+  /** 'choice' fields: shown as a small link under the main chips instead of a chip of its own. */
+  secondary?: boolean;
+  /** 'choice' fields: an AppIcon name drawn above the label; any option with one turns the row into tall tiles (NEO-228). */
+  icon?: AppIconName;
+}
+
+/**
+ * Entity-specific derived-fields hook (FormRenderer's `derive` prop). Runs on
+ * every form change with the form as it was on the previous run, so a hook
+ * can tell which field the user just touched; returns the fields to patch.
+ */
+export type FormDerive = (
+  form: Record<string, unknown>,
+  prev: Record<string, unknown>,
+) => Partial<Record<string, unknown>> | void;
+
+/**
+ * A field-level validation rule. Return `true` when valid, or an i18n KEY
+ * (not a literal message) when invalid — FormRenderer resolves the key via
+ * `t()` at render time, so config files never need access to a translator.
+ */
+export type FormFieldRule = (v: unknown) => true | string;
+
+/**
+ * The shared set of form sections (NEO-92). A form whose fields span two or
+ * more sections renders as the "Carpeta" folder: a spine with the record's
+ * identity and a section index, and one sheet with a heading per section.
+ * Labels: `app.formRenderer.section.<id>` in packages/i18n.
+ */
+export const FORM_SECTION_IDS = [
+  "identity",
+  "contact",
+  "organization",
+  "profile",
+  "clinical",
+  "status",
+  "access",
+  "territory",
+  "links",
+] as const;
+export type FormSectionId = (typeof FORM_SECTION_IDS)[number];
+
+export interface FormFieldDef {
+  /** Payload field name — also the key form state is stored/read under. */
+  key: string;
+  /** Which Vuetify input the renderer draws. */
+  type: FormFieldType;
+  /**
+   * i18n key for the field label — resolved via t(), never hardcoded English.
+   * A function variant re-resolves on every render against the live form
+   * state (same shape as `hidden`) — e.g. a clinic picker whose label swaps
+   * to "Add clinic" once the typed value stops matching an existing option.
+   */
+  labelKey: string | ((form: Record<string, unknown>) => string);
+  /**
+   * When true, the renderer adds a generic "required" rule automatically. A
+   * function variant is re-evaluated against the live form state on every
+   * render (same shape as `hidden`) — e.g. a field required only for one
+   * value of a sibling `type` select.
+   */
+  required?: boolean | ((form: Record<string, unknown>) => boolean);
+  /** Extra validation rules layered on top of the built-in required check. */
+  rules?: FormFieldRule[];
+  /**
+   * Options for 'select'/'autocomplete'/'combobox' fields: a static array, or
+   * an async loader function (e.g. "load practitioner options from the API",
+   * the same shape as useEventForm.ts's loadHcp()/loadHco()). The loader
+   * receives the current form state so a field can depend on a sibling field's
+   * value (see `dependsOn`). Loaders are called once per dialog open (or on a
+   * `dependsOn` change) and cached.
+   */
+  options?: FormFieldOption[] | ((form: Record<string, unknown>) => Promise<FormFieldOption[]>);
+  /**
+   * Narrows a STATIC `options` list against the live form (e.g. salutations
+   * offered per market, from the form's country) — keeps the list static, so
+   * titles stay i18n keys, instead of turning it into an async loader.
+   */
+  optionFilter?: (option: FormFieldOption, form: Record<string, unknown>) => boolean;
+  /** Allow multiple selections — only meaningful for type 'autocomplete'. */
+  multiple?: boolean;
+  /**
+   * Disables (not hides) this field when the dialog is editing an existing
+   * record (initialData has an id) — for values with real backend
+   * implications (e.g. email/login identity) that a plain edit form
+   * shouldn't silently no-op or let a rep casually change.
+   */
+  immutableOnEdit?: boolean;
+  /**
+   * Value used to seed the field when there is no initialData for it. A
+   * function is invoked fresh every time the form (re)builds its state (i.e.
+   * on every dialog open), so it can read live context at that moment, e.g.
+   * `default: () => useAuthStore().user?.country_code`.
+   */
+  default?: unknown | (() => unknown);
+  /** i18n key for optional helper text shown under the field. */
+  hint?: string;
+  /** i18n key for placeholder text shown inside an empty field (e.g. "example@mail.com"). */
+  placeholder?: string;
+  /** Icon rendered in the input's #prepend-inner slot when set. */
+  icon?: AppIconName;
+  /**
+   * When set on an 'autocomplete'/'combobox' field whose options identify a
+   * person/org record (e.g. a practitioner or clinic picker), renders an
+   * AppAvatar next to each dropdown option and selected chip, using the
+   * option's `title` as the avatar's name seed.
+   */
+  avatarEntityType?: AppAvatarEntityType;
+  /**
+   * Skip rendering this field's row, while keeping it in the field list for
+   * state/validation/payload purposes (e.g. an admin-only field, or a value
+   * silently inherited from another field). A function is re-evaluated
+   * whenever the form re-renders and receives the live form state, so it can
+   * react to e.g. the current user's role — `hidden: () => useAuthStore().user?.role
+   * !== "admin"` — or a sibling field's value — `hidden: (form) => form.type !== "patient"`.
+   */
+  hidden?: boolean | ((form: Record<string, unknown>) => boolean);
+  /**
+   * Vuetify `color` prop passed straight through to the underlying input —
+   * tints the outline/label (e.g. "success" for green) once focused/active.
+   * A function variant reacts to live form state, same shape as `hidden`.
+   */
+  color?: string | ((form: Record<string, unknown>) => string | undefined);
+  /**
+   * Field keys whose value changes invalidate this field's cached options and
+   * force a reload (e.g. a specialty picker whose options depend on the
+   * currently selected clinic).
+   */
+  dependsOn?: string[];
+  /**
+   * After a `dependsOn`-triggered options reload resolves, if this field is
+   * still empty, seed it with the first resolved option's value.
+   */
+  autoSelectFirstIfEmpty?: boolean;
+  /**
+   * When set, this field's value actually lives at `payload[nestUnder][key]`
+   * / `initialData[nestUnder][key]` instead of a flat `payload[key]` — e.g.
+   * social-media fields nested under `social_links`, or a freetext field
+   * nested under `metadata`. Applies symmetrically on read and write.
+   *
+   * Known limitation: writes always replace `payload[nestUnder]` wholesale —
+   * this is fine as long as each nested bucket has exactly one writer in the
+   * form (true for every current use); it is not a merge with what's already
+   * stored in that DB column.
+   */
+  nestUnder?: string;
+  /**
+   * Layout width hint, out of a 12-unit row (like OrganizationForm/PatientForm's
+   * 2-column rows). A field pairs with the next visible field into one
+   * .pwa-form-row when the two `cols` values add up to 12 — each gets that
+   * share of the row's width (`6`+`6` → 50/50, `2`+`10` → narrow/wide, e.g.
+   * identityFields' prefix+first name). Omit (or `12`) for a full-width field
+   * on its own row. Hidden fields are filtered out before pairing, so a
+   * `cols: 6` field whose intended partner is hidden will pair with the next
+   * visible field whose `cols` completes it to 12.
+   */
+  cols?: 2 | 6 | 10 | 12;
+  /** 'toggle' fields: i18n keys for the small state line under the label (NEO-241). */
+  toggleText?: { on: string; off: string };
+  /**
+   * 'number' fields: draw − and + either side of the value (NumberStepperField,
+   * NEO-241). The first press on an empty field lands on `start`.
+   */
+  stepper?: { step: number; min: number; max: number; start: number; unitKey?: string };
+  /**
+   * 'boolean' fields only — the value stored in form state (and submitted)
+   * when the switch is on/off. Default `true`/`false`, a real boolean. Set
+   * these to override for a field backed by a non-boolean column being given
+   * a boolean UI (e.g. patientForm's `cpap_device`, a TEXT column presented
+   * as a yes/no switch — `trueValue: "CPAP"`, `falseValue: ""`). 'toggle'
+   * fields use the same pair.
+   */
+  trueValue?: unknown;
+  falseValue?: unknown;
+  /**
+   * Which section this field belongs to (NEO-92). FormRenderer groups fields
+   * by section in order of each section's first field, so a config can keep
+   * its field order; fields without one join the first section. Use
+   * config/forms/sections.ts's `inSection()` to tag a run of fields.
+   */
+  section?: FormSectionId;
+  /**
+   * 'date' fields only (NEO-132, AppDateField): allowed range — "YYYY-MM-DD"
+   * or the live token "today" — which day the calendar opens on, and the
+   * shortcut chips above it ("past": Today/Yesterday/A week ago).
+   */
+  date?: {
+    min?: string;
+    max?: string;
+    openAt?: "day" | "year";
+    quickPicks?: "past" | "future" | "none";
+  };
+}

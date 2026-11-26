@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pwa",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@neo/pwa", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "ajm-corporativo",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@ajm/corporativo", "dev"],
+      "port": 5180
+    }
+  ]
+}

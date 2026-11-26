@@ -1,0 +1,183 @@
+import type { RouteRecordRaw } from "vue-router";
+import PublicLayout from "../layouts/PublicLayout.vue";
+import AppLayout from "../layouts/AppLayout.vue";
+import type { UserRole } from "../stores/auth";
+
+export { PublicLayout, AppLayout };
+
+const ALL_STAFF_ROLES: UserRole[] = ["rep", "doctor", "manager", "admin", "kam", "msl"];
+// NeoCRM support (CORE-197) is not staff of the tenant: it opens only the screens that name it below.
+const STAFF_AND_SUPPORT: UserRole[] = [...ALL_STAFF_ROLES, "support"];
+
+/** App starts at login; root and unknown paths send unauthenticated users to /login. */
+// Nav order: dashboard, leads, hcp, hco, patients, calendar, presentations
+// (hidden — see `hidden` meta below), resources, users, documents,
+// territories — the mobile bottom
+// bar (AppShell) shows exactly the first 4 of
+// whatever's visible for the current role. appNavRoutes below derives from
+// this array's order — reordering here reorders both the sidebar and the
+// bottom bar. The post-login landing page and logo link target is the role's
+// first visible nav entry (see homePathForRole) — /dashboard for admin.
+// Each app-layout route carries a `roles` meta — AppNavLinks.vue filters the
+// sidebar by it, and the router guard (router/index.ts) enforces it: visiting
+// a route directly with the wrong role redirects to the role's home instead of
+// rendering the view. admin always bypasses this (see isRoleAllowed) — sees
+// every view regardless of what's listed here.
+// /login, /forgot-password and /reset-password all share this one lazy-import
+// reference (not separate `() => import(...)` closures per path) so Vue
+// Router resolves them to the literal same async component — RouterView then
+// reuses the mounted instance across navigation between them instead of
+// remounting it. That's what keeps the card shell, logo and settings icon
+// (AuthChrome/AuthCard, rendered once inside AuthView.vue) on screen the
+// whole time — only the inner step content transitions. See AuthView.vue.
+const authViewComponent = () => import("../views/LoginView.vue");
+
+export const routes: RouteRecordRaw[] = [
+  { path: "/", redirect: "/login" },
+  { path: "/login", name: "login", component: authViewComponent, meta: { layout: "public", public: true } },
+  { path: "/forgot-password", name: "forgot-password", component: authViewComponent, meta: { layout: "public", public: true } },
+  { path: "/reset-password", name: "reset-password", component: authViewComponent, meta: { layout: "public", public: true } },
+  { path: "/auth/callback", name: "auth-callback", component: () => import("../views/AuthCallbackView.vue"), meta: { layout: "public", public: true } },
+  { path: "/change-password", name: "change-password", component: () => import("../views/ChangePasswordView.vue"), meta: { layout: "public", requiresAuth: true } },
+  { path: "/partner-register", name: "partner-register", component: () => import("../views/PartnerRegistrationView.vue"), meta: { layout: "public", public: true } },
+  // Phone half of "sign on your phone", the QR next to every signature pad on a computer (CORE-166, CORE-172) — same #<token> rule as /q.
+  { path: "/sign", name: "sign-on-phone", component: () => import("../views/SignOnPhoneView.vue"), meta: { layout: "public", public: true } },
+  // CORE-166's first QRs pointed here; the #token rides along.
+  { path: "/partner-sign", redirect: (to) => ({ path: "/sign", hash: to.hash }) },
+  // Patient self-fill questionnaire from a doctor's QR code (NEO-36) — no account; the token is the
+  // credential and lives in the URL #fragment (/q#<token>), which browsers never send to any server.
+  { path: "/q", name: "patient-questionnaire", component: () => import("../views/PatientQuestionnaireView.vue"), meta: { layout: "public", public: true } },
+  // Patient's appointment page from the appointment email (CORE-25): confirm, "I can't come", stop emails. Same /a#<token> rule as /q.
+  { path: "/a", name: "patient-appointment", component: () => import("../views/PatientAppointmentView.vue"), meta: { layout: "public", public: true } },
+  // The patient's signed Historia clínica from the emailed link (NEO-258). Same /d#<token> rule as /q.
+  { path: "/d", name: "patient-document", component: () => import("../views/PatientDocumentView.vue"), meta: { layout: "public", public: true } },
+  { path: "/dev", name: "dev", component: () => import("../views/DevView.vue"), meta: { layout: "app", devOnly: true } },
+  { path: "/dashboard", name: "dashboard", component: () => import("../views/DashboardView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "doctor"] } }, // admin + doctor (NEO-233 Panel v2, behind its switch — see router/index.ts); everyone else lands on homePathForRole()
+  { path: "/leads", name: "leads", component: () => import("../views/LeadsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
+  { path: "/leads/:id", name: "lead-detail", component: () => import("../views/LeadDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
+  { path: "/hcp", name: "hcp", component: () => import("../views/HCPView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
+  { path: "/hcp/:id", name: "hcp-detail", component: () => import("../views/HCPDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
+  { path: "/hco", name: "hco", component: () => import("../views/HCOView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
+  { path: "/hco/:id", name: "hco-detail", component: () => import("../views/HCODetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["rep", "kam", "msl", "manager", "admin"] } },
+  { path: "/patients", name: "patients", component: () => import("../views/PatientsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
+  { path: "/patients/:id", name: "patient-detail", component: () => import("../views/PatientDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES } },
+  // Calendario (CORE-117) — right after patients so a doctor has it in the phone bottom bar. Replaces
+  // the separate Planificador (encounters) and Citas (appointments) screens/calendars with one union
+  // list; what each role sees within it (own / territory / redacted) is still decided by the API
+  // (queries/encounter.ts + queries/appointment.ts, merged in queries/calendar.ts).
+  { path: "/calendar", name: "calendar", component: () => import("../views/CalendarView.vue"), meta: { layout: "app", requiresAuth: true, roles: STAFF_AND_SUPPORT, phoneOwnHeader: true } },
+  // Old routes, kept so bookmarks/links still work — no `layout: "app"` meta, so appNavRoutes (below)
+  // never lists them in the sidebar/bottom bar.
+  { path: "/planner", redirect: "/calendar" },
+  { path: "/appointments", redirect: "/calendar" },
+  // Cross-patient clinical aggregates — rep excluded (sees studies/orders only inside their own patient's tabs, not this tenant-wide list).
+  { path: "/sleep-studies", name: "sleep-studies", component: () => import("../views/SleepStudiesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["doctor", "manager", "admin"] } }, // health data: admin + doctor (2026-09-25) + manager (NEO-83)
+  { path: "/treatment-plans", name: "treatment-plans", component: () => import("../views/TreatmentPlansView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["doctor", "manager", "admin"] } },
+  // Hidden from nav while the OrthoApnea resources module ships (not deleted — see the `hidden` filter in appNavRoutes below).
+  { path: "/presentations", name: "presentations", component: () => import("../views/PresentationsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES, hidden: true } },
+  { path: "/resources", name: "resources", component: () => import("../views/ResourcesView.vue"), meta: { layout: "app", requiresAuth: true, roles: STAFF_AND_SUPPORT, partner: "orthoapnea" } },
+  { path: "/users", name: "users", component: () => import("../views/UsersView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
+  { path: "/users/:id", name: "user-detail", component: () => import("../views/UserDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
+  // Admin/manager-only WYSIWYG editor for generated-document body content
+  // (GDPR/informed-consent prose) — see docs/stories/document-content-editor.md.
+  // Documents are identified by a (templateKey, locale) pair, not a single id.
+  // Route names deliberately avoid the bare "documents" name — router/app.spec.ts's
+  // "pwa app has only rep view routes (no portal-only views)" test already
+  // reserves that exact name for a future, separate HCP/patient-portal
+  // "my documents" view (a doctor/patient seeing their OWN signed PDFs) —
+  // a genuinely different feature from this admin/manager content editor.
+  // The URL path stays the clean "/documents" (paths aren't what that test
+  // reserves, only route `name`s), only the internal name differs.
+  { path: "/documents", name: "document-content", component: () => import("../views/DocumentsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager", "support"] } },
+  { path: "/documents/:templateKey/:locale", name: "document-content-detail", component: () => import("../views/DocumentContentEditorView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager", "support"] } },
+  // Geographic hierarchy (country > region > city > village > district) data entry — admin-only,
+  // narrow reference-data CRUD inside the existing app, not a separate portal/admin deployment.
+  { path: "/territories", name: "territories", component: () => import("../views/TerritoriesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
+  // Admin: reports from users (tenant admin) and grouped production errors (platform admin, second tab).
+  // Every signed-in user: their own reports and what happened to them. Opened from the user menu, not the nav.
+  { path: "/my-reports", name: "my-reports", component: () => import("../views/MyReportsView.vue"), meta: { layout: "app", requiresAuth: true, hidden: true } },
+  { path: "/issues", name: "issues", component: () => import("../views/IssuesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "support"] } },
+  // Platform work board (CORE-177): every team's tickets, platform admins only (`platformOnly` hides the nav
+  // entry from tenant admins; the API answers them 403 anyway).
+  { path: "/platform/board", name: "work-board", component: () => import("../views/WorkBoardView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "support"], platformOnly: true } },
+  { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
+];
+
+/** App layout nav: one source of truth for sidebar/drawer + bottom-bar links; derived from routes. */
+/** List routes only (no detail routes like /leads/:id). */
+export const appNavRoutes = routes
+  .filter(
+    (r): r is (typeof routes)[number] & { path: string; name: string } =>
+      typeof r.path === "string" &&
+      !r.path.includes(":") &&
+      r.path !== "/" &&
+      r.path !== "/login" &&
+      r.path !== "/dev" &&
+      typeof (r as { name?: string }).name === "string" &&
+      (r.meta as { layout?: string; devOnly?: boolean; hidden?: boolean } | undefined)?.layout === "app" &&
+      !(r.meta as { devOnly?: boolean } | undefined)?.devOnly &&
+      !(r.meta as { hidden?: boolean } | undefined)?.hidden,
+  )
+  .map((r) => ({
+    path: r.path,
+    name: (r as { name: string }).name,
+    roles: (r.meta as { roles?: UserRole[] } | undefined)?.roles,
+    platformOnly: (r.meta as { platformOnly?: boolean } | undefined)?.platformOnly === true,
+  }));
+
+/** Undefined `roles` means "visible/allowed to all". admin always bypasses — sees every view. */
+export function isRoleAllowed(roles: UserRole[] | undefined, role: UserRole | undefined | null): boolean {
+  return !roles || role === "admin" || (!!role && roles.includes(role));
+}
+
+/** Nav routes visible to the given role. */
+export function navRoutesForRole(role: UserRole | undefined | null) {
+  return appNavRoutes.filter((r) => isRoleAllowed(r.roles, role));
+}
+
+/** Default post-login entry point; the router guard forwards roles that can't see it to homePathForRole(). */
+export const appHomePath = routes.find((r) => (r as { name?: string }).name === "dashboard")?.path ?? "/dashboard";
+
+/**
+ * Roles whose home isn't simply their first visible nav entry. Doctor → the Panel (NEO-233 D1);
+ * while the Panel switch is off the router guard forwards /dashboard to /patients.
+ */
+const ROLE_HOME_PATHS: Partial<Record<UserRole, string>> = { doctor: "/dashboard", manager: "/patients" };
+
+/** Where a doctor lands while the Panel switch is off (the pre-NEO-233 home). */
+export const DOCTOR_FALLBACK_HOME = "/patients";
+
+/** A role's home (landing page + logo link): /dashboard for admin, ROLE_HOME_PATHS, else the first visible nav entry. */
+export function homePathForRole(role: UserRole | undefined | null): string {
+  return (role && ROLE_HOME_PATHS[role]) || navRoutesForRole(role)[0]?.path || appHomePath;
+}
+
+/** Returns the i18n key for a nav route name. Every entry follows `user.<name>.title`. */
+export function navTitleKey(name: string): string {
+  return `user.${name}.title`;
+}
+
+/** Detail route name → its parent list route name, for resolving nav icons on detail pages. */
+const detailRouteParents: Record<string, string> = {
+  "lead-detail": "leads",
+  "hcp-detail": "hcp",
+  "hco-detail": "hco",
+  "patient-detail": "patients",
+  "user-detail": "users",
+  "document-content-detail": "document-content",
+};
+
+/** Parent list route name for a detail route (e.g. `patient-detail` → `patients`), or undefined for top-level routes. */
+export function navParentName(name: string): string | undefined {
+  return detailRouteParents[name];
+}
+
+/**
+ * Returns the AppIcon name (e.g. `nav-leads`) for a route, reusing the same
+ * sidebar/bottom-nav icon on detail pages. Undefined for routes with no nav
+ * entry (login, dev, ...) — AppIcon has no icon registered for those.
+ */
+export function navIconName(name: string): string | undefined {
+  const listName = detailRouteParents[name] ?? name;
+  return appNavRoutes.some((r) => r.name === listName) ? `nav-${listName}` : undefined;
+}

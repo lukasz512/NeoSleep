@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<!--
+  Plantilla de generación — STOP-Bang OSA Screening (NeoSleep)
+  ===============================================================
+  Same two-pass substitution split as historiaEndo.html/informedConsent.html
+  — see those files' own header comments for the full explanation. No
+  content-slot / document_content_version usage here: unlike Historia Endo,
+  STOP-Bang has no admin-editable prose body, just the 8 standardized
+  screening items (fixed clinical instrument, not editable copy) plus
+  per-instance patient/doctor/clinic/score data-fields.
+
+  data-field values filled by apps/api's renderHtmlToPdf({dataFields}):
+    nombre_paciente, fecha_nacimiento, nombre_medico, nombre_clinica, fecha — same as historiaEndo.html
+    q_snoring / q_tiredness / q_observed_apnea / q_pressure / q_bmi_over_35 /
+      q_age_over_50 / q_neck_circumference_over_40cm / q_is_male — Sí/No
+      choice boxes, the recorded answer marked (renderHtmlToPdf choiceFields)
+    score — the computed total (0-8), from stop_bang_screening.score
+      (a Postgres GENERATED ALWAYS ... STORED column, not recomputed here)
+    score_zone — the three official risk zones as choice boxes, the one the
+      score falls in marked (Łukasz, 2026-09-26)
+    bmi_detail / neck_detail — the specialist's measurements under B and N
+      ("IMC 35,8 kg/m² · 162 cm · 94 kg", "Cuello 42 cm"), empty when B/N
+      were answered as a plain yes/no (migration 034)
+    patient_stamp — "answered by the patient via personal link · date" when
+      S-T-O-P came from the QR/email link; empty on a blank form, which then
+      shows a line for the patient to sign (signature model A)
+-->
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>{{documents.stopBang.title}} (NeoSleep)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: {{brand:primary}};
+    --secondary: {{brand:secondary}};
+    --text: #1a1a1a;
+    --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  @page { size: A4; margin: 18mm 14mm 18mm; } /* 18mm: room for the 2-line per-page footer */
+  body {
+    font-family: var(--font);
+    font-weight: 300;
+    color: var(--text);
+    font-size: 9.5pt;
+    line-height: 1.42;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 28px 24px 20px;
+    background: #fff;
+  }
+
+  .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
+  .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
+  @media print {
+    body { padding: 0; max-width: none; }
+    .screen-only { display: none; }
+  }
+  {{style:docFields}}
+  {{style:docTheme}}
+</style>
+</head>
+<body>
+
+  <header class="doc-header">
+    <span class="logo">{{brand:logo}}</span>
+    <span class="doc-cat">{{documents.common.category.screening}}</span>
+  </header>
+
+  <div class="doc-title">
+    <h1>{{documents.stopBang.title}}</h1>
+    <h2>{{documents.stopBang.subtitle}}</h2>
+  </div>
+
+  <dl class="doc-fields">
+    <div class="doc-field doc-field--patient"><dt>{{documents.stopBang.fieldPatientName}}</dt><dd data-field="nombre_paciente"></dd></div>
+    <div class="doc-field doc-field--short"><dt>{{documents.fieldBirthDate}}</dt><dd data-field="fecha_nacimiento"></dd></div>
+    <div class="doc-field"><dt>{{documents.stopBang.fieldPractitioner}}</dt><dd data-field="nombre_medico"></dd></div>
+    <div class="doc-field"><dt>{{documents.stopBang.fieldClinic}}</dt><dd data-field="nombre_clinica"></dd></div>
+    <div class="doc-field doc-field--short"><dt>{{documents.stopBang.fieldDate}}</dt><dd data-field="fecha"></dd></div>
+  </dl>
+
+  <h3 class="doc-sec">{{documents.stopBang.sectionStop}}</h3>
+  <table class="checklist">
+    <tr><td class="letter">S</td><td>{{documents.stopBang.q.snoring}}</td><td class="q-answer" data-field="q_snoring"></td></tr>
+    <tr><td class="letter">T</td><td>{{documents.stopBang.q.tiredness}}</td><td class="q-answer" data-field="q_tiredness"></td></tr>
+    <tr><td class="letter">O</td><td>{{documents.stopBang.q.observedApnea}}</td><td class="q-answer" data-field="q_observed_apnea"></td></tr>
+    <tr><td class="letter">P</td><td>{{documents.stopBang.q.pressure}}</td><td class="q-answer" data-field="q_pressure"></td></tr>
+  </table>
+
+  <h3 class="doc-sec">{{documents.stopBang.sectionBang}}</h3>
+  <table class="checklist">
+    <tr><td class="letter">B</td><td>{{documents.stopBang.q.bmiOver35}}<span class="q-detail" data-field="bmi_detail"></span></td><td class="q-answer" data-field="q_bmi_over_35"></td></tr>
+    <tr><td class="letter">A</td><td>{{documents.stopBang.q.ageOver50}}</td><td class="q-answer" data-field="q_age_over_50"></td></tr>
+    <tr><td class="letter">N</td><td>{{documents.stopBang.q.neckCircumference}}<span class="q-detail" data-field="neck_detail"></span></td><td class="q-answer" data-field="q_neck_circumference_over_40cm"></td></tr>
+    <tr><td class="letter">G</td><td>{{documents.stopBang.q.isMale}}</td><td class="q-answer" data-field="q_is_male"></td></tr>
+  </table>
+
+  <div class="doc-result">
+    <div class="doc-result-top">
+      <span class="doc-result-label">{{documents.stopBang.scoreLabel}}</span>
+      <span class="doc-result-score" data-field="score"></span>
+    </div>
+    <div class="doc-result-zones" data-field="score_zone"></div>
+    <p class="doc-result-note">{{documents.stopBang.interpretationNote}}</p>
+  </div>
+
+  <div class="sig-panels">
+    <div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.stopBang.signaturePatient}}</div><div class="sig-stamp" data-field="patient_stamp"></div><div class="sig-area" data-field="firma_paciente"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_paciente"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha_stop"></dd></div></dl></div></div>
+    <div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.stopBang.signatureSpecialist}}</div><div class="sig-area" data-field="firma_doctor"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_medico"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl></div></div>
+  </div>
+
+  <div class="contact-footer screen-only">
+    <div>{{brand:contactLine}}</div>
+    <div class="doc-ref" data-field="doc_ref">{{doc:ref}}</div>
+  </div>
+
+</body>
+</html>

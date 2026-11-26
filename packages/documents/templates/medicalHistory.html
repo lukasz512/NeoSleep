@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<!--
+  Plantilla de generación — Antecedentes médicos (NeoSleep)
+  =========================================================
+  Printable patient medical-history questionnaire, one item of the patient
+  Estudios checklist (NEO-36 part 2, ADR-024). Fixed clinical instrument —
+  no admin-editable content slot. Same two-pass substitution as
+  stopBang.html: {{documents.*}} / {{brand:*}} filled by renderDocumentHtml,
+  data-field values filled by apps/api's renderHtmlToPdf.
+
+  data-field values:
+    nombre_paciente, fecha_nacimiento, nombre_medico, nombre_clinica, fecha
+    q_has_* — "Sí" / "No" from the latest medical_history_questionnaire, or
+      empty Sí / No tick-boxes (drawn by the
+      renderer, choiceFields) when printing a blank form to fill in by hand
+    medical_history_other — free text ("Otros")
+    firma_paciente — the patient's signature (image when signed digitally,
+      empty box otherwise)
+-->
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>{{documents.medicalHistory.title}} (NeoSleep)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: {{brand:primary}};
+    --secondary: {{brand:secondary}};
+    --text: #1a1a1a;
+    --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  @page { size: A4; margin: 18mm 14mm 18mm; } /* 18mm: room for the 2-line per-page footer */
+  body { font-family: var(--font); font-weight: 300; color: var(--text); font-size: 9.5pt; line-height: 1.42; max-width: 800px; margin: 0 auto; padding: 28px 24px 20px; background: #fff; }
+  .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
+  .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
+  @media print { body { padding: 0; max-width: none; } .screen-only { display: none; } }
+  {{style:docFields}}
+  {{style:docTheme}}
+</style>
+</head>
+<body>
+
+  <header class="doc-header">
+    <span class="logo">{{brand:logo}}</span>
+    <span class="doc-cat">{{documents.common.category.clinicalRecord}}</span>
+  </header>
+
+  <div class="doc-title">
+    <h1>{{documents.medicalHistory.title}}</h1>
+    <h2>{{documents.medicalHistory.subtitle}}</h2>
+  </div>
+
+  <dl class="doc-fields">
+    <div class="doc-field doc-field--patient"><dt>{{documents.historiaEndo.fieldPatientName}}</dt><dd data-field="nombre_paciente"></dd></div>
+    <div class="doc-field doc-field--short"><dt>{{documents.fieldBirthDate}}</dt><dd data-field="fecha_nacimiento"></dd></div>
+    <div class="doc-field"><dt>{{documents.historiaEndo.fieldPractitioner}}</dt><dd data-field="nombre_medico"></dd></div>
+    <div class="doc-field"><dt>{{documents.historiaEndo.fieldClinic}}</dt><dd data-field="nombre_clinica"></dd></div>
+    <div class="doc-field doc-field--short"><dt>{{documents.historiaEndo.fieldDate}}</dt><dd data-field="fecha"></dd></div>
+  </dl>
+
+  <p class="doc-prompt">{{documents.medicalHistory.prompt}}</p>
+  <table class="checklist">
+    <tr><td>{{documents.historiaEndo.q.anemia}}</td><td class="q-answer" data-field="q_has_anemia"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.diabetes}}</td><td class="q-answer" data-field="q_has_diabetes"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.smoking}}</td><td class="q-answer" data-field="q_has_smoking"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.endocrineDisorder}}</td><td class="q-answer" data-field="q_has_endocrine_disorder"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.sinusitis}}</td><td class="q-answer" data-field="q_has_sinusitis"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.alcoholism}}</td><td class="q-answer" data-field="q_has_alcoholism"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.hypertension}}</td><td class="q-answer" data-field="q_has_hypertension"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.hepatitis}}</td><td class="q-answer" data-field="q_has_hepatitis"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.cancer}}</td><td class="q-answer" data-field="q_has_cancer"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.addictions}}</td><td class="q-answer" data-field="q_has_addictions"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.heartDisease}}</td><td class="q-answer" data-field="q_has_heart_disease"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.kidneyDisease}}</td><td class="q-answer" data-field="q_has_kidney_disease"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.hiv}}</td><td class="q-answer" data-field="q_has_hiv"></td></tr>
+    <tr><td>{{documents.historiaEndo.q.neurologicalDisorder}}</td><td class="q-answer" data-field="q_has_neurological_disorder"></td></tr>
+  </table>
+  <div class="doc-notes"><div class="doc-notes-label">{{documents.historiaEndo.q.other}}</div><div class="doc-notes-body" data-field="medical_history_other"></div></div>
+
+  <div class="sig-panels"><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.historiaEndo.signatureLabelPatient}}</div><div class="sig-stamp" data-field="patient_stamp"></div><div class="sig-area" data-field="firma_paciente"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_paciente"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div></div>
+
+  <div class="contact-footer screen-only">
+    <div>{{brand:contactLine}}</div>
+    <div class="doc-ref" data-field="doc_ref">{{doc:ref}}</div>
+  </div>
+
+</body>
+</html>

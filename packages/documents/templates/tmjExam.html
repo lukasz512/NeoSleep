@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<!--
+  Plantilla de generación — Evaluación del ATM (NeoSleep)
+  ======================================================
+  Printable temporomandibular joint evaluation, a section of the patient's
+  Historia clínica (NEO-231, Dra. Lorena) — filled by the doctor. Fixed
+  clinical instrument, no content slot. Same substitution split as stopBang.html.
+
+  data-field values:
+    nombre_paciente, fecha_nacimiento, nombre_medico, nombre_clinica, fecha
+    tmj_<finding>_right / tmj_<finding>_left — one tick-box per side, marked
+      from the latest tmj_exam, empty on a blank form (renderer choiceFields)
+    tmj_max_opening — maximum opening, "38 mm"; empty to write by hand
+    firma_doctor — the doctor's signature box (signed on paper)
+-->
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>{{documents.tmjExam.title}} (NeoSleep)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: {{brand:primary}};
+    --secondary: {{brand:secondary}};
+    --text: #1a1a1a;
+    --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  @page { size: A4; margin: 18mm 14mm 18mm; } /* 18mm: room for the 2-line per-page footer */
+  body { font-family: var(--font); font-weight: 300; color: var(--text); font-size: 9.5pt; line-height: 1.42; max-width: 800px; margin: 0 auto; padding: 28px 24px 20px; background: #fff; }
+  .screen-only.contact-footer { font-size: 8pt; color: var(--secondary); border-top: 1px solid #ccc; padding-top: 8px; margin-top: 24px; }
+  .screen-only.contact-footer .doc-ref { text-align: right; margin-top: 2px; }
+  @media print { body { padding: 0; max-width: none; } .screen-only { display: none; } }
+  {{style:docFields}}
+  {{style:docTheme}}
+</style>
+</head>
+<body>
+
+  <header class="doc-header">
+    <span class="logo">{{brand:logo}}</span>
+    <span class="doc-cat">{{documents.common.category.clinicalRecord}}</span>
+  </header>
+
+  <div class="doc-title">
+    <h1>{{documents.tmjExam.title}}</h1>
+    <h2>{{documents.tmjExam.subtitle}}</h2>
+  </div>
+
+  <dl class="doc-fields">
+    <div class="doc-field doc-field--patient"><dt>{{documents.historiaEndo.fieldPatientName}}</dt><dd data-field="nombre_paciente"></dd></div>
+    <div class="doc-field doc-field--short"><dt>{{documents.fieldBirthDate}}</dt><dd data-field="fecha_nacimiento"></dd></div>
+    <div class="doc-field"><dt>{{documents.historiaEndo.fieldPractitioner}}</dt><dd data-field="nombre_medico"></dd></div>
+    <div class="doc-field"><dt>{{documents.historiaEndo.fieldClinic}}</dt><dd data-field="nombre_clinica"></dd></div>
+    <div class="doc-field doc-field--short"><dt>{{documents.historiaEndo.fieldDate}}</dt><dd data-field="fecha"></dd></div>
+  </dl>
+
+  <table class="checklist tmj">
+    <tr><th>{{documents.tmjExam.colFinding}}</th><th class="tmj-side">{{documents.tmjExam.colRight}}</th><th class="tmj-side">{{documents.tmjExam.colLeft}}</th></tr>
+    <tr><td>{{documents.tmjExam.f.painPalpation}}</td><td class="q-answer" data-field="tmj_pain_palpation_right"></td><td class="q-answer" data-field="tmj_pain_palpation_left"></td></tr>
+    <tr><td>{{documents.tmjExam.f.jointSounds}}</td><td class="q-answer" data-field="tmj_joint_sounds_right"></td><td class="q-answer" data-field="tmj_joint_sounds_left"></td></tr>
+    <tr><td>{{documents.tmjExam.f.openingLimitation}}</td><td class="q-answer" data-field="tmj_opening_limitation_right"></td><td class="q-answer" data-field="tmj_opening_limitation_left"></td></tr>
+    <tr><td>{{documents.tmjExam.f.openingDeviation}}</td><td class="q-answer" data-field="tmj_opening_deviation_right"></td><td class="q-answer" data-field="tmj_opening_deviation_left"></td></tr>
+    <tr><td>{{documents.tmjExam.f.musclePain}}</td><td class="q-answer" data-field="tmj_muscle_pain_right"></td><td class="q-answer" data-field="tmj_muscle_pain_left"></td></tr>
+    <tr><td>{{documents.tmjExam.maxOpening}}</td><td class="q-answer" colspan="2" data-field="tmj_max_opening"></td></tr>
+  </table>
+
+  <div class="doc-notes"><div class="doc-notes-label">{{documents.oralExam.notes}}</div><div class="doc-notes-body"></div></div>
+
+  <div class="sig-panels"><div class="sig-panel"><div class="sig-main"><div class="sig-label">{{documents.historiaEndo.signatureLabelDoctor}}</div><div class="sig-area" data-field="firma_doctor"></div><dl class="sig-details"><div><dt>{{documents.signature.name}}</dt><dd data-field="nombre_medico"></dd></div><div><dt>{{documents.signature.date}}</dt><dd data-field="fecha"></dd></div></dl><div class="sig-e-note">{{documents.signature.eSigned}}</div></div></div></div>
+
+  <div class="contact-footer screen-only">
+    <div>{{brand:contactLine}}</div>
+    <div class="doc-ref" data-field="doc_ref">{{doc:ref}}</div>
+  </div>
+
+</body>
+</html>

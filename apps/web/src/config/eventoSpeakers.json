@@ -1,0 +1,138 @@
+[
+  {
+    "num": 1,
+    "specialty": "Lic. en psicología",
+    "color": "#6A7FB8",
+    "name": "Ulises Jiménez Correa",
+    "photo": "/images/speakers/ulises-jimenez.jpg",
+    "link": null,
+    "flags": ["mx"],
+    "subtitle": "Maestro en psicobiología. Egresado de la UNAM",
+    "topic": "Insomnio comórbido con apnea del sueño (COMISA)",
+    "bio": "Licenciado en Psicología, Maestro en Psicobiología egresado de la UNAM y Doctor en Biología Experimental egresado de la UAM. Investigador y clínico especializado en trastornos del sueño, con enfoque en la relación entre salud mental, neurobiología y patología respiratoria nocturna.",
+    "bullets": [
+      "COMISA: cuando el insomnio y la apnea del sueño coexisten en el mismo paciente",
+      "Por qué tratar solo una condición no es suficiente: el riesgo del subdiagnóstico",
+      "La importancia del diagnóstico y tratamiento con visión interdisciplinaria entre dentistas, médicos y psicólogos",
+      "Cómo identificar al paciente COMISA en el consultorio dental y cuándo derivar"
+    ]
+  },
+  {
+    "num": 2,
+    "specialty": "Neumólogo Pediatra, Pediatra, Medicina de Sueño",
+    "color": "#4A9B8E",
+    "name": "Dr. Jhonatan Mata Aranda",
+    "photo": "/images/speakers/jhonatan-mata-aranda.jpg",
+    "link": null,
+    "flags": ["mx"],
+    "topic": "Apnea Obstructiva del Sueño y Dispositivo de Avance Mandibular: Selección del Paciente Ideal",
+    "bio": "Médico con Alta especialidad en Medicina de Sueño, Subespecialista en Neumología Pediátrica, Certificado por el Consejo de Neumología y Cirugía de Tórax, Médico Especialista en Pediatría, Certificado por el Consejo Mexicano de Certificación en Pediatría A.C.\n\nCursó sus estudios de Licenciatura de Médico Cirujano en la Facultad de Estudios Superiores de Iztacala (UNAM).\n\nSus estudios de posgrado los realizó en la Universidad Nacional Autónoma de México y es egresado del Hospital Regional de Alta Especialidad de Ixtapaluca (HRAEI) como Médico Pediatra y del Instituto Nacional de Enfermedades Respiratorias (INER) como Neumólogo Pediatra; realizó su Alta Especialidad en la Clínica de Trastornos del Sueño de la UNAM dentro del Hospital General de México.\n\nMaestría en Administración de Hospitales y Salud Pública en el Instituto de Estudios Superiores de Administración Pública (IESAP).\n\nHa participado como conferencista y presentador de trabajos de investigación médica en congresos nacionales, así como consultor de temas de interés en el área médica en sitios de internet y medios de comunicación de televisión y radio.\n\nActualmente se desempeña como Médico Subespecialista en el Hospital Regional de Alta Especialidad de Ixtapaluca; así como en el Hospital Pediátrico de Azcapotzalco, donde actualmente es Jefe de Neumología e Inhaloterapia, y ejerce como Consultor Médico en el medio privado.\n\nTrabaja en un protocolo de investigación del Instituto Politécnico Nacional (IPN) relacionado al uso del extracto dializable de leucocitos (factor de transferencia) en pacientes adultos con infección por COVID-19.",
+    "bullets": [
+      "Miembro activo de la Sociedad Mexicana de Pediatría A.C.",
+      "Miembro activo del Colegio Mexicano de Neumólogos Pediatras A.C.",
+      "Miembro activo de la Sociedad Mexicana de Neumología y Cirugía de Tórax A.C."
+    ]
+  },
+  {
+    "num": 3,
+    "specialty": "Nutrióloga Registrada en BC, Canadá",
+    "color": "#6BAA6F",
+    "name": "Adriana de la Parra Sólomon MSc, RD",
+    "photo": "/images/speakers/adriana-de-la-parra.jpg",
+    "link": null,
+    "flags": ["mx", "ca"],
+    "topic": "Más allá del ronquido: cómo la alimentación, estilo de vida y el peso impactan el sueño",
+    "bio": "Nutrióloga Registrada en BC, Canadá, con Licenciatura en Nutrición y Ciencias de los Alimentos por la Universidad Iberoamericana Ciudad de México y una Maestría en Nutrición Humana por la Universidad de McGill en Montreal, Canadá. Especializada en nutrición deportiva por el Comité Olímpico Internacional, con experiencia en consulta privada, educación en salud y bienestar, así como en conferencias impartidas en distintas partes de México. A lo largo de su trayectoria ha colaborado con instituciones como el Gatorade Sports Science Institute (GSSI), el CNAR y la Federación Mexicana de Nutrición Deportiva, además de impartir clases online para el Instituto Universitario Vive Sano y la Universidad Intercontinental (UIC). Su trabajo se enfoca en promover hábitos sostenibles relacionados con la alimentación, la actividad física, el descanso y el bienestar integral para mejorar la salud y calidad de vida de las personas.",
+    "bullets": []
+  },
+  {
+    "num": 4,
+    "specialty": "Odontóloga",
+    "color": "#128F83",
+    "name": "Dra. Lorena González",
+    "photo": "/images/speakers/lorena-gonzalez.jpg",
+    "link": null,
+    "flags": ["ve"],
+    "topic": "Tratamiento de la apnea del sueño en odontología: de la detección a la intervención.",
+    "bio": "Odontóloga General, egresada de la Universidad Central de Venezuela.\n\nEstudiante de Maestría de Endodoncia, en el Instituto de especialidades odontológicas Yury Kuttler.\n\nCertificada con OrthoApnea para tratamientos con dispositivos de avance mandibular.",
+    "bullets": [
+      "Cómo sospechar apnea en consulta",
+      "Screening y cuestionarios",
+      "Signos clínicos odontológicos",
+      "Referencia y diagnóstico médico",
+      "¿Cuándo intervenir?",
+      "Flujo clínico con DAM",
+      "George Gauge + escaneo",
+      "OrthoApnea",
+      "Seguimiento"
+    ]
+  },
+  {
+    "num": 5,
+    "specialty": "Médico Cirujano y Partero · Medicina del Sueño", 
+    "color": "#3E8B5E",
+    "name": "Dr. Sebastian Lorda Dumont",
+    "photo": "/images/speakers/sebastian-lorda.jpg",
+    "link": null,
+    "flags": ["mx"],
+    "topic": "Apnea del sueño como problema de salud pública: diagnóstico médico, criterios de derivación y el rol del dentista en el protocolo de tratamiento.",
+    "bio": "Médico Cirujano y Partero egresado de la Universidad Autónoma de Nuevo León (UANL), con Maestría en Salud Pública por la Universidad de Yale. Diplomado en Medicina del Sueño por la Sociedad Mexicana de Investigación y Medicina del Sueño (SOMIMS) y Miembro de la Academia Americana de Medicina del Sueño (AASM).\n\nSu formación combina la visión clínica con un profundo entendimiento del impacto de los trastornos del sueño en la salud pública. Especializado en el diagnóstico y manejo de la apnea obstructiva del sueño, trabaja en la intersección entre la medicina preventiva, la salud respiratoria y la odontología del sueño.",
+    "bullets": [
+      "Médico Cirujano y Partero – Universidad Autónoma de Nuevo León (UANL)",
+      "Maestría en Salud Pública – Universidad de Yale",
+      "Diplomado en Medicina del Sueño – Sociedad Mexicana del Sueño (SOMIMS)",
+      "Miembro – Academia Americana de Medicina del Sueño (AASM)"
+    ]
+  },
+  {
+    "num": 6,
+    "specialty": "International Business Developer",
+    "color": "#B87A5B",
+    "name": "José Naranjo González",
+    "photo": "/images/speakers/jose-naranjo.jpg",
+    "link": null,
+    "flags": ["es"],
+    "topic": "Cómo integrar el DAM en tu clínica: del primer paciente al flujo rentable.",
+    "bio": "Licenciado en Administración y Dirección de Empresas (LADE) por la Universidad Carlos III de Madrid. José desarrolla su actividad internacional en español, francés e inglés, con una sólida experiencia en sectores de alto valor añadido, donde la excelencia en el servicio, el acompañamiento profesional y la experiencia del cliente marcan la diferencia.\n\nEn OrthoApnea es responsable del desarrollo y consolidación de mercados de habla hispana, impulsando la expansión de soluciones avanzadas para el tratamiento de los trastornos respiratorios del sueño mediante dispositivos de avance mandibular.",
+    "bullets": [
+      "Desarrollo internacional y expansión de mercados",
+      "Acompañamiento clínico y formación a profesionales",
+      "Medicina Dental del Sueño y terapia DAM",
+      "Estrategia de colaboración y desarrollo de negocio"
+    ]
+  },
+  {
+    "num": 7,
+    "specialty": "Chief Technology Officer",
+    "color": "#5B7AB8",
+    "name": "Łukasz Ostrowski",
+    "photo": "/images/speakers/lukasz-ostrowski.jpeg",
+    "link": null,
+    "flags": ["pl"],
+    "topic": "Infraestructura digital NeoSleep: integración de IA, flujo clínico automatizado y escalabilidad multi-clínica.",
+    "bio": "Łukasz es el arquitecto tecnológico detrás de NeoSleep. Responsable del diseño y desarrollo de la plataforma digital que integra diagnóstico con IA, seguimiento clínico y gestión de pacientes en un solo ecosistema. Con experiencia en desarrollo de software a escala internacional, lidera la implementación tecnológica que convierte datos del sueño en decisiones clínicas accionables para dentistas y especialistas.",
+    "bullets": [
+      "Plataforma de conexión paciente–clínica",
+      "Gestión de citas y comunicación integrada",
+      "Seguimiento del tratamiento y adherencia",
+      "Escalabilidad para redes de clínicas"
+    ]
+  },
+  {
+    "num": 8,
+    "specialty": "Founder & Director",
+    "color": "#B85B8A",
+    "name": "Alfred Jan Díaz",
+    "photo": "/images/speakers/alfred-jan.jpeg",
+    "link": null,
+    "flags": ["mx", "ve"],
+    "topic": "Sleep Marketing: Cómo Crear Demanda Antes del Diagnóstico",
+    "bio": "Alfred Jan es fundador de NeoSleep y especialista en creación de experiencias, marketing y desarrollo de marcas con enfoque internacional. Con trayectoria en México, España y Canadá, lidera la visión de NeoSleep integrando tecnología, diagnóstico y odontología del sueño para transformar la manera en que se detecta y trata la apnea del sueño.",
+    "bullets": [
+      "Cómo posicionar tu clínica en odontología del sueño",
+      "Estrategias de captación de pacientes con apnea",
+      "Contenido y canales que funcionan en salud dental",
+      "Crecimiento sostenible y escalable para la clínica"
+    ]
+  }
+]

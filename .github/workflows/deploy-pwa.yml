@@ -1,0 +1,131 @@
+# Deploy rep-app to GoDaddy FTP
+# - prod → pwa.neosleepcare.com (path: secret GODADY_FTP_PWA_PROD)
+# - dev  → pwa-dev.neosleepcare.com (path: secret GODADY_FTP_PWA_DEV)
+#
+# The prod branch is protected by the requiere_PR_to_merge ruleset — no
+# direct pushes, no bypass, for anyone. So a push to prod here only ever
+# happens because a "Promote Dev → Prod" PR was reviewed and merged
+# (promote-dev-to-prod.yml opens that PR; it never pushes anything itself).
+#
+# NOTE: GODADY_FTP_PWA_* secrets must hold the FTP server-dir path (e.g.
+# /neosleepcare.com/pwa/prod), not the public https:// URL — see
+# secrets/deploy-notes.md for the exact paths.
+#
+# TODO: migrate to SSH (appleboy/scp-action) once Hetzner VPS is provisioned.
+# See infrastructure/setup/provision.md for the migration runbook.
+
+name: Deploy NeoSleepCare App
+
+# Deploys only when something this app is built from changed (CORE-144):
+# its own code, the shared packages it imports, or the root build files. A
+# change elsewhere (API, docs, the other app) no longer rebuilds and re-uploads
+# it. Run it by hand (workflow_dispatch) to redeploy without a change.
+on:
+  push:
+    branches: [prod, dev]
+    paths:
+      - "apps/pwa/**"
+      - "packages/**"
+      - "apps/api/client/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".nvmrc"
+      - "tsconfig.base.json"
+      - "tsconfig.json"
+      - ".github/workflows/deploy-pwa.yml"
+  workflow_dispatch:
+
+# A newer merge replaces a deploy that is still waiting for a runner, instead
+# of queueing behind it. A deploy that already started is never cancelled — a
+# half-finished FTP upload leaves the site pointing at missing assets.
+concurrency:
+  group: deploy-pwa-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history: the build number below counts commits since the
+          # last version bump in apps/pwa/package.json.
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # API_URL_PROD / API_URL_DEV point at the Cloud Run services (NEO-45; Render
+      # removed in CORE-188). See docs/RUNBOOK_API_CLOUD_RUN.md.
+      - name: Set API URL for build
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/prod" ]; then
+            echo "VITE_API_URL=${{ secrets.API_URL_PROD }}" >> $GITHUB_ENV
+            echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_PROD }}" >> $GITHUB_ENV
+          else
+            echo "VITE_API_URL=${{ secrets.API_URL_DEV }}" >> $GITHUB_ENV
+            echo "VITE_GA_ID=${{ secrets.VITE_GA_ID_DEV }}" >> $GITHUB_ENV
+          fi
+
+      # Shown under the login badge as "Version <package.json version>.N" (CORE-154).
+      # N = commits since the commit that last changed the "version" line in
+      # apps/pwa/package.json, plus one. Bumping the version restarts N at 1;
+      # within a version N only goes up. Nothing to maintain by hand.
+      - name: Set app build number and channel
+        run: |
+          VERSION_COMMIT=$(git log -1 --format=%H -G'"version"' -- apps/pwa/package.json)
+          echo "VITE_APP_BUILD=$(( $(git rev-list --count "${VERSION_COMMIT}..HEAD") + 1 ))" >> $GITHUB_ENV
+          if [ "${{ github.ref }}" = "refs/heads/prod" ]; then
+            echo "VITE_APP_CHANNEL=prod" >> $GITHUB_ENV
+          else
+            echo "VITE_APP_CHANNEL=dev" >> $GITHUB_ENV
+          fi
+
+      # VITE_GOOGLE_MAPS_BROWSER_API_KEY powers the HCO location map
+      # (components/HCOLocationMap.vue). HTTP-referrer-restricted to the PWA/website
+      # domains, so it is safe in the bundle. Without it the map never loads.
+      - name: Build rep-app
+        run: pnpm run build:pwa
+        env:
+          VITE_GOOGLE_MAPS_BROWSER_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_BROWSER_API_KEY }}
+          # Map ID for Advanced Markers (CORE-43, ported from deploy-web.yml's
+          # NEO-79 setup). Optional: while the secret is unset the map falls
+          # back to Google's DEMO_MAP_ID (see
+          # apps/pwa/src/composables/useGoogleMaps.ts). Not a secret value,
+          # but kept next to the key so both are configured in one place.
+          VITE_GOOGLE_MAPS_MAP_ID: ${{ secrets.VITE_GOOGLE_MAPS_MAP_ID }}
+
+      - name: Deploy to PROD (pwa.neosleepcare.com)
+        if: github.ref == 'refs/heads/prod'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          local-dir: ./apps/pwa/dist/
+          server-dir: ${{ secrets.GODADY_FTP_PWA_PROD }}/
+          dangerous-clean-slate: false
+
+      - name: Deploy to DEV (pwa-dev.neosleepcare.com)
+        if: github.ref == 'refs/heads/dev'
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftp
+          local-dir: ./apps/pwa/dist/
+          server-dir: ${{ secrets.GODADY_FTP_PWA_DEV }}/
+          dangerous-clean-slate: false

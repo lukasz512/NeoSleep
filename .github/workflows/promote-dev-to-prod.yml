@@ -1,0 +1,67 @@
+# One-click convenience: opens a pull request from dev into prod. That's
+# all it does — no push, no build, no auto-merge.
+#
+# Merging is a deliberate, manual click on the PR in GitHub, done by a real
+# user. That's not laziness — a push made by a workflow's own GITHUB_TOKEN
+# never triggers other workflows (GitHub's anti-recursion rule), so an
+# auto-merge here would silently never fire deploy-pwa.yml / deploy-web.yml
+# (push: [prod]). A human clicking Merge is the one point in this chain
+# GitHub guarantees behaves normally.
+#
+# The prod ruleset (requiere_PR_to_merge) requires both a PR AND the CI
+# status check to be green before the Merge button is even clickable — so
+# this can never ship a red build, automated or not.
+#
+# In Actions, select "Promote Dev → Prod", click "Run workflow", confirm,
+# then go to the PR it opens (or updates) and merge it yourself once CI
+# passes.
+
+name: Promote Dev → Prod
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  open-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Open (or reuse) the dev -> prod PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          git fetch origin dev prod
+
+          # Nothing to promote is the only expected reason for zero open PRs
+          # below — check that FIRST, so a real `gh pr create` failure (e.g.
+          # missing "Allow GitHub Actions to create pull requests" repo
+          # setting) surfaces as a loud error instead of being read as
+          # "must mean prod is already up to date".
+          if [ -z "$(git rev-list origin/prod..origin/dev)" ]; then
+            echo "Nothing to promote — prod already matches dev."
+            exit 0
+          fi
+
+          number=$(gh pr list --base prod --head dev --state open --json number --jq '.[0].number')
+          if [ -z "$number" ]; then
+            gh pr create \
+              --base prod \
+              --head dev \
+              --title "Promote dev to prod" \
+              --body "Review the dev/prod diff and merge once CI is green — that ships to PROD."
+            number=$(gh pr list --base prod --head dev --state open --json number --jq '.[0].number')
+          fi
+
+          if [ -z "$number" ]; then
+            echo "::error::dev is ahead of prod but no PR could be opened or found — see the gh pr create output above."
+            exit 1
+          fi
+          echo "PR #$number is open — review and merge it to promote: https://github.com/${{ github.repository }}/pull/$number"
