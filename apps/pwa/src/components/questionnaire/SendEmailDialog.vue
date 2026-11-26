@@ -40,6 +40,7 @@
         density="compact"
         hide-details
       />
+      <p v-if="recipient && items.length" class="send-email__muted">{{ t("app.clinical.email.copyToMeHint") }}</p>
       <p v-if="recipient" class="send-email__hint">
         <AppIcon name="info-circle" class="send-email__hint-icon" />{{ t("app.clinical.email.spamHint") }}
       </p>
