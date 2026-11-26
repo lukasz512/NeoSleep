@@ -52,6 +52,7 @@ export default defineConfig({
     testTimeout: 15_000,
     globalSetup: ["./vitest.global-setup.ts"],
     // Blocks every fetch to apneadock.* — see the file's own comment.
-    setupFiles: ["./test/fetch-guard.ts"],
+    // Pins supertest's ephemeral servers to 127.0.0.1 (CORE-265).
+    setupFiles: ["./test/fetch-guard.ts", "./test/loopback-listen.ts"],
   },
 });

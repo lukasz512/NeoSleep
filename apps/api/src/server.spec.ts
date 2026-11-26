@@ -9,16 +9,12 @@ describe("API server", () => {
     expect(res.body).toEqual({ ok: true, commit: process.env.GIT_COMMIT || null });
   });
 
-  it("GET /health/pdf renders a real PDF, then rate-limits after 3 calls a minute", async () => {
-    const first = await request(app).get("/health/pdf");
-    expect(first.status).toBe(200);
-    expect(first.body.ok).toBe(true);
-    expect(first.body.bytes).toBeGreaterThan(500);
-
-    await request(app).get("/health/pdf");
-    await request(app).get("/health/pdf");
-    const fourth = await request(app).get("/health/pdf");
-    expect(fourth.status).toBe(429);
+  // The rate limit has its own spec (healthPdfRateLimit.spec.ts, CORE-265): it needs a stubbed renderer.
+  it("GET /health/pdf renders a real PDF", async () => {
+    const res = await request(app).get("/health/pdf");
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.bytes).toBeGreaterThan(500);
   }, 60_000);
 
   // Auth guard — unauthenticated requests should return 401
