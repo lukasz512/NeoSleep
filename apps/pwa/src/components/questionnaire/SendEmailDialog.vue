@@ -209,9 +209,7 @@ async function copyLink() {
   color: rgba(var(--v-theme-on-surface), 0.6);
 }
 .send-email__header-slot {
-  display: flex;
-  justify-content: flex-end;
-  padding: 0 24px;
+  padding: 4px 24px 0;
 }
 .send-email__header-slot:empty {
   display: none;

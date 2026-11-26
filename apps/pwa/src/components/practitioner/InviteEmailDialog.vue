@@ -60,9 +60,7 @@ watch(
 
 <style scoped>
 .invite-email__header-slot {
-  display: flex;
-  justify-content: flex-end;
-  padding: 0 24px;
+  padding: 4px 24px 0;
 }
 .invite-email__body {
   margin: 0;
