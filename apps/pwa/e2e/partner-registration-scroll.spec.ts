@@ -70,6 +70,12 @@ for (const [label, width, height] of [
   ["narrow window", 760, 640],
 ] as const) {
   test(`${label}: the form scrolls with the wheel over the card and over the background`, async ({ page }) => {
+    // Three wheel gestures plus a cold page load don't fit the 30s default on a
+    // slow WebKit runner: the flake hunt of 2026-11-26 (ubuntu-latest) measured
+    // 12-15s until the form rendered and ~5s per gesture, every gesture scrolling
+    // correctly, and the test dying of the budget. Same budget as the sibling
+    // partner-document-dialog spec; the assertions are unchanged.
+    test.setTimeout(90_000);
     await openRegistration(page, width, height);
     // Polled, not measured once: on a loaded CI runner WebKit can report the
     // documents block as visible one layout pass before the form below it has
