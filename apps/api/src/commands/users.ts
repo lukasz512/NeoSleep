@@ -197,6 +197,10 @@ export async function UpdateUserCommand(
     throw new ValidationError("Invalid status");
   }
   if (input.territory_id) await assertValidScopeKind(ctx, input.territory_id);
+  if (input.email !== undefined) {
+    input = { ...input, email: input.email.trim().toLowerCase() };
+    if (!input.email || !EMAIL_REGEX.test(input.email)) throw new ValidationError("A valid email is required", "email");
+  }
 
   const target = await getUserById(ctx.client, id);
   if (!target) return null;
@@ -225,7 +229,11 @@ export async function UpdateUserCommand(
     action: "update",
     entity_type: "User",
     entity_id: id,
-    entity_after: { status: before.status, region: before.region, role: before.role, territory_id: before.scope_territory_id },
+    entity_before: input.email !== undefined && input.email !== target.email ? { email: target.email } : undefined,
+    entity_after: {
+      status: before.status, region: before.region, role: before.role, territory_id: before.scope_territory_id,
+      ...(input.email !== undefined && input.email !== target.email ? { email: input.email } : {}),
+    },
     request_id: ctx.requestId,
   });
 

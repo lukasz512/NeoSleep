@@ -4,6 +4,7 @@ import { AppError, DatabaseError } from "../errors.js";
 import { displayNameSql } from "../utils/personName.js";
 import { localeForCountry } from "../utils/patientEmailLocale.js";
 import { getTerritoryCountryCode } from "./territory.js";
+import { assertEmailNotTaken } from "./identityEmail.js";
 
 export type StaffRole = "admin" | "manager" | "kam" | "msl" | "rep" | "doctor" | "support";
 
@@ -475,6 +476,8 @@ export interface UpdateUserInput {
   first_name?: string;
   last_name?: string;
   phone?: string | null;
+  /** NEO-271: the login email. Written to identities.email (the one shared row), so a doctor who is also a user changes on both screens. */
+  email?: string;
   status?: "active" | "inactive" | "suspended";
   country_code?: string | null;
   /** Country the identity belongs to (PL, MX…). Stored on identities, shared by user/HCP/patient. */
@@ -520,6 +523,16 @@ export async function updateUser(
          FROM users u
          WHERE u.identity_id = i.id AND u.id = $5`,
         [salutation, firstName, lastName, phone, id]
+      );
+    }
+    if (input.email !== undefined && input.email !== existing.email) {
+      await assertEmailNotTaken(client, input.email, existing.identity_id);
+      await client.query(`UPDATE identities SET email = $1, updated_at = now() WHERE id = $2`, [input.email, existing.identity_id]);
+      // The login email is the sign-in key: drop any override so it cannot
+      // keep the old address working, and kill every open session.
+      await client.query(
+        `UPDATE users SET login_email = NULL, token_version = token_version + 1, updated_at = now() WHERE id = $1`,
+        [id]
       );
     }
     if (input.status !== undefined) {

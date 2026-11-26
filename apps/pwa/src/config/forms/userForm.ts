@@ -20,9 +20,8 @@ import { countryOfTerritory, loadScopeTerritoryOptions } from "./territoryOption
  * admin can trigger the "reset password" row action to send a fresh link.
  * Admins never type/see another person's password.
  *
- * `email` is marked `immutableOnEdit` — FormRenderer disables it once
- * initialData.id is set, so the edit dialog no longer shows a live-looking
- * field that UpdateUserCommand silently ignores.
+ * `email` stays editable (NEO-271): changing it writes identities.email and signs
+ * the user out everywhere.
  *
  * Reuses the shared Identity block (prefix key overridden to "salutation",
  * matching patientForm.ts/hcpForm.ts's DB-layer naming convention).
@@ -76,7 +75,6 @@ export function userFormDerive(
 
 const identity = identityFields();
 identity[0] = { ...identity[0], key: "salutation" };
-identity[3] = { ...identity[3], immutableOnEdit: true };
 
 export const userFormFields: FormFieldDef[] = [
   ...identity,
