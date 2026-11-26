@@ -3121,6 +3121,7 @@
   "app.clinical.email.validity": "El enlace es personal y funciona durante 7 días.",
   "app.clinical.email.spamHint": "Si el paciente no encuentra el correo, pídele que revise su carpeta de spam.",
   "app.clinical.email.copyToMe": "Enviarme una confirmación (sin enlaces)",
+  "app.clinical.email.language": "Idioma del correo",
   "app.clinical.email.submit": "Enviar",
   "app.clinical.email.copyLink": "Copiar enlace",
   "app.clinical.email.history": "Enviados",

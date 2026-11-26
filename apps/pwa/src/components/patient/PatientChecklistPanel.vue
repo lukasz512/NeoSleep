@@ -168,6 +168,7 @@
       :items="emailableItems"
       :open-keys="openEmailKeys"
       :recipient="emailDialog.recipient"
+      :language="emailDialog.language"
       :sends="emailDialog.sends"
       :sending="emailing"
       :last-url="emailDialog.lastUrl"
@@ -866,9 +867,10 @@ watch(
  * delivery status, and can copy the link right after sending.
  */
 const emailing = ref(false);
-const emailDialog = reactive<{ open: boolean; recipient: string | null; sends: EmailSend[]; lastUrl: string | null }>({
+const emailDialog = reactive<{ open: boolean; recipient: string | null; language: string; sends: EmailSend[]; lastUrl: string | null }>({
   open: false,
   recipient: null,
+  language: "en",
   sends: [],
   lastUrl: null,
 });
@@ -880,6 +882,7 @@ async function refreshEmailSends() {
   const data = await checklistApi.loadEmailSends();
   if (!data) return;
   emailDialog.recipient = data.recipient;
+  emailDialog.language = data.language;
   emailDialog.sends = data.sends;
 }
 async function openEmailDialog() {
@@ -887,10 +890,10 @@ async function openEmailDialog() {
   emailDialog.open = true;
   await refreshEmailSends();
 }
-async function onEmailSend({ items, copyToMe }: { items: string[]; copyToMe: boolean }) {
+async function onEmailSend({ items, copyToMe, language }: { items: string[]; copyToMe: boolean; language: string }) {
   emailing.value = true;
   try {
-    const sent = await checklistApi.sendByEmail({ items, copyToMe });
+    const sent = await checklistApi.sendByEmail({ items, copyToMe, language });
     if (sent) emailDialog.lastUrl = sent.url;
     await refreshEmailSends();
   } finally {

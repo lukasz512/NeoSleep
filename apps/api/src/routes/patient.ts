@@ -439,7 +439,7 @@ patientRouter.post(
     const origin = resolveFrontendOrigin(req);
     const result = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return SendQuestionnaireEmailCommand(ctx, id, origin, (req.body ?? {}) as { items?: unknown; copy_to_me?: unknown });
+      return SendQuestionnaireEmailCommand(ctx, id, origin, (req.body ?? {}) as { items?: unknown; copy_to_me?: unknown; language?: unknown });
     });
     res.status(201).json({ ...result.request, sent_to: result.sent_to, url: result.url });
   })
@@ -455,7 +455,7 @@ patientRouter.post(
     const origin = resolveFrontendOrigin(req);
     const result = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return SendHistoriaClinicaEmailCommand(ctx, id, origin, { doctorSignature: req.body?.doctorSignature });
+      return SendHistoriaClinicaEmailCommand(ctx, id, origin, { doctorSignature: req.body?.doctorSignature, language: req.body?.language });
     });
     res.status(201).json({ sent_to: result.sent_to, expires_at: result.link.expires_at });
   })

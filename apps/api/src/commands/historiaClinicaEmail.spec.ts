@@ -4,6 +4,7 @@ import { withTenant, insertStaffUser, insertPatient, insertPractitioner, getGlob
 import { ensureDocumentContent } from "../testing/documentContentFixture.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import { ForbiddenError, ValidationError } from "../errors.js";
+import { emailLocale } from "../mailer.js";
 import { RecordClinicalQuestionnaireCommand } from "./clinicalRecords.js";
 import { PatientHasNoEmailError } from "./questionnaireRequest.js";
 import { SendHistoriaClinicaEmailCommand, DownloadPublicDocumentCommand, DocumentLinkInvalidError } from "./historiaClinicaEmail.js";
@@ -99,6 +100,23 @@ beforeEach(() => {
   sendMock.mockResolvedValue(`re_${unique()}`);
   uploadMock.mockClear();
   deleteMock.mockClear();
+});
+
+describe("SendHistoriaClinicaEmailCommand language (CORE-268)", () => {
+  it("uses the sender's language override, and rejects an unsupported one before anything is stored", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const { ctx, patientId } = await doctorWithPatient(client);
+      await completeHistoria(ctx, patientId);
+
+      await expect(SendHistoriaClinicaEmailCommand(ctx, patientId, ORIGIN, { doctorSignature: SIGNATURE, language: "de" })).rejects.toThrow(ValidationError);
+      expect(sendMock).not.toHaveBeenCalled();
+      expect(uploadMock).not.toHaveBeenCalled();
+
+      await SendHistoriaClinicaEmailCommand(ctx, patientId, ORIGIN, { doctorSignature: SIGNATURE, language: "en" });
+      const recipient = sendMock.mock.calls[0]![2] as { language: string; region: string | null };
+      expect(emailLocale(recipient)).toBe("en"); // the patient is MX; the explicit en must not be re-mapped
+    });
+  });
 });
 
 describe("SendHistoriaClinicaEmailCommand", () => {
