@@ -540,7 +540,7 @@ describe("admin picks another of the doctor's clinics as the delivery address (N
     expect(res.body).toMatchObject({ delivery: null, deliveryIssues: [{ path: "delivery_organization_id", code: "invalid" }] });
   });
 
-  it("only an admin may choose: a manager gets 403, a doctor sees no list", async () => {
+  it("only an admin or the doctor may choose: a manager gets 403, a doctor sees their own clinics", async () => {
     const s = await setup(COMPLETE_HCO, "manager");
     const otherId = await addClinic(s.dentistId, TOLUCA);
     const managerRes = await request(app)
@@ -550,7 +550,8 @@ describe("admin picks another of the doctor's clinics as the delivery address (N
 
     const doctorToken = await doctorLoginFor(s);
     const doctorRes = await request(app).get("/api/v1/device-orders/context?product_code=002").set("Authorization", `Bearer ${doctorToken}`);
-    expect(doctorRes.body.deliveryOptions).toBeUndefined();
+    expect(doctorRes.body.deliveryOptions).toHaveLength(2);
+    expect(doctorRes.body.deliveryOptions.map((o: { organizationId: string }) => o.organizationId)).toContain(otherId);
     expect(doctorRes.body.delivery).toMatchObject({ city: COMPLETE_HCO.city });
   });
 
@@ -568,7 +569,7 @@ describe("admin picks another of the doctor's clinics as the delivery address (N
     expect(dto.deliveryAddress).toMatchObject({ city: "Toluca", postalCode: "50000" });
   });
 
-  it("POST: a doctor can't redirect the delivery — 403, OrthoApnea receives nothing", async () => {
+  it("POST: a doctor ships to another of their own saved clinics (NEO-265 D1)", async () => {
     const s = await setup();
     const otherId = await addClinic(s.dentistId, TOLUCA);
     const doctorToken = await doctorLoginFor(s);
@@ -576,8 +577,127 @@ describe("admin picks another of the doctor's clinics as the delivery address (N
       .post("/api/v1/device-orders")
       .set("Authorization", `Bearer ${doctorToken}`)
       .send({ treatment_plan_id: s.planId, patient_id: s.patientId, delivery_organization_id: otherId, order: validOrder(s.dentistId) });
+    await trackLink(s.planId);
+    expect(res.status).toBe(201);
+    const dto = replica.requests.find((r) => r.method === "POST" && r.path === TREATMENTS)!.body as Record<string, unknown>;
+    expect(dto.deliveryAddress).toMatchObject({ city: "Toluca", postalCode: "50000" });
+  });
+
+  it("POST: a doctor can't ship to someone else's clinic — 400, OrthoApnea receives nothing", async () => {
+    const s = await setup();
+    const stranger = await setup({ ...COMPLETE_HCO, city: "Monterrey" });
+    const strangerClinic = await addClinic(stranger.dentistId);
+    const doctorToken = await doctorLoginFor(s);
+    const res = await request(app)
+      .post("/api/v1/device-orders")
+      .set("Authorization", `Bearer ${doctorToken}`)
+      .send({ treatment_plan_id: s.planId, patient_id: s.patientId, delivery_organization_id: strangerClinic, order: validOrder(s.dentistId) });
+    expect(res.status).toBe(400);
+    expect(res.body.fields).toContainEqual({ path: "delivery_organization_id", code: "invalid" });
+    expect(replica.count("POST", TREATMENTS)).toBe(0);
+  });
+
+  it("POST: a manager still can't choose a clinic — 403", async () => {
+    const s = await setup(COMPLETE_HCO, "manager");
+    const otherId = await addClinic(s.dentistId, TOLUCA);
+    const res = await request(app)
+      .post("/api/v1/device-orders")
+      .set("Authorization", `Bearer ${s.token}`)
+      .send({ treatment_plan_id: s.planId, patient_id: s.patientId, delivery_organization_id: otherId, order: validOrder(s.dentistId) });
     expect(res.status).toBe(403);
     expect(replica.count("POST", TREATMENTS)).toBe(0);
+  });
+});
+
+describe("a custom delivery address instead of the clinic (NEO-265, rules §1.2 'Dirección alternativa')", () => {
+  const CUSTOM = {
+    name: "Dr Jan Testowy",
+    address: "Calle Reforma 10",
+    city: "Guadalajara",
+    postalCode: "44100",
+    countryCode: "MX",
+    phone: "+523300000000",
+    email: "jan@example.com",
+  };
+
+  async function post(token: string, s: Setup, extra: Record<string, unknown>) {
+    return request(app)
+      .post("/api/v1/device-orders")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ treatment_plan_id: s.planId, patient_id: s.patientId, order: validOrder(s.dentistId), ...extra });
+  }
+
+  it("a doctor can ship to their own address: 201 and the DTO carries it, not the clinic", async () => {
+    const s = await setup();
+    const res = await post(await doctorLoginFor(s), s, { custom_delivery: CUSTOM });
+    await trackLink(s.planId);
+    expect(res.status).toBe(201);
+    const dto = replica.requests.find((r) => r.method === "POST" && r.path === TREATMENTS)!.body as Record<string, unknown>;
+    expect(dto.deliveryAddress).toMatchObject({ city: "Guadalajara", postalCode: "44100", phone: "+523300000000", email: "jan@example.com", active: true });
+    expect((dto.deliveryAddress as { address: string }).address.toUpperCase()).not.toContain(COMPLETE_HCO.address_line1.toUpperCase());
+  });
+
+  it("an admin can too, and the audit row records the address that was sent", async () => {
+    const s = await setup();
+    const res = await post(s.token, s, { custom_delivery: CUSTOM });
+    await trackLink(s.planId);
+    expect(res.status).toBe(201);
+    const audit = await withTenant(TENANT_SLUG, (client) => getAuditLogForEntities(client, ["PartnerOrder"], [s.planId]));
+    expect(audit.find((e) => e.action === "create")?.entity_after).toMatchObject({ delivery: { city: "Guadalajara", email: "jan@example.com" } });
+  });
+
+  it("400 custom delivery validation: every field required, name <= 40 — zero OrthoApnea calls", async () => {
+    const s = await setup();
+    const res = await post(s.token, s, { custom_delivery: { ...CUSTOM, phone: "", name: "x".repeat(41), email: "bad@" } });
+    expect(res.status).toBe(400);
+    expect(res.body.fields).toEqual(
+      expect.arrayContaining([
+        { path: "delivery.phone", code: "required" },
+        { path: "delivery.name", code: "tooLong", params: { max: 40 } },
+        { path: "delivery.email", code: "emailInvalid" },
+      ]),
+    );
+    expect(replica.count("POST", TREATMENTS)).toBe(0);
+  });
+
+  it("400 a Spanish address without a province; with one it is accepted and the province reaches OA", async () => {
+    const s = await setup();
+    const spain = { ...CUSTOM, countryCode: "ES", city: "Madrid", postalCode: "28001" };
+    const missing = await post(s.token, s, { custom_delivery: spain });
+    expect(missing.status).toBe(400);
+    expect(missing.body.fields).toEqual([{ path: "delivery.province", code: "required" }]);
+    expect(replica.count("POST", TREATMENTS)).toBe(0);
+
+    const ok = await post(s.token, s, { custom_delivery: { ...spain, province: "Madrid" } });
+    await trackLink(s.planId);
+    expect(ok.status).toBe(201);
+    const dto = replica.requests.find((r) => r.method === "POST" && r.path === TREATMENTS)!.body as Record<string, unknown>;
+    expect(dto.deliveryAddress).toMatchObject({ province: "Madrid" });
+  });
+
+  it("400 when both a clinic and a custom address are sent — no ambiguity about where it ships", async () => {
+    const s = await setup();
+    const tolucaId = await addClinic(s.dentistId, { ...COMPLETE_HCO, city: "Toluca", postal_code: "50000" });
+    const res = await post(s.token, s, { custom_delivery: CUSTOM, delivery_organization_id: tolucaId });
+    expect(res.status).toBe(400);
+    expect(res.body.fields).toEqual([{ path: "custom_delivery", code: "invalid" }]);
+    expect(replica.count("POST", TREATMENTS)).toBe(0);
+  });
+
+  it("400 a custom address that is not an object", async () => {
+    const s = await setup();
+    const res = await post(s.token, s, { custom_delivery: "Calle 1" });
+    expect(res.status).toBe(400);
+    expect(res.body.fields).toEqual([{ path: "custom_delivery", code: "invalid" }]);
+  });
+
+  it("without custom_delivery the clinic stays the default", async () => {
+    const s = await setup();
+    const res = await post(s.token, s, {});
+    await trackLink(s.planId);
+    expect(res.status).toBe(201);
+    const dto = replica.requests.find((r) => r.method === "POST" && r.path === TREATMENTS)!.body as Record<string, unknown>;
+    expect(dto.deliveryAddress).toMatchObject({ address: COMPLETE_HCO.address_line1, city: COMPLETE_HCO.city });
   });
 });
 

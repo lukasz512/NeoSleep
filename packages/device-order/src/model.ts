@@ -177,6 +177,8 @@ export interface DeliveryAddress {
   city: string;
   postalCode: string;
   countryCode: string;
+  /** Required only for CA/ES/DE/US (rules §1.2); empty elsewhere. */
+  province?: string;
   phone: string;
   email: string;
 }

@@ -5,6 +5,7 @@ import {
   mainSplintCount,
   ORDER_ISSUE_CODES,
   PRODUCT_CODES,
+  validateDeliveryAddress,
   validateDeviceOrder,
   type DeliveryAddress,
   type DeviceOrder,
@@ -72,7 +73,7 @@ function parseDeliveryOptions(raw: unknown): DeliveryOption[] {
 export interface DeviceOrderContext {
   /** The ordering doctor's primary HCO; `organizationId` only when the API names the record. */
   delivery: (DeliveryAddress & { organizationId?: string }) | null;
-  /** The doctor's clinics, primary first — sent to an admin only, who may ship to another one (NEO-210 D2). */
+  /** The doctor's clinics, primary first — sent to an admin or the doctor, who may ship to another one (NEO-210 D2, NEO-265). */
   deliveryOptions: DeliveryOption[];
   deliveryIssues: OrderIssue[];
   minDesiredDate: string | null;
@@ -167,10 +168,22 @@ interface UnsentOrder {
 
 const ORDER_TOAST: ShowOptions = { icon: "nav-treatment-plans" };
 
+/** An address typed in instead of a saved clinic (NEO-265). */
+export type CustomDelivery = {
+  name: string;
+  address: string;
+  city: string;
+  postalCode: string;
+  countryCode: string;
+  province: string;
+  phone: string;
+  email: string;
+};
+
 /**
- * `asDoctor`: the user is a doctor. A doctor orders only as themselves, so only
- * to their own clinic (Łukasz, 2026-10-03, NEO-210): there is no doctor to pick,
- * and the API answers the context with the doctor's own practitioner id.
+ * `asDoctor`: the user is a doctor. A doctor orders only as themselves: there is
+ * no doctor to pick, and the API answers the context with the doctor's own
+ * practitioner id. They ship to one of their own clinics or to a typed address.
  */
 export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) {
   const { t } = useI18n();
@@ -190,6 +203,19 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
   let contextRequest = 0;
   /** The clinic an admin chose to ship to; null = the doctor's primary (NEO-210 D2). */
   const deliveryOrganizationId = ref<string | null>(null);
+  /** NEO-265: ship to a saved clinic (default) or to an address typed in, as OrthoApnea's own radio. */
+  const deliveryMode = ref<"clinic" | "custom">("clinic");
+  const emptyCustomDelivery = (): CustomDelivery => ({
+    name: "",
+    address: "",
+    city: "",
+    postalCode: "",
+    countryCode: "",
+    province: "",
+    phone: "",
+    email: "",
+  });
+  const customDelivery = reactive<CustomDelivery>(emptyCustomDelivery());
   /** The treatment_plan this session saves into — a resumed draft's, or the one created on the first save/confirm. */
   const currentDraftPlanId = ref<string | null>(null);
   const submitLoading = ref(false);
@@ -307,6 +333,11 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
    */
   const deliveryIssues = computed<OrderIssue[]>(() => {
     const fromServer = serverIssues.value.filter((i) => i.path === "delivery" || i.path.startsWith("delivery."));
+    if (deliveryMode.value === "custom") {
+      // The typed-in address is checked here with the API's own rule; the clinic context doesn't apply.
+      const local = validateDeliveryAddress(customDelivery);
+      return [...local, ...fromServer.filter((s) => !local.some((l) => l.path === s.path))];
+    }
     if (!order.dentistId) return fromServer;
     if (contextFailed.value) return [{ path: "delivery", code: "invalid" }, ...fromServer];
     if (!context.value) return fromServer;
@@ -380,6 +411,8 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
     context.value = null;
     contextFailed.value = false;
     deliveryOrganizationId.value = null;
+    deliveryMode.value = "clinic";
+    Object.assign(customDelivery, emptyCustomDelivery());
     scanUploads.value = [];
     const draft = draftPlan?.metadata?.orthoapneaDraft;
     const resumed = draft ? draftToOrder(draft) : defaultDeviceOrder();
@@ -447,7 +480,7 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
     contextLoading.value = true;
     try {
       const params = new URLSearchParams(doctor ? { product_code: order.productCode } : { dentist_id: order.dentistId, product_code: order.productCode });
-      if (!doctor && deliveryOrganizationId.value) params.set("organization_id", deliveryOrganizationId.value);
+      if (deliveryOrganizationId.value) params.set("organization_id", deliveryOrganizationId.value);
       const res = await apiFetch(`/api/v1/device-orders/context?${params.toString()}`, { handleErrors: false });
       if (request !== contextRequest) return;
       if (!res.ok) {
@@ -517,13 +550,23 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
   function buildOrderBody(
     patientId: string,
     planId: string,
-  ): { treatment_plan_id: string; patient_id: string; delivery_organization_id?: string; order: DeviceOrder } {
+  ): {
+    treatment_plan_id: string;
+    patient_id: string;
+    delivery_organization_id?: string;
+    custom_delivery?: DeliveryAddress;
+    order: DeviceOrder;
+  } {
     syncAdditionalSplints();
+    const custom = deliveryMode.value === "custom";
+    const { province, ...rest } = customDelivery;
     return {
       treatment_plan_id: planId,
       patient_id: patientId,
-      // Only an admin's explicit choice; without it the API ships to the doctor's primary clinic.
-      ...(deliveryOrganizationId.value && !asDoctor() ? { delivery_organization_id: deliveryOrganizationId.value } : {}),
+      // An explicit clinic choice; without it the API ships to the doctor's primary clinic.
+      ...(!custom && deliveryOrganizationId.value ? { delivery_organization_id: deliveryOrganizationId.value } : {}),
+      // A typed-in address replaces the clinic entirely (exclusive on the API).
+      ...(custom ? { custom_delivery: { ...rest, ...(province.trim() ? { province } : {}) } } : {}),
       order: JSON.parse(JSON.stringify(order)) as DeviceOrder,
     };
   }
@@ -679,6 +722,8 @@ export function useOrthoApneaOrderWizard(asDoctor: () => boolean = () => false) 
     contextLoading,
     contextFailed,
     deliveryOrganizationId,
+    deliveryMode,
+    customDelivery,
     currentDraftPlanId,
     submitLoading,
     serverIssues,
