@@ -902,7 +902,7 @@ function onDoctorPicked(value: unknown) {
   order.dentistId = typeof value === "string" ? value : "";
 }
 
-/** The doctor's clinics as an admin's choice (the API sends them to an admin only), primary marked. */
+/** The doctor's clinics as the choice of an admin or doctor (the API sends them to both), primary marked. */
 const clinicItems = computed(() =>
   (context.value?.deliveryOptions ?? []).map((o) => ({
     value: o.organizationId,

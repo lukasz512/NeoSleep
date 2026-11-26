@@ -73,7 +73,7 @@ function parseDeliveryOptions(raw: unknown): DeliveryOption[] {
 export interface DeviceOrderContext {
   /** The ordering doctor's primary HCO; `organizationId` only when the API names the record. */
   delivery: (DeliveryAddress & { organizationId?: string }) | null;
-  /** The doctor's clinics, primary first — sent to an admin only, who may ship to another one (NEO-210 D2). */
+  /** The doctor's clinics, primary first — sent to an admin or the doctor, who may ship to another one (NEO-210 D2, NEO-265). */
   deliveryOptions: DeliveryOption[];
   deliveryIssues: OrderIssue[];
   minDesiredDate: string | null;
