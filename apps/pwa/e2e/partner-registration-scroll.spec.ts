@@ -14,6 +14,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 const PREVIEW = {
   email: "doctor@example.com",
+  phone: "+52 55 9876 5432",
   firstName: "Ana",
   lastName: "García",
   clinicName: "Clínica Sonrisa",

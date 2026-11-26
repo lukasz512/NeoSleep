@@ -17,7 +17,7 @@ import { test, expect, type Page } from "@playwright/test";
  */
 
 const PREVIEW = {
-  email: "doctor@example.com", firstName: "Ana", lastName: "García",
+  email: "doctor@example.com", phone: "+52 55 9876 5432", firstName: "Ana", lastName: "García",
   clinicName: "Clínica de Prueba", clinicEmail: "clinic@example.com", clinicPhone: "+52 55 1234 5678",
   clinicAddress: "Av. Reforma 123, CDMX", taxId: null, jurisdiction: "MX", licenseNumber: "12345678",
   practiceRole: "staff", documents: { agreementVersionId: "agr-1", dpaVersionId: "dpa-1", noticeVersionId: "not-1" },
