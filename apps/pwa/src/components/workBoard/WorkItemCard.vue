@@ -1,7 +1,7 @@
 <template>
   <article
     class="work-card"
-    :class="{ 'work-card--dragging': dragging }"
+    :class="{ 'work-card--dragging': dragging, 'work-card--dense': dense, 'work-card--urgent': item.priority === 1 }"
     :draggable="draggable"
     :data-testid="`work-card-${item.key}`"
     @dragstart="onDragStart"
@@ -9,9 +9,22 @@
   >
     <button type="button" class="work-card__open" :aria-label="`${item.key} ${item.title}`" @click="emit('open', item.key)" @keydown="onKeydown">
       <span class="work-card__top">
-        <span class="work-card__key">{{ item.key }}</span>
-        <span v-if="item.priority" class="work-card__priority" :class="`work-card__priority--p${item.priority}`" :title="t(`workBoard.priority.p${item.priority}`)">
-          {{ t(`workBoard.priority.short.p${item.priority}`) }}
+        <span class="work-card__id">
+          <span class="work-card__key">{{ item.key }}</span>
+          <span
+            v-if="fromSession || live"
+            class="work-card__session"
+            role="img"
+            :title="sessionText"
+            :aria-label="sessionText"
+            data-testid="work-card-session"
+          >
+            <VIcon icon="mdi-robot-outline" size="14" aria-hidden="true" />
+            <span v-if="live" class="work-card__live" data-testid="work-card-live" />
+          </span>
+        </span>
+        <span v-if="item.priority" class="work-card__priority" :title="t(`workBoard.priority.p${item.priority}`)" data-testid="work-card-priority">
+          <WorkPriorityMark :priority="item.priority" :label="t(`workBoard.priority.p${item.priority}`)" />
         </span>
       </span>
       <span class="work-card__title">{{ item.title }}</span>
@@ -24,25 +37,88 @@
       >
         <VIcon icon="mdi-checkbox-marked-outline" size="14" aria-hidden="true" />{{ progress.done }}/{{ progress.total }}
       </span>
-      <span v-if="git || held" class="work-card__marks">
+      <span v-if="!dense && (git || held || noArtifact)" class="work-card__marks">
         <span v-if="git" class="work-card__git" :class="{ 'work-card__git--alert': alert }" data-testid="work-card-git">
           <VIcon :icon="GIT_ICONS[git]" size="14" aria-hidden="true" />{{ t(`workBoard.git.${git}`) }}
         </span>
         <span v-if="held" class="work-card__git" data-testid="work-card-hold">
           <VIcon icon="mdi-pause-circle-outline" size="14" aria-hidden="true" />{{ t("workBoard.hold.on") }}
         </span>
+        <span v-if="noArtifact" class="work-card__git work-card__git--alert" data-testid="work-card-no-artifact">
+          <VIcon icon="mdi-shape-outline" size="14" aria-hidden="true" />{{ t("workBoard.card.noArtifact") }}
+        </span>
       </span>
     </button>
-    <span v-if="links.length" class="work-card__links">
-      <a
-        v-for="link in links"
-        :key="link.kind"
-        :href="link.url"
-        target="_blank"
-        rel="noopener"
-        class="work-card__link"
-        :data-testid="`work-card-link-${link.kind}`"
-      >{{ t(`workBoard.link.${link.kind}`) }}</a>
+    <span v-if="!dense && labels.length" class="work-card__labels" data-testid="work-card-labels">
+      <WorkLabelChip
+        v-for="label in labels.slice(0, MAX_CHIPS)"
+        :key="label"
+        :name="label"
+        clickable
+        small
+        :aria-label="t('workBoard.labels.filterBy', { name: label })"
+        :data-testid="`work-card-label-${label}`"
+        @click="emit('label', label)"
+      />
+      <span v-if="labels.length > MAX_CHIPS" class="work-card__more" :title="labels.slice(MAX_CHIPS).join(', ')" data-testid="work-card-labels-more">
+        +{{ labels.length - MAX_CHIPS }}
+      </span>
+    </span>
+    <span v-if="showMeta || links.length" class="work-card__foot">
+      <span v-if="showMeta" class="work-card__meta" :data-testid="dense ? 'work-card-compact' : 'work-card-footer'">
+        <template v-if="dense">
+          <span v-if="labels.length" class="work-card__dots" data-testid="work-card-dots">
+            <WorkLabelChip v-for="label in labels" :key="label" :name="label" dot-only />
+          </span>
+          <span v-if="git" class="work-card__git" :class="{ 'work-card__git--alert': alert }" data-testid="work-card-git">
+            <VIcon :icon="GIT_ICONS[git]" size="14" aria-hidden="true" />{{ t(`workBoard.git.${git}`) }}
+          </span>
+          <span v-if="held" class="work-card__git" data-testid="work-card-hold">
+            <VIcon icon="mdi-pause-circle-outline" size="14" aria-hidden="true" />{{ t("workBoard.hold.on") }}
+          </span>
+          <span v-if="noArtifact" class="work-card__git work-card__git--alert" data-testid="work-card-no-artifact">
+            <VIcon icon="mdi-shape-outline" size="14" aria-hidden="true" />{{ t("workBoard.card.noArtifact") }}
+          </span>
+        </template>
+        <span
+          v-if="!dense && item.assignee"
+          class="work-card__assignee"
+          role="img"
+          :title="item.assignee"
+          :aria-label="t('workBoard.card.assignee', { name: item.assignee })"
+          data-testid="work-card-assignee"
+        >{{ initialsOf(item.assignee) }}</span>
+        <span
+          v-if="!dense && item.due_date"
+          class="work-card__due"
+          :class="{ 'work-card__due--overdue': overdue }"
+          :title="t(overdue ? 'workBoard.card.overdue' : 'workBoard.card.due', { date: dueText })"
+          data-testid="work-card-due"
+        >
+          <VIcon icon="mdi-calendar-outline" size="14" aria-hidden="true" />{{ dueText }}
+        </span>
+        <span
+          v-if="days !== null"
+          class="work-card__days"
+          :class="{ 'work-card__days--stale': stale }"
+          :title="t('workBoard.card.daysInColumn', { n: days })"
+          data-testid="work-card-days"
+        >{{ t("workBoard.card.days", { n: days }) }}</span>
+      </span>
+      <span v-if="links.length" class="work-card__links">
+        <a
+          v-for="link in links"
+          :key="link.kind"
+          :href="link.url"
+          target="_blank"
+          rel="noopener"
+          class="work-card__link"
+          :class="link.kind === 'ci' && link.state ? `work-card__link--${link.state}` : undefined"
+          :title="linkText(link)"
+          :aria-label="linkText(link)"
+          :data-testid="`work-card-link-${link.kind}`"
+        ><VIcon :icon="linkIcon(link)" size="16" aria-hidden="true" /></a>
+      </span>
     </span>
   </article>
 </template>
@@ -50,17 +126,45 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { CARD_LINK_KINDS, GIT_ICONS, HOLD_LABEL, checklistProgress, gitMarker, linkOf, outOfStep } from "../../composables/useWorkBoard";
-import type { WorkItem, WorkLinkKind } from "../../types/workBoard";
+import {
+  GIT_ICONS,
+  HOLD_LABEL,
+  SESSION_LABEL,
+  cardLinks,
+  checklistProgress,
+  daysInColumn,
+  gitMarker,
+  initialsOf,
+  isLive,
+  isOverdue,
+  isStale,
+  missingArtifact,
+  outOfStep,
+  shownLabels,
+} from "../../composables/useWorkBoard";
+import WorkLabelChip from "./WorkLabelChip.vue";
+import WorkPriorityMark from "./WorkPriorityMark.vue";
+import { useWorkBoardContext } from "./workBoardContext";
+import { WORK_URGENT_COLOR } from "./workGlyphs";
+import type { WorkItem, WorkLink, WorkLinkKind } from "../../types/workBoard";
 
 /**
- * One board card: KEY-n, priority, title, where the code is (CORE-221), and the
- * spec/artifact/PR/CI links that exist.
- * `[` / `]` on a focused card ask the board to move it one column left / right.
+ * One board card: KEY-n, priority, title, where the code is (CORE-221), its labels, and a footer
+ * with the assignee, the due date, the days in this column and the spec/artifact/PR/CI links as
+ * icons (CORE-219). A robot marks a ticket a Claude session created; the green dot means a session
+ * touched it in the last 15 minutes. Compact density keeps the key, the title and one row of
+ * marks: a dot per label, where the code is, on hold, the days and the links. A Needs Review
+ * card with no artifact link says so (CORE-233).
+ * `[` / `]` on a focused card ask the board to move it one column left / right; clicking a label
+ * asks it to filter by that label.
  */
 const props = withDefaults(defineProps<{ item: WorkItem; draggable?: boolean }>(), { draggable: true });
-const emit = defineEmits<{ open: [key: string]; move: [key: string, step: -1 | 1] }>();
-const { t } = useI18n();
+const emit = defineEmits<{ open: [key: string]; move: [key: string, step: -1 | 1]; label: [name: string] }>();
+const { t, locale } = useI18n();
+const board = useWorkBoardContext();
+const dense = computed(() => board.dense.value);
+/** Labels a card shows before "+n". */
+const MAX_CHIPS = 3;
 const dragging = ref(false);
 /** How much of "Done when" is ticked (CORE-195); null when it isn't a checklist. */
 const progress = computed(() => checklistProgress(props.item.done_when));
@@ -68,12 +172,50 @@ const git = computed(() => gitMarker(props.item));
 /** Status and git disagree; the marker turns into a warning. */
 const alert = computed(() => outOfStep(props.item));
 const held = computed(() => props.item.status === "needs_review" && props.item.labels.includes(HOLD_LABEL));
+/** In Needs Review with nothing to read (CORE-233). */
+const noArtifact = computed(() => missingArtifact(props.item));
 
-const links = computed(() =>
-  CARD_LINK_KINDS.map((kind) => ({ kind, url: linkOf(props.item, kind) })).filter(
-    (l): l is { kind: WorkLinkKind; url: string } => l.url !== null,
-  ),
+const links = computed(() => cardLinks(props.item));
+const labels = computed(() => shownLabels(props.item));
+const fromSession = computed(() => props.item.labels.includes(SESSION_LABEL));
+const live = computed(() => isLive(props.item.session_active_at, board.now.value));
+const sessionText = computed(() => t(live.value ? "workBoard.session.live" : "workBoard.session.badge"));
+
+const closed = computed(() => props.item.status === "done" || props.item.status === "canceled");
+/** Days in the column, once there is a full one to count; a closed item stops counting. */
+const days = computed(() => {
+  const n = daysInColumn(props.item, board.now.value);
+  return closed.value || n < 1 ? null : n;
+});
+const stale = computed(() => isStale(props.item, board.now.value));
+const overdue = computed(() => isOverdue(props.item, board.now.value));
+const dueText = computed(() =>
+  props.item.due_date
+    ? new Date(`${props.item.due_date}T00:00:00`).toLocaleDateString(locale.value === "mx" ? "es-MX" : locale.value, { day: "numeric", month: "short" })
+    : "",
 );
+const showMeta = computed(() =>
+  dense.value
+    ? labels.value.length > 0 || git.value !== null || held.value || noArtifact.value || days.value !== null
+    : !!props.item.assignee || !!props.item.due_date || days.value !== null,
+);
+
+const LINK_ICONS: Record<WorkLinkKind, string> = {
+  spec: "mdi-file-document-outline",
+  artifact: "mdi-shape-outline",
+  pr: "mdi-source-pull",
+  ci: "mdi-circle-outline",
+  other: "mdi-link-variant",
+};
+
+function linkIcon(link: WorkLink): string {
+  if (link.kind === "ci" && link.state) return link.state === "passed" ? "mdi-check-circle" : "mdi-close-circle";
+  return LINK_ICONS[link.kind];
+}
+
+function linkText(link: WorkLink): string {
+  return link.kind === "ci" && link.state ? t(`workBoard.ci.${link.state}`) : t(`workBoard.link.${link.kind}`);
+}
 
 function onDragStart(event: DragEvent): void {
   dragging.value = true;
@@ -142,21 +284,13 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 .work-card__priority {
-  padding: 0 8px;
-  font-size: 0.75rem;
-  line-height: 20px;
-  border-radius: 4px;
-  background: rgba(var(--v-theme-on-surface), 0.08);
+  display: inline-flex;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
 }
 
-.work-card__priority--p1 {
-  color: rgb(var(--v-theme-on-error));
-  background: rgb(var(--v-theme-error));
-}
-
-.work-card__priority--p2 {
-  color: rgb(var(--v-theme-warning));
-  background: rgba(var(--v-theme-warning), 0.12);
+/* Urgent is the one priority that marks the whole card (CORE-225). */
+.work-card--urgent {
+  box-shadow: inset 3px 0 0 v-bind(WORK_URGENT_COLOR);
 }
 
 .work-card__progress {
@@ -197,20 +331,125 @@ function onKeydown(event: KeyboardEvent): void {
   overflow-wrap: anywhere;
 }
 
-.work-card__links {
+.work-card__id {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.work-card__session {
+  position: relative;
+  display: inline-flex;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.work-card__live {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgb(var(--v-theme-success));
+  box-shadow: 0 0 0 2px rgb(var(--v-theme-surface));
+}
+
+.work-card__labels {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 4px;
   margin-top: 4px;
 }
 
-.work-card__link {
+.work-card__more {
   font-size: 0.75rem;
-  color: rgb(var(--v-theme-primary));
-  text-decoration: none;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.work-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 24px;
+  margin-top: 4px;
+}
+
+.work-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+}
+
+.work-card__dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.work-card__assignee {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: rgb(var(--v-theme-on-surface));
+  background: rgba(var(--v-theme-on-surface), 0.08);
+  border-radius: 50%;
+}
+
+.work-card__due {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.work-card__due--overdue {
+  color: rgb(var(--v-theme-error));
+}
+
+.work-card__days--stale {
+  color: rgb(var(--v-theme-warning));
+  font-weight: 600;
+}
+
+.work-card__links {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.work-card__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  border-radius: 6px;
 }
 
 .work-card__link:hover {
-  text-decoration: underline;
+  color: rgb(var(--v-theme-primary));
+  background: rgba(var(--v-theme-primary), 0.08);
+}
+
+.work-card__link--passed {
+  color: rgb(var(--v-theme-success));
+}
+
+.work-card__link--failed {
+  color: rgb(var(--v-theme-error));
+}
+
+.work-card--dense {
+  padding: 8px 12px;
 }
 </style>

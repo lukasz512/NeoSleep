@@ -263,7 +263,7 @@ function parseReporterReply(value: unknown): string | null | undefined {
 // ---------------------------------------------------------------------------
 problemReportRouter.get(
   "/admin/issues/access",
-  requireRole("admin", "support"),
+  requireRole("admin", "manager", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     res.json({ platformAdmin: await isPlatformStaff(req.user?.email) });
   })
@@ -274,7 +274,7 @@ problemReportRouter.get(
 // ---------------------------------------------------------------------------
 problemReportRouter.get(
   "/admin/problem-reports",
-  requireRole("admin", "support"),
+  requireRole("admin", "manager", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     const status = parseStatusFilter<ProblemReportStatus>(req.query.status, PROBLEM_REPORT_STATUSES, "status");
     const items = await listProblemReports(tenantSlugFromHost(req.hostname), status);
@@ -287,7 +287,7 @@ problemReportRouter.get(
 // ---------------------------------------------------------------------------
 problemReportRouter.patch(
   "/admin/problem-reports/:id",
-  requireRole("admin", "support"),
+  requireRole("admin", "manager", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = requireUuid(req, "ProblemReport");
     const statusRaw = field(req.body, "status");
@@ -304,12 +304,17 @@ problemReportRouter.patch(
       throw new ValidationError("admin_note must be text of at most 5000 characters", "admin_note");
     }
     const slug = tenantSlugFromHost(req.hostname);
-    const updated = await updateProblemReport(slug, id, {
-      status: statusRaw as ProblemReportStatus | undefined,
-      admin_note: noteRaw === undefined ? undefined : typeof noteRaw === "string" ? noteRaw.trim() || null : null,
-      tracker_ref: trackerRef,
-      reporter_reply: reporterReply,
-    });
+    const updated = await updateProblemReport(
+      slug,
+      id,
+      {
+        status: statusRaw as ProblemReportStatus | undefined,
+        admin_note: noteRaw === undefined ? undefined : typeof noteRaw === "string" ? noteRaw.trim() || null : null,
+        tracker_ref: trackerRef,
+        reporter_reply: reporterReply,
+      },
+      platformAuditActor(req)
+    );
     if (!updated) throw new NotFoundError("ProblemReport", id);
     await notifyProblemReportStatusChanged({ tenantSlug: slug, ...updated, actorUserId: req.user!.sub });
     res.json(updated.row);
@@ -321,7 +326,7 @@ problemReportRouter.patch(
 // ---------------------------------------------------------------------------
 problemReportRouter.get(
   "/admin/problem-reports/:id/attachment",
-  requireRole("admin", "support"),
+  requireRole("admin", "manager", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = requireUuid(req, "ProblemReport");
     const path = await getProblemReportAttachmentPath(tenantSlugFromHost(req.hostname), id);
@@ -335,7 +340,7 @@ problemReportRouter.get(
 // ---------------------------------------------------------------------------
 problemReportRouter.get(
   "/admin/diagnostics",
-  requireRole("admin", "support"),
+  requireRole("admin", "manager", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     await requirePlatformStaff(req);
     const statusQuery = req.query.status === undefined || req.query.status === "" ? "open" : req.query.status;
@@ -352,7 +357,7 @@ problemReportRouter.get(
 // ---------------------------------------------------------------------------
 problemReportRouter.patch(
   "/admin/diagnostics/:id",
-  requireRole("admin", "support"),
+  requireRole("admin", "manager", "support"),
   asyncHandler(async (req: Request, res: Response) => {
     await requirePlatformStaff(req);
     const id = requireUuid(req, "Diagnostic");

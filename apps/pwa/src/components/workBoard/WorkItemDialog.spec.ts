@@ -7,7 +7,7 @@ import * as vuetifyComponents from "vuetify/components";
 import * as vuetifyDirectives from "vuetify/directives";
 import en from "@i18n/en.json";
 import WorkItemDialog from "./WorkItemDialog.vue";
-import type { WorkAttachment, WorkItem, WorkTeam } from "../../types/workBoard";
+import type { WorkAttachment, WorkItem, WorkItemEvent, WorkTeam } from "../../types/workBoard";
 
 /** Work item dialog, variant A (CORE-192): chips, sections on demand, paste/drop/pick attachments. */
 const apiFetch = vi.fn();
@@ -69,7 +69,7 @@ function ok(body: unknown, status = 200): Response {
 interface Call { path: string; method: string; body: unknown }
 const calls: Call[] = [];
 
-function serve(current: WorkItem | null, extra: WorkAttachment[] = []): void {
+function serve(current: WorkItem | null, extra: WorkAttachment[] = [], events: WorkItemEvent[] = []): void {
   let n = 0;
   apiFetch.mockImplementation(async (path: string, init?: RequestInit) => {
     const method = init?.method ?? "GET";
@@ -87,7 +87,7 @@ function serve(current: WorkItem | null, extra: WorkAttachment[] = []): void {
     }
     if (path.endsWith("/items") && method === "POST") return ok({ item: item({ key: "CORE-10", ...JSON.parse(String(init!.body)) }) }, 201);
     if (method === "PATCH") return ok({ item: { ...current!, ...JSON.parse(String(init!.body)) } });
-    return ok({ item: current, events: [], attachments: extra });
+    return ok({ item: current, events, attachments: extra });
   });
 }
 
@@ -476,5 +476,154 @@ describe("WorkItemDialog image size and preview (CORE-202)", () => {
     await flushPromises();
     expect(open).toHaveBeenCalledTimes(1);
     open.mockRestore();
+  });
+});
+
+/** Labels in the dialog's chip row (CORE-219): pick from the catalog, create by typing, remove. */
+describe("WorkItemDialog labels (CORE-219)", () => {
+  const CATALOG = [
+    { id: "l-api", name: "api", color: "blue" as const, created_at: "2026-11-10T10:00:00Z" },
+    { id: "l-frontend", name: "Frontend", color: "green" as const, created_at: "2026-11-10T10:00:00Z" },
+  ];
+  const patches = () => calls.filter((c) => c.method === "PATCH").map((c) => JSON.parse(String(c.body)) as { labels?: string[] });
+
+  async function open(labels: string[]) {
+    serve(item({ labels }));
+    const wrapper = await render({ itemKey: "CORE-9", creating: false });
+    await wrapper.setProps({ labels: CATALOG });
+    return wrapper;
+  }
+
+  async function openMenu(): Promise<HTMLInputElement> {
+    (q("work-item-label-add") as HTMLElement).click();
+    await flushPromises();
+    return q("work-item-label-input")!.querySelector("input")!;
+  }
+
+  async function type(input: HTMLInputElement, value: string): Promise<void> {
+    input.value = value;
+    input.dispatchEvent(new Event("input"));
+    await flushPromises();
+  }
+
+  async function save(): Promise<void> {
+    (q("work-item-save") as HTMLButtonElement).click();
+    await flushPromises();
+  }
+
+  it("adds a catalog label and keeps the technical session label on save", async () => {
+    await open(["session", "api"]);
+    expect(q("work-item-labels")!.textContent).toContain("api");
+    expect(q("work-item-labels")!.textContent).not.toContain("session");
+    await openMenu();
+    expect(q("work-item-label-option-api")).toBeNull(); // already on the item
+    (q("work-item-label-option-Frontend") as HTMLElement).click();
+    await flushPromises();
+    await save();
+    expect(patches()).toEqual([{ labels: ["session", "api", "Frontend"] }]);
+  });
+
+  it("creates a label by typing a new name, and takes the catalog's spelling for a known one", async () => {
+    await open([]);
+    const input = await openMenu();
+    await type(input, "billing");
+    expect(q("work-item-label-create")!.textContent).toContain("billing");
+    (q("work-item-label-create") as HTMLElement).click();
+    await flushPromises();
+    await type(input, "frontend");
+    expect(q("work-item-label-create")).toBeNull();
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await flushPromises();
+    await save();
+    expect(patches()).toEqual([{ labels: ["billing", "Frontend"] }]);
+  });
+
+  it("never offers to create the reserved session label", async () => {
+    await open([]);
+    const input = await openMenu();
+    await type(input, "Session");
+    expect(q("work-item-label-create")).toBeNull();
+  });
+
+  it("removes a label", async () => {
+    await open(["api", "Frontend"]);
+    (q("work-item-label-remove-api") as HTMLButtonElement).click();
+    await flushPromises();
+    await save();
+    expect(patches()).toEqual([{ labels: ["Frontend"] }]);
+  });
+
+  it("stops at ten labels", async () => {
+    await open(Array.from({ length: 10 }, (_, i) => `label-${i}`));
+    expect(q("work-item-label-add")!.classList.contains("v-chip--disabled")).toBe(true);
+  });
+
+  it("sends labels with a new item", async () => {
+    serve(null);
+    const wrapper = await render({ itemKey: null, creating: true });
+    await wrapper.setProps({ labels: CATALOG });
+    const title = q("work-item-title")!.querySelector("textarea")!;
+    title.value = "Labelled";
+    title.dispatchEvent(new Event("input"));
+    await openMenu();
+    (q("work-item-label-option-api") as HTMLElement).click();
+    await flushPromises();
+    await save();
+    const created = calls.find((c) => c.method === "POST" && c.path.endsWith("/items"))!;
+    expect((JSON.parse(String(created.body)) as { labels?: string[] }).labels).toEqual(["api"]);
+  });
+});
+
+/** Status and priority read at a glance (CORE-225). */
+describe("WorkItemDialog status and priority marks (CORE-225)", () => {
+  it("draws the current status and priority on their chips", async () => {
+    serve(item({ status: "building", priority: 2 }));
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(q("work-item-status")!.querySelector("svg[data-status='building']")).not.toBeNull();
+    expect(q("work-item-priority")!.querySelectorAll("[data-lit='true']")).toHaveLength(3);
+    // The text next to the mark names it; the mark itself stays out of the accessibility tree.
+    expect(q("work-item-status")!.querySelector("svg")!.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("groups the status menu by stage, in board order, with a glyph on every status", async () => {
+    serve(item({ status: "building" }));
+    await render({ itemKey: "CORE-9", creating: false });
+    (q("work-item-status") as HTMLElement).click();
+    await flushPromises();
+    const menu = q("work-item-status-menu")!;
+    const groups = Array.from(menu.querySelectorAll("[data-testid='work-item-menu-group']")).map((el) => el.textContent?.trim());
+    expect(groups).toEqual(["Intake", "Specification", "Delivery", "Closed"]);
+    const glyphs = Array.from(menu.querySelectorAll(".v-list-item svg[data-status]")).map((el) => el.getAttribute("data-status"));
+    expect(glyphs).toEqual(["triage", "backlog", "to_spec", "spec_ready", "approved", "building", "needs_review", "done", "canceled"]);
+    expect(menu.querySelector(".v-list-item--active")!.textContent).toContain("Building");
+  });
+
+  it("draws a mark on every priority in its menu and saves the picked one", async () => {
+    serve(item({ priority: 0 }));
+    await render({ itemKey: "CORE-9", creating: false });
+    (q("work-item-priority") as HTMLElement).click();
+    await flushPromises();
+    const options = Array.from(document.querySelectorAll("[data-testid='work-item-priority-menu'] .v-list-item"));
+    expect(options.every((el) => el.querySelector("svg[data-priority]"))).toBe(true);
+    (options.find((el) => el.textContent?.includes("Urgent")) as HTMLElement).click();
+    await flushPromises();
+    expect(q("work-item-priority")!.querySelector("svg[data-priority='1']")).not.toBeNull();
+    (q("work-item-save") as HTMLButtonElement).click();
+    await flushPromises();
+    expect(JSON.parse(String(calls.find((c) => c.method === "PATCH")!.body))).toEqual({ priority: 1 });
+  });
+
+  it("draws both statuses of a move in the history", async () => {
+    const base = { body: null, actor: ME.email, actor_kind: "human" as const, created_at: "2026-11-10T11:00:00Z" };
+    serve(item(), [], [
+      { id: "1", kind: "created", from_status: null, to_status: "backlog", ...base },
+      { id: "2", kind: "status", from_status: "backlog", to_status: "building", ...base },
+    ]);
+    await render({ itemKey: "CORE-9", creating: false });
+    const lines = Array.from(q("work-item-events")!.querySelectorAll("li"));
+    const drawn = lines.map((li) => Array.from(li.querySelectorAll("svg[data-status]")).map((el) => el.getAttribute("data-status")));
+    expect(drawn).toEqual(expect.arrayContaining([["backlog"], ["backlog", "building"]]));
+    expect(q("work-item-events")!.textContent).toContain("Created in");
+    expect(q("work-item-events")!.textContent).toContain("→");
   });
 });

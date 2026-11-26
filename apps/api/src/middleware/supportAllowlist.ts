@@ -47,7 +47,7 @@ export function supportAllowlist(req: Request, res: Response, next: NextFunction
     return;
   }
   if (role === "support" && !isSupportAllowed(req.method, req.path)) {
-    res.status(403).json({ error: "Insufficient permissions" });
+    res.status(403).json({ error: "Insufficient permissions", code: "FORBIDDEN", reason: "ROLE_NOT_ALLOWED" });
     return;
   }
   next();

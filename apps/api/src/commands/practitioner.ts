@@ -19,6 +19,7 @@ import {
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
 import { ValidationError, ConflictError } from "../errors.js";
+import { assertTerritoryWriteAccess } from "../middleware/requireScope.js";
 import { ConvertLeadCommand } from "./lead.js";
 import { inferLanguage } from "./invitePractitioner.js";
 import { sendPartnerInviteEmail } from "../mailer.js";
@@ -79,6 +80,8 @@ export async function CreatePractitionerCommand(
   const phone = input.phone?.trim() ?? "";
   if (!phone) throw new ValidationError("phone is required");
   if (phone.replace(/\D/g, "").length < 9) throw new ValidationError("Phone must contain at least 9 digits");
+
+  await assertTerritoryWriteAccess(ctx, input.territory_id);
 
   const insertInput: InsertPractitionerInput = {
     first_name:       firstName,
@@ -181,12 +184,13 @@ export async function UpdatePractitionerCommand(
   // alone (same reasoning as every other server-side RBAC check in this
   // codebase — a hidden form field is a UI nicety, not an authorization
   // boundary).
-  if (input.status !== undefined && ctx.user.role !== "admin") {
-    throw new ValidationError("Only an admin can change a practitioner's status directly");
+  if (input.status !== undefined && ctx.user.role !== "admin" && ctx.user.role !== "manager") {
+    throw new ValidationError("Only an admin or manager can change a practitioner's status directly");
   }
 
   const before = await getPractitionerById(ctx.client, id);
   if (!before) return null;
+  await assertTerritoryWriteAccess(ctx, before.territory_id, input.territory_id);
 
   const updateInput: UpdatePractitionerInput = {
     first_name:       input.first_name,
@@ -229,6 +233,8 @@ export async function UpdatePractitionerCommand(
 export async function DeletePractitionerCommand(ctx: TenantContext, id: string): Promise<void> {
   if (!id?.trim()) throw new ValidationError("practitioner id is required");
 
+  const before = await getPractitionerById(ctx.client, id);
+  if (before) await assertTerritoryWriteAccess(ctx, before.territory_id);
   await softDeletePractitioner(ctx.client, id);
 
   await insertAuditLog(ctx.client, {

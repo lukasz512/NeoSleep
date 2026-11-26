@@ -117,7 +117,7 @@ territoryRouter.get(
 // ---------------------------------------------------------------------------
 territoryRouter.post(
   "/territory",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const body = req.body as TerritoryBody;
     const name = str(body.name);
@@ -149,7 +149,7 @@ territoryRouter.post(
 // ---------------------------------------------------------------------------
 territoryRouter.patch(
   "/territory/:id",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing territory id");
@@ -178,7 +178,7 @@ territoryRouter.patch(
 // ---------------------------------------------------------------------------
 territoryRouter.delete(
   "/territory/:id",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing territory id");

@@ -36,6 +36,20 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // existing doctor user's unchanged role is allowed to round-trip through
 // UpdateUserCommand — this list only gates role being newly assigned.
 const VALID_ROLES: StaffRole[] = ["admin", "manager", "kam", "msl", "rep", "support"];
+/** Roles only an admin may grant, change, or hold the credentials of (NEO-266). A manager
+ *  could otherwise promote themselves, or reset an admin's/NeoCRM-support's password and
+ *  take the account over. */
+const ADMIN_ONLY_ROLES: readonly StaffRole[] = ["admin", "support"];
+function assertMayGrantRole(ctx: TenantContext, role: StaffRole | undefined): void {
+  if (role && ADMIN_ONLY_ROLES.includes(role) && ctx.user.role !== "admin") {
+    throw new ForbiddenError(`Only an admin can assign the ${role} role`);
+  }
+}
+function assertMayManageUser(ctx: TenantContext, target: { role: StaffRole }): void {
+  if (ADMIN_ONLY_ROLES.includes(target.role) && ctx.user.role !== "admin") {
+    throw new ForbiddenError(`Only an admin can manage ${target.role} users`);
+  }
+}
 const BCRYPT_ROUNDS = 12;
 
 /** A user's own RBAC scope must be a country or the global root (migration
@@ -93,9 +107,7 @@ export async function CreateUserCommand(
   if (input.role && !VALID_ROLES.includes(input.role)) {
     throw new ValidationError(`role must be one of: ${VALID_ROLES.join(", ")}`);
   }
-  if (input.role && input.role !== "rep" && ctx.user.role !== "admin") {
-    throw new ForbiddenError("Only admin can set a user's role");
-  }
+  assertMayGrantRole(ctx, input.role);
   if (input.territory_id) await assertValidScopeKind(ctx, input.territory_id);
 
   const existingId = await getUserIdByEmail(ctx.client, email);
@@ -189,6 +201,7 @@ export async function UpdateUserCommand(
   const target = await getUserById(ctx.client, id);
   if (!target) return null;
   await assertTerritoryAccess(ctx, target.country_code);
+  assertMayManageUser(ctx, target);
 
   // Only validate/authorize `role` when it's actually changing — an
   // unchanged doctor/kam/msl value must round-trip through an edit of
@@ -196,9 +209,7 @@ export async function UpdateUserCommand(
   // which deliberately excludes 'doctor' (ADR-014: doctor accounts are only
   // ever provisioned via InvitePractitionerCommand's GDPR-consent flow).
   if (input.role !== undefined && input.role !== target.role) {
-    if (ctx.user.role !== "admin") {
-      throw new ForbiddenError("Only admin can change a user's role");
-    }
+    assertMayGrantRole(ctx, input.role);
     if (!VALID_ROLES.includes(input.role)) {
       throw new ValidationError(`role must be one of: ${VALID_ROLES.join(", ")}`);
     }
@@ -236,6 +247,7 @@ export async function ResetUserPasswordCommand(
 
   const user = await getUserById(ctx.client, id);
   if (!user) throw new NotFoundError("User", id);
+  assertMayManageUser(ctx, user);
 
   const token = crypto.randomBytes(32).toString("hex");
   const tokenHash = hashToken(token);
@@ -270,6 +282,7 @@ export async function DeleteUserCommand(ctx: TenantContext, id: string): Promise
   const target = await getUserById(ctx.client, id);
   if (!target) throw new NotFoundError("User", id);
   await assertTerritoryAccess(ctx, target.country_code);
+  assertMayManageUser(ctx, target);
 
   await softDeleteUser(ctx.client, id);
   await syncSupportPlatformAccess(ctx.client, ctx.user.email, { ...target, deleted: true });

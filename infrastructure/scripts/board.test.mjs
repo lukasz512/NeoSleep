@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cardUrl, parseArgs, parseTicketBody, run, teamsFileWith, ticketProblems } from "./board.mjs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { REVIEW_LIMIT, cardUrl, configFiles, loadConfig, parseArgs, parseTicketBody, reviewReminder, run, teamsFileWith, ticketProblems, waitingForReview } from "./board.mjs";
 
 const GOOD = "## Problem\nThe board is stale.\n\n## Change\n- Sessions write here\n\n## Done when\n- A test proves it";
 const CONFIG = { apiUrl: "https://api.test", token: "nbs_x", boardUrl: "https://pwa.test/platform/board" };
@@ -51,6 +54,14 @@ test("create sends the sections with the session token and prints key + link", a
   assert.equal(out[0], "CORE-9 https://pwa.test/platform/board?item=CORE-9");
 });
 
+test("create --later asks for Backlog and skips the rename hint (CORE-223)", async () => {
+  const { calls, impl } = fakeFetch({ item: { key: "CORE-9", status: "backlog", branch: null } });
+  const out = [];
+  await run(["create", "--team", "CORE", "--title", "For later", "--body", GOOD, "--later"], { config: CONFIG, fetchImpl: impl, log: (l) => out.push(l) });
+  assert.equal(calls[0].body.status, "backlog");
+  assert.deepEqual(out, ["CORE-9 https://pwa.test/platform/board?item=CORE-9"]);
+});
+
 test("create refuses a bad ticket before calling the API", async () => {
   const { calls, impl } = fakeFetch();
   await assert.rejects(run(["create", "--team", "CORE", "--title", "x", "--body", "## Problem\nx"], { config: CONFIG, fetchImpl: impl, log: () => {} }), /NEO-84/);
@@ -70,6 +81,12 @@ test("move, link and branch patch the item", async () => {
   ]);
 });
 
+test("link --state reports how a CI run ended", async () => {
+  const { calls, impl } = fakeFetch();
+  await run(["link", "CORE-9", "--kind", "ci", "--url", "https://github.com/x/y/actions/runs/1", "--state", "passed"], { config: CONFIG, fetchImpl: impl, log: () => {} });
+  assert.deepEqual(calls[0].body, { add_links: [{ kind: "ci", url: "https://github.com/x/y/actions/runs/1", state: "passed" }] });
+});
+
 test("surfaces the API's refusal", async () => {
   const { impl } = fakeFetch({ error: "The session cannot move needs_review to done" }, 403);
   await assert.rejects(run(["move", "CORE-9", "done"], { config: CONFIG, fetchImpl: impl, log: () => {} }), /403: The session cannot move/);
@@ -79,6 +96,80 @@ test("says how to configure when there is no token", async () => {
   await assert.rejects(run(["get", "CORE-1"], { config: { ...CONFIG, token: "" }, fetchImpl: fakeFetch().impl, log: () => {} }), /Session tokens/);
 });
 
+test("the config falls back to the next file: a worktree reads the main checkout's token (CORE-247)", () => {
+  const dir = mkdtempSync(join(tmpdir(), "board-"));
+  const main = join(dir, "main.json");
+  writeFileSync(main, JSON.stringify({ apiUrl: "https://api.main/", token: "nbs_main" }));
+  const config = loadConfig({}, [join(dir, "missing.json"), main]);
+  assert.equal(config.apiUrl, "https://api.main");
+  assert.equal(config.token, "nbs_main");
+  assert.equal(loadConfig({}, main).token, "nbs_main");
+  assert.equal(loadConfig({ BOARD_TOKEN: "nbs_env" }, [main]).token, "nbs_env");
+  rmSync(dir, { recursive: true });
+});
+
+test("this checkout's config file is tried first", () => {
+  assert.match(configFiles()[0], /\.claude\/local\/board\.json$/);
+});
+
 test("rewrites the team keys and keeps the comment header", () => {
   assert.equal(teamsFileWith("# header\n# more\nNEO\nCORE\n", ["CORE", "NEO", "AJM"]), "# header\n# more\nCORE\nNEO\nAJM\n");
+});
+
+// Session-start reminder about a full "Waiting for you" group (CORE-233).
+const NOW = Date.parse("2026-11-17T12:00:00Z");
+const waited = (key, days, extra = {}) => ({
+  key,
+  title: `Title of ${key}`,
+  status: "needs_review",
+  labels: [],
+  git_state: "none",
+  status_changed_at: new Date(NOW - days * 86_400_000).toISOString(),
+  ...extra,
+});
+const old = (count) => Array.from({ length: count }, (_, i) => waited(`CORE-${i + 1}`, 8 + i));
+
+test("waiting for review = Needs Review, not merged or on hold, the longest wait first", () => {
+  const items = [
+    waited("CORE-1", 2),
+    waited("CORE-2", 9, { git_state: "dev" }),
+    waited("CORE-3", 12, { git_state: "prod", labels: ["hold"] }),
+    waited("CORE-4", 30, { status: "building" }),
+    waited("CORE-5", 9, { git_state: null }),
+  ];
+  assert.deepEqual(
+    waitingForReview(items, NOW).map((i) => [i.key, i.days]),
+    [["CORE-3", 12], ["CORE-5", 9], ["CORE-1", 2]],
+  );
+});
+
+test("the reminder fires above the limit of tickets older than 7 days", () => {
+  const line = reviewReminder(old(REVIEW_LIMIT + 1), NOW);
+  assert.match(line, /6 tickets have waited for Łukasz's review for more than 7 days/);
+  assert.match(line, /CORE-6 \(13 d\), CORE-5 \(12 d\)/);
+  assert.match(line, /before creating a new ticket/);
+});
+
+test("the reminder stays silent at the limit, and a ticket of exactly 7 days does not count", () => {
+  assert.equal(reviewReminder(old(REVIEW_LIMIT), NOW), null);
+  assert.equal(reviewReminder([...old(REVIEW_LIMIT), waited("CORE-90", 7)], NOW), null);
+  assert.equal(reviewReminder([...old(REVIEW_LIMIT), waited("CORE-91", 20, { git_state: "dev" })], NOW), null);
+});
+
+test("waiting lists the group; --remind prints the reminder or nothing", async () => {
+  const many = fakeFetch({ items: old(REVIEW_LIMIT + 1) });
+  const lines = [];
+  await run(["waiting"], { config: CONFIG, fetchImpl: many.impl, log: (l) => lines.push(l), now: NOW });
+  assert.match(many.calls[0].url, /\/items\?status=needs_review$/);
+  assert.equal(lines.length, 6);
+  assert.match(lines[0], /^CORE-6\s+13 d\s+Title of CORE-6$/);
+
+  const reminded = [];
+  await run(["waiting", "--remind"], { config: CONFIG, fetchImpl: many.impl, log: (l) => reminded.push(l), now: NOW });
+  assert.equal(reminded.length, 1);
+  assert.match(reminded[0], /^6 tickets have waited/);
+
+  const quiet = [];
+  await run(["waiting", "--remind"], { config: CONFIG, fetchImpl: fakeFetch({ items: old(2) }).impl, log: (l) => quiet.push(l), now: NOW });
+  assert.deepEqual(quiet, []);
 });

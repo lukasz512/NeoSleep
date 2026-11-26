@@ -13,10 +13,28 @@ export type WorkStatus =
 
 export type WorkLinkKind = "artifact" | "spec" | "pr" | "ci" | "other";
 
+/** What a CI run ended with; a CI link without it is still running or was never reported (CORE-219). */
+export type WorkCiState = "passed" | "failed";
+
 export interface WorkLink {
   kind: WorkLinkKind;
   url: string;
   title?: string;
+  /** Only on a `ci` link. */
+  state?: WorkCiState;
+}
+
+export type WorkLabelColor = "blue" | "teal" | "green" | "amber" | "orange" | "red" | "pink" | "purple";
+
+/** How the board is laid out: one priority-sorted board, or a lane per label. */
+export type WorkBoardSort = "priority" | "label";
+
+/** One label of the catalog (CORE-219). Items carry labels by name; the catalog gives the colour. */
+export interface WorkLabel {
+  id: string;
+  name: string;
+  color: WorkLabelColor;
+  created_at: string;
 }
 
 export interface WorkTeam {
@@ -48,6 +66,8 @@ export interface WorkItem {
   updated_at: string;
   status_changed_at: string;
   completed_at: string | null;
+  /** The newest event a Claude session wrote on the item, for the live dot (CORE-219). */
+  session_active_at?: string | null;
   /** Where the code is, read from git by CI (CORE-221); null until the first report. */
   git_state: WorkGitState | null;
   /** Newest commit citing the ticket. */
@@ -78,6 +98,7 @@ export interface WorkItemDraft {
   status?: WorkStatus;
   assignee?: string | null;
   due_date?: string | null;
+  labels?: string[];
 }
 
 export interface WorkItemPatch {

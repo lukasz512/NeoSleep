@@ -82,6 +82,11 @@ describe("support role", () => {
     }
   });
 
+  it("says the refusal is about the role, not a region (CORE-224)", async () => {
+    const res = await request(app).patch("/api/v1/appointments/00000000-0000-0000-0000-000000000000").set("Authorization", platformSupport.auth).send({});
+    expect([res.status, res.body.code, res.body.reason]).toEqual([403, "FORBIDDEN", "ROLE_NOT_ALLOWED"]);
+  });
+
   it("can't write to the app config or create users", async () => {
     expect((await request(app).patch("/api/v1/config/app").set("Authorization", platformSupport.auth).send({})).status).toBe(403);
     expect((await request(app).post("/api/v1/users").set("Authorization", platformSupport.auth).send({})).status).toBe(403);

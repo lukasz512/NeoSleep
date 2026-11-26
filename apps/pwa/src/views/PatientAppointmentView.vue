@@ -145,7 +145,7 @@
 
         <dl class="patient-appointment__details" :class="{ 'patient-appointment__details--cancelled': appointment.status === 'cancelled' }" data-testid="appointment-details">
           <div><dt>{{ t("publicAppointment.date") }}</dt><dd>{{ when.date }}</dd></div>
-          <div><dt>{{ t("publicAppointment.time") }}</dt><dd>{{ when.time }}</dd></div>
+          <div><dt>{{ t("publicAppointment.time") }}</dt><dd>{{ when.time }} · {{ when.zone }}</dd></div>
           <div v-if="appointment.clinic_name"><dt>{{ t("publicAppointment.clinic") }}</dt><dd>{{ appointment.clinic_name }}</dd></div>
           <div v-if="appointment.clinic_address"><dt>{{ t("publicAppointment.address") }}</dt><dd>{{ appointment.clinic_address }}</dd></div>
           <div v-if="appointment.doctor_name"><dt>{{ t("publicAppointment.doctor") }}</dt><dd>{{ appointment.doctor_name }}</dd></div>
@@ -187,6 +187,7 @@ import AppLoadingState from "../components/AppLoadingState.vue";
 import PatientTopBar from "../components/questionnaire/PatientTopBar.vue";
 import { apiFetch } from "../composables/useApi";
 import { calendarTargets, type CalendarTarget } from "../utils/calendarTargets";
+import { utcOffsetLabel } from "../utils/appointmentTime";
 
 /**
  * The patient's appointment page (CORE-25), opened from the appointment
@@ -224,7 +225,7 @@ const DATE_LOCALES: Record<string, string> = { en: "en-GB", pl: "pl-PL", mx: "es
 const SUGGESTION_MAX = 200;
 
 const route = useRoute();
-const { t, locale } = useI18n();
+const { t, te, locale } = useI18n();
 
 const token = computed(() => route.hash.replace(/^#/, ""));
 const intent = computed(() => (typeof route.query.r === "string" ? route.query.r : null));
@@ -241,11 +242,14 @@ const open = computed(() => appointment.value?.status === "scheduled" && !appoin
 
 const when = computed(() => {
   const a = appointment.value;
-  if (!a) return { date: "", time: "" };
+  if (!a) return { date: "", time: "", zone: "" };
   const intlLocale = DATE_LOCALES[locale.value as string] ?? "es-MX";
   const date = new Intl.DateTimeFormat(intlLocale, { timeZone: a.timezone, weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date(a.start_at));
   const clock = new Intl.DateTimeFormat(intlLocale, { timeZone: a.timezone, hour: "2-digit", minute: "2-digit" });
-  return { date, time: `${clock.format(new Date(a.start_at))} – ${clock.format(new Date(a.end_at))}` };
+  // CORE-244: the same "Mexico City time (GMT-6)" as the email and the calendar entry.
+  const zoneKey = `timezoneName.${a.timezone.replaceAll("/", "_")}`;
+  const zone = `${t(te(zoneKey) ? zoneKey : "email.appointment.clinicTime")} (${utcOffsetLabel(a.start_at, a.timezone)})`;
+  return { date, time: `${clock.format(new Date(a.start_at))} – ${clock.format(new Date(a.end_at))}`, zone };
 });
 
 const targets = calendarTargets(typeof navigator === "undefined" ? "" : navigator.userAgent);

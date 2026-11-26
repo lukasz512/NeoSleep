@@ -220,7 +220,7 @@ export interface Lead {
 const { t } = useI18n();
 const authStore = useAuthStore();
 const configStore = useConfigStore();
-const isAdmin = computed(() => authStore.user?.role === "admin");
+const isAdmin = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
 const canAdd = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
 const showAddModal = ref(false);
 const showEditModal = ref(false);

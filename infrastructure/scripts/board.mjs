@@ -5,12 +5,15 @@
 // (/platform/board → Session tokens), one per device.
 //
 //   pnpm board create --team CORE --title "…" --body "## Problem\n…\n## Change\n…\n## Done when\n…" [--priority 2]
-//                     (or --body-file <path.md> instead of --body)
+//                     (or --body-file <path.md> instead of --body; --later puts a side ticket
+//                     nobody is building yet in Backlog instead of Building, CORE-223)
 //   pnpm board get CORE-12                      → the item + its history as JSON
 //   pnpm board comment CORE-12 "text"
-//   pnpm board link CORE-12 --kind artifact|spec|pr|ci|other --url https://… [--title "…"]
+//   pnpm board link CORE-12 --kind artifact|spec|pr|ci|other --url https://… [--title "…"] [--state passed|failed] (state: ci only)
 //   pnpm board branch CORE-12 worktree-core-12-slug
 //   pnpm board move CORE-12 building|needs_review
+//   pnpm board waiting [--remind]               → Needs Review tickets that wait for Łukasz, the longest wait
+//                     first; --remind prints one line only when too many are old (session start, CORE-233)
 //   pnpm board teams [--write]                  → team keys; --write refreshes .claude/ticket-teams
 //   pnpm board url CORE-12                      → the card's link (no network)
 //
@@ -18,6 +21,7 @@
 // (gitignored), or BOARD_API_URL / BOARD_TOKEN / BOARD_URL in the environment.
 // English only (CLAUDE.md). No dependencies beyond Node.
 
+import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -69,6 +73,29 @@ export function ticketProblems(markdown) {
   return problems;
 }
 
+/** The session-start reminder fires above this many tickets waiting longer than REVIEW_DAYS (CORE-233). */
+export const REVIEW_LIMIT = 5;
+export const REVIEW_DAYS = 7;
+/** Same label the board uses to keep a merged ticket in Needs Review (CORE-221). */
+const HOLD_LABEL = "hold";
+
+/** The board's "Waiting for you" group: Needs Review, not merged or on hold; the longest wait first, with whole days. */
+export function waitingForReview(items, now = Date.now()) {
+  return items
+    .filter((item) => item.status === "needs_review")
+    .filter((item) => !["dev", "prod"].includes(item.git_state) || (item.labels ?? []).includes(HOLD_LABEL))
+    .map((item) => ({ ...item, days: Math.max(0, Math.floor((now - Date.parse(item.status_changed_at)) / 86_400_000)) }))
+    .sort((a, b) => b.days - a.days);
+}
+
+/** One line for the session start when more than REVIEW_LIMIT tickets have waited over REVIEW_DAYS days; else null. */
+export function reviewReminder(items, now = Date.now()) {
+  const old = waitingForReview(items, now).filter((item) => item.days > REVIEW_DAYS);
+  if (old.length <= REVIEW_LIMIT) return null;
+  const list = old.map((item) => `${item.key} (${item.days} d)`).join(", ");
+  return `${old.length} tickets have waited for Łukasz's review for more than ${REVIEW_DAYS} days: ${list}. Tell him in one line before creating a new ticket.`;
+}
+
 /** --flag value pairs and positionals. */
 export function parseArgs(argv) {
   const flags = {};
@@ -87,12 +114,32 @@ export function parseArgs(argv) {
   return { flags, positional };
 }
 
-export function loadConfig(env = process.env, file = CONFIG_FILE) {
-  let fromFile = {};
+/**
+ * Where the session token may live: this checkout first, then the main checkout. The file is
+ * gitignored, so a worktree never has its own copy (CORE-247).
+ */
+export function configFiles(root = ROOT) {
+  const files = [join(root, ".claude/local/board.json")];
   try {
-    fromFile = JSON.parse(readFileSync(file, "utf-8"));
+    const common = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: root, encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    const main = join(dirname(common), ".claude/local/board.json");
+    if (common && !files.includes(main)) files.push(main);
   } catch {
-    // benign: no config file yet; the environment may carry everything
+    // benign: not a git checkout; only the local file applies
+  }
+  return files;
+}
+
+/** `files` is one path or a list; the first readable one wins. */
+export function loadConfig(env = process.env, files = configFiles()) {
+  let fromFile = {};
+  for (const file of [files].flat()) {
+    try {
+      fromFile = JSON.parse(readFileSync(file, "utf-8"));
+      break;
+    } catch {
+      // benign: no config file here; the next one or the environment may carry everything
+    }
   }
   return {
     apiUrl: String(env.BOARD_API_URL ?? fromFile.apiUrl ?? "").replace(/\/+$/, ""),
@@ -131,7 +178,7 @@ function need(value, what) {
   return String(value);
 }
 
-export async function run(argv, { config = loadConfig(), fetchImpl = fetch, log = console.log } = {}) {
+export async function run(argv, { config = loadConfig(), fetchImpl = fetch, log = console.log, now = Date.now() } = {}) {
   const [command, ...rest] = argv;
   const { flags, positional } = parseArgs(rest);
   const key = positional[0]?.toUpperCase();
@@ -143,8 +190,11 @@ export async function run(argv, { config = loadConfig(), fetchImpl = fetch, log 
       if (problems.length) throw new Error(`ticket rejected (NEO-84 format): ${problems.join("; ")}`);
       const payload = { team: need(flags.team, "--team").toUpperCase(), title: need(flags.title, "--title"), ...parseTicketBody(body) };
       if (flags.priority !== undefined) payload.priority = Number(flags.priority);
+      if (flags.later) payload.status = "backlog";
       const { item } = await call(config, "POST", "/items", payload, fetchImpl);
       log(`${item.key} ${cardUrl(item.key, config)}`);
+      // A ticket for later is not this session's work: the tab keeps its title.
+      if (flags.later) return item;
       // Replaces the old Linear PostToolUse reminder: the session tab should lead with the key.
       log(`New ticket ${item.key}: tell Łukasz to run /rename so the tab title leads with [${item.key}], and prefix your next reply with [${item.key}].`);
       return item;
@@ -163,6 +213,7 @@ export async function run(argv, { config = loadConfig(), fetchImpl = fetch, log 
     case "link": {
       const link = { kind: need(flags.kind, "--kind"), url: need(flags.url, "--url") };
       if (typeof flags.title === "string") link.title = flags.title;
+      if (typeof flags.state === "string") link.state = flags.state;
       const { item } = await call(config, "PATCH", `/items/${need(key, "the ticket key")}`, { add_links: [link] }, fetchImpl);
       log(`linked ${link.kind} on ${item.key}`);
       return item;
@@ -177,6 +228,17 @@ export async function run(argv, { config = loadConfig(), fetchImpl = fetch, log 
       log(`${item.key} → ${item.status}`);
       return item;
     }
+    case "waiting": {
+      const { items } = await call(config, "GET", "/items?status=needs_review", null, fetchImpl);
+      if (flags.remind) {
+        const line = reviewReminder(items, now);
+        if (line) log(line);
+        return line;
+      }
+      const waiting = waitingForReview(items, now);
+      for (const item of waiting) log(`${item.key}\t${item.days} d\t${item.title}`);
+      return waiting;
+    }
     case "teams": {
       const { items } = await call(config, "GET", "/teams", null, fetchImpl);
       const keys = items.map((t) => t.key);
@@ -190,7 +252,7 @@ export async function run(argv, { config = loadConfig(), fetchImpl = fetch, log 
       return url;
     }
     default:
-      throw new Error("usage: board create|get|comment|link|branch|move|teams|url … (see the header of infrastructure/scripts/board.mjs)");
+      throw new Error("usage: board create|get|comment|link|branch|move|waiting|teams|url … (see the header of infrastructure/scripts/board.mjs)");
   }
 }
 

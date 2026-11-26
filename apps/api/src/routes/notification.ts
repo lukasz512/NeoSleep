@@ -128,7 +128,7 @@ notificationRouter.put(
 // ---------------------------------------------------------------------------
 notificationRouter.get(
   "/admin/notification-defaults",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const result = await withTenant(slug, async (client) => {
@@ -141,7 +141,7 @@ notificationRouter.get(
 
 notificationRouter.put(
   "/admin/notification-defaults",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const body = (req.body ?? {}) as { defaults?: unknown };

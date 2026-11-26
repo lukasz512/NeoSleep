@@ -16,4 +16,6 @@ export const APP_STORAGE_KEYS = {
   /** Prefix of a patient's unsent questionnaire answers on their own device (composables/useQuestionnaireDraft.ts) —
    *  followed by a hash of the link token, never the token itself; cleared on submit, on an expired link and after 24h. */
   questionnaireDraftPrefix: "app-q-draft:",
+  /** Work board view choices of this browser: card density and collapsed label lanes (CORE-219). */
+  workBoard: "app-work-board",
 } as const;

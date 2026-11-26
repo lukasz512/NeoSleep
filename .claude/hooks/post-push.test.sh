@@ -5,6 +5,8 @@ set -uo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/change-shape.sh
 source "$DIR/lib/change-shape.sh"
+# shellcheck source=lib/ci-wait-lock.sh
+source "$DIR/lib/ci-wait-lock.sh"
 FAILS=0
 
 ok() { if [ "$2" = "$3" ]; then echo "  ok   $1"; else echo "  FAIL $1 (got '$2', want '$3')"; FAILS=$((FAILS + 1)); fi; }
@@ -29,8 +31,32 @@ hook() {
 OUT="$(hook '{"tool_name":"Bash","tool_input":{"command":"git push -u origin worktree-core-1-x"},"tool_response":{"stdout":"","stderr":"","interrupted":false}}')"
 case "$OUT" in *handoff*) ok "a push gets the handover steps" yes yes ;; *) ok "a push gets the handover steps" "$OUT" handoff ;; esac
 case "$OUT" in *"/clear"*) ok "it ends with the /clear line" yes yes ;; *) ok "it ends with the /clear line" no yes ;; esac
+case "$OUT" in *"--before"*) ok "it asks for before/after on the card" yes yes ;; *) ok "it asks for before/after on the card" no yes ;; esac
+# This test runs on any branch, so both CI answers are valid; a CI branch must get the one wait.
+if on_ci_branch "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"; then
+  case "$OUT" in *"ci-wait.mjs --branch"*) ok "a CI branch is told to start one background wait" yes yes ;; *) ok "a CI branch is told to start one background wait" no yes ;; esac
+fi
 ok "a non-push command is silent" "$(hook '{"tool_name":"Bash","tool_input":{"command":"git status"},"tool_response":{}}')" none
 ok "git push --dry-run is silent" "$(hook '{"tool_name":"Bash","tool_input":{"command":"git push --dry-run origin x"},"tool_response":{}}')" none
 ok "a rejected push is silent"    "$(hook '{"tool_name":"Bash","tool_input":{"command":"git push origin x"},"tool_response":{"stderr":"! [rejected] x -> x (non-fast-forward)\nerror: failed to push some refs"}}')" none
+
+echo "lib/ci-wait-lock.sh (CORE-247)"
+TMP="$(mktemp -d)"
+printf '{"ciBranchPatterns":["worktree-*","worker/*"]}' > "$TMP/ci.json"
+on_branch() { if CI_AUTOFIX_FILE="$TMP/ci.json" on_ci_branch "$1"; then echo yes; else echo no; fi; }
+ok "a worktree branch runs CI on push"   "$(on_branch worktree-core-1-x)" yes
+ok "a worker branch runs CI on push"     "$(on_branch worker/core-1)" yes
+ok "another branch does not"             "$(on_branch feature/x)" no
+running() { if CI_WAIT_DIR="$TMP" ci_wait_running "$1"; then echo yes; else echo no; fi; }
+echo "$$" > "$TMP/live.pid"
+sleep 0 & DEAD=$!
+wait "$DEAD"
+echo "$DEAD" > "$TMP/dead.pid"
+echo "garbage" > "$TMP/garbage.pid"
+ok "a live wait counts as running"       "$(running live)" yes
+ok "a dead wait does not"                "$(running dead)" no
+ok "a garbage lock does not"             "$(running garbage)" no
+ok "no lock file does not"               "$(running missing)" no
+rm -rf "$TMP"
 
 [ "$FAILS" -eq 0 ] && echo "all passed" || { echo "$FAILS failed"; exit 1; }

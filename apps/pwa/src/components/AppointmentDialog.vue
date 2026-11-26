@@ -147,6 +147,7 @@ import {
   useAppointments,
   APPOINTMENT_DURATIONS,
   DEFAULT_APPOINTMENT_DURATION,
+  forbiddenMessageKey,
   type Appointment,
   type AppointmentWriteResult,
 } from "../composables/useAppointments";
@@ -482,7 +483,7 @@ function close() {
 
 function explain(result: AppointmentWriteResult): string {
   if (result.conflict) return t("user.appointments.form.slotTaken");
-  if (result.forbidden) return isDoctor.value ? t("user.appointments.form.onlyOwnPatients") : t("user.appointments.form.outsideScope");
+  if (result.forbidden) return t(forbiddenMessageKey(result.forbiddenReason));
   return t("user.appointments.form.errorSave");
 }
 

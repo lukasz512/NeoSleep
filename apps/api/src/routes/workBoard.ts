@@ -5,7 +5,10 @@ import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireAuth } from "../middleware/requireAuth.js";
 import {
   WORK_ATTACHMENT_MAX_BYTES,
+  WORK_CI_STATES,
+  WORK_LABEL_COLORS,
   WORK_LINK_KINDS,
+  WORK_SESSION_LABEL,
   WORK_STATUSES,
   addWorkItemComment,
   applyWorkGitStates,
@@ -21,17 +24,21 @@ import {
   listWorkPeople,
   listSessionTokens,
   listWorkItems,
+  listWorkLabels,
   listWorkTeams,
   parseWorkItemKey,
   revokeSessionToken,
   updateWorkItem,
+  updateWorkLabel,
   touchSessionToken,
   workTeamExists,
   type WorkActor,
   type WorkAttachmentRow,
+  type WorkCiState,
   type WorkGitReport,
   type WorkItemPatch,
   type WorkItemRow,
+  type WorkLabelColor,
   type WorkLink,
   type WorkLinkKind,
   type WorkStatus,
@@ -58,7 +65,7 @@ export const workBoardRouter: RouterType = Router();
 
 export const AGENT_TOKEN_HEADER = "x-agent-token";
 export const SESSION_TOKEN_HEADER = "x-session-token";
-export const SESSION_LABEL = "session";
+export const SESSION_LABEL = WORK_SESSION_LABEL;
 
 /** The only status moves the agent may make: spec written, build started, build finished or given back. */
 export const AGENT_MOVES: Readonly<Partial<Record<WorkStatus, readonly WorkStatus[]>>> = {
@@ -79,6 +86,7 @@ const MAX_BODY = 5000;
 const MAX_COMMENT = 5000;
 const MAX_LINKS = 20;
 const MAX_LABELS = 10;
+const MAX_LABEL = 40;
 /** One git report names every ticket ever cited in a commit. */
 const MAX_GIT_REPORTS = 5000;
 const GIT_SHA_RE = /^[0-9a-f]{7,40}$/;
@@ -191,7 +199,7 @@ function priorityValue(value: unknown): number {
 }
 
 function labelsValue(value: unknown): string[] {
-  if (!Array.isArray(value) || value.length > MAX_LABELS || value.some((l) => typeof l !== "string" || !l.trim() || l.length > 40)) {
+  if (!Array.isArray(value) || value.length > MAX_LABELS || value.some((l) => typeof l !== "string" || !l.trim() || l.trim().length > MAX_LABEL)) {
     throw new ValidationError(`labels must be up to ${MAX_LABELS} short texts`, "labels");
   }
   return [...new Set((value as string[]).map((l) => l.trim()))];
@@ -209,6 +217,13 @@ function linksValue(value: unknown): WorkLink[] {
     if (typeof url !== "string" || !/^https:\/\/\S{3,2000}$/.test(url)) throw new ValidationError("links must be https URLs", "links");
     const link: WorkLink = { kind: kind as WorkLinkKind, url };
     if (typeof title === "string" && title.trim()) link.title = title.trim().slice(0, 200);
+    const state = field(raw, "state");
+    if (state !== undefined) {
+      if (kind !== "ci" || typeof state !== "string" || !(WORK_CI_STATES as readonly string[]).includes(state)) {
+        throw new ValidationError(`only a ci link has a state (${WORK_CI_STATES.join(" or ")})`, "links");
+      }
+      link.state = state as WorkCiState;
+    }
     return link;
   });
 }
@@ -315,8 +330,9 @@ workBoardRouter.post(
     let labels = hasField(req.body, "labels") ? labelsValue(field(req.body, "labels")) : [];
     if (actor.kind === "session") {
       // Decision core187-r1 Q2: the session is already working on it; the label makes it filterable.
+      // A side ticket for later asks for Backlog (board-upkeep-r1 P1, CORE-223).
       requireSessionTicket(problem, change, doneWhen);
-      status = "building";
+      status = status === "backlog" && hasField(req.body, "status") ? "backlog" : "building";
       labels = [...new Set([...labels, SESSION_LABEL])];
     }
     const item = await createWorkItem(
@@ -360,6 +376,8 @@ function gitReportsValue(value: unknown): WorkGitReport[] {
 // `complete` (every ticket left out has nothing merged) and `close` (the prod smoke test passed:
 // Needs Review tickets on prod move to Done unless labeled `hold`) are for the agent and people;
 // that close is the one exception to "closing stays human", decided in board-statuses-r1 D2.
+// `tidy: { branches: [keys with a remote branch] }` keeps Building to tickets somebody is building
+// (board-upkeep-r1 P1, CORE-223); like close, not for sessions.
 workBoardRouter.post(
   "/platform/work/git-state",
   asyncHandler(async (req, res) => {
@@ -374,10 +392,19 @@ workBoardRouter.post(
       }
       close = { smoke_url: url };
     }
-    if (actor.kind === "session" && (complete || close)) {
-      throw new ForbiddenError("A session can report a ticket's git state, not close tickets or send a complete report");
+    let tidy: { branches: { team: string; number: number }[] } | null = null;
+    if (hasField(req.body, "tidy")) {
+      const branches = field(field(req.body, "tidy"), "branches");
+      const parsed = Array.isArray(branches) && branches.length <= MAX_GIT_REPORTS
+        ? branches.map((key) => (typeof key === "string" ? parseWorkItemKey(key) : null))
+        : [null];
+      if (parsed.some((key) => key === null)) throw new ValidationError("tidy needs { branches: [ticket keys] }", "tidy");
+      tidy = { branches: parsed.filter((key) => key !== null) };
     }
-    res.json(await applyWorkGitStates(reports, { complete, close }, actor));
+    if (actor.kind === "session" && (complete || close || tidy)) {
+      throw new ForbiddenError("A session can report a ticket's git state, not close or tidy tickets or send a complete report");
+    }
+    res.json(await applyWorkGitStates(reports, { complete, close, tidy }, actor));
   })
 );
 
@@ -446,6 +473,41 @@ workBoardRouter.post(
     const event = await addWorkItemComment(team, number, text, actor, (current) => hideTriageFromMachines(actor, current, key));
     if (!event) throw new NotFoundError("Work item", key);
     res.status(201).json({ event });
+  })
+);
+
+// GET /api/v1/platform/work/labels — the label catalog (CORE-219), by name
+workBoardRouter.get(
+  "/platform/work/labels",
+  asyncHandler(async (_req, res) => {
+    res.json({ items: await listWorkLabels() });
+  })
+);
+
+// PATCH /api/v1/platform/work/labels/:id { name?, color? } — people only; a rename reaches every item
+workBoardRouter.patch(
+  "/platform/work/labels/:id",
+  asyncHandler(async (req, res) => {
+    const actor = requireHuman(res);
+    const id = routeParam(req, "id") ?? "";
+    const patch: { name?: string; color?: WorkLabelColor } = {};
+    if (hasField(req.body, "name")) {
+      const name = typeof field(req.body, "name") === "string" ? (field(req.body, "name") as string).trim() : "";
+      if (!name || name.length > MAX_LABEL) throw new ValidationError(`name must be 1-${MAX_LABEL} characters`, "name");
+      if (name.toLowerCase() === SESSION_LABEL) throw new ValidationError(`name "${SESSION_LABEL}" is reserved for session tickets`, "name");
+      patch.name = name;
+    }
+    if (hasField(req.body, "color")) {
+      const color = field(req.body, "color");
+      if (typeof color !== "string" || !(WORK_LABEL_COLORS as readonly string[]).includes(color)) {
+        throw new ValidationError(`color must be one of ${WORK_LABEL_COLORS.join(", ")}`, "color");
+      }
+      patch.color = color as WorkLabelColor;
+    }
+    const item = UUID_RE.test(id) ? await updateWorkLabel(id, patch, actor) : null;
+    if (!item) throw new NotFoundError("Label", id);
+    if (item === "duplicate") throw new ValidationError("name is already used by another label", "name");
+    res.json({ item });
   })
 );
 

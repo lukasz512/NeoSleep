@@ -80,8 +80,22 @@ export class AuthError extends AppError {
   }
 }
 
+/**
+ * Why a 403 was given (CORE-224) — the PWA picks its message from this, so a
+ * booking rule is never reported as a region problem. A throw without one
+ * stays a plain FORBIDDEN and the client shows its neutral message.
+ */
+export type ForbiddenReason =
+  | "OUTSIDE_TERRITORY"
+  | "NOT_BOOKER"
+  | "CLINICAL_FIELDS"
+  | "CANNOT_CLOSE"
+  | "OTHER_DOCTOR"
+  | "NOT_OWN_PATIENT"
+  | "ROLE_NOT_ALLOWED";
+
 export class ForbiddenError extends AppError {
-  constructor(message = "Forbidden") {
+  constructor(message = "Forbidden", public readonly reason?: ForbiddenReason) {
     super(message, "FORBIDDEN", 403);
   }
 }

@@ -145,7 +145,7 @@ const { userDetails } = useIdentity();
 const notifications = useNotifications();
 const { submit } = useEntitySubmit();
 const authStore = useAuthStore();
-const isAdmin = computed(() => authStore.user?.role === "admin");
+const isAdmin = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
 
 const showForm = ref(false);
 const showEditModal = ref(false);

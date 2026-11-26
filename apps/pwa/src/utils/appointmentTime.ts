@@ -90,6 +90,16 @@ export function timeZoneLabel(iso: string, timeZone: string, locale: string): st
   return parts.find((p) => p.type === "timeZoneName")?.value ?? timeZone;
 }
 
+/** "GMT-6", "GMT+5:30" — the zone's offset at `iso`, the same in every language (CORE-244). */
+export function utcOffsetLabel(iso: string, timeZone: string): string {
+  const p = zonedParts(iso, timeZone);
+  const at = new Date(iso);
+  const minutes = Math.round((Date.UTC(p.y, p.m - 1, p.d, p.h, p.min) - at.setUTCSeconds(0, 0)) / 60_000);
+  const abs = Math.abs(minutes);
+  const rest = abs % 60 ? `:${pad(abs % 60)}` : "";
+  return `GMT${minutes < 0 ? "-" : "+"}${Math.floor(abs / 60)}${rest}`;
+}
+
 /**
  * The doctor's other bookings on `dayIso` as wall-clock "HH:mm" intervals in
  * `timeZone` — AppDateField strikes through the slots a new booking would

@@ -5,17 +5,18 @@ import {
   getTerritoryById,
   getTerritoryPath,
   softDeleteTerritory,
+  countRoleGrantsOnTerritory,
   type InsertTerritoryInput,
   type UpdateTerritoryInput,
   type Territory,
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
-import { ValidationError } from "../errors.js";
+import { ConflictError, ValidationError } from "../errors.js";
 
 /**
  * COMMANDS — Territory (geographic hierarchy) domain.
  *
- * Admin-only (see routes/territory.ts's requireRole("admin")) — this is the
+ * Admin-only (see routes/territory.ts's requireRole("admin", "manager")) — this is the
  * data-entry surface for the country > region > city > village > district
  * tree that patient.territory_id (via identities) links into, and that
  * users/organization territory assignment already used before this.
@@ -151,6 +152,13 @@ export async function UpdateTerritoryCommand(
 
 export async function DeleteTerritoryCommand(ctx: TenantContext, id: string): Promise<void> {
   if (!id?.trim()) throw new ValidationError("territory id is required");
+
+  // A role grant keeps scoping its user on a soft-deleted node, with nothing left in the
+  // pickers to show for it (CORE-226) — the grants are moved or removed first.
+  const grants = await countRoleGrantsOnTerritory(ctx.client, id);
+  if (grants > 0) {
+    throw new ConflictError(`This territory still scopes ${grants} role grant(s) — reassign them before deleting it`, "TERRITORY_IN_USE");
+  }
 
   await softDeleteTerritory(ctx.client, id);
 

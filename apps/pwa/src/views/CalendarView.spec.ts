@@ -296,6 +296,16 @@ describe("CalendarView (CORE-117)", () => {
     expect(document.body.querySelector('[data-testid="calendar-add-event"]')).toBeNull();
   });
 
+  // CORE-224: support reads the calendar only (API allowlist) — no "+" that could only end in a 403.
+  it("support sees the calendar without the \"+\" button", async () => {
+    apiFetch.mockResolvedValue(jsonResponse(true, 200, { items: [] }));
+    const wrapper = await mountView("support");
+
+    expect(apiFetch.mock.calls.some(([p]) => String(p).startsWith("/api/v1/calendar"))).toBe(true);
+    expect(wrapper.find('[data-testid="calendar-add"]').exists()).toBe(false);
+    expect(document.body.querySelector('[data-testid="calendar-add"]')).toBeNull();
+  });
+
   // CORE-4: a notification about a visit opens that visit, not just the calendar.
   it("?appointment=<id> loads that visit, jumps to its day and opens its detail", async () => {
     const appointment = { id: "a-9", patient_id: "p-1", patient_name: "Jane Doe", practitioner_id: "doc-1", practitioner_name: "Dr. Smith", start_at: "2032-03-10T14:00:00.000Z", end_at: "2032-03-10T14:30:00.000Z", timezone: "UTC", status: "scheduled" };
