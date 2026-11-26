@@ -7,6 +7,9 @@ import { linkPractitionerOrganization, setGlobalPrimaryOrganization } from "../d
 import { getAuditLogForEntities } from "../db/audit-log.js";
 import { getUserById } from "../db/users.js";
 import type { TenantContext } from "../context/TenantContext.js";
+import { ValidationError } from "../errors.js";
+import { emailLocale } from "../mailer.js";
+import { GetPatientEmailSendsQuery } from "../queries/patientEmailSend.js";
 import {
   SendQuestionnaireEmailCommand,
   PatientHasNoEmailError,
@@ -86,6 +89,43 @@ describe("SendQuestionnaireEmailCommand", () => {
         [messageId]
       );
       expect(rows).toEqual([{ kind: "questionnaire_link", sent_to_masked: "l***@example.mx", status: "sent", questionnaire_request_id: request.id, sent_by: ctx.user.id }]);
+    });
+  });
+
+  it("lets the sender override the mail language, even en for an MX patient (CORE-268)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await insertPatient(client, { first_name: "Eva", last_name: `Idioma-${uniqueSuffix()}`, email: `eva.idioma.${uniqueSuffix()}@example.mx`, region: "MX" });
+
+      sendMock.mockImplementation(async () => `re_${uniqueSuffix()}`); // one provider id per send
+      await SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN, { language: "en" });
+      await SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN, { language: "pl" });
+      await SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN, {});
+
+      const recipients = sendMock.mock.calls.map((call) => call[2] as { language: string; region: string | null });
+      expect(emailLocale(recipients[0]!)).toBe("en");
+      expect(emailLocale(recipients[1]!)).toBe("pl");
+      expect(emailLocale(recipients[2]!)).toBe("mx"); // no override: the recipient's own language
+    });
+  });
+
+  it("rejects an unsupported language before a link is created or a mail is sent (CORE-268)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await insertPatient(client, { first_name: "Eva", last_name: `Idioma-${uniqueSuffix()}`, email: `eva.malidioma.${uniqueSuffix()}@example.mx`, region: "MX" });
+
+      await expect(SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN, { language: "de" })).rejects.toThrow(ValidationError);
+      expect(sendMock).not.toHaveBeenCalled();
+      const { rows } = await client.query("SELECT 1 FROM questionnaire_request WHERE patient_id = $1", [patient.id]);
+      expect(rows).toHaveLength(0);
+    });
+  });
+
+  it("the email-sends query reports the recipient's language for the picker default (CORE-268)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await insertPatient(client, { first_name: "Ola", last_name: `Jezyk-${uniqueSuffix()}`, email: `ola.jezyk.${uniqueSuffix()}@example.pl`, region: "PL" });
+      await expect(GetPatientEmailSendsQuery(ctx, patient.id)).resolves.toMatchObject({ language: "pl" });
     });
   });
 

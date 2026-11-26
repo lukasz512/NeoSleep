@@ -350,10 +350,10 @@ export function usePatientChecklist(patientId: () => string) {
   }
 
   /** Where the next email would go (masked) and what was sent before (NEO-192). */
-  async function loadEmailSends(): Promise<{ recipient: string | null; sends: EmailSend[] } | null> {
+  async function loadEmailSends(): Promise<{ recipient: string | null; language: string; sends: EmailSend[] } | null> {
     const res = await apiFetch(`/api/v1/patient/${patientId()}/email-sends`, { handleErrors: false });
     if (!res.ok) return null;
-    return (await res.json()) as { recipient: string | null; sends: EmailSend[] };
+    return (await res.json()) as { recipient: string | null; language: string; sends: EmailSend[] };
   }
 
   /**
@@ -362,8 +362,12 @@ export function usePatientChecklist(patientId: () => string) {
    * to the record" message, not a generic failure. Returns the masked
    * address and the link (for "Copy link"), or null.
    */
-  async function sendByEmail(options: { items?: string[]; copyToMe?: boolean } = {}): Promise<{ sent_to: string; url: string } | null> {
-    const body = { ...(options.items ? { items: options.items } : {}), ...(options.copyToMe ? { copy_to_me: true } : {}) };
+  async function sendByEmail(options: { items?: string[]; copyToMe?: boolean; language?: string } = {}): Promise<{ sent_to: string; url: string } | null> {
+    const body = {
+      ...(options.items ? { items: options.items } : {}),
+      ...(options.copyToMe ? { copy_to_me: true } : {}),
+      ...(options.language ? { language: options.language } : {}),
+    };
     const res = await apiFetch(`/api/v1/patient/${patientId()}/questionnaire-requests/email`, { ...json(body), handleErrors: false });
     if (res.status === 422) {
       // 422 is either "no email on the record" or "the mail server refused this address" (NEO-202).
@@ -383,8 +387,8 @@ export function usePatientChecklist(patientId: () => string) {
   }
 
   /** NEO-258: the finished Historia clínica, signed by the doctor, emailed to the patient as a 7-day link. */
-  async function sendHistoriaByEmail(doctorSignature: string): Promise<boolean> {
-    const res = await apiFetch(`/api/v1/patient/${patientId()}/historia-clinica/email`, { ...json({ doctorSignature }), handleErrors: false });
+  async function sendHistoriaByEmail(doctorSignature: string, language?: string): Promise<boolean> {
+    const res = await apiFetch(`/api/v1/patient/${patientId()}/historia-clinica/email`, { ...json({ doctorSignature, ...(language ? { language } : {}) }), handleErrors: false });
     if (res.status === 422) {
       notifications.show(t("app.clinical.email.noEmail"), "warning", undefined, { icon: "mail" });
       return false;

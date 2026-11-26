@@ -1,3 +1,5 @@
+import { ValidationError } from "../errors.js";
+
 /**
  * The ONE country -> language mapping (CORE-261). Used to default `identities.language` when an
  * identity is created or backfilled, and as the fallback for rows that still hold the default 'en'.
@@ -26,4 +28,23 @@ export function patientEmailLocale(language: string | null, region: string | nul
   if (lang.startsWith("pl")) return "pl";
   if (lang.startsWith("es") || lang === "mx") return "mx";
   return localeForCountry(region);
+}
+
+/**
+ * Language for ONE manual send (CORE-268). The sender may override the recipient's language; the
+ * override is used as given, so the region is dropped (otherwise an explicit `en` for a PL/MX
+ * recipient would be re-mapped to the country's language). No override: the recipient's language.
+ */
+export function resolveSendLanguage(
+  override: unknown,
+  language: string | null,
+  region: string | null,
+): { language: string; region: string | null } {
+  if (override === undefined || override === null || override === "") {
+    return { language: patientEmailLocale(language, region), region };
+  }
+  if (typeof override !== "string" || !(SUPPORTED_LANGUAGES as readonly string[]).includes(override)) {
+    throw new ValidationError(`language must be one of: ${SUPPORTED_LANGUAGES.join(", ")}`);
+  }
+  return { language: override, region: null };
 }

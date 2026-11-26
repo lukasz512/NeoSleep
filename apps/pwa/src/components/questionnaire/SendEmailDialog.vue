@@ -30,6 +30,8 @@
         <p class="send-email__muted">{{ t("app.clinical.email.validity") }}</p>
       </fieldset>
 
+      <EmailLanguageSelect v-if="recipient && items.length" v-model="mailLanguage" />
+
       <VCheckbox
         v-if="recipient && items.length"
         v-model="copyToMe"
@@ -84,6 +86,7 @@ import { useI18n } from "vue-i18n";
 import AppFormDialog from "../AppFormDialog.vue";
 import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
+import EmailLanguageSelect from "./EmailLanguageSelect.vue";
 import { useNotifications } from "../../composables/useNotifications";
 import type { ChecklistItem, EmailSend, EmailSendStatus } from "../../composables/usePatientChecklist";
 
@@ -102,6 +105,8 @@ const props = defineProps<{
   openKeys: string[];
   /** Masked address the email goes to; null = the record has no email. */
   recipient: string | null;
+  /** The recipient's own mail language (identities.language); the picker starts here (CORE-268). */
+  language: string;
   sends: EmailSend[];
   sending: boolean;
   /** Link of the email just sent, for "Copy link"; null before sending. */
@@ -111,13 +116,14 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   "update:modelValue": [open: boolean];
-  send: [payload: { items: string[]; copyToMe: boolean }];
+  send: [payload: { items: string[]; copyToMe: boolean; language: string }];
 }>();
 const { t } = useI18n();
 const notifications = useNotifications();
 
 const selected = ref<string[]>([]);
 const copyToMe = ref(false);
+const mailLanguage = ref(props.language);
 
 watch(
   () => props.modelValue,
@@ -125,13 +131,21 @@ watch(
     if (!open) return;
     selected.value = props.openKeys.filter((key) => props.items.some((item) => item.key === key));
     copyToMe.value = false;
+    mailLanguage.value = props.language;
   },
   { immediate: true }
+);
+// The recipient's language arrives with the history request, after the dialog opened.
+watch(
+  () => props.language,
+  (language) => {
+    mailLanguage.value = language;
+  }
 );
 
 function onSubmit() {
   if (!selected.value.length || props.sending) return;
-  emit("send", { items: [...selected.value], copyToMe: copyToMe.value });
+  emit("send", { items: [...selected.value], copyToMe: copyToMe.value, language: mailLanguage.value });
 }
 
 function tone(status: EmailSendStatus): "ok" | "warn" | "bad" | "neutral" {

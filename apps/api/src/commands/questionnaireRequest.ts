@@ -34,7 +34,7 @@ import { getUserById } from "../db/users.js";
 import { isPatientEmailHeldByAnother } from "../db/identityEmail.js";
 import { insertPatientEmailSend } from "../db/patientEmailSend.js";
 import { maskEmail } from "../utils/maskEmail.js";
-import { patientEmailLocale } from "../utils/patientEmailLocale.js";
+import { patientEmailLocale, resolveSendLanguage } from "../utils/patientEmailLocale.js";
 import { PRIVACY_NOTICE_URL } from "../env.js";
 import { validateMedicalHistory, validateStop } from "./clinicalRecordFields.js";
 import { isSignatureDataUrl } from "../utils/signatureDataUrl.js";
@@ -174,8 +174,10 @@ export async function SendQuestionnaireEmailCommand(
   ctx: TenantContext,
   patientId: string,
   frontendOrigin: string,
-  body: { items?: unknown; copy_to_me?: unknown } = {}
+  body: { items?: unknown; copy_to_me?: unknown; language?: unknown } = {}
 ): Promise<{ request: CreatedQuestionnaireRequest["request"]; sent_to: string; url: string }> {
+  // CORE-268: reject a bad language before a link is created.
+  resolveSendLanguage(body.language, null, null);
   // NEO-192: the doctor picks the items in the send dialog; none picked = everything still open.
   const created = await CreateQuestionnaireRequestCommand(
     ctx,
@@ -189,6 +191,7 @@ export async function SendQuestionnaireEmailCommand(
   const email = context.patient_email?.trim();
   if (!email) throw new PatientHasNoEmailError();
 
+  const mailLocale = resolveSendLanguage(body.language, context.patient_language, context.patient_region);
   const sent = await sendQuestionnaireLinkEmail(
     email,
     created.url,
@@ -196,8 +199,8 @@ export async function SendQuestionnaireEmailCommand(
       title: context.patient_salutation,
       firstName: context.patient_first_name,
       lastName: context.patient_last_name,
-      language: patientEmailLocale(context.patient_language, context.patient_region),
-      region: context.patient_region,
+      language: mailLocale.language,
+      region: mailLocale.region,
     },
     { name: context.organization_name, email: context.organization_email },
     created.request.items.length,

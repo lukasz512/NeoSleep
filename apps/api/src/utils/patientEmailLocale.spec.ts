@@ -1,5 +1,24 @@
 import { describe, it, expect } from "vitest";
-import { localeForCountry, patientEmailLocale, SUPPORTED_LANGUAGES } from "./patientEmailLocale.js";
+import { localeForCountry, patientEmailLocale, resolveSendLanguage, SUPPORTED_LANGUAGES } from "./patientEmailLocale.js";
+import { ValidationError } from "../errors.js";
+
+// CORE-268: the sender's choice wins; without one, the recipient's language applies.
+describe("resolveSendLanguage", () => {
+  it("defaults to the recipient's language and keeps the region", () => {
+    expect(resolveSendLanguage(undefined, "en", "MX")).toEqual({ language: "mx", region: "MX" });
+    expect(resolveSendLanguage(null, "pl", null)).toEqual({ language: "pl", region: null });
+  });
+
+  it("an explicit override wins, even en for a PL or MX patient (region dropped so it is not re-mapped)", () => {
+    expect(resolveSendLanguage("en", "mx", "MX")).toEqual({ language: "en", region: null });
+    expect(resolveSendLanguage("pl", "mx", "MX")).toEqual({ language: "pl", region: null });
+  });
+
+  it("rejects an unsupported language", () => {
+    expect(() => resolveSendLanguage("de", "pl", "PL")).toThrow(ValidationError);
+    expect(() => resolveSendLanguage(5, "pl", "PL")).toThrow(ValidationError);
+  });
+});
 
 // CORE-261: one region -> language mapping, used by mail and notifications.
 describe("localeForCountry", () => {
