@@ -48,15 +48,18 @@ async function openRegistration(page: Page, width: number, height: number) {
   // A cold WebKit page on a busy CI runner can take longer than the 5s default
   // to render this first view (flaked on PR #233, even after the global warm-up).
   await expect(page.locator(".partner-registration__documents")).toBeVisible({ timeout: 20_000 });
-  // The card zooms in after the backdrop intro — measure once it has settled
-  // (the backdrop's gradient/orb loops are infinite and never settle; skip them).
-  await page.waitForFunction(() =>
+  // The card zooms in after the backdrop intro — measure once it has settled.
+  await animationsSettled(page);
+}
+
+// The backdrop's gradient/orb loops are infinite and never settle; skip them.
+const animationsSettled = (page: Page) =>
+  page.waitForFunction(() =>
     document
       .getAnimations()
       .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity)
       .every((a) => a.playState !== "running"),
   );
-}
 
 const scrollTop = (page: Page) =>
   page.evaluate(() => document.querySelector(".partner-registration")!.scrollTop);
@@ -106,6 +109,13 @@ test("the form still scrolls after the Edit details dialog was opened and closed
   await openRegistration(page, 1280, 720);
   await page.getByRole("button", { name: /edit details/i }).click();
   await expect(page.locator(".v-dialog .v-card")).toBeVisible();
+  // Press Escape on a dialog that has finished opening, as a person would.
+  // Vuetify marks an overlay as the top one in a timer after it opens and
+  // ignores Escape until then; on a slow WebKit runner the key arrived ~0.1s
+  // after the card showed, before that timer, and the dialog stayed open
+  // (flake hunt 2026-11-26, reproduced locally by sending Escape in the same
+  // task as the click; a later Escape closes it).
+  await animationsSettled(page);
   await page.keyboard.press("Escape");
   await expect(page.locator(".v-dialog .v-card")).toBeHidden();
   await wheelAt(page, 640, 400);
