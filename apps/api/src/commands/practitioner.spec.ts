@@ -99,6 +99,55 @@ describe("ActivatePractitionerCommand", () => {
     });
   }, 15000);
 
+  // NEO-272: the invite is written in the doctor's own language, the sender may override it for one send.
+  describe("invite language (NEO-272)", () => {
+    async function invitedLanguage(
+      practitionerLanguage: string,
+      override?: string,
+    ): Promise<string | undefined> {
+      let language: string | undefined;
+      await withTenant(TENANT_SLUG, async (client) => {
+        const ctx = await buildTestContext(client);
+        const practitioner = await CreatePractitionerCommand(ctx, {
+          first_name: "Lang",
+          last_name: "Case",
+          email: `qa-hcp-${uniqueSuffix()}@example.com`,
+          phone: "600100200",
+          region: "PL",
+          language: practitionerLanguage,
+        });
+        await ActivatePractitionerCommand(ctx, practitioner.id, "https://pwa-dev.neosleepcare.com", override);
+        language = (sendPartnerInviteEmailMock.mock.calls[0]![2] as { language: string }).language;
+      });
+      return language;
+    }
+
+    it("defaults to the doctor's language, not the country's", async () => {
+      expect(await invitedLanguage("mx")).toBe("mx");
+    }, 20000);
+
+    it("uses the language the sender picked instead of the doctor's", async () => {
+      expect(await invitedLanguage("pl", "en")).toBe("en");
+    }, 20000);
+
+    it("rejects a language that is not supported, before anything is sent", async () => {
+      await withTenant(TENANT_SLUG, async (client) => {
+        const ctx = await buildTestContext(client);
+        const practitioner = await CreatePractitionerCommand(ctx, {
+          first_name: "Bad",
+          last_name: "Lang",
+          email: `qa-hcp-${uniqueSuffix()}@example.com`,
+          phone: "600100200",
+          region: "PL",
+        });
+        await expect(
+          ActivatePractitionerCommand(ctx, practitioner.id, "https://pwa-dev.neosleepcare.com", "xx"),
+        ).rejects.toBeInstanceOf(ValidationError);
+        expect(sendPartnerInviteEmailMock).not.toHaveBeenCalled();
+      });
+    }, 20000);
+  });
+
   it("resend (calling Activate again while still 'invited') mints a fresh token, invalidates the previous one, and sends another email", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildTestContext(client);

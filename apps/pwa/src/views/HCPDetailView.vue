@@ -47,7 +47,7 @@
               :loading="activateLoading"
               :class="entityActionBtnClass('activatePractitioner')"
               :aria-label="t(activateLabelKey)"
-              @click="onActivate"
+              @click="showInviteDialog = true"
             >
               <AppIcon
                 :name="entityActionIcon('activatePractitioner')"
@@ -208,6 +208,13 @@
       </template>
     </ItemDetailLayout>
 
+    <InviteEmailDialog
+      v-if="hcp"
+      v-model="showInviteDialog"
+      :language="hcp.language || languageForCountry(authStore.user?.region)"
+      :sending="activateLoading"
+      @send="onActivate"
+    />
     <AppConfirmDialog
       v-model="showDeleteConfirm"
       :text="t('user.hcp.actions.deleteConfirmText')"
@@ -238,6 +245,8 @@ import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import ItemDetailLayout from "../components/ItemDetailLayout.vue";
 import AppButton from "../components/AppButton.vue";
+import InviteEmailDialog from "../components/practitioner/InviteEmailDialog.vue";
+import { languageForCountry } from "../config/forms/localeFields";
 import AppConfirmDialog from "../components/AppConfirmDialog.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AppAvatar from "../components/AppAvatar.vue";
@@ -397,14 +406,18 @@ function onEdit() {
   showEditModal.value = true;
 }
 
+const showInviteDialog = ref(false);
 const { loading: activateLoading, run: onActivate } = useAsyncAction(
-  async () => {
+  async (language: string) => {
     const id = hcp.value?.id;
     if (!id) return;
     const isResend = hcp.value?.status === "invited";
     const res = await apiFetch(`/api/v1/practitioner/${id}/activate`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ language }),
     });
+    showInviteDialog.value = false;
     if (res.ok) {
       notifications.show(
         t(isResend ? "user.hcp.detail.resendInviteSuccess" : "user.hcp.detail.activateSuccess"),

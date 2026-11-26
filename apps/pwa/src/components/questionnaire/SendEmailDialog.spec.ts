@@ -97,7 +97,7 @@ describe("SendEmailDialog (NEO-192)", () => {
     const w = await mountDialog({ language: "pl" });
     expect(document.querySelector("[data-testid=email-language]")).not.toBeNull();
     expect(w.findComponent(EmailLanguageSelect).props("modelValue")).toBe("pl");
-    expect(document.body.textContent).toContain(en["app.language.pl"]);
+    expect(document.querySelector("[data-testid=email-language]")!.getAttribute("aria-label")).toContain(en["app.language.pl"]);
   });
 
   it("sends the language the sender picked instead of the recipient's", async () => {
@@ -116,6 +116,31 @@ describe("SendEmailDialog (NEO-192)", () => {
     await w.setProps({ modelValue: true });
     await nextTick();
     expect(w.findComponent(EmailLanguageSelect).props("modelValue")).toBe("mx");
+  });
+
+  // NEO-272: hint behind an "i" button, spam note as an info alert, language as a flag in the header corner.
+  it("explains the confirmation copy behind an info button, not as always-visible text", async () => {
+    await mountDialog();
+    const btn = document.querySelector("[data-testid=send-email-copy-info]") as HTMLElement | null;
+    expect(btn).not.toBeNull();
+    expect(btn!.tagName).toBe("BUTTON");
+    expect(btn!.getAttribute("aria-label")).toBe(en["app.clinical.email.copyToMeInfoLabel"]);
+    expect(document.body.textContent).not.toContain(en["app.clinical.email.copyToMeHint"]);
+  });
+
+  it("shows the spam note as an info alert", async () => {
+    await mountDialog();
+    const alert = document.querySelector("[data-testid=send-email-spam-alert]");
+    expect(alert).not.toBeNull();
+    expect(alert!.textContent).toContain(en["app.clinical.email.spamHint"]);
+  });
+
+  it("puts the language flag in the dialog header, labelled for assistive tech", async () => {
+    await mountDialog({ language: "pl" });
+    const flag = document.querySelector("[data-testid=email-language]") as HTMLElement | null;
+    expect(flag).not.toBeNull();
+    expect(flag!.getAttribute("aria-label")).toContain(en["app.language.pl"]);
+    expect(flag!.closest("[data-testid=send-email-header-slot]")).not.toBeNull();
   });
 
   it("shows each past email's delivery status, a bounce as 'Didn't arrive'", async () => {

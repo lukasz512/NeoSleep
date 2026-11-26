@@ -3472,5 +3472,10 @@
   "app.deviceOrder.errors.scanFileEmpty": "Ten plik jest pusty.",
   "app.deviceOrder.errors.scanFileType": "Można przesłać tylko pliki {types}.",
   "app.deviceOrder.errors.scanFileTooLarge": "Ten plik jest większy niż {maxMb} MB.",
-  "app.deviceOrder.errors.scanUploadFailed": "Przesyłanie nie powiodło się. Usuń plik i spróbuj ponownie."
+  "app.deviceOrder.errors.scanUploadFailed": "Przesyłanie nie powiodło się. Usuń plik i spróbuj ponownie.",
+  "app.clinical.email.copyToMeInfoLabel": "Czym jest kopia e-maila?",
+  "app.clinical.email.languageFlagLabel": "Język wiadomości: {language}. Kliknij, aby zmienić.",
+  "user.hcp.detail.inviteDialog.title": "Wyślij zaproszenie",
+  "user.hcp.detail.inviteDialog.body": "Zaproszenie wyjdzie w języku lekarza. Zmień go tylko, jeśli lekarz czyta w innym.",
+  "user.hcp.detail.inviteDialog.send": "Wyślij zaproszenie"
 }

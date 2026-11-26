@@ -64,6 +64,7 @@ const Harness = defineComponent({
         items: [item("informedConsent", "done"), item("medicalHistory", "missing"), item("stopBang", "pending_patient")],
         openKeys: ["medicalHistory", "stopBang"],
         recipient: params.get("recipient") === "none" ? null : "l***@example.mx",
+        language: params.get("lang") === "pl" || params.get("lang") === "en" ? String(params.get("lang")) : "mx",
         sends,
         sending: false,
         lastUrl: null,

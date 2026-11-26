@@ -3472,5 +3472,10 @@
   "app.deviceOrder.errors.scanFileEmpty": "Este archivo está vacío.",
   "app.deviceOrder.errors.scanFileType": "Solo se pueden subir archivos {types}.",
   "app.deviceOrder.errors.scanFileTooLarge": "Este archivo pesa más de {maxMb} MB.",
-  "app.deviceOrder.errors.scanUploadFailed": "No se pudo subir. Quite el archivo e inténtelo de nuevo."
+  "app.deviceOrder.errors.scanUploadFailed": "No se pudo subir. Quite el archivo e inténtelo de nuevo.",
+  "app.clinical.email.copyToMeInfoLabel": "¿Qué es la copia del correo?",
+  "app.clinical.email.languageFlagLabel": "Idioma del correo: {language}. Clic para cambiar.",
+  "user.hcp.detail.inviteDialog.title": "Enviar invitación",
+  "user.hcp.detail.inviteDialog.body": "La invitación sale en el idioma del médico. Cámbialo solo si el médico lee en otro.",
+  "user.hcp.detail.inviteDialog.send": "Enviar invitación"
 }

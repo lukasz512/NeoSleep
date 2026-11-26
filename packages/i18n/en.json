@@ -3472,5 +3472,10 @@
   "app.deviceOrder.errors.scanFileEmpty": "This file is empty.",
   "app.deviceOrder.errors.scanFileType": "Only {types} files can be uploaded.",
   "app.deviceOrder.errors.scanFileTooLarge": "This file is larger than {maxMb} MB.",
-  "app.deviceOrder.errors.scanUploadFailed": "Upload failed. Remove the file and try again."
+  "app.deviceOrder.errors.scanUploadFailed": "Upload failed. Remove the file and try again.",
+  "app.clinical.email.copyToMeInfoLabel": "What is the email copy?",
+  "app.clinical.email.languageFlagLabel": "Email language: {language}. Click to change.",
+  "user.hcp.detail.inviteDialog.title": "Send invite",
+  "user.hcp.detail.inviteDialog.body": "The invite goes out in the doctor's own language. Change it only if the doctor reads another.",
+  "user.hcp.detail.inviteDialog.send": "Send invite"
 }

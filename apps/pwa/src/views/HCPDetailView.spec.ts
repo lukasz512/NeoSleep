@@ -184,6 +184,16 @@ describe("HCPDetailView — invite/resend status handling", () => {
     expect(button).toBeTruthy();
     await button!.trigger("click");
 
-    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/api/v1/practitioner/hcp-1/activate", { method: "POST" }));
+    // NEO-272: the button opens the invite dialog; sending from it posts the chosen mail language.
+    await vi.waitFor(() => expect(document.querySelector("[data-testid=invite-email-send]")).not.toBeNull());
+    (document.querySelector("[data-testid=invite-email-send]") as HTMLElement).click();
+
+    await vi.waitFor(() =>
+      expect(apiFetch).toHaveBeenCalledWith("/api/v1/practitioner/hcp-1/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: expect.stringMatching(/^\{"language":"(en|pl|mx)"\}$/),
+      }),
+    );
   });
 });
