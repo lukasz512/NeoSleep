@@ -71,11 +71,18 @@ for (const [label, width, height] of [
 ] as const) {
   test(`${label}: the form scrolls with the wheel over the card and over the background`, async ({ page }) => {
     await openRegistration(page, width, height);
-    const sc = await page.evaluate(() => {
-      const el = document.querySelector(".partner-registration")!;
-      return { scrollHeight: el.scrollHeight, clientHeight: el.clientHeight };
-    });
-    expect(sc.scrollHeight).toBeGreaterThan(sc.clientHeight);
+    // Polled, not measured once: on a loaded CI runner WebKit can report the
+    // documents block as visible one layout pass before the form below it has
+    // its full height (scrollHeight === clientHeight for a moment, flake hunt
+    // 2026-11-25). A page that really doesn't overflow still fails here.
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const el = document.querySelector(".partner-registration")!;
+          return el.scrollHeight - el.clientHeight;
+        }),
+      )
+      .toBeGreaterThan(0);
 
     await wheelAt(page, width / 2, height / 2); // over the card
     await wheelAt(page, 8, height / 2); // over the background, left edge
