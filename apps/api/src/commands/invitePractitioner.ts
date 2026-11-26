@@ -41,6 +41,7 @@ import {
   ValidationError,
 } from "../errors.js";
 import { hashToken } from "../utils/hashToken.js";
+import { localeForCountry } from "../utils/patientEmailLocale.js";
 import { normalizeNationalIds } from "../utils/nationalIds.js";
 import { sendPartnerJoinThankYouEmail } from "../mailer.js";
 import { uploadPartnerDocument } from "../services/partnerDocuments.js";
@@ -81,13 +82,6 @@ import {
  */
 
 const BCRYPT_ROUNDS = 12;
-
-export function inferLanguage(region: string | null | undefined): string {
-  const r = (region || "").toUpperCase();
-  if (r === "PL") return "pl";
-  if (r === "MX") return "mx";
-  return "en";
-}
 
 /** Best-effort single display line from Organization's structured address columns — the
  * invite form still collects/edits clinic address as one free-text field (see
@@ -213,7 +207,7 @@ export async function InvitePractitionerCommand(
       title: lead.salutation,
       firstName,
       lastName,
-      language: inferLanguage(lead.region),
+      language: localeForCountry(lead.region),
       region: lead.region,
     },
     { name: ctx.user.name ?? "NeoSleep", email: ctx.user.email }

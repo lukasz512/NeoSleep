@@ -10,6 +10,7 @@ import { ValidationError } from "../errors.js";
 import { parsePaginationParams, toFilterArray, routeParam } from "./utils.js";
 import type { StaffRole } from "../db.js";
 import { resolveFrontendOrigin } from "../utils/frontendOrigin.js";
+import { SUPPORTED_LANGUAGES } from "../utils/patientEmailLocale.js";
 
 /**
  * User routes — thin waiters. See routes/practitioner.ts for the pattern.
@@ -113,7 +114,11 @@ usersRouter.patch(
     const body = req.body as {
       salutation?: string; first_name?: string; last_name?: string; phone?: string;
       status?: "active" | "inactive" | "suspended"; country_code?: string; role?: StaffRole; territory_id?: string;
+      region?: string | null; language?: string;
     };
+    if (body.language !== undefined && !(SUPPORTED_LANGUAGES as readonly string[]).includes(body.language)) {
+      throw new ValidationError("language must be one of: " + SUPPORTED_LANGUAGES.join(", "));
+    }
 
     const user = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
@@ -124,6 +129,8 @@ usersRouter.patch(
         phone: body.phone !== undefined ? body.phone : undefined,
         status: body.status,
         country_code: body.country_code !== undefined ? body.country_code : undefined,
+        region: body.region !== undefined ? body.region : undefined,
+        language: body.language,
         role: body.role,
         territory_id: typeof body.territory_id === "string" ? body.territory_id : undefined,
       });

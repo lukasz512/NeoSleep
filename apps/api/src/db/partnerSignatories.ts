@@ -39,12 +39,7 @@ export interface PartnerSignatoryConfig {
   approvedVersions: Record<string, string>;
 }
 
-/** Locale the jurisdiction's documents are written in — jurisdiction == locale for partner documents. */
-export function jurisdictionLocale(jurisdiction: PartnerJurisdiction): "pl" | "mx" {
-  return jurisdiction === "PL" ? "pl" : "mx";
-}
-
-/** Inverse of jurisdictionLocale — null for any other locale (e.g. "en"). */
+/** Jurisdiction a locale's documents belong to (inverse of localeForCountry) — null for any other locale (e.g. "en"). */
 export function localeJurisdiction(locale: string): PartnerJurisdiction | null {
   if (locale === "pl") return "PL";
   if (locale === "mx") return "MX";

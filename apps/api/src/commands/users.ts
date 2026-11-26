@@ -260,7 +260,7 @@ export async function ResetUserPasswordCommand(
     firstName: user.first_name,
     lastName: user.last_name,
     language: user.language,
-    region: user.region,
+    region: user.region ?? user.country_code,
   });
 
   await insertAuditLog(ctx.client, {

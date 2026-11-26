@@ -5,6 +5,7 @@ import { insertOrganization } from "../db/organization.js";
 import { insertPractitioner } from "../db/practitioner.js";
 import { linkPractitionerOrganization, setGlobalPrimaryOrganization } from "../db/practitionerOrganization.js";
 import { getAuditLogForEntities } from "../db/audit-log.js";
+import { getUserById } from "../db/users.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import {
   SendQuestionnaireEmailCommand,
@@ -153,14 +154,18 @@ describe("SendQuestionnaireEmailCommand", () => {
   it("sends the doctor a confirmation without any link when asked (D4)", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildContext(client);
-      const patient = await insertPatient(client, { first_name: "Lucía", last_name: `Copia-${uniqueSuffix()}`, email: `lucia.${uniqueSuffix()}@example.mx`, region: "MX" });
+      const patient = await insertPatient(client, { first_name: "Lucía", last_name: `Copia-${uniqueSuffix()}`, email: `lucia.${uniqueSuffix()}@example.mx`, region: "PL" });
 
       await SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN, { copy_to_me: true });
 
       expect(confirmMock).toHaveBeenCalledTimes(1);
-      const [to, info] = confirmMock.mock.calls[0] as [string, Record<string, unknown>];
+      const [to, info, recipient] = confirmMock.mock.calls[0] as [string, Record<string, unknown>, Record<string, unknown>];
       expect(to).toBe(ctx.user.email);
-      expect(info).toMatchObject({ patient: "Lucía C.", sentTo: "l***@example.mx", count: 3, language: "mx" });
+      expect(info).toMatchObject({ patient: "Lucía C.", sentTo: "l***@example.mx", count: 3 });
+      // CORE-259: the language comes from the doctor (the recipient), never from the PL patient.
+      expect(info).not.toHaveProperty("language");
+      const doctor = await getUserById(client, ctx.user.id);
+      expect(recipient).toMatchObject({ language: doctor?.language, region: doctor?.region ?? doctor?.country_code });
       expect(JSON.stringify(info)).not.toContain("/q#");
     });
   });

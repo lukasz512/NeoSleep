@@ -4,7 +4,8 @@ import { bookingLimiter } from "../middleware/rateLimiter.js";
 import { getSlots, bookSlot } from "../services/googleCalendar.js";
 import { withTenant, tenantSlugFromHost } from "../db.js";
 import { UpsertPublicLeadCommand } from "../commands/lead.js";
-import { sendContactEmail, sendDemoBookingConfirmationEmail, localeForRegion } from "../mailer.js";
+import { sendContactEmail, sendDemoBookingConfirmationEmail } from "../mailer.js";
+import { localeForCountry } from "../utils/patientEmailLocale.js";
 import { ValidationError } from "../errors.js";
 import type { RequestWithId } from "../middleware/requestId.js";
 
@@ -94,7 +95,7 @@ bookingRouter.post(
       await sendDemoBookingConfirmationEmail(
         email,
         { start: body.start, meetLink: booked.meetLink },
-        { firstName, lastName, language: localeForRegion(body.countryCode), region: body.countryCode }
+        { firstName, lastName, language: localeForCountry(body.countryCode), region: body.countryCode }
       );
     } catch (err) {
       console.error("[booking] lead capture / confirmation email failed (booking itself still succeeded):", err);

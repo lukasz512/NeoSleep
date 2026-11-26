@@ -11,12 +11,12 @@ import {
   getPartnerSignatoryConfig,
   setApprovedPartnerVersion,
   approvalKey,
-  jurisdictionLocale,
   localeJurisdiction,
   type PartnerJurisdiction,
   type PartnerSignatory,
 } from "../db/partnerSignatories.js";
 import { insertAuditLog } from "../db.js";
+import { localeForCountry } from "../utils/patientEmailLocale.js";
 import { getTerritoryCountryCode } from "../db/territory.js";
 import { getOrganizationById } from "../db/organization.js";
 import { downloadPartnerDocument } from "../services/partnerDocuments.js";
@@ -105,7 +105,8 @@ export async function resolvePartnerDocumentSet(
     throw new PartnerDocumentsNotReadyError(`No NeoSleep signatory is configured for ${jurisdiction}`);
   }
 
-  const locale = jurisdictionLocale(jurisdiction);
+  // PartnerJurisdiction is only PL | MX, both of which localeForCountry maps to pl | mx.
+  const locale = localeForCountry(jurisdiction) as "pl" | "mx";
   const [agreement, dpa, notice] = await withPlatform(async (platform) => [
     await getCurrentDocumentContentVersion(platform, "partnerAgreement", locale),
     await getCurrentDocumentContentVersion(platform, "partnerDpa", locale),
