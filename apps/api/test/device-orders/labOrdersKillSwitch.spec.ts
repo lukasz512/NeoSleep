@@ -210,7 +210,7 @@ describe("NEO-210 POST /partners/orthoapnea/treatments/:id/comments — kill swi
 });
 
 describe("NEO-210 GET/PATCH /api/v1/device-orders/lab-orders-config", () => {
-  it.each(["rep", "kam", "msl", "doctor", "manager"] as const)("403 for %s", async (role) => {
+  it.each(["rep", "kam", "msl", "doctor"] as const)("403 for %s", async (role) => {
     const token = await staff(role);
     const getRes = await request(app).get("/api/v1/device-orders/lab-orders-config").set("Authorization", `Bearer ${token}`);
     expect(getRes.status).toBe(403);

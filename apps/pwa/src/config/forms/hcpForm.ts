@@ -382,7 +382,7 @@ export const hcpFormFields: FormFieldDef[] = [
     labelKey: "user.hcp.form.status",
     options: STATUS_OPTIONS,
     default: "pending_approval",
-    hidden: () => useAuthStore().user?.role !== "admin",
+    hidden: () => !["admin", "manager"].includes(useAuthStore().user?.role ?? ""),
     cols: 12,
   },
 ];

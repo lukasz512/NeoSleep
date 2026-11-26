@@ -75,7 +75,7 @@ lookupRouter.get(
  */
 lookupRouter.post(
   "/lookups",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const body = req.body as {
@@ -109,7 +109,7 @@ lookupRouter.post(
  */
 lookupRouter.delete(
   "/lookups/disable/:globalId",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const slug     = tenantSlugFromHost(req.hostname);
     const globalId = routeParam(req, "globalId")?.trim();

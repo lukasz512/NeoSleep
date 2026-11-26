@@ -462,7 +462,7 @@ describe("UpdatePractitionerCommand", () => {
     });
   }, 15000);
 
-  it("rejects a status override attempt from a non-admin (manager) role", async () => {
+  it("lets a manager override the status directly (NEO-266)", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const adminCtx = await buildTestContext(client);
       const practitioner = await CreatePractitionerCommand(adminCtx, {
@@ -487,14 +487,10 @@ describe("UpdatePractitionerCommand", () => {
         requestId: `test-${uniqueSuffix()}`,
       };
 
-      await expect(
-        UpdatePractitionerCommand(managerCtx, practitioner.id, { status: "active" })
-      ).rejects.toThrow(ValidationError);
+      await UpdatePractitionerCommand(managerCtx, practitioner.id, { status: "active" });
 
-      // Not silently ignored either — the whole request must be rejected,
-      // not "succeed but drop the status field".
-      const unchanged = await getPractitionerById(client, practitioner.id);
-      expect(unchanged?.status).toBe("pending_approval");
+      const updated = await getPractitionerById(client, practitioner.id);
+      expect(updated?.status).toBe("active");
     });
   }, 15000);
 });

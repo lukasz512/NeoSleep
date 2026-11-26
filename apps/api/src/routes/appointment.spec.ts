@@ -246,7 +246,7 @@ describe("/api/v1/appointments", () => {
     expect(tooLong.body).toMatchObject({ code: "VALIDATION_ERROR", field: "duration_minutes", reason: "invalid" });
   });
 
-  it("clinical reads are audited (not the field force's redacted ones); only admin deletes", async () => {
+  it("clinical reads are audited (not the field force's redacted ones); admin and manager delete (NEO-266)", async () => {
     const admin = await staff("admin");
     const manager = await staff("manager");
     const doc = await doctor(false);
@@ -269,7 +269,7 @@ describe("/api/v1/appointments", () => {
     const managerDelete = await request(app).delete(`/api/v1/appointments/${created.body.id}`).set("Authorization", manager.auth);
     const adminDelete = await request(app).delete(`/api/v1/appointments/${created.body.id}`).set("Authorization", admin.auth);
     const gone = await request(app).get(`/api/v1/appointments/${created.body.id}`).set("Authorization", admin.auth);
-    expect([managerDelete.status, adminDelete.status, gone.status]).toEqual([403, 200, 404]);
+    expect([managerDelete.status, adminDelete.status, gone.status]).toEqual([200, 404, 404]);
   });
 
   it("lists by time window", async () => {

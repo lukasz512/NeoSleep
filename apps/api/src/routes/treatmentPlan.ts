@@ -205,7 +205,7 @@ treatmentPlanRouter.patch(
 // ---------------------------------------------------------------------------
 treatmentPlanRouter.put(
   "/treatment-plan/:id/advance-level",
-  requireRole("admin", "doctor"),
+  requireRole("admin", "manager", "doctor"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing treatment plan id");
@@ -230,7 +230,7 @@ treatmentPlanRouter.put(
 // ---------------------------------------------------------------------------
 treatmentPlanRouter.delete(
   "/treatment-plan/:id",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing treatment plan id");

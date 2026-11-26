@@ -53,7 +53,7 @@ export async function DeleteNoteCommand(ctx: TenantContext, id: string): Promise
   if (!note) throw new NotFoundError("Note", id);
 
   const isAuthor = note.author_id === ctx.user.id;
-  const isAdmin = ctx.user.role === "admin";
+  const isAdmin = ctx.user.role === "admin" || ctx.user.role === "manager";
   if (!isAuthor && !isAdmin) {
     throw new ForbiddenError("Only the note's author or an admin can delete it");
   }

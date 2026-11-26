@@ -42,7 +42,7 @@ noteRouter.get(
 // ---------------------------------------------------------------------------
 noteRouter.get(
   "/note/device-orders/recent",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const limit = typeof req.query.limit === "string" ? Number.parseInt(req.query.limit, 10) : undefined;
     const slug = tenantSlugFromHost(req.hostname);

@@ -376,7 +376,7 @@ const router = useRouter();
 const authStore = useAuthStore();
 const notifications = useNotifications();
 const { submit } = useEntitySubmit();
-const isAdmin = computed(() => authStore.user?.role === "admin");
+const isAdmin = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
 
 const leadCache = useEntityCacheStore("leads");
 const lead = ref<Lead | null>(null);

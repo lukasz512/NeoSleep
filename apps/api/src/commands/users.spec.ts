@@ -165,7 +165,7 @@ describe("UpdateUserCommand / CreateUserCommand — role-change authorization", 
     });
   }, 15000);
 
-  it("a manager cannot change a user's role (ForbiddenError), even to a value VALID_ROLES would otherwise allow", async () => {
+  it("a manager can set any role except admin/support, and cannot touch admin/support accounts (NEO-266)", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const adminCtx = await buildTestContext(client);
       const managerCtx = await buildManagerContext(client);
@@ -176,7 +176,16 @@ describe("UpdateUserCommand / CreateUserCommand — role-change authorization", 
         role: "rep",
       }, FRONTEND_ORIGIN);
 
-      await expect(UpdateUserCommand(managerCtx, target.id, { role: "manager" })).rejects.toThrow(ForbiddenError);
+      await expect(UpdateUserCommand(managerCtx, target.id, { role: "admin" })).rejects.toThrow(ForbiddenError);
+      await expect(UpdateUserCommand(managerCtx, target.id, { role: "support" })).rejects.toThrow(ForbiddenError);
+      await expect(UpdateUserCommand(managerCtx, target.id, { role: "manager" })).resolves.not.toThrow();
+
+      const adminTarget = await CreateUserCommand(adminCtx, {
+        first_name: "QA", last_name: `AdminTarget-${uniqueSuffix()}`,
+        email: `qa-admin-target-${uniqueSuffix()}@neosleepcare.com`,
+        role: "admin",
+      }, FRONTEND_ORIGIN);
+      await expect(UpdateUserCommand(managerCtx, adminTarget.id, { phone: "+48500600703" })).rejects.toThrow(ForbiddenError);
       // Unrelated field, no role change — still allowed for a manager.
       await expect(UpdateUserCommand(managerCtx, target.id, { phone: "+48500600702" })).resolves.not.toThrow();
     });

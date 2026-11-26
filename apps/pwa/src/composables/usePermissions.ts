@@ -19,7 +19,8 @@ export function usePermissions() {
   // No role is excluded from editing patients — doctors manage their own
   // patients' clinical data same as everyone else.
   const canEditPatients = computed(() => !!role.value);
-  const isAdmin = computed(() => role.value === "admin");
+  // Admin-level write rights: admin and manager (FFM). Granting admin/support roles stays admin-only in the API.
+  const isAdmin = computed(() => role.value === "admin" || role.value === "manager");
   /** A doctor works on their own patients (CORE-104): the record's practitioner is them. */
   const isDoctor = computed(() => role.value === "doctor");
 

@@ -179,9 +179,7 @@ describe("POST /api/v1/device-orders/reconciliation/run (Check now)", () => {
     expect(run.summary).toEqual({ oursSent: 1 });
   });
 
-  it("403 for a manager and a rep (Check now is admin only)", async () => {
-    const m = await setup(undefined, "manager");
-    expect((await checkNow(m.token)).status).toBe(403);
+  it("403 for a rep (Check now is admin and manager only, NEO-266)", async () => {
     const repToken = signAuthToken({ id: crypto.randomUUID(), email: "qa-rep@example.com", role: "rep", token_version: 0 });
     expect((await checkNow(repToken)).status).toBe(403);
     expect(replica.count("GET", LIST)).toBe(0);

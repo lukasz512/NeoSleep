@@ -184,8 +184,8 @@ export async function UpdatePractitionerCommand(
   // alone (same reasoning as every other server-side RBAC check in this
   // codebase — a hidden form field is a UI nicety, not an authorization
   // boundary).
-  if (input.status !== undefined && ctx.user.role !== "admin") {
-    throw new ValidationError("Only an admin can change a practitioner's status directly");
+  if (input.status !== undefined && ctx.user.role !== "admin" && ctx.user.role !== "manager") {
+    throw new ValidationError("Only an admin or manager can change a practitioner's status directly");
   }
 
   const before = await getPractitionerById(ctx.client, id);

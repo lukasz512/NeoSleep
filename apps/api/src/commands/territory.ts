@@ -16,7 +16,7 @@ import { ConflictError, ValidationError } from "../errors.js";
 /**
  * COMMANDS — Territory (geographic hierarchy) domain.
  *
- * Admin-only (see routes/territory.ts's requireRole("admin")) — this is the
+ * Admin-only (see routes/territory.ts's requireRole("admin", "manager")) — this is the
  * data-entry surface for the country > region > city > village > district
  * tree that patient.territory_id (via identities) links into, and that
  * users/organization territory assignment already used before this.
