@@ -452,7 +452,7 @@ const props = defineProps<{
 const { t, locale } = useI18n();
 const notifications = useNotifications();
 const authStore = useAuthStore();
-const isAdmin = computed(() => authStore.user?.role === "admin");
+const isAdmin = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
 
 const checklistApi = usePatientChecklist(() => props.patientId);
 const checklist = computed(() => checklistApi.checklist.value);

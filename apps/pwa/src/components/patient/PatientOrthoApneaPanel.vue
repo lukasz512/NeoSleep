@@ -241,7 +241,7 @@ const route = useRoute();
 const { specialtySet } = useIdentity();
 const notifications = useNotifications();
 const authStore = useAuthStore();
-const isAdmin = computed(() => authStore.user?.role === "admin");
+const isAdmin = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
 /** Placing a real, billable lab order: admin / doctor / manager only (NEO-199); the API enforces the same. */
 const canOrder = computed(() => STUDY_ROLES.includes(authStore.user?.role ?? ""));
 /** The advance level is the treating doctor's call (protocol visits 4–5); the API allows admin + doctor. */

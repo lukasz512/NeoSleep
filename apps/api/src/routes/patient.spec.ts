@@ -67,7 +67,7 @@ describe("/api/v1/patient/:id/clinical-records", () => {
     expect([read.status, link.status]).toEqual([403, 403]);
   });
 
-  it("manager reads and edits the patient's studies and reads the Documents tab (NEO-83), but cannot hard delete", async () => {
+  it("manager reads and edits the patient's studies and reads the Documents tab (NEO-83), and hard deletes (NEO-266)", async () => {
     const { auth, patientId } = await authAndPatient("manager");
     const records = await request(app).get(`/api/v1/patient/${patientId}/clinical-records`).set("Authorization", auth);
     const checklist = await request(app).get(`/api/v1/patient/${patientId}/checklist`).set("Authorization", auth);
@@ -81,7 +81,7 @@ describe("/api/v1/patient/:id/clinical-records", () => {
     const hardDelete = await request(app).delete(`/api/v1/sleep-study/${created.body.id}`).set("Authorization", auth);
     const docs = await request(app).get(`/api/v1/patient/${patientId}/documents`).set("Authorization", auth);
     expect([records.status, checklist.status, exam.status, created.status, updated.status, listed.status, hardDelete.status, docs.status])
-      .toEqual([200, 200, 201, 201, 200, 200, 403, 200]);
+      .toEqual([200, 200, 201, 201, 200, 200, 200, 200]);
     expect(Number(updated.body.ahi_score)).toBe(12);
   });
 

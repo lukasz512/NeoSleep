@@ -234,7 +234,7 @@ leadsRouter.post(
 // ---------------------------------------------------------------------------
 leadsRouter.delete(
   "/lead/:id",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing lead id");

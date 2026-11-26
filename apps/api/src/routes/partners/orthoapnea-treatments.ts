@@ -190,7 +190,7 @@ orthoapneaTreatmentsRouter.post(
 
 // ---------------------------------------------------------------------------
 // GET /api/v1/partners/orthoapnea/treatments/:treatmentPlanId/transactions
-// Admin-only (requireRole("admin"), same gate as e.g. DELETE /sleep-study/:id) —
+// Admin-only (requireRole("admin", "manager"), same gate as e.g. DELETE /sleep-study/:id) —
 // this exposes the full request/response JSON exchanged with OrthoApnea for
 // one order, including patient PII (name, email, phone) baked into the
 // stored payloads. Used by the admin-only transaction-log UI (debugging +
@@ -199,7 +199,7 @@ orthoapneaTreatmentsRouter.post(
 // ---------------------------------------------------------------------------
 orthoapneaTreatmentsRouter.get(
   "/partners/orthoapnea/treatments/:treatmentPlanId/transactions",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const treatmentPlanId = routeParam(req, "treatmentPlanId")?.trim();
     if (!treatmentPlanId) throw new ValidationError("Missing treatment_plan id");
@@ -239,7 +239,7 @@ orthoapneaTreatmentsRouter.post(
 // ---------------------------------------------------------------------------
 orthoapneaTreatmentsRouter.get(
   "/partners/orthoapnea/sync-status",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const { runs, open } = await withTenant(slug, async (client) => ({
@@ -271,7 +271,7 @@ orthoapneaTreatmentsRouter.get(
 // ---------------------------------------------------------------------------
 orthoapneaTreatmentsRouter.post(
   "/partners/orthoapnea/sync-statuses/now",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     // Short transaction only to resolve the live user (token_version check); the lab calls run outside it (ADR-017).

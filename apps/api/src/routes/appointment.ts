@@ -181,7 +181,7 @@ appointmentRouter.patch(
 // DELETE /api/v1/appointments/:id — soft delete, admin-only
 appointmentRouter.delete(
   "/appointments/:id",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = idParam(req);
     const slug = tenantSlugFromHost(req.hostname);

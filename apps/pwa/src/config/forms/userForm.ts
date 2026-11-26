@@ -81,11 +81,12 @@ export const userFormFields: FormFieldDef[] = [
     options: ROLE_OPTIONS,
     default: "rep",
     required: true,
-    // Only admin can change (or set, on create) a user's role — mirrors
-    // hcoForm.ts's own admin-only 'status' field. The backend
-    // (commands/users.ts) is the real enforcement boundary; this only keeps
-    // a non-admin from seeing a control they can't use.
-    hidden: () => useAuthStore().user?.role !== "admin",
+    // Admin and manager can set a user's role; only an admin can hand out the
+    // admin/support roles (the backend, commands/users.ts, is the real
+    // enforcement boundary — this only hides options a manager can't use).
+    hidden: () => !["admin", "manager"].includes(useAuthStore().user?.role ?? ""),
+    optionFilter: (option) =>
+      useAuthStore().user?.role === "admin" || !["admin", "support"].includes(String(option.value)),
     cols: 6,
   },
   {

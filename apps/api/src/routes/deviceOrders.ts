@@ -397,7 +397,7 @@ function counterOnly(run: { status: string; summary: { matchLevel?: number | nul
 // POST /api/v1/device-orders/reconciliation/run — "Check now" (admin).
 deviceOrdersRouter.post(
   "/device-orders/reconciliation/run",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const ctx = await withTenant(slug, (client) => buildContext(req, client, slug));
@@ -435,7 +435,7 @@ deviceOrdersRouter.get(
 // GET /api/v1/device-orders/reconciliation/runs?limit=30 — admin history (summaries, no orders).
 deviceOrdersRouter.get(
   "/device-orders/reconciliation/runs",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const raw = Number(req.query.limit ?? 30);
     const limit = Number.isInteger(raw) && raw > 0 ? Math.min(raw, 100) : 30;
@@ -460,7 +460,7 @@ deviceOrdersRouter.get(
 // GET /api/v1/device-orders/lab-orders-config — admin only.
 deviceOrdersRouter.get(
   "/device-orders/lab-orders-config",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (_req: Request, res: Response) => {
     const config = await getLabOrdersSendConfig();
     res.json({ ...config, environment: DEPLOY_ENV });
@@ -470,7 +470,7 @@ deviceOrdersRouter.get(
 // PATCH /api/v1/device-orders/lab-orders-config — body: { sendEnabled: boolean }. Admin only, audited.
 deviceOrdersRouter.patch(
   "/device-orders/lab-orders-config",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const body = req.body as { sendEnabled?: unknown };
     if (typeof body.sendEnabled !== "boolean") {

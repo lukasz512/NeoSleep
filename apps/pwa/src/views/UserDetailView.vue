@@ -307,7 +307,7 @@ const router = useRouter();
 const notifications = useNotifications();
 const { submit } = useEntitySubmit();
 const authStore = useAuthStore();
-const isAdmin = computed(() => authStore.user?.role === "admin");
+const isAdmin = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
 
 interface UserDocument {
   id: string;

@@ -165,7 +165,7 @@ export async function SetTreatmentAdvanceLevelCommand(
 }
 
 /**
- * Admin-only soft delete (see requireRole("admin") on the DELETE route) —
+ * Admin-only soft delete (see requireRole("admin", "manager") on the DELETE route) —
  * hides the plan from every list view (getTreatmentPlansPaginated/
  * getTreatmentPlanById both filter deleted_at IS NULL) without touching its
  * partner_link/partner_transaction rows, so a failed OrthoApnea order's full

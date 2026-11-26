@@ -397,7 +397,7 @@ patientRouter.post(
 
 patientRouter.delete(
   "/patient/:id/studies/uploads/:attachmentId",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = uuidParam(req, "id");
     const attachmentId = uuidParam(req, "attachmentId");
@@ -661,7 +661,7 @@ patientRouter.patch(
 // ---------------------------------------------------------------------------
 patientRouter.delete(
   "/patient/:id",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing patient id");
