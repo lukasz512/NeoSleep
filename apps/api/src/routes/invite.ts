@@ -107,6 +107,10 @@ inviteRouter.post(
         {
           token: str(body.token),
           password: str(body.password),
+          firstName: str(body.firstName),
+          lastName: str(body.lastName),
+          email: str(body.email),
+          phone: str(body.phone),
           clinicName: str(body.clinicName),
           clinicEmail: str(body.clinicEmail),
           clinicPhone: str(body.clinicPhone),
