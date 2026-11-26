@@ -1,0 +1,493 @@
+{
+  "meta": {
+    "title": "neoCRM · El CRM para hacer crecer vuestra empresa: clientes, calendario y avisos",
+    "description": "neoCRM es un CRM con vuestra marca: clientes, calendario, avisos y próximos pasos en un solo sitio, en el móvil y en el ordenador."
+  },
+  "nav": {
+    "skip": "Saltar al contenido",
+    "demo": "Pedir una demo",
+    "language": "English",
+    "themeToDark": "Cambiar a tema oscuro",
+    "themeToLight": "Cambiar a tema claro"
+  },
+  "hero": {
+    "hello": "Hola, ¿qué tal el día?",
+    "greeting": "Hola, {name}:",
+    "eyebrow": "CRM con vuestra marca",
+    "titles": {
+      "default": "El CRM para hacer crecer vuestra empresa",
+      "equipos": "El CRM para equipos comerciales que quieren crecer",
+      "distribucion": "El CRM para distribuidoras y mayoristas",
+      "servicios": "El CRM para empresas de servicios",
+      "comercios": "El CRM para tiendas y negocios locales"
+    },
+    "body": "Clientes, calendario, avisos y próximos pasos en un solo sitio, para que ninguna oportunidad se quede sin seguimiento. Con vuestra marca, en vuestro idioma y en el móvil.",
+    "cta": "Pedir una demo",
+    "secondary": "Ver qué incluye",
+    "marks": {
+      "default": "crecer",
+      "equipos": "crecer",
+      "distribucion": "distribuidoras",
+      "servicios": "servicios",
+      "comercios": "tiendas"
+    }
+  },
+  "lens": {
+    "label": "Ver la página como",
+    "roles": {
+      "all": "Todo",
+      "direccion": "Dirección",
+      "it": "IT y seguridad",
+      "operaciones": "Operaciones"
+    },
+    "notes": {
+      "all": "Orden habitual de la página.",
+      "direccion": "Orden para dirección: primero para quién es y cómo se pone en marcha.",
+      "it": "Orden para IT y seguridad: primero seguridad, privacidad y accesibilidad.",
+      "operaciones": "Orden para operaciones: primero el producto y el día a día del equipo."
+    }
+  },
+  "sections": {
+    "who": {
+      "title": "Para quién es",
+      "pick": "Elegid vuestro sector y la página se ajusta.",
+      "picked": "Página ajustada para: {sector}.",
+      "lead": "Empresas que quieren crecer sin perder el hilo: saber a quién se ha visto, qué se habló y qué toca después, aunque el equipo trabaje fuera de la oficina.",
+      "items": {
+        "equipos": {
+          "title": "Equipos comerciales",
+          "body": "Clientes, contactos y próximos pasos ordenados, sin hojas de cálculo que cada persona guarda a su manera."
+        },
+        "distribucion": {
+          "title": "Distribuidoras y mayoristas",
+          "body": "Comerciales con su zona, su calendario y un informe después de cada visita; responsables que ven a su equipo."
+        },
+        "servicios": {
+          "title": "Empresas de servicios",
+          "body": "Instalación, mantenimiento o consultoría: cada cliente con su historial y la próxima cita apuntada."
+        },
+        "comercios": {
+          "title": "Tiendas y negocios locales",
+          "body": "Clientes habituales con su historial, las citas en el calendario y un aviso cuando toca volver a llamar."
+        }
+      }
+    },
+    "product": {
+      "title": "Qué hace por vuestro negocio",
+      "lead": "Lo que el equipo usa cada día para que ningún cliente se quede sin seguimiento, pensado primero para el móvil.",
+      "items": [
+        {
+          "title": "Clientes y contactos",
+          "body": "Empresas y personas en una sola ficha, con su historial."
+        },
+        {
+          "title": "Calendario y citas",
+          "body": "Citas, visitas y eventos en un calendario; cada persona ve su agenda."
+        },
+        {
+          "title": "Avisos",
+          "body": "Notificaciones en la aplicación, en el móvil y por correo, para que nada se pase."
+        },
+        {
+          "title": "Visitas con su informe",
+          "body": "Un formulario breve después de cada visita, para que lo acordado no dependa de la memoria."
+        },
+        {
+          "title": "Formularios y firma",
+          "body": "Formularios que se rellenan en el móvil y se pueden firmar en pantalla."
+        },
+        {
+          "title": "Vista de equipo",
+          "body": "Quien dirige ve la actividad del equipo; cada persona ve lo suyo."
+        },
+        {
+          "title": "En el móvil, como una aplicación",
+          "body": "Se abre en el navegador y se puede instalar en la pantalla de inicio, sin pasar por una tienda de aplicaciones."
+        }
+      ]
+    },
+    "brand": {
+      "title": "Con vuestra marca y en vuestro idioma",
+      "lead": "Vuestro equipo abre su propia herramienta, no la de un proveedor.",
+      "items": [
+        {
+          "title": "Vuestro nombre, logotipo y colores",
+          "body": "La marca se configura para cada cliente, sin desarrollos a medida."
+        },
+        {
+          "title": "Español, inglés y polaco",
+          "body": "Cada persona usa la aplicación en su idioma."
+        },
+        {
+          "title": "Vuestras palabras",
+          "body": "Los nombres de menús y campos se pueden adaptar a cómo habláis en la empresa."
+        }
+      ]
+    },
+    "security": {
+      "title": "Seguridad",
+      "lead": "Medidas que están en el producto hoy. Lo que aún no tenemos lo decimos más abajo, sin fechas.",
+      "items": [
+        {
+          "title": "Datos separados por cliente",
+          "body": "Cada empresa tiene su propio esquema de base de datos; no comparte tablas con otras."
+        },
+        {
+          "title": "Permisos por rol y territorio",
+          "body": "Seis roles, de administración a comercial, limitados además por zona. Cada persona ve solo lo que necesita."
+        },
+        {
+          "title": "Registro de accesos",
+          "body": "Queda anotado quién hizo qué y quién consultó datos sensibles."
+        },
+        {
+          "title": "Contraseñas y sesiones",
+          "body": "Las contraseñas se guardan cifradas con bcrypt y las sesiones usan credenciales de corta duración que se renuevan."
+        },
+        {
+          "title": "Protección del servicio",
+          "body": "Límite de intentos, cabeceras de seguridad y lista de orígenes permitidos en la API."
+        },
+        {
+          "title": "Copias de seguridad",
+          "body": "Cada noche, cifradas, con una comprobación de que se pueden restaurar."
+        },
+        {
+          "title": "Revisión continua del código",
+          "body": "Análisis automático de seguridad y búsqueda de secretos en cada cambio; dependencias actualizadas cada semana."
+        },
+        {
+          "title": "Claves bajo llave",
+          "body": "Las credenciales del servicio viven en un almacén de secretos gestionado, nunca en el código ni en el navegador."
+        }
+      ]
+    },
+    "access": {
+      "title": "Accesibilidad",
+      "lead": "Una herramienta de trabajo tiene que servir a todo el equipo. Esto es lo que ya hace la interfaz.",
+      "items": [
+        {
+          "title": "Texto con contraste suficiente",
+          "body": "Los colores de texto y de los botones se eligen para que se lean bien, también en tema oscuro."
+        },
+        {
+          "title": "Botones cómodos para el dedo",
+          "body": "Los controles táctiles miden al menos 44 píxeles."
+        },
+        {
+          "title": "Menos movimiento si lo pedís",
+          "body": "La aplicación respeta el ajuste del dispositivo que reduce las animaciones."
+        },
+        {
+          "title": "Errores que se anuncian",
+          "body": "Los errores de un formulario se comunican también a los lectores de pantalla."
+        },
+        {
+          "title": "Todo con teclado",
+          "body": "Los diálogos se abren, se recorren y se cierran sin ratón."
+        }
+      ]
+    },
+    "privacy": {
+      "title": "Privacidad y datos",
+      "lead": "Diseñado con el RGPD en mente. Aquí preferimos ser exactos.",
+      "items": [
+        {
+          "title": "Dónde están los datos",
+          "body": "Hoy el servicio y la base de datos se alojan en Estados Unidos, en proveedores de nube. Si necesitáis otra región, mirad «En qué estamos trabajando»."
+        },
+        {
+          "title": "Consentimientos registrados",
+          "body": "El consentimiento de cada persona queda guardado con su fecha."
+        },
+        {
+          "title": "Quién ha visto qué",
+          "body": "Cuando se guardan datos sensibles, queda anotado quién los consultó, para poder responder si alguien lo pregunta."
+        },
+        {
+          "title": "Esta página no os sigue",
+          "body": "No usa cookies de publicidad ni analítica. Un enlace personal solo lleva un nombre en la dirección; no se guarda ni se envía."
+        }
+      ]
+    },
+    "onboarding": {
+      "title": "Puesta en marcha",
+      "lead": "Empezar no debería ser un proyecto.",
+      "items": [
+        {
+          "title": "Demo",
+          "body": "Os enseñamos el producto con un caso parecido al vuestro.",
+          "points": [
+            "Treinta minutos, sin compromiso",
+            "Vemos vuestro proceso real: cómo se visita, qué se anota y qué se pierde hoy",
+            "Os llevamos una ficha de ejemplo con vuestro sector"
+          ]
+        },
+        {
+          "title": "Vuestro espacio",
+          "body": "Creamos vuestro espacio con marca, idioma, roles y territorios.",
+          "points": [
+            "Marca, idioma y roles configurados por nosotros",
+            "Importamos vuestra lista de clientes si ya la tenéis en una hoja",
+            "Definimos zonas y quién ve qué"
+          ]
+        },
+        {
+          "title": "Vuestro equipo",
+          "body": "Dais de alta a las personas y empiezan a registrar visitas desde el móvil.",
+          "points": [
+            "Altas de personas en minutos",
+            "Cada persona instala la aplicación desde el navegador",
+            "Primera visita registrada el mismo día"
+          ]
+        },
+        {
+          "title": "Ajustes",
+          "body": "Revisamos juntos las primeras semanas y adaptamos textos y permisos.",
+          "points": [
+            "Revisión conjunta las primeras semanas",
+            "Cambiamos textos, campos y permisos según lo que veáis en el uso",
+            "Un solo contacto para dudas"
+          ]
+        }
+      ]
+    },
+    "roadmap": {
+      "title": "En qué estamos trabajando",
+      "lead": "Todavía no lo tenemos. Preferimos decirlo aquí antes que prometerlo en la portada. No damos fechas.",
+      "filterLabel": "Mostrar",
+      "all": "Todo",
+      "status": {
+        "progress": "en curso",
+        "planned": "planificado"
+      },
+      "items": [
+        {
+          "title": "Accesibilidad WCAG 2.2 AA",
+          "body": "Pruebas automáticas en cada cambio y una declaración de accesibilidad pública."
+        },
+        {
+          "title": "ISO 27001",
+          "body": "Hemos empezado el análisis interno de brechas. Todavía no hay certificación ni auditoría externa."
+        },
+        {
+          "title": "Verificación en dos pasos",
+          "body": "Un segundo factor al iniciar sesión."
+        },
+        {
+          "title": "Alojamiento en la Unión Europea",
+          "body": "Opción de tener el servicio y los datos en una región europea."
+        }
+      ]
+    },
+    "faq": {
+      "title": "Preguntas frecuentes",
+      "lead": "Lo que suelen preguntarnos antes de una demo.",
+      "items": [
+        {
+          "title": "¿Necesitamos un departamento de sistemas?",
+          "body": "No. Nosotros preparamos vuestro espacio; vosotros solo dais de alta a las personas."
+        },
+        {
+          "title": "¿Hay que instalar algo?",
+          "body": "No. Funciona en el navegador del móvil y del ordenador, y se puede añadir a la pantalla de inicio."
+        },
+        {
+          "title": "¿Podemos usar nuestra marca?",
+          "body": "Sí: nombre, logotipo, colores e idioma se configuran para cada cliente."
+        },
+        {
+          "title": "¿Tenéis sellos externos de seguridad?",
+          "body": "Todavía no. Lo que está en marcha aparece en «En qué estamos trabajando»; lo que ya funciona, en «Seguridad»."
+        },
+        {
+          "title": "¿Cuánto cuesta?",
+          "body": "Depende del número de personas y de la configuración. Os damos una propuesta después de la demo."
+        }
+      ]
+    }
+  },
+  "visuals": {
+    "note": "Pantalla ilustrativa con empresas de ejemplo. Ordenad el día y tocad una visita.",
+    "hero": {
+      "alt": "De las notas sueltas al día ordenado en el móvil: ordenad el día y elegid una visita para ver su próximo paso",
+      "notesLabel": "Notas sueltas de hoy",
+      "notes": [
+        "Llamar a Rivas ¡¡el jueves!!",
+        "Informe de Olmos… ¿lo hice?",
+        "Lera: primera visita, ¿a qué hora?",
+        "Propuesta Rivas → enviar YA"
+      ],
+      "empty": "todavía en notas sueltas…",
+      "tidy": "Ordenar mi día",
+      "untidy": "Volver a las notas",
+      "tipBefore": "pulsad y mirad qué pasa",
+      "tipAfter": "así queda, y os avisa solo",
+      "today": "Hoy",
+      "count": "martes · 3 visitas",
+      "visits": [
+        {
+          "who": "MG",
+          "time": "09:30",
+          "name": "Ferretería Olmos",
+          "note": "Informe pendiente",
+          "next": "Ferretería Olmos: completar el informe de la visita."
+        },
+        {
+          "who": "IS",
+          "time": "12:00",
+          "name": "Talleres Rivas",
+          "note": "Enviar propuesta",
+          "next": "Talleres Rivas: enviar la propuesta y llamar el jueves."
+        },
+        {
+          "who": "LF",
+          "time": "16:15",
+          "name": "Bodegas Lera",
+          "note": "Primera visita",
+          "next": "Bodegas Lera: primera visita, apuntar con quién se habla."
+        }
+      ]
+    },
+    "product": {
+      "alt": "Informe de visita de ejemplo: elegid el próximo paso y guardadlo",
+      "hint": "Probadlo: elegid el próximo paso y guardad.",
+      "title": "Informe de visita",
+      "fields": [
+        {
+          "label": "Cliente",
+          "value": "Talleres Rivas"
+        },
+        {
+          "label": "Qué se acordó",
+          "value": "Propuesta para 12 puestos"
+        }
+      ],
+      "nextLabel": "Próximo paso",
+      "options": [
+        "Llamar el jueves",
+        "Enviar propuesta",
+        "Segunda visita"
+      ],
+      "save": "Guardar",
+      "saved": "Informe guardado. Próximo paso: {step}."
+    },
+    "brand": {
+      "alt": "La misma pantalla con la marca y el idioma que elijáis",
+      "hint": "Cambiad de marca y de idioma: la pantalla es la misma.",
+      "brandLabel": "Marca",
+      "langLabel": "Idioma",
+      "names": [
+        "Talleres Rivas",
+        "Bodegas Lera",
+        "Ferretería Olmos"
+      ],
+      "langs": [
+        {
+          "code": "ES",
+          "hello": "Buenos días, Marta",
+          "action": "Nueva visita"
+        },
+        {
+          "code": "EN",
+          "hello": "Good morning, Marta",
+          "action": "New visit"
+        },
+        {
+          "code": "PL",
+          "hello": "Dzień dobry, Marta",
+          "action": "Nowa wizyta"
+        }
+      ]
+    },
+    "security": {
+      "alt": "Capas de protección alrededor de vuestros datos; cada capa se puede pulsar",
+      "hint": "Pulsad una capa para ver qué hace.",
+      "layers": [
+        "Vuestra empresa · esquema de datos propio",
+        "Rol y territorio · cada persona ve lo suyo",
+        "Registro de accesos · quién hizo qué"
+      ],
+      "core": "Vuestros clientes"
+    },
+    "access": {
+      "alt": "Una pantalla de ejemplo que cambia de tema y enseña la medida de su botón",
+      "hint": "Cambiad el tema y mirad las medidas.",
+      "themeLabel": "Tema",
+      "light": "Claro",
+      "dark": "Oscuro",
+      "measures": "Mostrar medidas",
+      "sample": "Próxima visita",
+      "button": "Guardar",
+      "measure": "44 px"
+    },
+    "privacy": {
+      "alt": "Ficha de consentimiento con su estado, su fecha y quién la consultó",
+      "title": "Consentimiento",
+      "person": "Lucía Ferrer",
+      "state": "Aceptado",
+      "date": "12 de marzo",
+      "logShow": "Ver quién lo consultó",
+      "log": [
+        {
+          "who": "Marta Gil",
+          "detail": "Responsable · 12 de marzo, 10:42"
+        },
+        {
+          "who": "Iván Soto",
+          "detail": "Comercial · 14 de marzo, 09:05"
+        }
+      ]
+    }
+  },
+  "contact": {
+    "hand": "¿Hablamos?",
+    "title": "Pedid una demo",
+    "titleFor": "{name}, ¿os lo enseñamos?",
+    "body": "Media hora, con un caso parecido al vuestro y tiempo para preguntas de seguridad.",
+    "email": "Escribir un correo",
+    "whatsapp": "Escribir por WhatsApp",
+    "subject": "Demo de neoCRM",
+    "subjectFor": "Demo de neoCRM para {name}",
+    "message": "Hola, nos gustaría ver una demo de neoCRM.",
+    "messageFor": "Hola, somos {name} y nos gustaría ver una demo de neoCRM."
+  },
+  "footer": {
+    "note": "neoCRM · CRM con vuestra marca",
+    "back": "Volver a AJ Management"
+  },
+  "photos": {
+    "who": [
+      {
+        "alt": "Una persona del equipo explica algo con calma a un compañero junto a un portátil",
+        "caption": "El que sale a visitar"
+      },
+      {
+        "alt": "Un equipo reunido ante una pared de notas adhesivas, una persona señala una",
+        "caption": "Y el que coordina"
+      },
+      {
+        "alt": "Compañeros trabajando juntos con sus portátiles en una mesa",
+        "caption": "Todos con lo mismo delante"
+      }
+    ],
+    "launch": [
+      {
+        "alt": "Dos personas conversan en una mesa durante una demostración"
+      },
+      {
+        "alt": "Un equipo prepara su espacio de trabajo con notas en la pared"
+      },
+      {
+        "alt": "Un grupo de compañeros empieza a usar sus portátiles juntos"
+      },
+      {
+        "alt": "Dos personas chocan la mano tras revisar los primeros resultados"
+      }
+    ],
+    "demo": {
+      "alt": "Dos manos que se estrechan",
+      "caption": "Treinta minutos y lo vemos"
+    }
+  }
+}

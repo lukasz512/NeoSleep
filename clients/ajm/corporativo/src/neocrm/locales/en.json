@@ -1,0 +1,493 @@
+{
+  "meta": {
+    "title": "neoCRM · The CRM to grow your company: customers, calendar and notifications",
+    "description": "neoCRM is a CRM under your own brand: customers, calendar, notifications and next steps in one place, on the phone and on the computer."
+  },
+  "nav": {
+    "skip": "Skip to content",
+    "demo": "Request a demo",
+    "language": "Español",
+    "themeToDark": "Switch to dark theme",
+    "themeToLight": "Switch to light theme"
+  },
+  "hero": {
+    "hello": "Hi, how is your day going?",
+    "greeting": "Hello, {name}:",
+    "eyebrow": "A CRM under your own brand",
+    "titles": {
+      "default": "The CRM to grow your company",
+      "equipos": "The CRM for sales teams that want to grow",
+      "distribucion": "The CRM for distributors and wholesalers",
+      "servicios": "The CRM for service companies",
+      "comercios": "The CRM for shops and local businesses"
+    },
+    "body": "Customers, calendar, notifications and next steps in one place, so no opportunity is left without follow-up. Under your brand, in your language and on the phone.",
+    "cta": "Request a demo",
+    "secondary": "See what is included",
+    "marks": {
+      "default": "grow",
+      "equipos": "grow",
+      "distribucion": "distributors",
+      "servicios": "service",
+      "comercios": "shops"
+    }
+  },
+  "lens": {
+    "label": "View the page as",
+    "roles": {
+      "all": "Everything",
+      "direccion": "Management",
+      "it": "IT and security",
+      "operaciones": "Operations"
+    },
+    "notes": {
+      "all": "The usual order of the page.",
+      "direccion": "Order for management: who it is for and how it gets started come first.",
+      "it": "Order for IT and security: security, privacy and accessibility come first.",
+      "operaciones": "Order for operations: the product and the team's day-to-day come first."
+    }
+  },
+  "sections": {
+    "who": {
+      "title": "Who it is for",
+      "pick": "Pick your sector and the page adjusts.",
+      "picked": "Page adjusted for: {sector}.",
+      "lead": "Companies that want to grow without losing the thread: knowing who was seen, what was said and what comes next, even when the team works away from the office.",
+      "items": {
+        "equipos": {
+          "title": "Sales teams",
+          "body": "Customers, contacts and next steps in order, without spreadsheets each person keeps their own way."
+        },
+        "distribucion": {
+          "title": "Distributors and wholesalers",
+          "body": "Sales reps with their area, their calendar and a report after each visit; managers who see their team."
+        },
+        "servicios": {
+          "title": "Service companies",
+          "body": "Installation, maintenance or consulting: each customer with their history and the next appointment noted."
+        },
+        "comercios": {
+          "title": "Shops and local businesses",
+          "body": "Regular customers with their history, appointments in the calendar and a notification when it is time to call again."
+        }
+      }
+    },
+    "product": {
+      "title": "What it does for your business",
+      "lead": "What the team uses every day so no customer is left without follow-up, designed for the phone first.",
+      "items": [
+        {
+          "title": "Customers and contacts",
+          "body": "Companies and people on one record, with their history."
+        },
+        {
+          "title": "Calendar and appointments",
+          "body": "Appointments, visits and events in a calendar; each person sees their own agenda."
+        },
+        {
+          "title": "Notifications",
+          "body": "Notifications in the app, on the phone and by email, so nothing slips."
+        },
+        {
+          "title": "Visits with their report",
+          "body": "A short form after each visit, so what was agreed does not depend on memory."
+        },
+        {
+          "title": "Forms and signature",
+          "body": "Forms that are filled in on the phone and can be signed on screen."
+        },
+        {
+          "title": "Team view",
+          "body": "Whoever leads sees the team's activity; each person sees their own."
+        },
+        {
+          "title": "On the phone, like an app",
+          "body": "It opens in the browser and can be installed on the home screen, with no app store involved."
+        }
+      ]
+    },
+    "brand": {
+      "title": "Under your brand and in your language",
+      "lead": "Your team opens its own tool, not a vendor's.",
+      "items": [
+        {
+          "title": "Your name, logo and colours",
+          "body": "The brand is configured per client, with no custom development."
+        },
+        {
+          "title": "Spanish, English and Polish",
+          "body": "Each person uses the app in their language."
+        },
+        {
+          "title": "Your words",
+          "body": "Menu and field names can be adapted to how you speak inside the company."
+        }
+      ]
+    },
+    "security": {
+      "title": "Security",
+      "lead": "Measures that are in the product today. What we do not have yet is listed further down, without dates.",
+      "items": [
+        {
+          "title": "Data separated per client",
+          "body": "Each company has its own database schema; it shares no tables with others."
+        },
+        {
+          "title": "Permissions by role and territory",
+          "body": "Six roles, from administration to sales rep, also limited by area. Each person sees only what they need."
+        },
+        {
+          "title": "Access log",
+          "body": "Who did what, and who viewed sensitive data, is written down."
+        },
+        {
+          "title": "Passwords and sessions",
+          "body": "Passwords are stored hashed with bcrypt and sessions use short-lived credentials that are renewed."
+        },
+        {
+          "title": "Service protection",
+          "body": "Attempt limits, security headers and an allow-list of origins on the API."
+        },
+        {
+          "title": "Backups",
+          "body": "Every night, encrypted, with a check that they can be restored."
+        },
+        {
+          "title": "Continuous code review",
+          "body": "Automatic security analysis and secret scanning on every change; dependencies updated weekly."
+        },
+        {
+          "title": "Keys locked away",
+          "body": "Service credentials live in a managed secret store, never in the code or the browser."
+        }
+      ]
+    },
+    "access": {
+      "title": "Accessibility",
+      "lead": "A work tool has to serve the whole team. This is what the interface already does.",
+      "items": [
+        {
+          "title": "Text with enough contrast",
+          "body": "Text and button colours are chosen to read well, in the dark theme too."
+        },
+        {
+          "title": "Buttons that fit a finger",
+          "body": "Touch controls measure at least 44 pixels."
+        },
+        {
+          "title": "Less motion if you ask",
+          "body": "The app respects the device setting that reduces animations."
+        },
+        {
+          "title": "Errors that are announced",
+          "body": "Form errors are also communicated to screen readers."
+        },
+        {
+          "title": "Everything by keyboard",
+          "body": "Dialogs open, can be walked through and close without a mouse."
+        }
+      ]
+    },
+    "privacy": {
+      "title": "Privacy and data",
+      "lead": "Designed with the GDPR in mind. Here we prefer to be exact.",
+      "items": [
+        {
+          "title": "Where the data is",
+          "body": "Today the service and the database are hosted in the United States, with cloud providers. If you need another region, see \"What we are working on\"."
+        },
+        {
+          "title": "Consent on record",
+          "body": "Each person's consent is stored with its date."
+        },
+        {
+          "title": "Who has seen what",
+          "body": "When sensitive data is stored, who viewed it is written down, so you can answer if someone asks."
+        },
+        {
+          "title": "This page does not follow you",
+          "body": "It uses no advertising or analytics cookies. A personal link only carries a name in the address; it is not stored or sent."
+        }
+      ]
+    },
+    "onboarding": {
+      "title": "Getting started",
+      "lead": "Starting should not be a project.",
+      "items": [
+        {
+          "title": "Demo",
+          "body": "We show you the product with a case close to yours.",
+          "points": [
+            "Thirty minutes, no commitment",
+            "We look at your real process: how visits go, what gets noted, what is lost today",
+            "We bring a sample record for your sector"
+          ]
+        },
+        {
+          "title": "Your space",
+          "body": "We create your space with brand, language, roles and territories.",
+          "points": [
+            "Brand, language and roles set up by us",
+            "We import your client list if it already lives in a spreadsheet",
+            "We define territories and who sees what"
+          ]
+        },
+        {
+          "title": "Your team",
+          "body": "You add your people and they start logging visits from the phone.",
+          "points": [
+            "People added in minutes",
+            "Everyone installs the app from the browser",
+            "First visit logged the same day"
+          ]
+        },
+        {
+          "title": "Adjustments",
+          "body": "We review the first weeks together and adapt wording and permissions.",
+          "points": [
+            "Joint review for the first weeks",
+            "We change texts, fields and permissions based on how you use it",
+            "One contact for questions"
+          ]
+        }
+      ]
+    },
+    "roadmap": {
+      "title": "What we are working on",
+      "lead": "We do not have these yet. We would rather say so here than promise them on the cover. We give no dates.",
+      "filterLabel": "Show",
+      "all": "Everything",
+      "status": {
+        "progress": "in progress",
+        "planned": "planned"
+      },
+      "items": [
+        {
+          "title": "WCAG 2.2 AA accessibility",
+          "body": "Automated tests on every change and a public accessibility statement."
+        },
+        {
+          "title": "ISO 27001",
+          "body": "We have started the internal gap analysis. There is no certification or external audit yet."
+        },
+        {
+          "title": "Two-step verification",
+          "body": "A second factor at sign-in."
+        },
+        {
+          "title": "Hosting in the European Union",
+          "body": "An option to keep the service and the data in a European region."
+        }
+      ]
+    },
+    "faq": {
+      "title": "Frequent questions",
+      "lead": "What people usually ask us before a demo.",
+      "items": [
+        {
+          "title": "Do we need an IT department?",
+          "body": "No. We prepare your space; you only add your people."
+        },
+        {
+          "title": "Is there anything to install?",
+          "body": "No. It runs in the browser on phone and computer, and can be added to the home screen."
+        },
+        {
+          "title": "Can we use our brand?",
+          "body": "Yes: name, logo, colours and language are configured per client."
+        },
+        {
+          "title": "Do you hold external security seals?",
+          "body": "Not yet. What is under way appears in \"What we are working on\"; what already works, in \"Security\"."
+        },
+        {
+          "title": "How much does it cost?",
+          "body": "It depends on the number of people and the configuration. We send a proposal after the demo."
+        }
+      ]
+    }
+  },
+  "visuals": {
+    "note": "Illustrative screen with example companies. Tidy the day and tap a visit.",
+    "hero": {
+      "alt": "From loose notes to a tidy day on the phone: tidy the day and pick a visit to see its next step",
+      "notesLabel": "Today's loose notes",
+      "notes": [
+        "Call Rivas on Thursday!!",
+        "Olmos report… did I do it?",
+        "Lera: first visit, what time?",
+        "Rivas proposal → send NOW"
+      ],
+      "empty": "still on loose notes…",
+      "tidy": "Tidy my day",
+      "untidy": "Back to the notes",
+      "tipBefore": "press it and see what happens",
+      "tipAfter": "like this, and it reminds you by itself",
+      "today": "Today",
+      "count": "Tuesday · 3 visits",
+      "visits": [
+        {
+          "who": "MG",
+          "time": "09:30",
+          "name": "Ferretería Olmos",
+          "note": "Report pending",
+          "next": "Ferretería Olmos: complete the visit report."
+        },
+        {
+          "who": "IS",
+          "time": "12:00",
+          "name": "Talleres Rivas",
+          "note": "Send proposal",
+          "next": "Talleres Rivas: send the proposal and call on Thursday."
+        },
+        {
+          "who": "LF",
+          "time": "16:15",
+          "name": "Bodegas Lera",
+          "note": "First visit",
+          "next": "Bodegas Lera: first visit, note who you speak to."
+        }
+      ]
+    },
+    "product": {
+      "alt": "Example visit report: pick the next step and save it",
+      "hint": "Try it: pick the next step and save.",
+      "title": "Visit report",
+      "fields": [
+        {
+          "label": "Customer",
+          "value": "Talleres Rivas"
+        },
+        {
+          "label": "What was agreed",
+          "value": "Proposal for 12 seats"
+        }
+      ],
+      "nextLabel": "Next step",
+      "options": [
+        "Call on Thursday",
+        "Send proposal",
+        "Second visit"
+      ],
+      "save": "Save",
+      "saved": "Report saved. Next step: {step}."
+    },
+    "brand": {
+      "alt": "The same screen under the brand and language you pick",
+      "hint": "Change the brand and the language: the screen stays the same.",
+      "brandLabel": "Brand",
+      "langLabel": "Language",
+      "names": [
+        "Talleres Rivas",
+        "Bodegas Lera",
+        "Ferretería Olmos"
+      ],
+      "langs": [
+        {
+          "code": "ES",
+          "hello": "Buenos días, Marta",
+          "action": "Nueva visita"
+        },
+        {
+          "code": "EN",
+          "hello": "Good morning, Marta",
+          "action": "New visit"
+        },
+        {
+          "code": "PL",
+          "hello": "Dzień dobry, Marta",
+          "action": "Nowa wizyta"
+        }
+      ]
+    },
+    "security": {
+      "alt": "Layers of protection around your data; each layer can be pressed",
+      "hint": "Press a layer to see what it does.",
+      "layers": [
+        "Your company · its own data schema",
+        "Role and territory · each person sees their own",
+        "Access log · who did what"
+      ],
+      "core": "Your customers"
+    },
+    "access": {
+      "alt": "An example screen that changes theme and shows the size of its button",
+      "hint": "Change the theme and look at the sizes.",
+      "themeLabel": "Theme",
+      "light": "Light",
+      "dark": "Dark",
+      "measures": "Show sizes",
+      "sample": "Next visit",
+      "button": "Save",
+      "measure": "44 px"
+    },
+    "privacy": {
+      "alt": "Consent record with its state, its date and who viewed it",
+      "title": "Consent",
+      "person": "Lucía Ferrer",
+      "state": "Accepted",
+      "date": "12 March",
+      "logShow": "See who viewed it",
+      "log": [
+        {
+          "who": "Marta Gil",
+          "detail": "Manager · 12 March, 10:42"
+        },
+        {
+          "who": "Iván Soto",
+          "detail": "Sales rep · 14 March, 09:05"
+        }
+      ]
+    }
+  },
+  "contact": {
+    "hand": "Shall we talk?",
+    "title": "Request a demo",
+    "titleFor": "{name}, shall we show you?",
+    "body": "Half an hour, with a case close to yours and time for security questions.",
+    "email": "Write an email",
+    "whatsapp": "Write on WhatsApp",
+    "subject": "neoCRM demo",
+    "subjectFor": "neoCRM demo for {name}",
+    "message": "Hello, we would like to see a demo of neoCRM.",
+    "messageFor": "Hello, we are {name} and we would like to see a demo of neoCRM."
+  },
+  "footer": {
+    "note": "neoCRM · A CRM under your own brand",
+    "back": "Back to AJ Management"
+  },
+  "photos": {
+    "who": [
+      {
+        "alt": "A team member calmly explains something to a colleague beside a laptop",
+        "caption": "The one out visiting"
+      },
+      {
+        "alt": "A team gathered at a wall of sticky notes, one person pointing at a note",
+        "caption": "And the one coordinating"
+      },
+      {
+        "alt": "Colleagues working together on laptops at a table",
+        "caption": "Everyone with the same thing in front of them"
+      }
+    ],
+    "launch": [
+      {
+        "alt": "Two people talking at a table during a demo"
+      },
+      {
+        "alt": "A team sets up its workspace with notes on the wall"
+      },
+      {
+        "alt": "A group of colleagues starts using their laptops together"
+      },
+      {
+        "alt": "Two people high-five after reviewing the first results"
+      }
+    ],
+    "demo": {
+      "alt": "Two hands shaking",
+      "caption": "Thirty minutes and we'll see"
+    }
+  }
+}

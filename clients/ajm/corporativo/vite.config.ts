@@ -21,7 +21,9 @@ const escapeReplacementChar: Plugin = {
 function heroPreload(mediaBase: string): Plugin {
   return {
     name: "hero-preload",
-    transformIndexHtml() {
+    transformIndexHtml(_html, ctx) {
+      // the neoCRM page (neocrm/index.html) has no hero footage
+      if (ctx.path.includes("/neocrm/")) return [];
       return [
         { tag: "link", attrs: { rel: "preload", as: "image", type: "image/avif", media: "(max-width: 700px)", href: `${mediaBase}/hero/poster-640.avif` }, injectTo: "head" },
         { tag: "link", attrs: { rel: "preload", as: "image", type: "image/avif", media: "(min-width: 701px)", href: `${mediaBase}/hero/poster.avif` }, injectTo: "head" },
@@ -36,6 +38,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [vue(), escapeReplacementChar, heroPreload(mediaBase)],
     server: { port: 5180 },
-    build: { target: "es2020", cssCodeSplit: true },
+    // two pages: the AJ Management site and the neoCRM product page at <base>neocrm/ (CORE-215)
+    build: { target: "es2020", cssCodeSplit: true, rollupOptions: { input: { main: "index.html", neocrm: "neocrm/index.html" } } },
   };
 });

@@ -13,13 +13,16 @@
     "media": "bash scripts/encode-media.sh"
   },
   "dependencies": {
+    "@fontsource-variable/caveat": "^5.2.0",
     "@fontsource-variable/montserrat": "^5.3.0",
     "@fontsource/bodoni-moda": "^5.3.0",
     "@fontsource/mrs-saint-delafield": "^5.3.0",
+    "three": "0.170.0",
     "vue": "catalog:",
     "vue-i18n": "catalog:"
   },
   "devDependencies": {
+    "@types/three": "0.170.0",
     "@vitejs/plugin-vue": "catalog:",
     "@vue/test-utils": "catalog:",
     "eslint": "catalog:",

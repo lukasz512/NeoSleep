@@ -1,0 +1,135 @@
+/* The neoCRM page's own look, apart from the AJ Management site (--ajm-* in ../style.css): neoCRM's
+   teal, copied here as plain values because client sites import nothing from neoCRM (CORE-47).
+   Every text/background pair below is at least 4.5:1. No gradients (style.spec.ts). */
+:root {
+  /* warm paper with a dot grid, like a notebook page (round 5); the dots are an SVG tile, not a gradient */
+  --ncrm-bg: #ffffff;
+  --ncrm-dots: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Ccircle cx='1.5' cy='1.5' r='1' fill='%23c5d6ee'/%3E%3Cpath d='M-3 1.5h9M1.5-3v9' stroke='%23dde8f6'/%3E%3C/svg%3E");
+  --ncrm-surface: #fffdf8;
+  --ncrm-ink: #10211f;
+  --ncrm-muted: #46605c;
+  --ncrm-line: #dfd5bf;
+  --ncrm-tint: #efe6d0;
+  /* sticky notes and the initials of the people on them: the same paper colours in both themes */
+  --ncrm-note-1: #ffe58a;
+  --ncrm-note-2: #ffc9a8;
+  --ncrm-note-3: #bfe6d8;
+  --ncrm-note-ink: #2a2412;
+  --ncrm-note-shadow: rgba(60, 45, 10, 0.18);
+  --ncrm-hand: "Caveat Variable", "Caveat", "Bradley Hand", "Segoe Print", cursive;
+  --ncrm-primary: #0b6b62;
+  --ncrm-primary-hover: #08534c;
+  --ncrm-on-primary: #ffffff;
+  /* the demo band stays dark teal in both themes */
+  --ncrm-band: #082a27;
+  --ncrm-on-band: #f1f8f7;
+  /* the warm accent, one element per section; the same amber with dark text in both themes */
+  --ncrm-warm: #f2b84b;
+  --ncrm-warm-ink: #3d2a00;
+  /* the drawn phone's body, and the second example brand in "with your brand" */
+  --ncrm-frame: #10211f;
+  --ncrm-navy: #2b4a8b;
+  --ncrm-on-navy: #ffffff;
+  --ncrm-gutter: clamp(16px, 5vw, 48px);
+  /* the reader's own system typeface, so the page reads like a native app (round 9); handwriting stays Caveat */
+  --ncrm-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  /* the living paper (paper.ts): the same dot grid drawn on a canvas, the parcel's shadow, the second balloon */
+  --ncrm-dot: #c5d6ee;
+  --ncrm-dot-strong: #4f7fc4;
+  --ncrm-shade: #3c2d0a;
+  --ncrm-balloon: #2b4a8b;
+  /* glass tiles (round 9): a see-through fill over the blurred paper, a light edge, a soft shadow */
+  --ncrm-glass: rgba(255, 253, 248, 0.52);
+  --ncrm-glass-inner: rgba(255, 253, 248, 0.6);
+  --ncrm-glass-edge: rgba(255, 255, 255, 0.78);
+  --ncrm-glass-hi: rgba(255, 255, 255, 0.95);
+  --ncrm-glass-lo: rgba(60, 45, 10, 0.08);
+  --ncrm-glass-shadow: rgba(60, 45, 10, 0.24);
+  --ncrm-band-glass: rgba(8, 42, 39, 0.92);
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  --ncrm-bg: #061a18;
+  --ncrm-dots: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Ccircle cx='1.5' cy='1.5' r='1' fill='%23173833'/%3E%3Cpath d='M-3 1.5h9M1.5-3v9' stroke='%23173833'/%3E%3C/svg%3E");
+  --ncrm-note-shadow: rgba(0, 0, 0, 0.4);
+  --ncrm-surface: #0c2925;
+  --ncrm-ink: #e8f2f0;
+  --ncrm-muted: #a6bcb8;
+  --ncrm-line: #1f423d;
+  --ncrm-tint: #0f332e;
+  --ncrm-primary: #17b5a5;
+  --ncrm-primary-hover: #3cc7b9;
+  --ncrm-on-primary: #04201d;
+  --ncrm-band: #0f332e;
+  --ncrm-frame: #2f524d;
+  --ncrm-dot: #173833;
+  --ncrm-dot-strong: #2f7269;
+  --ncrm-shade: #000000;
+  --ncrm-balloon: #ffc9a8;
+  --ncrm-glass: rgba(18, 58, 52, 0.5);
+  --ncrm-glass-inner: rgba(12, 41, 37, 0.6);
+  --ncrm-glass-edge: rgba(255, 255, 255, 0.13);
+  --ncrm-glass-hi: rgba(255, 255, 255, 0.22);
+  --ncrm-glass-lo: rgba(0, 0, 0, 0.3);
+  --ncrm-glass-shadow: rgba(0, 0, 0, 0.6);
+  --ncrm-band-glass: rgba(15, 51, 46, 0.68);
+  color-scheme: dark;
+}
+/* "Accessibility" draws one screen in each theme, whatever the page's own theme is */
+.ncrm-tone-light {
+  --ncrm-surface: #ffffff;
+  --ncrm-ink: #10211f;
+  --ncrm-muted: #46605c;
+  --ncrm-line: #d3e0dd;
+  --ncrm-primary: #0b6b62;
+  --ncrm-on-primary: #ffffff;
+}
+.ncrm-tone-dark {
+  --ncrm-surface: #0c2925;
+  --ncrm-ink: #e8f2f0;
+  --ncrm-muted: #a6bcb8;
+  --ncrm-line: #1f423d;
+  --ncrm-primary: #17b5a5;
+  --ncrm-on-primary: #04201d;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  background: var(--ncrm-bg) var(--ncrm-dots);
+  color: var(--ncrm-ink);
+  font-family: var(--ncrm-font);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+/* the canvas draws the dots while the paper is alive (LivePaper.vue) */
+html.ncrm-live body {
+  background-image: none;
+}
+h1,
+h2,
+h3 {
+  letter-spacing: -0.022em;
+}
+:focus-visible {
+  outline: 3px solid var(--ncrm-primary);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
