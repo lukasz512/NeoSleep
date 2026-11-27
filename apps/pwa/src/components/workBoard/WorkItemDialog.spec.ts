@@ -44,6 +44,7 @@ function item(overrides: Partial<WorkItem> = {}): WorkItem {
     git_state: null,
     git_sha: null,
     git_checked_at: null,
+    verify_state: null, verify_checked_at: null, verify_run_url: null, verify_results: null, fix_item: null,
     ...overrides,
   };
 }
@@ -398,6 +399,55 @@ describe("WorkItemDialog git state and hold (CORE-221)", () => {
   });
 });
 
+describe("WorkItemDialog verification (CORE-277)", () => {
+  const failed = () =>
+    item({
+      status: "needs_review",
+      verify_state: "fail",
+      verify_run_url: "https://ci.test/run/7",
+      fix_item: "CORE-10",
+      verify_results: [
+        { ac: "Rejects a move without an artifact", test: "workBoard.spec", status: "pass" },
+        { ac: "Shows the badge", test: "WorkItemCard.spec", status: "fail" },
+      ],
+    });
+
+  it("shows the result, the AC to test rows, the run and the fix ticket", async () => {
+    serve(failed());
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(q("work-item-verify")?.textContent).toContain("Tests failed");
+    const rows = Array.from(document.querySelectorAll("[data-testid='work-item-verify-row']"));
+    expect(rows.map((r) => r.getAttribute("data-status"))).toEqual(["pass", "fail"]);
+    expect(rows[0].textContent).toContain("Rejects a move without an artifact");
+    expect(rows[1].textContent).toContain("WorkItemCard.spec");
+    expect(q("work-item-verify-run")?.getAttribute("href")).toBe("https://ci.test/run/7");
+    expect(q("work-item-verify-fix")?.textContent).toContain("CORE-10");
+  });
+
+  it("queues the tests again and reports the updated ticket", async () => {
+    serve(failed());
+    const wrapper = await render({ itemKey: "CORE-9", creating: false });
+    (q("work-item-verify-rerun") as HTMLElement).click();
+    await flushPromises();
+    expect(calls.some((c) => c.method === "POST" && c.path.endsWith("/items/CORE-9/verify"))).toBe(true);
+    expect(wrapper.emitted("saved")).toBeTruthy();
+  });
+
+  it("offers no re-run while the tests are queued", async () => {
+    serve(item({ status: "verifying", verify_state: "pending" }));
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(q("work-item-verify")?.textContent).toContain("Tests queued");
+    expect(q("work-item-verify-rerun")).toBeNull();
+  });
+
+  it("shows nothing for a ticket that was never verified", async () => {
+    serve(item({ status: "needs_review" }));
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(q("work-item-verify")).toBeNull();
+    expect(q("work-item-verify-section")).toBeNull();
+  });
+});
+
 describe("WorkItemDialog Done-when checklist (CORE-195)", () => {
   const boxes = () => Array.from(document.querySelectorAll("[data-testid='work-item-check'] input[type='checkbox']")) as HTMLInputElement[];
 
@@ -632,7 +682,7 @@ describe("WorkItemDialog status and priority marks (CORE-225)", () => {
     const groups = Array.from(menu.querySelectorAll("[data-testid='work-item-menu-group']")).map((el) => el.textContent?.trim());
     expect(groups).toEqual(["Intake", "Specification", "Delivery", "Closed"]);
     const glyphs = Array.from(menu.querySelectorAll(".v-list-item svg[data-status]")).map((el) => el.getAttribute("data-status"));
-    expect(glyphs).toEqual(["triage", "backlog", "to_spec", "spec_ready", "approved", "building", "needs_review", "done", "canceled"]);
+    expect(glyphs).toEqual(["triage", "backlog", "to_spec", "spec_ready", "approved", "building", "needs_review", "verifying", "done", "canceled"]);
     expect(menu.querySelector(".v-list-item--active")!.textContent).toContain("Building");
   });
 

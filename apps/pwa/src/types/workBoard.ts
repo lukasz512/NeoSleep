@@ -8,6 +8,7 @@ export type WorkStatus =
   | "approved"
   | "building"
   | "needs_review"
+  | "verifying"
   | "done"
   | "canceled";
 
@@ -73,9 +74,25 @@ export interface WorkItem {
   /** Newest commit citing the ticket. */
   git_sha: string | null;
   git_checked_at: string | null;
+  /** The post-landing test run (CORE-277); null when the ticket was never verified. */
+  verify_state: WorkVerifyState | null;
+  verify_checked_at: string | null;
+  verify_run_url: string | null;
+  /** AC -> test map of the last run. */
+  verify_results: WorkVerifyResult[] | null;
+  /** Key of the fix ticket a failed run created. */
+  fix_item: string | null;
 }
 
 export type WorkGitState = "none" | "dev" | "prod";
+
+export type WorkVerifyState = "pending" | "pass" | "fail";
+
+export interface WorkVerifyResult {
+  ac: string;
+  test: string;
+  status: "pass" | "fail";
+}
 
 export interface WorkItemEvent {
   id: string;

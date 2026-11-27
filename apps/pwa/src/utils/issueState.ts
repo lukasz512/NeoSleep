@@ -27,7 +27,7 @@ const WEEK_MS = 7 * 24 * 3600 * 1000;
 function ticketState(status: string | null | undefined, blocked: boolean): IssueState | null {
   if (!status || status === "canceled") return null;
   if (status === "building") return blocked ? "needs_you" : "being_fixed";
-  if (status === "needs_review") return "artifact_ready";
+  if (status === "needs_review" || status === "verifying") return "artifact_ready";
   if (status === "done") return "done";
   return "ticket";
 }

@@ -8,6 +8,7 @@ import { apiFetch, backgroundApiFetch } from "./useApi";
 import type {
   WorkAttachment,
   WorkGitState,
+  WorkVerifyState,
   WorkItem,
   WorkItemDraft,
   WorkItemEvent,
@@ -31,6 +32,7 @@ export const WORK_BOARD_COLUMNS: readonly WorkStatus[] = [
   "approved",
   "building",
   "needs_review",
+  "verifying",
   "done",
 ];
 
@@ -136,6 +138,11 @@ export async function addWorkItemComment(key: string, body: string): Promise<Wor
   ).event;
 }
 
+/** Queues a fresh test run for a ticket (CORE-277); the CI workflow picks it up. */
+export async function rerunWorkVerify(key: string): Promise<WorkItem> {
+  return (await request<{ item: WorkItem }>("useWorkBoard.verify", `${BASE}/items/${encodeURIComponent(key)}/verify`, jsonInit("POST", {}))).item;
+}
+
 /** Case-insensitive match on key and title; an empty query matches everything. */
 export function matchesQuery(item: WorkItem, query: string): boolean {
   const q = query.trim().toLowerCase();
@@ -182,6 +189,17 @@ export const GIT_ICONS: Record<WorkGitState, string> = {
   none: "mdi-source-branch",
   dev: "mdi-source-merge",
   prod: "mdi-rocket-launch-outline",
+};
+
+/** The verify badge (CORE-277): null when the ticket was never verified. */
+export function verifyMarker(item: WorkItem): WorkVerifyState | null {
+  return item.verify_state ?? null;
+}
+
+export const VERIFY_ICONS: Record<WorkVerifyState, string> = {
+  pending: "mdi-timer-sand",
+  pass: "mdi-check-decagram-outline",
+  fail: "mdi-alert-circle-outline",
 };
 
 /** A Needs Review ticket git disagrees with: nothing merged, or on prod and not held. */

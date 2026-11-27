@@ -88,7 +88,7 @@ export async function report({ items, branches = [], close = null, config, fetch
   const res = await fetchImpl(`${config.apiUrl.replace(/\/+$/, "")}/api/v1/platform/work/git-state`, {
     method: "POST",
     headers: { "X-Agent-Token": config.agentToken, "Content-Type": "application/json" },
-    body: JSON.stringify({ items, complete: true, tidy: { branches }, ...(close ? { close } : {}) }),
+    body: JSON.stringify({ items, complete: true, verify: true, tidy: { branches }, ...(close ? { close } : {}) }),
   });
   const json = await res.json().catch(() => ({}));
   // The API revision that knows this route is not serving yet (the deploy runs beside this job).
