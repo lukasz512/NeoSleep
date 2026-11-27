@@ -2531,7 +2531,7 @@
   "website.help.faq.q7.q": "Jak chronione są moje dane osobowe i zdrowotne?",
   "website.help.faq.q7.a": "Wszystkie dane są szyfrowane w tranzycie (TLS 1.3) i w spoczynku (AES-256). Spełniamy wymagania RODO (UE), LFPDPPP (Meksyk) i PDPA (Tajlandia). Twoje informacje zdrowotne są dostępne wyłącznie dla Ciebie i uprawnionego specjalisty prowadzącego Twój przypadek. Nigdy nie sprzedajemy ani nie udostępniamy Twoich danych stronom trzecim w celach komercyjnych.",
   "website.help.faq.q8.q": "Czy mogę złożyć wniosek o usunięcie danych?",
-  "website.help.faq.q8.a": "Tak. Masz prawo do usunięcia danych na mocy RODO i równoważnych przepisów w innych jurysdykcjach. Aby złożyć wniosek, wyślij e-mail na adres info@neosleepcare.com z tematem 'Wniosek o usunięcie danych'. Rozpatrzymy Twój wniosek w ciągu 30 dni i potwierdzimy jego realizację.",
+  "website.help.faq.q8.a": "Tak. Masz prawo do usunięcia danych na mocy RODO i równoważnych przepisów w innych jurysdykcjach. Aby złożyć wniosek, wyślij e-mail na adres info{'@'}neosleepcare.com z tematem 'Wniosek o usunięcie danych'. Rozpatrzymy Twój wniosek w ciągu 30 dni i potwierdzimy jego realizację.",
   "website.help.cta.heading": "Nie znalazłeś odpowiedzi?",
   "website.help.cta.subtitle": "Nasz zespół jest gotowy do pomocy. Wyślij nam wiadomość, a odpowiemy wkrótce.",
   "website.help.cta.btn": "Skontaktuj się z nami",

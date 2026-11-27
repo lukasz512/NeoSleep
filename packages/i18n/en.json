@@ -2615,7 +2615,7 @@
   "website.help.faq.q7.q": "How is my personal and health data protected?",
   "website.help.faq.q7.a": "All data is encrypted in transit (TLS 1.3) and at rest (AES-256). We comply with GDPR (EU), LFPDPPP (Mexico), and PDPA (Thailand). Your health information is only accessible to you and the licensed specialist managing your case. We never sell or share your data with third parties for commercial purposes.",
   "website.help.faq.q8.q": "Can I request deletion of my data?",
-  "website.help.faq.q8.a": "Yes. You have the right to erasure under GDPR and equivalent laws in other jurisdictions. To submit a deletion request, send an email to info@neosleepcare.com with the subject 'Data Deletion Request'. We will process your request within 30 days and confirm once complete.",
+  "website.help.faq.q8.a": "Yes. You have the right to erasure under GDPR and equivalent laws in other jurisdictions. To submit a deletion request, send an email to info{'@'}neosleepcare.com with the subject 'Data Deletion Request'. We will process your request within 30 days and confirm once complete.",
   "website.help.cta.heading": "Didn't find your answer?",
   "website.help.cta.subtitle": "Our team is ready to help. Send us a message and we'll get back to you shortly.",
   "website.help.cta.btn": "Contact us",
