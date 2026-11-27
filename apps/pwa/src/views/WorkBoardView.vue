@@ -34,6 +34,19 @@
         @create="creating = true"
       />
 
+      <!-- Why a card dropped on Approved went back (CORE-234). -->
+      <VAlert
+        v-if="notice"
+        type="warning"
+        variant="tonal"
+        density="compact"
+        closable
+        class="work-board__notice"
+        data-testid="work-board-notice"
+        :text="t('workBoard.approved.notMoved', { key: notice.key, reason: t(`workBoard.approved.${notice.missing}`) })"
+        @click:close="notice = null"
+      />
+
       <!-- By label: one lane per label, each with the same status columns; the lanes scroll sideways together. -->
       <div
         v-if="sort === 'label' && lanes.length"
@@ -121,6 +134,7 @@ import {
   groupByLabel,
   matchesLabels,
   matchesQuery,
+  approvedBlocker,
   neighbourStatus,
   outOfStep,
   patchWorkItem,
@@ -200,6 +214,8 @@ const labelsOpen = ref(false);
 /** Tokens that still work; null until the first answer (the key then shows no number). */
 const tokenCount = ref<number | null>(null);
 const now = ref(Date.now());
+/** The ticket that could not enter Approved, and what it lacks (CORE-234). */
+const notice = ref<{ key: string; missing: "priority" | "done_when" } | null>(null);
 const toolbarRef = ref<{ focusSearch: () => void } | null>(null);
 const compact = computed(() => smAndDown.value);
 /** Card density for the screen in hand: the phone and the desktop each keep their own. */
@@ -359,6 +375,9 @@ function onLabelSaved(label: WorkLabel, previousName: string): void {
 async function moveTo(key: string, status: WorkStatus): Promise<void> {
   const item = items.value.find((i) => i.key === key);
   if (!item || item.status === status) return;
+  const missing = approvedBlocker(item, status);
+  notice.value = missing ? { key, missing } : null;
+  if (missing) return;
   const before = item.status;
   upsert({ ...item, status, status_changed_at: new Date().toISOString() });
   moving += 1;
@@ -439,6 +458,11 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+}
+
+.work-board__notice {
+  flex: none;
+  margin-bottom: 12px;
 }
 
 .work-board__lanes {

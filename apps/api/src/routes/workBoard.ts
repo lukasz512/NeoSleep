@@ -10,7 +10,11 @@ import {
   WORK_LINK_KINDS,
   WORK_SESSION_LABEL,
   WORK_STATUSES,
+  WORK_REVIEW_DECISIONS,
   addWorkItemComment,
+  applyBacklogReview,
+  countSessionApprovals,
+  SESSION_APPROVED_PER_WEEK,
   applyWorkGitStates,
   createWorkItem,
   deleteWorkAttachment,
@@ -41,6 +45,7 @@ import {
   type WorkLabelColor,
   type WorkLink,
   type WorkLinkKind,
+  type WorkReviewAnswer,
   type WorkStatus,
 } from "../db.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
@@ -57,7 +62,10 @@ import { platformAuditActor, routeParam } from "./utils.js";
  *  - a Claude Code session, with `X-Session-Token` (one per device, issued and revoked on the
  *    board, CORE-187): creates its own ticket straight into Building with the `session` label,
  *    comments, links, sets the branch and hands over to Needs Review. Never closes, never
- *    edits the text, never sees Triage.
+ *    edits the text, never sees Triage. Two exceptions (CORE-234): it may carry Łukasz's
+ *    backlog-review answers to Backlog tickets (a cancel only once a second form confirmed it),
+ *    and move the picks he clicked from Backlog to Approved, three a week at most.
+ * A ticket enters Approved only with a priority and a Done when, whoever moves it.
  * Tenant users get 403; the board holds no tenant or patient data.
  */
 
@@ -76,7 +84,10 @@ export const AGENT_MOVES: Readonly<Partial<Record<WorkStatus, readonly WorkStatu
 
 const AGENT_FIELDS = new Set(["status", "add_links", "branch"]);
 
-/** A session picks work up (Building) and hands it over (Needs Review); closed work stays closed. */
+/**
+ * A session picks work up (Building) and hands it over (Needs Review); closed work stays closed.
+ * It may also move a pick from Backlog to Approved, SESSION_APPROVED_PER_WEEK at most (D2).
+ */
 const SESSION_TARGETS: readonly WorkStatus[] = ["building", "needs_review"];
 const SESSION_CLOSED: readonly WorkStatus[] = ["done", "canceled"];
 /** Same limit the old Linear ticket-format hook enforced (NEO-84). */
@@ -90,6 +101,8 @@ const MAX_LABEL = 40;
 /** One git report names every ticket ever cited in a commit. */
 const MAX_GIT_REPORTS = 5000;
 const GIT_SHA_RE = /^[0-9a-f]{7,40}$/;
+const MAX_REVIEW_DECISIONS = 50;
+const REVIEW_FORM_RE = /^[\w.-]{1,60}$/;
 /** Long enough to look at a screenshot, short enough that a leaked link soon dies (CORE-192). */
 const ATTACHMENT_URL_SECONDS = 600;
 const ATTACHMENT_MIME_RE = /^image\/[a-z0-9.+-]+$/;
@@ -283,6 +296,27 @@ function requireSessionTicket(problem: string | null, change: string | null, don
   }
 }
 
+/** The nightly worker reads Approved, so a ticket enters it prepared (board-upkeep-r1 P3, CORE-234). */
+function requireReadyForApproved(priority: number, doneWhen: string | null): void {
+  if (!priority) throw new ValidationError("a ticket enters Approved only with a priority", "priority");
+  if (!doneWhen?.trim()) throw new ValidationError("a ticket enters Approved only with a Done when", "done_when");
+}
+
+function reviewAnswersValue(value: unknown): WorkReviewAnswer[] {
+  const problem = `decisions must be 1 to ${MAX_REVIEW_DECISIONS} of { key, decision: ${WORK_REVIEW_DECISIONS.join("|")} }, one per ticket`;
+  if (!Array.isArray(value) || value.length < 1 || value.length > MAX_REVIEW_DECISIONS) throw new ValidationError(problem, "decisions");
+  const seen = new Set<string>();
+  return value.map((raw) => {
+    const key = field(raw, "key");
+    const decision = WORK_REVIEW_DECISIONS.find((d) => d === field(raw, "decision"));
+    const parsed = typeof key === "string" ? parseWorkItemKey(key) : null;
+    const id = parsed ? `${parsed.team}-${parsed.number}` : "";
+    if (!parsed || !decision || seen.has(id)) throw new ValidationError(problem, "decisions");
+    seen.add(id);
+    return { ...parsed, decision };
+  });
+}
+
 // GET /api/v1/platform/work/teams
 workBoardRouter.get(
   "/platform/work/teams",
@@ -335,6 +369,8 @@ workBoardRouter.post(
       status = status === "backlog" && hasField(req.body, "status") ? "backlog" : "building";
       labels = [...new Set([...labels, SESSION_LABEL])];
     }
+    const priority = hasField(req.body, "priority") ? priorityValue(field(req.body, "priority")) : 0;
+    if (status === "approved") requireReadyForApproved(priority, doneWhen);
     const item = await createWorkItem(
       {
         team,
@@ -343,7 +379,7 @@ workBoardRouter.post(
         change,
         done_when: doneWhen,
         status,
-        priority: hasField(req.body, "priority") ? priorityValue(field(req.body, "priority")) : 0,
+        priority,
         labels,
         links: hasField(req.body, "links") ? linksValue(field(req.body, "links")) : [],
         assignee: hasField(req.body, "assignee") ? await assigneeValue(field(req.body, "assignee")) : null,
@@ -408,6 +444,28 @@ workBoardRouter.post(
   })
 );
 
+// POST /api/v1/platform/work/backlog-review { form, confirm?, decisions: [{ key, decision }] } — the answers
+// Łukasz clicked in a backlog-review decision form (board-upkeep-r1 P3, CORE-234), applied to
+// Backlog tickets only: keep | later | cancel | shipped (closes only what git sees on prod).
+// For people and sessions; a session carries his answers, it does not decide, and its cancels
+// apply only with `confirm`, the id of a second form that repeated them (D1). Not for the agent.
+workBoardRouter.post(
+  "/platform/work/backlog-review",
+  asyncHandler(async (req, res) => {
+    const actor = actorOf(res);
+    if (actor.kind === "agent") throw new ForbiddenError("The agent cannot apply a backlog review");
+    const form = field(req.body, "form");
+    if (typeof form !== "string" || !REVIEW_FORM_RE.test(form)) {
+      throw new ValidationError("form is the id of the decision form the answers came from", "form");
+    }
+    const confirm = field(req.body, "confirm");
+    if (confirm !== undefined && (typeof confirm !== "string" || !REVIEW_FORM_RE.test(confirm) || confirm === form)) {
+      throw new ValidationError("confirm is the id of the second form that repeated the cancels", "confirm");
+    }
+    res.json(await applyBacklogReview(form, reviewAnswersValue(field(req.body, "decisions")), actor, confirm));
+  })
+);
+
 // PATCH /api/v1/platform/work/items/CORE-12
 workBoardRouter.patch(
   "/platform/work/items/:key",
@@ -445,15 +503,29 @@ workBoardRouter.patch(
     }
 
     const key = `${team}-${number}`;
-    const item = await updateWorkItem(team, number, patch, actor, (current) => {
-      if (actor.kind === "human") return;
-      hideTriageFromMachines(actor, current, key);
+    const item = await updateWorkItem(team, number, patch, actor, async (current, client) => {
+      if (actor.kind !== "human") hideTriageFromMachines(actor, current, key);
       if (patch.status === undefined || patch.status === current.status) return;
-      const allowed =
-        actor.kind === "agent"
-          ? AGENT_MOVES[current.status]?.includes(patch.status)
-          : SESSION_TARGETS.includes(patch.status) && !SESSION_CLOSED.includes(current.status);
-      if (!allowed) throw new ForbiddenError(`The ${actor.kind} cannot move ${current.status} to ${patch.status}`);
+      if (actor.kind !== "human") {
+        const pick = actor.kind === "session" && current.status === "backlog" && patch.status === "approved";
+        const allowed =
+          actor.kind === "agent"
+            ? AGENT_MOVES[current.status]?.includes(patch.status)
+            : pick || (SESSION_TARGETS.includes(patch.status) && !SESSION_CLOSED.includes(current.status));
+        if (!allowed) throw new ForbiddenError(`The ${actor.kind} cannot move ${current.status} to ${patch.status}`);
+      }
+      // The worker giving a build back returns a ticket that already passed the rule.
+      if (patch.status === "approved" && current.status !== "building") {
+        requireReadyForApproved(
+          patch.priority ?? current.priority,
+          patch.done_when !== undefined ? patch.done_when : current.done_when
+        );
+      }
+      if (actor.kind === "session" && patch.status === "approved" && (await countSessionApprovals(client)) >= SESSION_APPROVED_PER_WEEK) {
+        throw new ForbiddenError(
+          `Sessions already moved ${SESSION_APPROVED_PER_WEEK} tickets to Approved in the last 7 days; a person moves the next one`
+        );
+      }
     });
     if (!item) throw new NotFoundError("Work item", key);
     res.json({ item });

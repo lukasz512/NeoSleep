@@ -122,7 +122,7 @@ async function main() {
   if (!result) return console.log("::warning::The board API has no /git-state route yet; nothing reported. The next run retries.");
   console.log(`board: ${result.updated} tickets updated, closed: ${result.closed?.join(", ") || "none"}`);
   // An API revision from before CORE-223 ignores `tidy` and answers without `tidied`.
-  console.log(`board: Building → Needs Review: ${result.tidied?.to_review.join(", ") || "none"}; Building → Backlog: ${result.tidied?.to_backlog.join(", ") || "none"}`);
+  console.log(`board: Building → Needs Review: ${result.tidied?.to_review.join(", ") || "none"}; Building → Backlog: ${result.tidied?.to_backlog.join(", ") || "none"}; Backlog set aside as later: ${result.tidied?.to_later?.join(", ") || "none"}`);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

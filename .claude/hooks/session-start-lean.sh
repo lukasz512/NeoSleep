@@ -27,6 +27,10 @@ if [ -f "$BOARD_CONFIG" ]; then
   REVIEW="$(BOARD_API_URL="$(jq -r '.apiUrl // empty' "$BOARD_CONFIG")" BOARD_TOKEN="$(jq -r '.token // empty' "$BOARD_CONFIG")" \
     node "$(dirname "$0")/../../infrastructure/scripts/board.mjs" waiting --remind 2>/dev/null)"
   [ -n "$REVIEW" ] && LINES+=("$REVIEW")
+  # Monday picks while Approved runs low (CORE-234).
+  PICKS="$(BOARD_API_URL="$(jq -r '.apiUrl // empty' "$BOARD_CONFIG")" BOARD_TOKEN="$(jq -r '.token // empty' "$BOARD_CONFIG")" \
+    node "$(dirname "$0")/../../infrastructure/scripts/board.mjs" picks --remind 2>/dev/null)"
+  [ -n "$PICKS" ] && LINES+=("$PICKS")
 fi
 
 STAMP="$STATE_DIR/skill-doctor.last"

@@ -66,6 +66,19 @@ export const HOLD_LABEL = "hold";
 /** Days a ticket may sit in Building without a branch before the tidy returns it to Backlog (CORE-223). */
 export const BUILDING_WITHOUT_BRANCH_DAYS = 3;
 
+/** Sets a Backlog ticket aside: the board folds it under "Later" (board-upkeep-r1 P3, CORE-234). */
+export const LATER_LABEL = "later";
+
+/** Days a Backlog ticket may go untouched before the tidy labels it `later` (CORE-234). */
+export const BACKLOG_UNTOUCHED_DAYS = 60;
+
+/** Tickets all sessions together may move from Backlog to Approved per 7 days (core-234-decisions D2). */
+export const SESSION_APPROVED_PER_WEEK = 3;
+
+/** What a backlog review may decide about one ticket (CORE-234). */
+export const WORK_REVIEW_DECISIONS = ["keep", "later", "cancel", "shipped"] as const;
+export type WorkReviewDecision = (typeof WORK_REVIEW_DECISIONS)[number];
+
 export interface WorkTeamRow {
   key: string;
   name: string;
@@ -351,7 +364,7 @@ export async function updateWorkItem(
   number: number,
   patch: WorkItemPatch,
   actor: WorkActor,
-  check?: (current: WorkItemRow) => void
+  check?: (current: WorkItemRow, client: PoolClient) => void | Promise<void>
 ): Promise<WorkItemRow | null> {
   return inPlatformTransaction(async (client) => {
     const current = (
@@ -361,7 +374,7 @@ export async function updateWorkItem(
       )
     ).rows[0];
     if (!current) return null;
-    check?.(current);
+    await check?.(current, client);
 
     if (patch.labels) patch = { ...patch, labels: await ensureWorkLabels(client, patch.labels) };
     const changed = EDITABLE_FIELDS.filter(
@@ -469,6 +482,10 @@ export interface WorkGitReport {
  * one with no branch (neither the `branch` field nor a remote branch in `tidy.branches`) and
  * nothing merged after BUILDING_WITHOUT_BRANCH_DAYS returns to Backlog. Tickets labeled
  * `hold` stay. Each move leaves a status event and a comment.
+ *
+ * The same tidy (CORE-234) labels a Backlog ticket `later` when nothing touched it for
+ * BACKLOG_UNTOUCHED_DAYS, with an edit event and a comment. `updated_at` stays as it was:
+ * the board's own label is not a touch.
  */
 export async function applyWorkGitStates(
   reports: readonly WorkGitReport[],
@@ -478,7 +495,7 @@ export async function applyWorkGitStates(
     tidy?: { branches: readonly { team: string; number: number }[] } | null;
   },
   actor: WorkActor
-): Promise<{ updated: number; closed: string[]; tidied: { to_review: string[]; to_backlog: string[] } }> {
+): Promise<{ updated: number; closed: string[]; tidied: { to_review: string[]; to_backlog: string[]; to_later: string[] } }> {
   return inPlatformTransaction(async (client) => {
     const teams = reports.map((r) => r.team);
     const numbers = reports.map((r) => r.number);
@@ -515,6 +532,7 @@ export async function applyWorkGitStates(
     }
     const toReview: string[] = [];
     const toBacklog: string[] = [];
+    const toLater: string[] = [];
     if (options.tidy) {
       const merged = await client.query<WorkItemRow>(
         `UPDATE platform.work_item SET status = 'needs_review', status_changed_at = now(), updated_at = now()
@@ -551,9 +569,109 @@ export async function applyWorkGitStates(
         });
         toBacklog.push(item.key);
       }
+      const later = (await ensureWorkLabels(client, [LATER_LABEL]))[0]!;
+      const untouched = await client.query<WorkItemRow>(
+        `UPDATE platform.work_item SET labels = array_append(labels, $2)
+          WHERE status = 'backlog' AND updated_at < now() - make_interval(days => $3::int)
+            AND NOT (labels && ARRAY[$1, $2]::text[])
+          RETURNING ${ITEM_COLUMNS}`,
+        [HOLD_LABEL, later, BACKLOG_UNTOUCHED_DAYS]
+      );
+      for (const item of untouched.rows) {
+        await insertEvent(client, item.id, actor, { kind: "edit", body: "labels" });
+        await insertEvent(client, item.id, actor, {
+          kind: "comment",
+          body: `Set aside as "${later}" automatically: nothing touched this ticket for ${BACKLOG_UNTOUCHED_DAYS} days. Remove the label to bring it back; label a ticket "${HOLD_LABEL}" to keep it out of this rule.`,
+        });
+        toLater.push(item.key);
+      }
     }
-    return { updated: rowCount ?? 0, closed: closed.sort(), tidied: { to_review: toReview.sort(), to_backlog: toBacklog.sort() } };
+    return {
+      updated: rowCount ?? 0,
+      closed: closed.sort(),
+      tidied: { to_review: toReview.sort(), to_backlog: toBacklog.sort(), to_later: toLater.sort() },
+    };
   });
+}
+
+export interface WorkReviewAnswer {
+  team: string;
+  number: number;
+  decision: WorkReviewDecision;
+}
+
+/**
+ * Applies one round of backlog-review answers (board-upkeep-r1 P3, CORE-234), all or nothing.
+ * Only a ticket that is in Backlog right now is touched; `shipped` closes it only when git
+ * sees its code on prod. A session's `cancel` waits until a second form (`confirm`) repeats it
+ * (core-234-decisions D1). Everything else comes back in `skipped` with the reason. Each applied
+ * answer leaves a comment naming the form it came from.
+ */
+export async function applyBacklogReview(
+  form: string,
+  answers: readonly WorkReviewAnswer[],
+  actor: WorkActor,
+  confirm?: string
+): Promise<{ applied: { key: string; decision: WorkReviewDecision }[]; skipped: { key: string; reason: string }[] }> {
+  return inPlatformTransaction(async (client) => {
+    const applied: { key: string; decision: WorkReviewDecision }[] = [];
+    const skipped: { key: string; reason: string }[] = [];
+    const later = (await ensureWorkLabels(client, [LATER_LABEL]))[0]!;
+    const source = confirm ? `${form}, confirmed in ${confirm}` : form;
+    for (const { team, number, decision } of answers) {
+      const key = `${team}-${number}`;
+      const current = (
+        await client.query<WorkItemRow>(
+          `SELECT ${ITEM_COLUMNS} FROM platform.work_item WHERE team_key = $1 AND number = $2 FOR UPDATE`,
+          [team, number]
+        )
+      ).rows[0];
+      if (!current || current.status !== "backlog") {
+        skipped.push({ key, reason: "not in Backlog" });
+        continue;
+      }
+      if (decision === "shipped" && current.git_state !== "prod") {
+        skipped.push({ key, reason: "not on prod" });
+        continue;
+      }
+      if (decision === "cancel" && actor.kind === "session" && !confirm) {
+        skipped.push({ key, reason: "cancel waits for a confirmation form" });
+        continue;
+      }
+      let comment: string;
+      if (decision === "cancel" || decision === "shipped") {
+        const status: WorkStatus = decision === "cancel" ? "canceled" : "done";
+        await client.query(
+          `UPDATE platform.work_item SET status = $2, status_changed_at = now(), completed_at = now(), updated_at = now() WHERE id = $1`,
+          [current.id, status]
+        );
+        await insertEvent(client, current.id, actor, { kind: "status", from_status: "backlog", to_status: status });
+        comment = decision === "cancel" ? "canceled." : `closed, commit ${(current.git_sha ?? "").slice(0, 7)} is on prod.`;
+      } else {
+        const without = current.labels.filter((label) => label.toLowerCase() !== LATER_LABEL);
+        const labels = decision === "later" ? [...without, later] : without;
+        await client.query(`UPDATE platform.work_item SET labels = $2, updated_at = now() WHERE id = $1`, [current.id, labels]);
+        if (JSON.stringify(labels) !== JSON.stringify(current.labels)) await insertEvent(client, current.id, actor, { kind: "edit", body: "labels" });
+        comment = decision === "later" ? `set aside as "${later}".` : "stays in Backlog.";
+      }
+      await insertEvent(client, current.id, actor, { kind: "comment", body: `Backlog review ${source}: ${comment}` });
+      applied.push({ key, decision });
+    }
+    return { applied, skipped };
+  });
+}
+
+/**
+ * How many tickets sessions moved to Approved in the last 7 days. Call it inside the
+ * transaction of the next move: it takes a lock, so two moves at once cannot both fit under the cap.
+ */
+export async function countSessionApprovals(client: PoolClient): Promise<number> {
+  await client.query("SELECT pg_advisory_xact_lock(hashtext('platform.work_item:session_approved'))");
+  const { rows } = await client.query<{ count: number }>(
+    `SELECT count(*)::int AS count FROM platform.work_item_event
+      WHERE kind = 'status' AND to_status = 'approved' AND actor_kind = 'session' AND created_at > now() - interval '7 days'`
+  );
+  return rows[0]!.count;
 }
 
 export const WORK_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;

@@ -347,6 +347,7 @@
       </AppFormDialog>
     </div>
     <template #actions>
+      <p v-if="approvedText" class="work-dialog__rejected" role="alert" data-testid="work-item-approved-blocker">{{ approvedText }}</p>
       <VSpacer />
       <AppButton variant="text" @click="emit('close')">{{ t("app.common.close") }}</AppButton>
       <AppButton color="primary" variant="flat" :loading="saving" :disabled="!canSave" data-testid="work-item-save" @click="save">
@@ -371,6 +372,7 @@ import {
   WORK_STATUS_OPTIONS,
   gitMarker,
   addWorkItemComment,
+  approvedBlocker,
   createWorkItem,
   deleteWorkAttachment,
   fetchAttachmentUrl,
@@ -624,8 +626,15 @@ const patch = computed<WorkItemPatch>(() => {
   return out;
 });
 
+/** Why the ticket may not enter Approved yet (CORE-234); the API refuses the same save. */
+const approvedText = computed(() => {
+  const from = session.creating ? "backlog" : current.value?.status;
+  const missing = from ? approvedBlocker({ status: from, priority: form.priority, done_when: form.done_when }, form.status) : null;
+  return missing ? t(`workBoard.approved.${missing}`) : "";
+});
+
 const canSave = computed(() => {
-  if (!form.title.trim()) return false;
+  if (!form.title.trim() || approvedText.value) return false;
   return session.creating ? !!form.team : Object.keys(patch.value).length > 0;
 });
 const canComment = computed(() => !!comment.value.trim() || commentQueue.pending.value.length > 0);
