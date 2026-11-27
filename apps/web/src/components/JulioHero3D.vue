@@ -1,8 +1,14 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import type { JulioLang, JulioStep } from "../config/julioContent";
 import { julioHeroLabels } from "../config/julioHeroLabels";
-import type { JulioHeroLabels } from "../config/julioHeroLabels";
+
+/**
+ * Hero of the private proposal page: the real order form (an app screenshot) in a light
+ * device frame with a restrained CSS tilt, plus a frosted-glass order timeline.
+ * Form values are animated over the screenshot so the form looks alive.
+ * Pure DOM/CSS: no WebGL, so there is no fallback path to maintain.
+ */
 
 const props = defineProps<{
   lang: JulioLang;
@@ -11,422 +17,136 @@ const props = defineProps<{
   fallbackSrc: string;
 }>();
 
-const host = ref<HTMLDivElement | null>(null);
-const failed = ref(false);
-const labels = computed<JulioHeroLabels>(() => julioHeroLabels[props.lang]);
+const labels = computed(() => julioHeroLabels[props.lang]);
 
-const TEAL = "#128F83";
-const TEAL_DARK = "#10544E";
-const INK = "#474747";
+interface FormFrame {
+  mr: number;
+  mp: number;
+  left: number;
+  right: number;
+  press: "mr-minus" | "mr-plus" | "mp-minus" | "mp-plus" | "left-plus" | "right-plus" | null;
+}
 
-/** Latest text for the draw functions; updated by the language watcher. */
-const state = { labels: labels.value, title: props.title, steps: props.steps };
-watch(
-  () => [props.lang, props.title, props.steps] as const,
-  () => {
-    state.labels = labels.value;
-    state.title = props.title;
-    state.steps = props.steps;
-  },
+// A short, repeating edit session: values are added and removed in the real form.
+const FORM_SCRIPT: FormFrame[] = [
+  { mr: -2, mp: 8, left: 0, right: 0, press: null },
+  { mr: -1, mp: 8, left: 0, right: 0, press: "mr-plus" },
+  { mr: 0, mp: 8, left: 0, right: 0, press: "mr-plus" },
+  { mr: 0, mp: 9, left: 0, right: 0, press: "mp-plus" },
+  { mr: 0, mp: 10, left: 0, right: 0, press: "mp-plus" },
+  { mr: 0, mp: 10, left: 1, right: 0, press: "left-plus" },
+  { mr: 0, mp: 10, left: 1, right: 1, press: "right-plus" },
+  { mr: 0, mp: 9, left: 1, right: 1, press: "mp-minus" },
+  { mr: -1, mp: 9, left: 1, right: 1, press: "mr-minus" },
+  { mr: -2, mp: 8, left: 0, right: 0, press: null },
+];
+
+const formIdx = ref(0);
+const tick = ref(0);
+const frame = computed<FormFrame>(
+  () => FORM_SCRIPT[formIdx.value % FORM_SCRIPT.length] ?? FORM_SCRIPT[0]!,
 );
+const range = computed(() => frame.value.mp - frame.value.mr);
 
-const clamp = (v: number, a: number, b: number): number => Math.min(b, Math.max(a, v));
-const ease = (x: number): number => x * x * (3 - 2 * x);
+// Glass timeline: labels appear one by one first, then the highlight walks the steps.
+const n = computed(() => props.steps.length);
+const cycleLen = computed(() => n.value * 2 + 4);
+const shown = computed(() => Math.min(n.value, Math.max(0, (tick.value % cycleLen.value) - 1)));
+const active = computed(() => {
+  const t = (tick.value % cycleLen.value) - (n.value + 2);
+  return t < 0 ? -1 : Math.min(n.value - 1, t);
+});
+const progress = computed(() => (active.value < 0 ? 0 : ((active.value + 1) / n.value) * 100));
 
-function roundRect(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
-  c.beginPath();
-  c.moveTo(x + r, y);
-  c.arcTo(x + w, y, x + w, y + h, r);
-  c.arcTo(x + w, y + h, x, y + h, r);
-  c.arcTo(x, y + h, x, y, r);
-  c.arcTo(x, y, x + w, y, r);
-  c.closePath();
-}
+const stage = ref<HTMLElement | null>(null);
+const tiltX = ref(0);
+const tiltY = ref(0);
+let timer: number | undefined;
+let io: IntersectionObserver | undefined;
+let visible = true;
 
-/** MR / MP values that tick up and down like the stepper in the app. */
-function stepperValues(t: number): { mr: number; mp: number } {
-  return {
-    mr: Math.round(Math.sin(t * 0.9) * 2),
-    mp: 8 + Math.round(Math.sin(t * 0.7 + 1) * 2),
-  };
-}
-
-function drawStepper(c: CanvasRenderingContext2D, x: number, y: number, label: string, value: number, pressedUp: boolean, pressedDown: boolean): void {
-  c.fillStyle = INK;
-  c.font = "600 22px system-ui, sans-serif";
-  c.textAlign = "left";
-  c.fillText(label, x, y);
-  roundRect(c, x, y + 14, 300, 70, 14);
-  c.fillStyle = "#fff";
-  c.fill();
-  c.strokeStyle = "#cfd8d7";
-  c.lineWidth = 2;
-  c.stroke();
-  const btn = (bx: number, sign: string, on: boolean): void => {
-    roundRect(c, bx, y + 24, 50, 50, 12);
-    c.fillStyle = on ? TEAL : "#e6f3f1";
-    c.fill();
-    c.fillStyle = on ? "#fff" : TEAL_DARK;
-    c.font = "700 32px system-ui, sans-serif";
-    c.textAlign = "center";
-    c.fillText(sign, bx + 25, y + 60);
-  };
-  btn(x + 10, "−", pressedDown);
-  btn(x + 240, "+", pressedUp);
-  c.fillStyle = INK;
-  c.font = "700 34px system-ui, sans-serif";
-  c.textAlign = "center";
-  c.fillText(String(value), x + 150, y + 61);
-}
-
-function drawTooth(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, rot: number): void {
-  c.save();
-  c.translate(x, y);
-  c.rotate(rot);
-  roundRect(c, -w / 2, -h / 2, w, h, w * 0.32);
-  const g = c.createLinearGradient(0, -h / 2, 0, h / 2);
-  g.addColorStop(0, "#ffffff");
-  g.addColorStop(1, "#e7ecea");
-  c.fillStyle = g;
-  c.fill();
-  c.strokeStyle = "#9db1ae";
-  c.lineWidth = 2;
-  c.stroke();
-  c.restore();
-}
-
-/** Two arches; the lower one grinds left and right and slides forward. */
-function drawTeeth(c: CanvasRenderingContext2D, cx: number, cy: number, t: number, lbl: JulioHeroLabels): void {
-  const grind = Math.sin(t * 1.5) * 26;
-  const forward = (Math.sin(t * 0.45) + 1) / 2;
-  const n = 10;
-  const draw = (dx: number, baseY: number, sign: number, h: number): void => {
-    for (let i = 0; i < n; i++) {
-      const k = i - (n - 1) / 2;
-      const w = 34 - Math.abs(k) * 1.6;
-      drawTooth(c, cx + dx + k * 38, baseY + sign * k * k * 1.7, w, h, (k * 0.045) * sign);
-    }
-  };
-  draw(0, cy - 20, -1, 56);
-  draw(grind, cy + 30 - forward * 10, 1, 52);
-  c.strokeStyle = TEAL;
-  c.lineWidth = 3;
-  c.setLineDash([8, 6]);
-  c.beginPath();
-  c.moveTo(cx, cy - 70);
-  c.lineTo(cx, cy + 90);
-  c.stroke();
-  c.setLineDash([]);
-  c.fillStyle = INK;
-  c.font = "600 20px system-ui, sans-serif";
-  c.textAlign = "center";
-  c.fillText(forward > 0.5 ? lbl.protrusion : lbl.occlusion, cx, cy + 124);
-}
-
-function drawScreen(c: CanvasRenderingContext2D, w: number, h: number, t: number): void {
-  const lbl = state.labels;
-  const bg = c.createLinearGradient(0, 0, 0, h);
-  bg.addColorStop(0, "#f6faf9");
-  bg.addColorStop(1, "#e6f1ef");
-  c.fillStyle = bg;
-  c.fillRect(0, 0, w, h);
-  c.fillStyle = TEAL;
-  c.fillRect(0, 0, w, 96);
-  c.fillStyle = "#fff";
-  c.font = "700 34px system-ui, sans-serif";
-  c.textAlign = "left";
-  c.fillText(lbl.formTitle, 40, 60);
-  c.fillStyle = TEAL_DARK;
-  c.font = "600 22px system-ui, sans-serif";
-  c.fillText(lbl.step, 40, 142);
-  for (let i = 0; i < 3; i++) {
-    roundRect(c, 40 + i * 150, 158, 138, 8, 4);
-    c.fillStyle = i < 2 ? TEAL : "#cfd8d7";
-    c.fill();
-  }
-  const cur = stepperValues(t);
-  const prev = stepperValues(t - 0.3);
-  drawStepper(c, 40, 230, lbl.mr, cur.mr, cur.mr > prev.mr, cur.mr < prev.mr);
-  drawStepper(c, 380, 230, lbl.mp, cur.mp, cur.mp > prev.mp, cur.mp < prev.mp);
-  c.fillStyle = INK;
-  c.font = "600 22px system-ui, sans-serif";
-  c.textAlign = "left";
-  c.fillText(lbl.range, 720, 244);
-  c.fillStyle = TEAL;
-  c.font = "700 64px system-ui, sans-serif";
-  c.fillText(String(cur.mp - cur.mr), 720, 318);
-  roundRect(c, 40, 360, w - 80, 360, 24);
-  c.fillStyle = "#fff";
-  c.fill();
-  c.strokeStyle = "#d8e3e1";
-  c.lineWidth = 2;
-  c.stroke();
-  drawTeeth(c, w / 2, 520, t, lbl);
-}
-
-function drawGlass(c: CanvasRenderingContext2D, w: number, h: number, t: number): void {
-  c.clearRect(0, 0, w, h);
-  const cycle = t % 15;
-  const fadeOut = 1 - ease(clamp((cycle - 13) / 2, 0, 1));
-  const titleA = ease(clamp(cycle / 0.8, 0, 1)) * fadeOut;
-  c.globalAlpha = titleA;
-  c.fillStyle = "#ffffff";
-  c.shadowColor = "rgba(0,40,36,0.45)";
-  c.shadowBlur = 12;
-  c.textAlign = "left";
-  c.font = "700 54px system-ui, sans-serif";
-  c.fillText(state.title, 48, 96);
-  c.shadowBlur = 0;
-  const steps = state.steps;
-  const active = clamp(Math.floor((cycle - 3) / 1.6), -1, 3);
-  const rowH = 118;
-  const top = 176;
-  steps.forEach((s, i) => {
-    // Labels first, one after another.
-    const a = ease(clamp((cycle - 0.8 - i * 0.45) / 0.5, 0, 1)) * fadeOut;
-    const y = top + i * rowH;
-    const finished = i < active || (i === 3 && cycle > 3 + 4 * 1.6);
-    const now = i === active && !finished;
-    c.globalAlpha = a;
-    if (i < steps.length - 1) {
-      c.fillStyle = "rgba(255,255,255,0.35)";
-      c.fillRect(70, y + 40, 4, rowH - 20);
-      if (finished) {
-        c.fillStyle = "#7ff0e2";
-        c.fillRect(70, y + 40, 4, rowH - 20);
-      }
-    }
-    // Highlight comes after the labels have appeared.
-    const dotX = 72;
-    const dotY = y + 20;
-    if (finished || now) {
-      const pulse = now ? (Math.sin(t * 5) + 1) / 2 : 0;
-      c.fillStyle = `rgba(127,240,226,${0.25 + pulse * 0.25})`;
-      c.beginPath();
-      c.arc(dotX, dotY, 30 + pulse * 6, 0, Math.PI * 2);
-      c.fill();
-    }
-    c.fillStyle = finished ? "#7ff0e2" : now ? "#ffffff" : "rgba(255,255,255,0.3)";
-    c.beginPath();
-    c.arc(dotX, dotY, 17, 0, Math.PI * 2);
-    c.fill();
-    c.fillStyle = finished || now ? "#ffffff" : "rgba(255,255,255,0.65)";
-    c.font = `${now ? 700 : 600} 38px system-ui, sans-serif`;
-    c.fillText(s.label, 120, y + 32);
-    c.font = "500 26px system-ui, sans-serif";
-    c.fillStyle = finished ? "#bff7ef" : "rgba(255,255,255,0.6)";
-    // The content defines the status words once: Done / In progress / Pending
-    // sit on the first, third and last step of the order timeline.
-    const statusDone = steps[0]?.status ?? "";
-    const statusActive = steps[2]?.status ?? "";
-    const statusPending = steps[steps.length - 1]?.status ?? "";
-    const status = finished ? statusDone : i === active ? statusActive : statusPending;
-    c.fillText(status, 120, y + 70);
-  });
-  // Computed progress bar.
-  const frac = clamp((cycle - 3) / (4 * 1.6), 0, 1);
-  c.globalAlpha = titleA;
-  roundRect(c, 48, h - 90, w - 96, 14, 7);
-  c.fillStyle = "rgba(255,255,255,0.28)";
-  c.fill();
-  roundRect(c, 48, h - 90, Math.max(14, (w - 96) * ease(frac)), 14, 7);
-  c.fillStyle = "#7ff0e2";
-  c.fill();
-  c.globalAlpha = 1;
-}
-
-let cleanup: (() => void) | null = null;
-
-async function start(el: HTMLDivElement): Promise<void> {
-  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const probe = document.createElement("canvas");
-  if (!(probe.getContext("webgl2") ?? probe.getContext("webgl"))) {
-    failed.value = true;
-    return;
-  }
-  const THREE = await import("three");
-  const { RoomEnvironment } = await import("three/examples/jsm/environments/RoomEnvironment.js");
-
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  el.appendChild(renderer.domElement);
-  renderer.domElement.setAttribute("aria-hidden", "true");
-
-  const scene = new THREE.Scene();
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environment = envTex;
-  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 50);
-  camera.position.set(0, 0.1, 8.2);
-
-  const key = new THREE.DirectionalLight(0xffffff, 2.2);
-  key.position.set(-3, 4, 5);
-  scene.add(key);
-
-  const rig = new THREE.Group();
-  scene.add(rig);
-
-  const slab = (w: number, h: number, r: number, depth: number, bevel: number): InstanceType<typeof THREE.ExtrudeGeometry> => {
-    const s = new THREE.Shape();
-    const x = -w / 2;
-    const y = -h / 2;
-    s.moveTo(x + r, y);
-    s.lineTo(x + w - r, y);
-    s.quadraticCurveTo(x + w, y, x + w, y + r);
-    s.lineTo(x + w, y + h - r);
-    s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    s.lineTo(x + r, y + h);
-    s.quadraticCurveTo(x, y + h, x, y + h - r);
-    s.lineTo(x, y + r);
-    s.quadraticCurveTo(x, y, x + r, y);
-    const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 6, curveSegments: 20 });
-    g.translate(0, 0, -depth / 2);
-    return g;
-  };
-
-  // Tablet: aluminium slab with a canvas-texture screen.
-  const tablet = new THREE.Group();
-  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x2b3a39, metalness: 0.9, roughness: 0.28 });
-  tablet.add(new THREE.Mesh(slab(4, 3, 0.26, 0.14, 0.05), bodyMat));
-  const screenCanvas = document.createElement("canvas");
-  screenCanvas.width = 1024;
-  screenCanvas.height = 768;
-  const sctx = screenCanvas.getContext("2d");
-  const screenTex = new THREE.CanvasTexture(screenCanvas);
-  screenTex.colorSpace = THREE.SRGBColorSpace;
-  screenTex.anisotropy = 8;
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(3.7, 2.7), new THREE.MeshBasicMaterial({ map: screenTex, toneMapped: false }));
-  screen.position.z = 0.125;
-  tablet.add(screen);
-  tablet.position.set(-0.35, 0.1, 0);
-  rig.add(tablet);
-
-  // Liquid glass card floating in front of the tablet.
-  const glass = new THREE.Group();
-  const glassMat = new THREE.MeshPhysicalMaterial({
-    color: 0xffffff,
-    transmission: 1,
-    thickness: 1.4,
-    ior: 1.45,
-    roughness: 0.12,
-    metalness: 0,
-    clearcoat: 1,
-    clearcoatRoughness: 0.08,
-    attenuationColor: new THREE.Color(0x9ee9df),
-    attenuationDistance: 2.2,
-    envMapIntensity: 1.6,
-  });
-  glass.add(new THREE.Mesh(slab(1.9, 2.5, 0.34, 0.2, 0.08), glassMat));
-  const glassCanvas = document.createElement("canvas");
-  glassCanvas.width = 512;
-  glassCanvas.height = 672;
-  const gctx = glassCanvas.getContext("2d");
-  const glassTex = new THREE.CanvasTexture(glassCanvas);
-  glassTex.colorSpace = THREE.SRGBColorSpace;
-  const label = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.8, 2.36),
-    new THREE.MeshBasicMaterial({ map: glassTex, transparent: true, toneMapped: false, depthWrite: false }),
-  );
-  label.position.z = 0.2;
-  glass.add(label);
-  glass.position.set(1.65, -0.35, 1.0);
-  rig.add(glass);
-
-  const resize = (): void => {
-    const w = el.clientWidth;
-    const h = el.clientHeight;
-    renderer.setSize(w, h, false);
-    renderer.domElement.style.width = "100%";
-    renderer.domElement.style.height = "100%";
-    camera.aspect = w / h;
-    camera.fov = w / h < 1.1 ? 44 : 32;
-    camera.updateProjectionMatrix();
-  };
-  resize();
-  const ro = new ResizeObserver(resize);
-  ro.observe(el);
-
-  const pointer = { x: 0, y: 0, sx: 0, sy: 0 };
-  const onMove = (e: PointerEvent): void => {
-    const r = el.getBoundingClientRect();
-    pointer.x = clamp(((e.clientX - r.left) / r.width - 0.5) * 2, -1, 1);
-    pointer.y = clamp(((e.clientY - r.top) / r.height - 0.5) * 2, -1, 1);
-  };
-  window.addEventListener("pointermove", onMove, { passive: true });
-
-  const frame = (t: number): void => {
-    if (sctx) drawScreen(sctx, 1024, 768, t);
-    if (gctx) drawGlass(gctx, 512, 672, t);
-    screenTex.needsUpdate = true;
-    glassTex.needsUpdate = true;
-    pointer.sx += (pointer.x - pointer.sx) * 0.06;
-    pointer.sy += (pointer.y - pointer.sy) * 0.06;
-    const sway = reduce ? 0 : Math.sin(t * 0.4) * 0.1;
-    rig.rotation.y = -0.4 + pointer.sx * 0.28 + sway;
-    rig.rotation.x = 0.16 + pointer.sy * 0.14;
-    rig.position.y = reduce ? 0 : Math.sin(t * 0.8) * 0.06;
-    glass.position.z = 1.0 + (reduce ? 0 : Math.sin(t * 0.9 + 1) * 0.1);
-    glass.rotation.y = 0.12 + Math.sin(t * 0.6) * (reduce ? 0 : 0.08);
-    glass.rotation.z = reduce ? 0 : Math.sin(t * 0.5) * 0.03;
-    renderer.render(scene, camera);
-  };
-
-  let raf = 0;
-  let visible = true;
-  const clock = new THREE.Clock();
-  const loop = (): void => {
-    raf = requestAnimationFrame(loop);
-    if (visible) frame(clock.getElapsedTime());
-  };
-  const io = new IntersectionObserver((entries) => {
-    visible = entries.some((en) => en.isIntersecting);
-  });
-  io.observe(el);
-
-  if (reduce) {
-    // Static, fully revealed state: no loop.
-    frame(11);
-  } else {
-    loop();
-  }
-
-  cleanup = (): void => {
-    cancelAnimationFrame(raf);
-    ro.disconnect();
-    io.disconnect();
-    window.removeEventListener("pointermove", onMove);
-    envTex.dispose();
-    pmrem.dispose();
-    scene.traverse((o) => {
-      if (o instanceof THREE.Mesh) {
-        o.geometry.dispose();
-        const m = o.material;
-        (Array.isArray(m) ? m : [m]).forEach((x) => x.dispose());
-      }
-    });
-    screenTex.dispose();
-    glassTex.dispose();
-    renderer.dispose();
-    renderer.domElement.remove();
-  };
+function onPointer(e: PointerEvent): void {
+  const el = stage.value;
+  if (!el) return;
+  const r = el.getBoundingClientRect();
+  const px = (e.clientX - (r.left + r.width / 2)) / Math.max(r.width, 1);
+  const py = (e.clientY - (r.top + r.height / 2)) / Math.max(r.height, 1);
+  tiltY.value = Math.max(-1, Math.min(1, px)) * 3;
+  tiltX.value = Math.max(-1, Math.min(1, py)) * -2;
 }
 
 onMounted(() => {
-  if (host.value) {
-    start(host.value).catch(() => {
-      failed.value = true;
-    });
+  const reduce =
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) {
+    // Static, readable end state.
+    formIdx.value = 4;
+    tick.value = n.value + 2 + 2;
+    return;
   }
+  timer = window.setInterval(() => {
+    if (!visible) return;
+    tick.value += 1;
+    formIdx.value += 1;
+  }, 1300);
+  if (stage.value && "IntersectionObserver" in window) {
+    io = new IntersectionObserver((entries) => {
+      visible = entries.some((e) => e.isIntersecting);
+    });
+    io.observe(stage.value);
+  }
+  window.addEventListener("pointermove", onPointer, { passive: true });
 });
-onBeforeUnmount(() => cleanup?.());
+
+onBeforeUnmount(() => {
+  if (timer !== undefined) window.clearInterval(timer);
+  io?.disconnect();
+  window.removeEventListener("pointermove", onPointer);
+});
 </script>
 
 <template>
   <div class="julio-hero3d" role="img" :aria-label="labels.alt">
-    <img v-if="failed" class="julio-hero3d__fallback" :src="fallbackSrc" alt="" />
-    <div v-show="!failed" ref="host" class="julio-hero3d__stage"></div>
+    <div
+      ref="stage"
+      class="julio-hero3d__scene"
+      :style="{ '--tx': `${tiltX}deg`, '--ty': `${tiltY}deg` }"
+      aria-hidden="true"
+    >
+      <div class="julio-hero3d__device">
+        <div class="julio-hero3d__screen">
+          <img class="julio-hero3d__shot" :src="fallbackSrc" alt="" />
+          <!-- Live values drawn over the real form -->
+          <span class="val val--mr">{{ frame.mr }}</span>
+          <span class="val val--mp">{{ frame.mp }}</span>
+          <span class="val val--range">{{ range }}</span>
+          <span class="val val--left">{{ frame.left }}</span>
+          <span class="val val--right">{{ frame.right }}</span>
+          <span v-if="frame.press" :key="formIdx" class="tap" :class="`tap--${frame.press}`"></span>
+        </div>
+      </div>
+
+      <div class="julio-glass">
+        <div class="julio-glass__head">
+          <span class="julio-glass__dot"></span>
+          <span class="julio-glass__title">{{ title }}</span>
+        </div>
+        <ol class="julio-glass__steps">
+          <li
+            v-for="(s, i) in steps"
+            :key="s.label"
+            class="julio-glass__step"
+            :class="{ 'is-shown': i < shown, 'is-active': i === active, 'is-done': i < active }"
+          >
+            <span class="julio-glass__marker"></span>
+            <span class="julio-glass__label">{{ s.label }}</span>
+            <span class="julio-glass__status">{{ s.status }}</span>
+          </li>
+        </ol>
+        <div class="julio-glass__bar"><span :style="{ width: `${progress}%` }"></span></div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -437,14 +157,286 @@ onBeforeUnmount(() => cleanup?.());
   aspect-ratio: 4 / 3;
   max-height: 560px;
 }
-.julio-hero3d__stage {
+.julio-hero3d__scene {
   position: absolute;
   inset: 0;
+  perspective: 1400px;
 }
-.julio-hero3d__fallback {
+.julio-hero3d__device {
+  position: absolute;
+  left: 0;
+  top: 4%;
+  width: 84%;
+  padding: 2.2%;
+  background: #fff;
+  border: 1px solid var(--website-border, #e3e6e5);
+  border-radius: 28px;
+  box-shadow:
+    0 24px 48px -20px rgba(16, 84, 78, 0.35),
+    0 2px 6px rgba(16, 84, 78, 0.08);
+  transform: rotateY(calc(-7deg + var(--ty, 0deg))) rotateX(calc(2deg + var(--tx, 0deg)));
+  transition: transform 0.25s ease-out;
+  animation: julio-sway 9s ease-in-out infinite;
+}
+.julio-hero3d__screen {
+  position: relative;
+  aspect-ratio: 900 / 769;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #fff;
+}
+.julio-hero3d__shot {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  border-radius: var(--website-card-radius, 16px);
+  display: block;
+}
+
+/* Values over the real form, positions in % of the 900 x 769 screenshot */
+.val {
+  position: absolute;
+  background: #fff;
+  color: #474747;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--website-font-sans, inherit);
+  font-size: clamp(11px, 1.9vw, 19px);
+  line-height: 1;
+}
+.val--mr,
+.val--mp {
+  left: 18.4%;
+  width: 18.3%;
+  height: 5.2%;
+}
+.val--mr {
+  top: 34.2%;
+}
+.val--mp {
+  top: 46.3%;
+}
+.val--range {
+  left: 68.6%;
+  top: 39.5%;
+  width: 8.6%;
+  height: 7%;
+  color: #10544e;
+  font-weight: 600;
+  font-size: clamp(18px, 4vw, 36px);
+}
+.val--left,
+.val--right {
+  top: 66%;
+  width: 8.6%;
+  height: 5%;
+}
+.val--left {
+  left: 23.2%;
+}
+.val--right {
+  left: 69.4%;
+}
+
+.tap {
+  position: absolute;
+  width: 6.4%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: rgba(18, 143, 131, 0.35);
+  transform: translate(-50%, -50%);
+  animation: julio-tap 1s ease-out forwards;
+  pointer-events: none;
+}
+.tap--mr-plus {
+  left: 40.6%;
+  top: 37%;
+}
+.tap--mr-minus {
+  left: 13.8%;
+  top: 37%;
+}
+.tap--mp-plus {
+  left: 40.6%;
+  top: 49%;
+}
+.tap--mp-minus {
+  left: 13.8%;
+  top: 49%;
+}
+.tap--left-plus {
+  left: 35.1%;
+  top: 68.7%;
+}
+.tap--right-plus {
+  left: 81.1%;
+  top: 68.7%;
+}
+
+/* Frosted glass order timeline, light variant of the earlier review design */
+.julio-glass {
+  position: absolute;
+  right: 0;
+  bottom: 2%;
+  width: 46%;
+  padding: 16px 18px 18px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  backdrop-filter: blur(18px) saturate(1.5);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  box-shadow:
+    0 20px 40px -18px rgba(16, 84, 78, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  color: var(--website-text, #474747);
+  font-family: var(--website-font-sans, inherit);
+  animation: julio-float 7s ease-in-out infinite;
+}
+.julio-glass__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  font-size: 14px;
+  color: #10544e;
+}
+.julio-glass__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #128f83;
+}
+.julio-glass__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.julio-glass__step {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 0.45s ease,
+    transform 0.45s ease,
+    background 0.4s ease;
+}
+.julio-glass__step.is-shown {
+  opacity: 0.7;
+  transform: none;
+}
+.julio-glass__step.is-done {
+  opacity: 0.9;
+}
+.julio-glass__step.is-active {
+  opacity: 1;
+  background: rgba(18, 143, 131, 0.16);
+  font-weight: 600;
+}
+.julio-glass__marker {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #128f83;
+  background: transparent;
+}
+.is-done .julio-glass__marker {
+  background: #128f83;
+}
+.is-active .julio-glass__marker {
+  background: #128f83;
+  box-shadow: 0 0 0 4px rgba(18, 143, 131, 0.22);
+}
+.julio-glass__status {
+  font-size: 11px;
+  color: #10544e;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+.is-active .julio-glass__status,
+.is-done .julio-glass__status {
+  opacity: 1;
+}
+.julio-glass__bar {
+  margin-top: 12px;
+  height: 5px;
+  border-radius: 99px;
+  background: rgba(16, 84, 78, 0.12);
+  overflow: hidden;
+}
+.julio-glass__bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #128f83, #3fc1b3);
+  border-radius: inherit;
+  transition: width 0.6s ease;
+}
+
+@keyframes julio-sway {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -5px;
+  }
+}
+@keyframes julio-float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -7px;
+  }
+}
+@keyframes julio-tap {
+  0% {
+    opacity: 0.9;
+    scale: 0.6;
+  }
+  100% {
+    opacity: 0;
+    scale: 1.6;
+  }
+}
+
+@media (max-width: 800px) {
+  .julio-hero3d {
+    aspect-ratio: auto;
+    max-height: none;
+  }
+  .julio-hero3d__scene {
+    position: static;
+    display: grid;
+    gap: 16px;
+  }
+  .julio-hero3d__device {
+    position: relative;
+    width: 100%;
+    top: 0;
+  }
+  .julio-glass {
+    position: relative;
+    width: 92%;
+    margin: -48px 0 0 auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .julio-hero3d__device,
+  .julio-glass {
+    animation: none;
+    transition: none;
+  }
 }
 </style>
