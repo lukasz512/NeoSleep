@@ -1,5 +1,16 @@
-import { Router, type Router as RouterType, type Request, type Response, type NextFunction } from "express";
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import {
+  Router,
+  type Router as RouterType,
+  type Request,
+  type Response,
+  type NextFunction,
+} from "express";
+import {
+  createHash,
+  randomBytes,
+  randomUUID,
+  timingSafeEqual,
+} from "node:crypto";
 import multer from "multer";
 import { asyncHandler } from "../middleware/errorHandler.js";
 import { requireAuth } from "../middleware/requireAuth.js";
@@ -31,7 +42,11 @@ import {
   listWorkLabels,
   listWorkTeams,
   parseWorkItemKey,
+  recordWorkVerifyResult,
+  requeueWorkVerify,
   revokeSessionToken,
+  WorkVerifyConflictError,
+  type WorkVerifyResult,
   updateWorkItem,
   updateWorkLabel,
   touchSessionToken,
@@ -48,8 +63,17 @@ import {
   type WorkReviewAnswer,
   type WorkStatus,
 } from "../db.js";
-import { ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
-import { deletePartnerDocument, getPartnerDocumentSignedUrl, uploadPartnerDocument } from "../services/partnerDocuments.js";
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from "../errors.js";
+import {
+  deletePartnerDocument,
+  getPartnerDocumentSignedUrl,
+  uploadPartnerDocument,
+} from "../services/partnerDocuments.js";
 import { platformAuditActor, routeParam } from "./utils.js";
 
 /**
@@ -76,7 +100,9 @@ export const SESSION_TOKEN_HEADER = "x-session-token";
 export const SESSION_LABEL = WORK_SESSION_LABEL;
 
 /** The only status moves the agent may make: spec written, build started, build finished or given back. */
-export const AGENT_MOVES: Readonly<Partial<Record<WorkStatus, readonly WorkStatus[]>>> = {
+export const AGENT_MOVES: Readonly<
+  Partial<Record<WorkStatus, readonly WorkStatus[]>>
+> = {
   to_spec: ["spec_ready"],
   approved: ["building"],
   building: ["needs_review", "approved"],
@@ -106,15 +132,26 @@ const REVIEW_FORM_RE = /^[\w.-]{1,60}$/;
 /** Long enough to look at a screenshot, short enough that a leaked link soon dies (CORE-192). */
 const ATTACHMENT_URL_SECONDS = 600;
 const ATTACHMENT_MIME_RE = /^image\/[a-z0-9.+-]+$/;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: WORK_ATTACHMENT_MAX_BYTES, files: 1 } });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: WORK_ATTACHMENT_MAX_BYTES, files: 1 },
+});
 
 /** Runs multer and reports its failures as a 400 instead of a 500. */
 function parseFile(req: Request, res: Response, next: NextFunction): void {
   upload.single("file")(req, res, (err: unknown) => {
     if (err instanceof multer.MulterError) {
-      next(new ValidationError(err.code === "LIMIT_FILE_SIZE" ? "file is larger than 10 MB" : `invalid upload: ${err.message}`, "file"));
+      next(
+        new ValidationError(
+          err.code === "LIMIT_FILE_SIZE"
+            ? "file is larger than 10 MB"
+            : `invalid upload: ${err.message}`,
+          "file",
+        ),
+      );
       return;
     }
     next(err);
@@ -122,7 +159,8 @@ function parseFile(req: Request, res: Response, next: NextFunction): void {
 }
 
 function agentTokenMatches(token: string): boolean {
-  const expected = process.env.WORK_BOARD_AGENT_TOKEN_SHA256?.trim().toLowerCase();
+  const expected =
+    process.env.WORK_BOARD_AGENT_TOKEN_SHA256?.trim().toLowerCase();
   if (!expected || !/^[0-9a-f]{64}$/.test(expected)) return false;
   const actual = createHash("sha256").update(token).digest();
   return timingSafeEqual(actual, Buffer.from(expected, "hex"));
@@ -133,7 +171,11 @@ function sha256Hex(value: string): string {
 }
 
 /** Sets res.locals.actor, or answers 401/403. */
-function requireBoardActor(req: Request, res: Response, next: NextFunction): void {
+function requireBoardActor(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
   const sessionToken = req.header(SESSION_TOKEN_HEADER);
   if (sessionToken !== undefined) {
     touchSessionToken(sha256Hex(sessionToken))
@@ -142,7 +184,10 @@ function requireBoardActor(req: Request, res: Response, next: NextFunction): voi
           res.status(401).json({ error: "Authentication required" });
           return;
         }
-        res.locals.actor = { name: `session:${row.name}`, kind: "session" } satisfies WorkActor;
+        res.locals.actor = {
+          name: `session:${row.name}`,
+          kind: "session",
+        } satisfies WorkActor;
         next();
       })
       .catch(next);
@@ -162,7 +207,10 @@ function requireBoardActor(req: Request, res: Response, next: NextFunction): voi
     isPlatformStaff(req.user?.email)
       .then((ok) => {
         if (!ok) throw new ForbiddenError("Platform staff only");
-        res.locals.actor = { name: req.user!.email ?? req.user!.sub, kind: "human" } satisfies WorkActor;
+        res.locals.actor = {
+          name: req.user!.email ?? req.user!.sub,
+          kind: "human",
+        } satisfies WorkActor;
         next();
       })
       .catch(next);
@@ -176,64 +224,112 @@ function actorOf(res: Response): WorkActor {
 }
 
 function field(body: unknown, name: string): unknown {
-  return body && typeof body === "object" ? (body as Record<string, unknown>)[name] : undefined;
+  return body && typeof body === "object"
+    ? (body as Record<string, unknown>)[name]
+    : undefined;
 }
 
 function hasField(body: unknown, name: string): boolean {
-  return !!body && typeof body === "object" && Object.prototype.hasOwnProperty.call(body, name);
+  return (
+    !!body &&
+    typeof body === "object" &&
+    Object.prototype.hasOwnProperty.call(body, name)
+  );
 }
 
 function requiredTitle(value: unknown): string {
   const title = typeof value === "string" ? value.trim() : "";
   if (!title) throw new ValidationError("title is required", "title");
-  if (title.length > MAX_TITLE) throw new ValidationError(`title is longer than ${MAX_TITLE} characters`, "title");
+  if (title.length > MAX_TITLE)
+    throw new ValidationError(
+      `title is longer than ${MAX_TITLE} characters`,
+      "title",
+    );
   return title;
 }
 
 function optionalBody(value: unknown, name: string): string | null {
   if (value === null) return null;
-  if (typeof value !== "string") throw new ValidationError(`${name} must be text`, name);
-  if (value.length > MAX_BODY) throw new ValidationError(`${name} is longer than ${MAX_BODY} characters`, name);
+  if (typeof value !== "string")
+    throw new ValidationError(`${name} must be text`, name);
+  if (value.length > MAX_BODY)
+    throw new ValidationError(
+      `${name} is longer than ${MAX_BODY} characters`,
+      name,
+    );
   return value.trim() || null;
 }
 
 function statusValue(value: unknown): WorkStatus {
-  if (typeof value !== "string" || !(WORK_STATUSES as readonly string[]).includes(value)) {
+  if (
+    typeof value !== "string" ||
+    !(WORK_STATUSES as readonly string[]).includes(value)
+  ) {
     throw new ValidationError("unknown status", "status");
   }
   return value as WorkStatus;
 }
 
 function priorityValue(value: unknown): number {
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 4) {
+  if (
+    typeof value !== "number" ||
+    !Number.isInteger(value) ||
+    value < 0 ||
+    value > 4
+  ) {
     throw new ValidationError("priority must be 0-4", "priority");
   }
   return value;
 }
 
 function labelsValue(value: unknown): string[] {
-  if (!Array.isArray(value) || value.length > MAX_LABELS || value.some((l) => typeof l !== "string" || !l.trim() || l.trim().length > MAX_LABEL)) {
-    throw new ValidationError(`labels must be up to ${MAX_LABELS} short texts`, "labels");
+  if (
+    !Array.isArray(value) ||
+    value.length > MAX_LABELS ||
+    value.some(
+      (l) => typeof l !== "string" || !l.trim() || l.trim().length > MAX_LABEL,
+    )
+  ) {
+    throw new ValidationError(
+      `labels must be up to ${MAX_LABELS} short texts`,
+      "labels",
+    );
   }
   return [...new Set((value as string[]).map((l) => l.trim()))];
 }
 
 function linksValue(value: unknown): WorkLink[] {
-  if (!Array.isArray(value) || value.length > MAX_LINKS) throw new ValidationError(`links must be a list of up to ${MAX_LINKS}`, "links");
+  if (!Array.isArray(value) || value.length > MAX_LINKS)
+    throw new ValidationError(
+      `links must be a list of up to ${MAX_LINKS}`,
+      "links",
+    );
   return value.map((raw) => {
     const kind = field(raw, "kind");
     const url = field(raw, "url");
     const title = field(raw, "title");
-    if (typeof kind !== "string" || !(WORK_LINK_KINDS as readonly string[]).includes(kind)) {
+    if (
+      typeof kind !== "string" ||
+      !(WORK_LINK_KINDS as readonly string[]).includes(kind)
+    ) {
       throw new ValidationError("unknown link kind", "links");
     }
-    if (typeof url !== "string" || !/^https:\/\/\S{3,2000}$/.test(url)) throw new ValidationError("links must be https URLs", "links");
+    if (typeof url !== "string" || !/^https:\/\/\S{3,2000}$/.test(url))
+      throw new ValidationError("links must be https URLs", "links");
     const link: WorkLink = { kind: kind as WorkLinkKind, url };
-    if (typeof title === "string" && title.trim()) link.title = title.trim().slice(0, 200);
+    if (typeof title === "string" && title.trim())
+      link.title = title.trim().slice(0, 200);
     const state = field(raw, "state");
     if (state !== undefined) {
-      if (kind !== "ci" || typeof state !== "string" || !(WORK_CI_STATES as readonly string[]).includes(state)) {
-        throw new ValidationError(`only a ci link has a state (${WORK_CI_STATES.join(" or ")})`, "links");
+      if (
+        kind !== "ci" ||
+        typeof state !== "string" ||
+        !(WORK_CI_STATES as readonly string[]).includes(state)
+      ) {
+        throw new ValidationError(
+          `only a ci link has a state (${WORK_CI_STATES.join(" or ")})`,
+          "links",
+        );
       }
       link.state = state as WorkCiState;
     }
@@ -244,25 +340,36 @@ function linksValue(value: unknown): WorkLink[] {
 /** A platform staff member's email (admin or support), or null to unassign. */
 async function assigneeValue(value: unknown): Promise<string | null> {
   if (value === null) return null;
-  if (typeof value !== "string" || !(await isPlatformStaff(value))) throw new ValidationError("assignee must be platform staff", "assignee");
+  if (typeof value !== "string" || !(await isPlatformStaff(value)))
+    throw new ValidationError("assignee must be platform staff", "assignee");
   return value.trim().toLowerCase();
 }
 
 function dueDateValue(value: unknown): string | null {
   if (value === null) return null;
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) {
+  if (
+    typeof value !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    Number.isNaN(Date.parse(`${value}T00:00:00Z`))
+  ) {
     throw new ValidationError("due_date must be YYYY-MM-DD", "due_date");
   }
   return value;
 }
 
 function sanitiseFilename(name: string): string {
-  const cleaned = name.replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^\.+/, "").slice(-100);
+  const cleaned = name
+    .replace(/[^A-Za-z0-9._-]+/g, "_")
+    .replace(/^\.+/, "")
+    .slice(-100);
   return cleaned || "attachment";
 }
 
 /** The storage path stays on the server; the client asks for a signed URL per attachment. */
-function publicAttachment({ path: _path, ...rest }: WorkAttachmentRow): Omit<WorkAttachmentRow, "path"> {
+function publicAttachment({
+  path: _path,
+  ...rest
+}: WorkAttachmentRow): Omit<WorkAttachmentRow, "path"> {
   return rest;
 }
 
@@ -274,44 +381,85 @@ function itemKey(req: Request): { team: string; number: number } {
 }
 
 /** Only people see Triage: for the agent and sessions an untriaged item is answered as not found. */
-function hideTriageFromMachines(actor: WorkActor, item: WorkItemRow | null, key: string): WorkItemRow {
-  if (!item || (actor.kind !== "human" && item.status === "triage")) throw new NotFoundError("Work item", key);
+function hideTriageFromMachines(
+  actor: WorkActor,
+  item: WorkItemRow | null,
+  key: string,
+): WorkItemRow {
+  if (!item || (actor.kind !== "human" && item.status === "triage"))
+    throw new NotFoundError("Work item", key);
   return item;
 }
 
 function requireHuman(res: Response): WorkActor {
   const actor = actorOf(res);
-  if (actor.kind !== "human") throw new ForbiddenError("Only a platform admin can do this");
+  if (actor.kind !== "human")
+    throw new ForbiddenError("Only a platform admin can do this");
   return actor;
 }
 
 /** A session ticket follows the NEO-84 template: all three sections, short. */
-function requireSessionTicket(problem: string | null, change: string | null, doneWhen: string | null): void {
-  for (const [name, value] of [["problem", problem], ["change", change], ["done_when", doneWhen]] as const) {
-    if (!value) throw new ValidationError(`${name} is required (Problem / Change / Done when)`, name);
+function requireSessionTicket(
+  problem: string | null,
+  change: string | null,
+  doneWhen: string | null,
+): void {
+  for (const [name, value] of [
+    ["problem", problem],
+    ["change", change],
+    ["done_when", doneWhen],
+  ] as const) {
+    if (!value)
+      throw new ValidationError(
+        `${name} is required (Problem / Change / Done when)`,
+        name,
+      );
   }
-  const length = (problem ?? "").length + (change ?? "").length + (doneWhen ?? "").length;
+  const length =
+    (problem ?? "").length + (change ?? "").length + (doneWhen ?? "").length;
   if (length > MAX_SESSION_TICKET) {
-    throw new ValidationError(`the ticket is ${length} characters (max ${MAX_SESSION_TICKET}); keep it to this change only`, "problem");
+    throw new ValidationError(
+      `the ticket is ${length} characters (max ${MAX_SESSION_TICKET}); keep it to this change only`,
+      "problem",
+    );
   }
 }
 
 /** The nightly worker reads Approved, so a ticket enters it prepared (board-upkeep-r1 P3, CORE-234). */
-function requireReadyForApproved(priority: number, doneWhen: string | null): void {
-  if (!priority) throw new ValidationError("a ticket enters Approved only with a priority", "priority");
-  if (!doneWhen?.trim()) throw new ValidationError("a ticket enters Approved only with a Done when", "done_when");
+function requireReadyForApproved(
+  priority: number,
+  doneWhen: string | null,
+): void {
+  if (!priority)
+    throw new ValidationError(
+      "a ticket enters Approved only with a priority",
+      "priority",
+    );
+  if (!doneWhen?.trim())
+    throw new ValidationError(
+      "a ticket enters Approved only with a Done when",
+      "done_when",
+    );
 }
 
 function reviewAnswersValue(value: unknown): WorkReviewAnswer[] {
   const problem = `decisions must be 1 to ${MAX_REVIEW_DECISIONS} of { key, decision: ${WORK_REVIEW_DECISIONS.join("|")} }, one per ticket`;
-  if (!Array.isArray(value) || value.length < 1 || value.length > MAX_REVIEW_DECISIONS) throw new ValidationError(problem, "decisions");
+  if (
+    !Array.isArray(value) ||
+    value.length < 1 ||
+    value.length > MAX_REVIEW_DECISIONS
+  )
+    throw new ValidationError(problem, "decisions");
   const seen = new Set<string>();
   return value.map((raw) => {
     const key = field(raw, "key");
-    const decision = WORK_REVIEW_DECISIONS.find((d) => d === field(raw, "decision"));
+    const decision = WORK_REVIEW_DECISIONS.find(
+      (d) => d === field(raw, "decision"),
+    );
     const parsed = typeof key === "string" ? parseWorkItemKey(key) : null;
     const id = parsed ? `${parsed.team}-${parsed.number}` : "";
-    if (!parsed || !decision || seen.has(id)) throw new ValidationError(problem, "decisions");
+    if (!parsed || !decision || seen.has(id))
+      throw new ValidationError(problem, "decisions");
     seen.add(id);
     return { ...parsed, decision };
   });
@@ -322,19 +470,25 @@ workBoardRouter.get(
   "/platform/work/teams",
   asyncHandler(async (_req, res) => {
     res.json({ items: await listWorkTeams() });
-  })
+  }),
 );
 
 // GET /api/v1/platform/work/items?team=CORE&status=to_spec,approved
 workBoardRouter.get(
   "/platform/work/items",
   asyncHandler(async (req, res) => {
-    const team = typeof req.query.team === "string" && req.query.team ? req.query.team.toUpperCase() : null;
+    const team =
+      typeof req.query.team === "string" && req.query.team
+        ? req.query.team.toUpperCase()
+        : null;
     let statuses: WorkStatus[] | null =
-      typeof req.query.status === "string" && req.query.status ? req.query.status.split(",").map(statusValue) : null;
-    if (actorOf(res).kind !== "human") statuses = (statuses ?? [...WORK_STATUSES]).filter((s) => s !== "triage");
+      typeof req.query.status === "string" && req.query.status
+        ? req.query.status.split(",").map(statusValue)
+        : null;
+    if (actorOf(res).kind !== "human")
+      statuses = (statuses ?? [...WORK_STATUSES]).filter((s) => s !== "triage");
     res.json({ items: await listWorkItems({ team, statuses }) });
-  })
+  }),
 );
 
 // GET /api/v1/platform/work/items/CORE-12 — the item and its event trail
@@ -342,10 +496,17 @@ workBoardRouter.get(
   "/platform/work/items/:key",
   asyncHandler(async (req, res) => {
     const { team, number } = itemKey(req);
-    const item = hideTriageFromMachines(actorOf(res), await getWorkItem(team, number), `${team}-${number}`);
-    const [events, attachments] = await Promise.all([listWorkItemEvents(item.id), listWorkAttachments(item.id)]);
+    const item = hideTriageFromMachines(
+      actorOf(res),
+      await getWorkItem(team, number),
+      `${team}-${number}`,
+    );
+    const [events, attachments] = await Promise.all([
+      listWorkItemEvents(item.id),
+      listWorkAttachments(item.id),
+    ]);
     res.json({ item, events, attachments: attachments.map(publicAttachment) });
-  })
+  }),
 );
 
 // POST /api/v1/platform/work/items — people and sessions; the agent works on existing items.
@@ -353,23 +514,43 @@ workBoardRouter.post(
   "/platform/work/items",
   asyncHandler(async (req, res) => {
     const actor = actorOf(res);
-    if (actor.kind === "agent") throw new ForbiddenError("The agent cannot create work items");
-    const team = typeof field(req.body, "team") === "string" ? (field(req.body, "team") as string).toUpperCase() : "";
-    if (!(await workTeamExists(team))) throw new ValidationError("unknown team", "team");
+    if (actor.kind === "agent")
+      throw new ForbiddenError("The agent cannot create work items");
+    const team =
+      typeof field(req.body, "team") === "string"
+        ? (field(req.body, "team") as string).toUpperCase()
+        : "";
+    if (!(await workTeamExists(team)))
+      throw new ValidationError("unknown team", "team");
     const title = requiredTitle(field(req.body, "title"));
-    const problem = hasField(req.body, "problem") ? optionalBody(field(req.body, "problem"), "problem") : null;
-    const change = hasField(req.body, "change") ? optionalBody(field(req.body, "change"), "change") : null;
-    const doneWhen = hasField(req.body, "done_when") ? optionalBody(field(req.body, "done_when"), "done_when") : null;
-    let status: WorkStatus = hasField(req.body, "status") ? statusValue(field(req.body, "status")) : "backlog";
-    let labels = hasField(req.body, "labels") ? labelsValue(field(req.body, "labels")) : [];
+    const problem = hasField(req.body, "problem")
+      ? optionalBody(field(req.body, "problem"), "problem")
+      : null;
+    const change = hasField(req.body, "change")
+      ? optionalBody(field(req.body, "change"), "change")
+      : null;
+    const doneWhen = hasField(req.body, "done_when")
+      ? optionalBody(field(req.body, "done_when"), "done_when")
+      : null;
+    let status: WorkStatus = hasField(req.body, "status")
+      ? statusValue(field(req.body, "status"))
+      : "backlog";
+    let labels = hasField(req.body, "labels")
+      ? labelsValue(field(req.body, "labels"))
+      : [];
     if (actor.kind === "session") {
       // Decision core187-r1 Q2: the session is already working on it; the label makes it filterable.
       // A side ticket for later asks for Backlog (board-upkeep-r1 P1, CORE-223).
       requireSessionTicket(problem, change, doneWhen);
-      status = status === "backlog" && hasField(req.body, "status") ? "backlog" : "building";
+      status =
+        status === "backlog" && hasField(req.body, "status")
+          ? "backlog"
+          : "building";
       labels = [...new Set([...labels, SESSION_LABEL])];
     }
-    const priority = hasField(req.body, "priority") ? priorityValue(field(req.body, "priority")) : 0;
+    const priority = hasField(req.body, "priority")
+      ? priorityValue(field(req.body, "priority"))
+      : 0;
     if (status === "approved") requireReadyForApproved(priority, doneWhen);
     const item = await createWorkItem(
       {
@@ -381,27 +562,44 @@ workBoardRouter.post(
         status,
         priority,
         labels,
-        links: hasField(req.body, "links") ? linksValue(field(req.body, "links")) : [],
-        assignee: hasField(req.body, "assignee") ? await assigneeValue(field(req.body, "assignee")) : null,
-        due_date: hasField(req.body, "due_date") ? dueDateValue(field(req.body, "due_date")) : null,
+        links: hasField(req.body, "links")
+          ? linksValue(field(req.body, "links"))
+          : [],
+        assignee: hasField(req.body, "assignee")
+          ? await assigneeValue(field(req.body, "assignee"))
+          : null,
+        due_date: hasField(req.body, "due_date")
+          ? dueDateValue(field(req.body, "due_date"))
+          : null,
       },
-      actor
+      actor,
     );
     res.status(201).json({ item });
-  })
+  }),
 );
 
 function gitReportsValue(value: unknown): WorkGitReport[] {
   if (!Array.isArray(value) || value.length > MAX_GIT_REPORTS) {
-    throw new ValidationError(`items must be a list of up to ${MAX_GIT_REPORTS}`, "items");
+    throw new ValidationError(
+      `items must be a list of up to ${MAX_GIT_REPORTS}`,
+      "items",
+    );
   }
   return value.map((raw) => {
     const key = field(raw, "key");
     const state = field(raw, "state");
     const sha = field(raw, "sha");
     const parsed = typeof key === "string" ? parseWorkItemKey(key) : null;
-    if (!parsed || (state !== "dev" && state !== "prod") || typeof sha !== "string" || !GIT_SHA_RE.test(sha)) {
-      throw new ValidationError("each item needs { key, state: dev|prod, sha }", "items");
+    if (
+      !parsed ||
+      (state !== "dev" && state !== "prod") ||
+      typeof sha !== "string" ||
+      !GIT_SHA_RE.test(sha)
+    ) {
+      throw new ValidationError(
+        "each item needs { key, state: dev|prod, sha }",
+        "items",
+      );
     }
     return { ...parsed, state, sha };
   });
@@ -423,7 +621,11 @@ workBoardRouter.post(
     let close: { smoke_url: string } | null = null;
     if (hasField(req.body, "close")) {
       const url = field(field(req.body, "close"), "smoke_url");
-      if (typeof url !== "string" || !/^https:\/\/\S+$/.test(url) || url.length > 500) {
+      if (
+        typeof url !== "string" ||
+        !/^https:\/\/\S+$/.test(url) ||
+        url.length > 500
+      ) {
         throw new ValidationError("close needs { smoke_url } (https)", "close");
       }
       close = { smoke_url: url };
@@ -431,17 +633,120 @@ workBoardRouter.post(
     let tidy: { branches: { team: string; number: number }[] } | null = null;
     if (hasField(req.body, "tidy")) {
       const branches = field(field(req.body, "tidy"), "branches");
-      const parsed = Array.isArray(branches) && branches.length <= MAX_GIT_REPORTS
-        ? branches.map((key) => (typeof key === "string" ? parseWorkItemKey(key) : null))
-        : [null];
-      if (parsed.some((key) => key === null)) throw new ValidationError("tidy needs { branches: [ticket keys] }", "tidy");
+      const parsed =
+        Array.isArray(branches) && branches.length <= MAX_GIT_REPORTS
+          ? branches.map((key) =>
+              typeof key === "string" ? parseWorkItemKey(key) : null,
+            )
+          : [null];
+      if (parsed.some((key) => key === null))
+        throw new ValidationError(
+          "tidy needs { branches: [ticket keys] }",
+          "tidy",
+        );
       tidy = { branches: parsed.filter((key) => key !== null) };
     }
-    if (actor.kind === "session" && (complete || close || tidy)) {
-      throw new ForbiddenError("A session can report a ticket's git state, not close or tidy tickets or send a complete report");
+    const verify = field(req.body, "verify") === true;
+    if (actor.kind === "session" && (complete || close || tidy || verify)) {
+      throw new ForbiddenError(
+        "A session can report a ticket's git state, not close or tidy tickets, queue verification or send a complete report",
+      );
     }
-    res.json(await applyWorkGitStates(reports, { complete, close, tidy }, actor));
-  })
+    res.json(
+      await applyWorkGitStates(
+        reports,
+        { complete, close, tidy, verify },
+        actor,
+      ),
+    );
+  }),
+);
+
+const MAX_VERIFY_RESULTS = 200;
+
+function verifyResultsValue(raw: unknown): WorkVerifyResult[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw) || raw.length > MAX_VERIFY_RESULTS) {
+    throw new ValidationError(
+      `results must be a list of at most ${MAX_VERIFY_RESULTS} { ac, test, status }`,
+      "results",
+    );
+  }
+  return raw.map((entry) => {
+    const ac = field(entry, "ac");
+    const test = field(entry, "test");
+    const status = field(entry, "status");
+    if (
+      typeof ac !== "string" ||
+      !ac.trim() ||
+      ac.length > 500 ||
+      typeof test !== "string" ||
+      !test.trim() ||
+      test.length > 500 ||
+      (status !== "pass" && status !== "fail")
+    ) {
+      throw new ValidationError(
+        "each result needs { ac, test, status: pass|fail }",
+        "results",
+      );
+    }
+    return { ac: ac.trim(), test: test.trim(), status };
+  });
+}
+
+function conflictOf(err: unknown): never {
+  if (err instanceof WorkVerifyConflictError)
+    throw new ConflictError(err.message);
+  throw err;
+}
+
+// POST /api/v1/platform/work/items/CORE-12/verify — run the post-landing tests again (CORE-277).
+// People and sessions; the agent only reports results.
+workBoardRouter.post(
+  "/platform/work/items/:key/verify",
+  asyncHandler(async (req, res) => {
+    const actor = actorOf(res);
+    if (actor.kind === "agent")
+      throw new ForbiddenError("The agent cannot start a verification");
+    const { team, number } = itemKey(req);
+    const key = `${team}-${number}`;
+    const item = await requeueWorkVerify(team, number, actor).catch(conflictOf);
+    if (!item) throw new NotFoundError("Work item", key);
+    res.json({ item });
+  }),
+);
+
+// POST /api/v1/platform/work/items/CORE-12/verify-result { state, run_url, results } — the test run's
+// outcome (board-verify.mjs in GitHub Actions). Returns the ticket to Needs Review; a fail opens a fix ticket.
+workBoardRouter.post(
+  "/platform/work/items/:key/verify-result",
+  asyncHandler(async (req, res) => {
+    const actor = actorOf(res);
+    if (actor.kind === "session")
+      throw new ForbiddenError("A session cannot report a verification result");
+    const { team, number } = itemKey(req);
+    const key = `${team}-${number}`;
+    const state = field(req.body, "state");
+    if (state !== "pass" && state !== "fail")
+      throw new ValidationError("state must be pass or fail", "state");
+    const runUrl = field(req.body, "run_url");
+    if (
+      typeof runUrl !== "string" ||
+      !/^https:\/\/\S+$/.test(runUrl) ||
+      runUrl.length > 500
+    ) {
+      throw new ValidationError("run_url must be an https URL", "run_url");
+    }
+    const results = verifyResultsValue(field(req.body, "results"));
+    const item = await recordWorkVerifyResult(
+      team,
+      number,
+      { state, run_url: runUrl, results },
+      actor,
+    ).catch(conflictOf);
+    if (!item) throw new NotFoundError("Work item", key);
+    res.json({ item });
+  }),
 );
 
 // POST /api/v1/platform/work/backlog-review { form, confirm?, decisions: [{ key, decision }] } — the answers
@@ -453,17 +758,36 @@ workBoardRouter.post(
   "/platform/work/backlog-review",
   asyncHandler(async (req, res) => {
     const actor = actorOf(res);
-    if (actor.kind === "agent") throw new ForbiddenError("The agent cannot apply a backlog review");
+    if (actor.kind === "agent")
+      throw new ForbiddenError("The agent cannot apply a backlog review");
     const form = field(req.body, "form");
     if (typeof form !== "string" || !REVIEW_FORM_RE.test(form)) {
-      throw new ValidationError("form is the id of the decision form the answers came from", "form");
+      throw new ValidationError(
+        "form is the id of the decision form the answers came from",
+        "form",
+      );
     }
     const confirm = field(req.body, "confirm");
-    if (confirm !== undefined && (typeof confirm !== "string" || !REVIEW_FORM_RE.test(confirm) || confirm === form)) {
-      throw new ValidationError("confirm is the id of the second form that repeated the cancels", "confirm");
+    if (
+      confirm !== undefined &&
+      (typeof confirm !== "string" ||
+        !REVIEW_FORM_RE.test(confirm) ||
+        confirm === form)
+    ) {
+      throw new ValidationError(
+        "confirm is the id of the second form that repeated the cancels",
+        "confirm",
+      );
     }
-    res.json(await applyBacklogReview(form, reviewAnswersValue(field(req.body, "decisions")), actor, confirm));
-  })
+    res.json(
+      await applyBacklogReview(
+        form,
+        reviewAnswersValue(field(req.body, "decisions")),
+        actor,
+        confirm,
+      ),
+    );
+  }),
 );
 
 // PATCH /api/v1/platform/work/items/CORE-12
@@ -475,61 +799,117 @@ workBoardRouter.patch(
     const body = req.body as Record<string, unknown>;
     if (actor.kind !== "human") {
       const forbidden = Object.keys(body).filter((k) => !AGENT_FIELDS.has(k));
-      if (forbidden.length) throw new ForbiddenError(`The ${actor.kind} cannot change ${forbidden.join(", ")}`);
+      if (forbidden.length)
+        throw new ForbiddenError(
+          `The ${actor.kind} cannot change ${forbidden.join(", ")}`,
+        );
     }
 
     const patch: WorkItemPatch = {};
     if (hasField(body, "title")) patch.title = requiredTitle(body.title);
-    if (hasField(body, "problem")) patch.problem = optionalBody(body.problem, "problem");
-    if (hasField(body, "change")) patch.change = optionalBody(body.change, "change");
-    if (hasField(body, "done_when")) patch.done_when = optionalBody(body.done_when, "done_when");
-    if (hasField(body, "priority")) patch.priority = priorityValue(body.priority);
+    if (hasField(body, "problem"))
+      patch.problem = optionalBody(body.problem, "problem");
+    if (hasField(body, "change"))
+      patch.change = optionalBody(body.change, "change");
+    if (hasField(body, "done_when"))
+      patch.done_when = optionalBody(body.done_when, "done_when");
+    if (hasField(body, "priority"))
+      patch.priority = priorityValue(body.priority);
     if (hasField(body, "labels")) patch.labels = labelsValue(body.labels);
-    if (hasField(body, "assignee")) patch.assignee = await assigneeValue(body.assignee);
-    if (hasField(body, "due_date")) patch.due_date = dueDateValue(body.due_date);
+    if (hasField(body, "assignee"))
+      patch.assignee = await assigneeValue(body.assignee);
+    if (hasField(body, "due_date"))
+      patch.due_date = dueDateValue(body.due_date);
     if (hasField(body, "branch")) {
-      if (body.branch !== null && (typeof body.branch !== "string" || !/^[\w./-]{1,200}$/.test(body.branch))) {
+      if (
+        body.branch !== null &&
+        (typeof body.branch !== "string" ||
+          !/^[\w./-]{1,200}$/.test(body.branch))
+      ) {
         throw new ValidationError("branch must be a git branch name", "branch");
       }
       patch.branch = body.branch as string | null;
     }
     if (hasField(body, "status")) patch.status = statusValue(body.status);
-    if (hasField(body, "add_links")) patch.add_links = linksValue(body.add_links);
+    if (hasField(body, "add_links"))
+      patch.add_links = linksValue(body.add_links);
     if (hasField(body, "remove_links")) {
-      if (!Array.isArray(body.remove_links) || body.remove_links.some((u) => typeof u !== "string")) {
-        throw new ValidationError("remove_links must be a list of URLs", "remove_links");
+      if (
+        !Array.isArray(body.remove_links) ||
+        body.remove_links.some((u) => typeof u !== "string")
+      ) {
+        throw new ValidationError(
+          "remove_links must be a list of URLs",
+          "remove_links",
+        );
       }
       patch.remove_links = body.remove_links as string[];
     }
 
     const key = `${team}-${number}`;
-    const item = await updateWorkItem(team, number, patch, actor, async (current, client) => {
-      if (actor.kind !== "human") hideTriageFromMachines(actor, current, key);
-      if (patch.status === undefined || patch.status === current.status) return;
-      if (actor.kind !== "human") {
-        const pick = actor.kind === "session" && current.status === "backlog" && patch.status === "approved";
-        const allowed =
-          actor.kind === "agent"
-            ? AGENT_MOVES[current.status]?.includes(patch.status)
-            : pick || (SESSION_TARGETS.includes(patch.status) && !SESSION_CLOSED.includes(current.status));
-        if (!allowed) throw new ForbiddenError(`The ${actor.kind} cannot move ${current.status} to ${patch.status}`);
-      }
-      // The worker giving a build back returns a ticket that already passed the rule.
-      if (patch.status === "approved" && current.status !== "building") {
-        requireReadyForApproved(
-          patch.priority ?? current.priority,
-          patch.done_when !== undefined ? patch.done_when : current.done_when
-        );
-      }
-      if (actor.kind === "session" && patch.status === "approved" && (await countSessionApprovals(client)) >= SESSION_APPROVED_PER_WEEK) {
-        throw new ForbiddenError(
-          `Sessions already moved ${SESSION_APPROVED_PER_WEEK} tickets to Approved in the last 7 days; a person moves the next one`
-        );
-      }
-    });
+    const item = await updateWorkItem(
+      team,
+      number,
+      patch,
+      actor,
+      async (current, client) => {
+        if (actor.kind !== "human") hideTriageFromMachines(actor, current, key);
+        if (patch.status === undefined || patch.status === current.status)
+          return;
+        if (actor.kind !== "human") {
+          const pick =
+            actor.kind === "session" &&
+            current.status === "backlog" &&
+            patch.status === "approved";
+          const allowed =
+            actor.kind === "agent"
+              ? AGENT_MOVES[current.status]?.includes(patch.status)
+              : pick ||
+                (SESSION_TARGETS.includes(patch.status) &&
+                  !SESSION_CLOSED.includes(current.status));
+          if (
+            !allowed ||
+            current.status === "verifying" ||
+            patch.status === "verifying"
+          ) {
+            throw new ForbiddenError(
+              `The ${actor.kind} cannot move ${current.status} to ${patch.status}`,
+            );
+          }
+          if (patch.status === "needs_review") {
+            const links = [...current.links, ...(patch.add_links ?? [])];
+            if (
+              !links.some((l) => l.kind === "artifact") ||
+              !links.some((l) => l.kind === "ci")
+            ) {
+              throw new ValidationError(
+                "Needs Review needs an artifact link and a ci (test run) link",
+                "add_links",
+              );
+            }
+          }
+        }
+        // The worker giving a build back returns a ticket that already passed the rule.
+        if (patch.status === "approved" && current.status !== "building") {
+          requireReadyForApproved(
+            patch.priority ?? current.priority,
+            patch.done_when !== undefined ? patch.done_when : current.done_when,
+          );
+        }
+        if (
+          actor.kind === "session" &&
+          patch.status === "approved" &&
+          (await countSessionApprovals(client)) >= SESSION_APPROVED_PER_WEEK
+        ) {
+          throw new ForbiddenError(
+            `Sessions already moved ${SESSION_APPROVED_PER_WEEK} tickets to Approved in the last 7 days; a person moves the next one`,
+          );
+        }
+      },
+    );
     if (!item) throw new NotFoundError("Work item", key);
     res.json({ item });
-  })
+  }),
 );
 
 // POST /api/v1/platform/work/items/CORE-12/comments { body }
@@ -538,14 +918,27 @@ workBoardRouter.post(
   asyncHandler(async (req, res) => {
     const actor = actorOf(res);
     const { team, number } = itemKey(req);
-    const text = typeof field(req.body, "body") === "string" ? (field(req.body, "body") as string).trim() : "";
+    const text =
+      typeof field(req.body, "body") === "string"
+        ? (field(req.body, "body") as string).trim()
+        : "";
     if (!text) throw new ValidationError("body is required", "body");
-    if (text.length > MAX_COMMENT) throw new ValidationError(`body is longer than ${MAX_COMMENT} characters`, "body");
+    if (text.length > MAX_COMMENT)
+      throw new ValidationError(
+        `body is longer than ${MAX_COMMENT} characters`,
+        "body",
+      );
     const key = `${team}-${number}`;
-    const event = await addWorkItemComment(team, number, text, actor, (current) => hideTriageFromMachines(actor, current, key));
+    const event = await addWorkItemComment(
+      team,
+      number,
+      text,
+      actor,
+      (current) => hideTriageFromMachines(actor, current, key),
+    );
     if (!event) throw new NotFoundError("Work item", key);
     res.status(201).json({ event });
-  })
+  }),
 );
 
 // GET /api/v1/platform/work/labels — the label catalog (CORE-219), by name
@@ -553,7 +946,7 @@ workBoardRouter.get(
   "/platform/work/labels",
   asyncHandler(async (_req, res) => {
     res.json({ items: await listWorkLabels() });
-  })
+  }),
 );
 
 // PATCH /api/v1/platform/work/labels/:id { name?, color? } — people only; a rename reaches every item
@@ -564,23 +957,46 @@ workBoardRouter.patch(
     const id = routeParam(req, "id") ?? "";
     const patch: { name?: string; color?: WorkLabelColor } = {};
     if (hasField(req.body, "name")) {
-      const name = typeof field(req.body, "name") === "string" ? (field(req.body, "name") as string).trim() : "";
-      if (!name || name.length > MAX_LABEL) throw new ValidationError(`name must be 1-${MAX_LABEL} characters`, "name");
-      if (name.toLowerCase() === SESSION_LABEL) throw new ValidationError(`name "${SESSION_LABEL}" is reserved for session tickets`, "name");
+      const name =
+        typeof field(req.body, "name") === "string"
+          ? (field(req.body, "name") as string).trim()
+          : "";
+      if (!name || name.length > MAX_LABEL)
+        throw new ValidationError(
+          `name must be 1-${MAX_LABEL} characters`,
+          "name",
+        );
+      if (name.toLowerCase() === SESSION_LABEL)
+        throw new ValidationError(
+          `name "${SESSION_LABEL}" is reserved for session tickets`,
+          "name",
+        );
       patch.name = name;
     }
     if (hasField(req.body, "color")) {
       const color = field(req.body, "color");
-      if (typeof color !== "string" || !(WORK_LABEL_COLORS as readonly string[]).includes(color)) {
-        throw new ValidationError(`color must be one of ${WORK_LABEL_COLORS.join(", ")}`, "color");
+      if (
+        typeof color !== "string" ||
+        !(WORK_LABEL_COLORS as readonly string[]).includes(color)
+      ) {
+        throw new ValidationError(
+          `color must be one of ${WORK_LABEL_COLORS.join(", ")}`,
+          "color",
+        );
       }
       patch.color = color as WorkLabelColor;
     }
-    const item = UUID_RE.test(id) ? await updateWorkLabel(id, patch, actor) : null;
+    const item = UUID_RE.test(id)
+      ? await updateWorkLabel(id, patch, actor)
+      : null;
     if (!item) throw new NotFoundError("Label", id);
-    if (item === "duplicate") throw new ValidationError("name is already used by another label", "name");
+    if (item === "duplicate")
+      throw new ValidationError(
+        "name is already used by another label",
+        "name",
+      );
     res.json({ item });
-  })
+  }),
 );
 
 // GET /api/v1/platform/work/people — who an item can be assigned to
@@ -588,7 +1004,7 @@ workBoardRouter.get(
   "/platform/work/people",
   asyncHandler(async (_req, res) => {
     res.json({ items: await listWorkPeople() });
-  })
+  }),
 );
 
 // POST /api/v1/platform/work/items/CORE-12/attachments (multipart: file, optional comment = its event id)
@@ -598,28 +1014,55 @@ workBoardRouter.post(
   asyncHandler(async (req, res) => {
     const actor = actorOf(res);
     const { team, number } = itemKey(req);
-    const item = hideTriageFromMachines(actor, await getWorkItem(team, number), `${team}-${number}`);
+    const item = hideTriageFromMachines(
+      actor,
+      await getWorkItem(team, number),
+      `${team}-${number}`,
+    );
     const file = req.file;
     if (!file) throw new ValidationError("file is required", "file");
-    if (!ATTACHMENT_MIME_RE.test(file.mimetype) && file.mimetype !== "application/pdf") {
-      throw new ValidationError("only images and PDF files can be attached", "file");
+    if (
+      !ATTACHMENT_MIME_RE.test(file.mimetype) &&
+      file.mimetype !== "application/pdf"
+    ) {
+      throw new ValidationError(
+        "only images and PDF files can be attached",
+        "file",
+      );
     }
     const comment = field(req.body, "comment");
-    if (comment !== undefined && comment !== "" && (typeof comment !== "string" || !/^\d{1,18}$/.test(comment))) {
+    if (
+      comment !== undefined &&
+      comment !== "" &&
+      (typeof comment !== "string" || !/^\d{1,18}$/.test(comment))
+    ) {
       throw new ValidationError("comment must be a comment id", "comment");
     }
     const eventId = typeof comment === "string" && comment ? comment : null;
     const filename = sanitiseFilename(file.originalname);
     const path = `work-board/${item.id}/${randomUUID()}-${filename}`;
-    await uploadPartnerDocument(path, new Uint8Array(file.buffer), file.mimetype);
+    await uploadPartnerDocument(
+      path,
+      new Uint8Array(file.buffer),
+      file.mimetype,
+    );
     // The path holds the uploader's file name, so it stays out of the log line (CodeQL log-injection).
     const cleanup = () =>
-      deletePartnerDocument(path).catch((err: unknown) => console.error("work attachment cleanup failed, item:", item.id, err));
+      deletePartnerDocument(path).catch((err: unknown) =>
+        console.error("work attachment cleanup failed, item:", item.id, err),
+      );
     let row: WorkAttachmentRow | null;
     try {
       row = await insertWorkAttachment(
-        { item_id: item.id, event_id: eventId, path, filename, mime_type: file.mimetype, size_bytes: file.size },
-        actor
+        {
+          item_id: item.id,
+          event_id: eventId,
+          path,
+          filename,
+          mime_type: file.mimetype,
+          size_bytes: file.size,
+        },
+        actor,
       );
     } catch (err) {
       await cleanup();
@@ -630,7 +1073,7 @@ workBoardRouter.post(
       throw new ValidationError("comment not found on this item", "comment");
     }
     res.status(201).json({ attachment: publicAttachment(row) });
-  })
+  }),
 );
 
 // GET /api/v1/platform/work/items/CORE-12/attachments/:id — a short-lived signed URL
@@ -638,12 +1081,19 @@ workBoardRouter.get(
   "/platform/work/items/:key/attachments/:id",
   asyncHandler(async (req, res) => {
     const { team, number } = itemKey(req);
-    const item = hideTriageFromMachines(actorOf(res), await getWorkItem(team, number), `${team}-${number}`);
+    const item = hideTriageFromMachines(
+      actorOf(res),
+      await getWorkItem(team, number),
+      `${team}-${number}`,
+    );
     const id = routeParam(req, "id") ?? "";
     const row = UUID_RE.test(id) ? await getWorkAttachment(item.id, id) : null;
     if (!row) throw new NotFoundError("Attachment", id);
-    res.json({ url: await getPartnerDocumentSignedUrl(row.path, ATTACHMENT_URL_SECONDS), expires_in: ATTACHMENT_URL_SECONDS });
-  })
+    res.json({
+      url: await getPartnerDocumentSignedUrl(row.path, ATTACHMENT_URL_SECONDS),
+      expires_in: ATTACHMENT_URL_SECONDS,
+    });
+  }),
 );
 
 // DELETE /api/v1/platform/work/items/CORE-12/attachments/:id — people only
@@ -655,12 +1105,16 @@ workBoardRouter.delete(
     const item = await getWorkItem(team, number);
     if (!item) throw new NotFoundError("Work item", `${team}-${number}`);
     const id = routeParam(req, "id") ?? "";
-    const row = UUID_RE.test(id) ? await deleteWorkAttachment(item.id, id, actor) : null;
+    const row = UUID_RE.test(id)
+      ? await deleteWorkAttachment(item.id, id, actor)
+      : null;
     if (!row) throw new NotFoundError("Attachment", id);
     // The row is gone either way; an object left behind in storage is logged for us, not shown.
-    await deletePartnerDocument(row.path).catch((err: unknown) => console.error(`work attachment ${row.path}: delete failed:`, err));
+    await deletePartnerDocument(row.path).catch((err: unknown) =>
+      console.error(`work attachment ${row.path}: delete failed:`, err),
+    );
     res.status(204).end();
-  })
+  }),
 );
 
 // GET /api/v1/platform/work/session-tokens — never carries a token, only who and when.
@@ -669,7 +1123,7 @@ workBoardRouter.get(
   asyncHandler(async (_req, res) => {
     requireHuman(res);
     res.json({ items: await listSessionTokens() });
-  })
+  }),
 );
 
 // POST /api/v1/platform/work/session-tokens { name } — the plaintext is in this answer only.
@@ -677,12 +1131,24 @@ workBoardRouter.post(
   "/platform/work/session-tokens",
   asyncHandler(async (req, res) => {
     const actor = requireHuman(res);
-    const name = typeof field(req.body, "name") === "string" ? (field(req.body, "name") as string).trim() : "";
-    if (!name || name.length > 60) throw new ValidationError("name is required (up to 60 characters)", "name");
+    const name =
+      typeof field(req.body, "name") === "string"
+        ? (field(req.body, "name") as string).trim()
+        : "";
+    if (!name || name.length > 60)
+      throw new ValidationError(
+        "name is required (up to 60 characters)",
+        "name",
+      );
     const token = `nbs_${randomBytes(32).toString("base64url")}`;
-    const item = await insertSessionToken(name, sha256Hex(token), actor.name, platformAuditActor(req, actor.name));
+    const item = await insertSessionToken(
+      name,
+      sha256Hex(token),
+      actor.name,
+      platformAuditActor(req, actor.name),
+    );
     res.status(201).json({ item, token });
-  })
+  }),
 );
 
 // DELETE /api/v1/platform/work/session-tokens/:id
@@ -691,9 +1157,12 @@ workBoardRouter.delete(
   asyncHandler(async (req, res) => {
     const actor = requireHuman(res);
     const id = routeParam(req, "id") ?? "";
-    if (!/^[0-9a-f-]{36}$/i.test(id) || !(await revokeSessionToken(id, platformAuditActor(req, actor.name)))) {
+    if (
+      !/^[0-9a-f-]{36}$/i.test(id) ||
+      !(await revokeSessionToken(id, platformAuditActor(req, actor.name)))
+    ) {
       throw new NotFoundError("Session token", id);
     }
     res.status(204).end();
-  })
+  }),
 );

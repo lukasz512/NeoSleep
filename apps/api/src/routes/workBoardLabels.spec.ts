@@ -210,7 +210,12 @@ describe("work board labels (CORE-219)", () => {
       expect((await asSession(request(app).post(`${BASE}/items/${key}/comments`)).send({ body: "Branch: x" })).status).toBe(201);
       const moved = await asSession(request(app).patch(`${BASE}/items/${key}`)).send({
         status: "needs_review",
-        add_links: [{ kind: "pr", url: "https://github.com/lukasz512/NeoSleep/pull/1" }],
+        // Needs Review takes an artifact and a CI link from a session (CORE-277).
+        add_links: [
+          { kind: "pr", url: "https://github.com/lukasz512/NeoSleep/pull/1" },
+          { kind: "artifact", url: "https://claude.ai/artifact/x" },
+          { kind: "ci", url: "https://github.com/lukasz512/NeoSleep/actions/runs/1" },
+        ],
       });
       expect(moved.status).toBe(200);
       expect(moved.body.item).toMatchObject({ status: "needs_review", labels: [name("cli"), "session"] });

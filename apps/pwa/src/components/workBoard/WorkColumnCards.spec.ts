@@ -23,6 +23,7 @@ function item(key: string, overrides: Partial<WorkItem> = {}): WorkItem {
     status: "needs_review", priority: 0, labels: [], links: [ARTIFACT], branch: null, assignee: null, due_date: null, source: "manual",
     created_at: daysAgo(30), updated_at: daysAgo(1), status_changed_at: daysAgo(1), completed_at: null,
     git_state: "none", git_sha: null, git_checked_at: daysAgo(0),
+    verify_state: null, verify_checked_at: null, verify_run_url: null, verify_results: null, fix_item: null,
     ...overrides,
   };
 }

@@ -64,6 +64,7 @@ function item(overrides: Partial<WorkItem>): WorkItem {
     git_state: null,
     git_sha: null,
     git_checked_at: null,
+    verify_state: null, verify_checked_at: null, verify_run_url: null, verify_results: null, fix_item: null,
     ...overrides,
   };
 }

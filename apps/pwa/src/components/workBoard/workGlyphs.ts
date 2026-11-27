@@ -23,6 +23,7 @@ export const WORK_STATUS_GLYPHS: Readonly<Record<WorkStatus, WorkStatusGlyphSpec
   approved: { shape: "pie", tone: "approved", fill: 3 / 6 },
   building: { shape: "pie", tone: "building", fill: 4 / 6 },
   needs_review: { shape: "pie", tone: "review", fill: 5 / 6 },
+  verifying: { shape: "pie", tone: "review", fill: 5.5 / 6 },
   done: { shape: "check", tone: "done" },
   canceled: { shape: "cross", tone: "neutral" },
 };
@@ -50,7 +51,7 @@ export type WorkStatusGroup = "intake" | "spec" | "delivery" | "closed";
 export const WORK_STATUS_GROUPS: readonly { id: WorkStatusGroup; statuses: readonly WorkStatus[] }[] = [
   { id: "intake", statuses: ["triage", "backlog"] },
   { id: "spec", statuses: ["to_spec", "spec_ready"] },
-  { id: "delivery", statuses: ["approved", "building", "needs_review"] },
+  { id: "delivery", statuses: ["approved", "building", "needs_review", "verifying"] },
   { id: "closed", statuses: ["done", "canceled"] },
 ];
 
