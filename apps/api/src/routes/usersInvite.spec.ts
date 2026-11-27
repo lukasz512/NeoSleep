@@ -45,7 +45,7 @@ async function tokensFor(userId: string): Promise<{ expires_at: Date }[]> {
 async function auditActions(userId: string): Promise<string[]> {
   return withTenant(TENANT_SLUG, async (client) => {
     const r = await client.query<{ action: string }>(
-      `SELECT action FROM audit_log WHERE entity_type = 'User' AND entity_id = $1 ORDER BY created_at`,
+      `SELECT action FROM audit_log WHERE entity_type = 'User' AND entity_id = $1 ORDER BY created_at, (action = 'create') DESC`, // rows from one request can share a timestamp; create always comes first
       [userId]
     );
     return r.rows.map((row) => row.action);

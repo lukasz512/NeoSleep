@@ -12,7 +12,13 @@
 !.env.example
 secrets
 backups
-docs
+docs/*
+!docs/user-guide/
+docs/user-guide/*
+!docs/user-guide/content/
+!docs/clinical/
+docs/clinical/*
+!docs/clinical/protocolo-atencion/
 e2e
 **/test-results
 **/playwright-report
