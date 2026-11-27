@@ -25,6 +25,7 @@ function jsonResponse(ok: boolean, body: unknown, status = ok ? 200 : 400) {
 
 const VALID_PREVIEW = {
   email: "doctor@example.com",
+  phone: "+52 55 9999 0000",
   firstName: "Ana",
   lastName: "García",
   clinicName: "Clínica Sonrisa",
@@ -357,5 +358,121 @@ describe("PartnerRegistrationView — errors in the form, not as an alert (NEO-1
     await flushPromises();
     expect(wrapper.text()).toContain(en["user.partnerRegistration.form.errorSubmit"]);
     expect(summary(wrapper).exists()).toBe(false);
+  });
+});
+
+
+describe("PartnerRegistrationView — person and clinic are separate cards (NEO-270)", () => {
+  Element.prototype.scrollIntoView = vi.fn();
+
+  const person = (w: VueWrapper) => w.find('[data-testid="person-details"]');
+  const clinic = (w: VueWrapper) => w.find('[data-testid="clinic-details"]');
+
+  async function ready() {
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, VALID_PREVIEW));
+    const { wrapper } = await mountPartnerRegistrationView();
+    return wrapper;
+  }
+
+  async function readyToFinish() {
+    const wrapper = await ready();
+    await signAndAcknowledge(wrapper);
+    const passwords = wrapper.findAll('input[type="password"]');
+    await passwords[0]!.setValue("correct-horse-battery");
+    await passwords[1]!.setValue("correct-horse-battery");
+    return wrapper;
+  }
+
+  /** Opens the person dialog, sets the input holding `from` to `to`, saves. */
+  async function editPersonValue(wrapper: VueWrapper, from: string, to: string) {
+    await person(wrapper).find('[data-testid="edit-person"]').trigger("click");
+    await flushPromises();
+    const input = Array.from(document.querySelectorAll<HTMLInputElement>("input")).find((i) => i.value === from)!;
+    input.value = to;
+    input.dispatchEvent(new Event("input"));
+    await flushPromises();
+    const save = Array.from(document.querySelectorAll("button")).find(
+      (b) => b.textContent?.trim() === en["user.partnerRegistration.form.editModal.save"],
+    )!;
+    save.click();
+    await flushPromises();
+  }
+
+  it("shows the doctor's own data in 'Your details' and the practice data in the clinic card", async () => {
+    const wrapper = await ready();
+    const p = person(wrapper).text();
+    expect(p).toContain(en["user.partnerRegistration.form.personDetailsHeading"]);
+    for (const v of [VALID_PREVIEW.firstName, VALID_PREVIEW.lastName, VALID_PREVIEW.email, VALID_PREVIEW.phone, VALID_PREVIEW.licenseNumber]) {
+      expect(p).toContain(v);
+    }
+    const c = clinic(wrapper).text();
+    expect(c).toContain(VALID_PREVIEW.clinicName);
+    expect(c).toContain(VALID_PREVIEW.taxId);
+    expect(c).not.toContain(VALID_PREVIEW.licenseNumber);
+    expect(c).not.toContain(VALID_PREVIEW.phone);
+  });
+
+  it("keeps Finish disabled while the personal phone is empty", async () => {
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, { ...VALID_PREVIEW, phone: null }));
+    const { wrapper } = await mountPartnerRegistrationView();
+    await signAndAcknowledge(wrapper);
+    expect(finishButton(wrapper).attributes("disabled")).toBeDefined();
+    expect(wrapper.text()).toContain(en["user.partnerRegistration.form.finishHintDetails"]);
+  });
+
+  it("submits the doctor's name, email and phone", async () => {
+    const wrapper = await readyToFinish();
+    apiFetch.mockResolvedValueOnce(jsonResponse(true, { success: true, email: VALID_PREVIEW.email }));
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+    const [, init] = apiFetch.mock.calls.at(-1)! as [string, { body: string }];
+    expect(JSON.parse(init.body)).toMatchObject({
+      firstName: "Ana",
+      lastName: "García",
+      email: VALID_PREVIEW.email,
+      phone: VALID_PREVIEW.phone,
+    });
+  });
+
+  it("a changed email is what gets submitted, and it asks to sign again", async () => {
+    const wrapper = await readyToFinish();
+    expect(finishButton(wrapper).attributes("disabled")).toBeUndefined();
+    await editPersonValue(wrapper, VALID_PREVIEW.email, "new.doctor@example.com");
+
+    expect(person(wrapper).text()).toContain("new.doctor@example.com");
+    expect(wrapper.text()).toContain(en["user.partnerRegistration.form.detailsChangedResign"]);
+    expect(finishButton(wrapper).attributes("disabled")).toBeDefined();
+  });
+
+  it("changing only the phone does not force a new signature (it is not in the contract)", async () => {
+    const wrapper = await readyToFinish();
+    await editPersonValue(wrapper, VALID_PREVIEW.phone, "+52 55 1111 2222");
+    expect(person(wrapper).text()).toContain("+52 55 1111 2222");
+    expect(wrapper.text()).not.toContain(en["user.partnerRegistration.form.detailsChangedResign"]);
+    expect(finishButton(wrapper).attributes("disabled")).toBeUndefined();
+  });
+
+  it("an email already in use is marked on the email row, with no red alert", async () => {
+    const wrapper = await readyToFinish();
+    apiFetch.mockResolvedValueOnce(
+      jsonResponse(false, { error: "Email already in use", code: "EMAIL_IN_USE", field: "email" }, 409),
+    );
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+    expect(person(wrapper).find('[data-field="email"] [data-testid="clinic-detail-error"]').exists()).toBe(true);
+    expect(wrapper.text()).not.toContain(en["user.partnerRegistration.form.errorSubmit"]);
+  });
+
+  it("the login redirect uses the email the API confirms (the changed one)", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    try {
+      const wrapper = await readyToFinish();
+      apiFetch.mockResolvedValueOnce(jsonResponse(true, { success: true, email: "new.doctor@example.com" }));
+      await wrapper.find("form").trigger("submit");
+      await flushPromises();
+      expect(wrapper.text()).toContain("new.doctor@example.com");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

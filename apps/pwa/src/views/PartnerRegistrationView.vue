@@ -30,7 +30,7 @@
           type="success"
           class="partner-registration__alert"
           :title="t('user.partnerRegistration.form.successTitle')"
-          :text="t('user.partnerRegistration.form.success', { email: preview?.email ?? '' })"
+          :text="t('user.partnerRegistration.form.success', { email: confirmedEmail })"
         />
         <p class="partner-registration__subtitle" role="status" aria-live="polite">
           {{ t('user.partnerRegistration.form.redirecting', { seconds: redirectSeconds }) }}
@@ -99,7 +99,52 @@
             />
           </div>
 
-          <div class="partner-registration__clinic-details">
+          <div class="partner-registration__clinic-details" data-testid="person-details">
+            <div class="partner-registration__clinic-details-header">
+              <h2 class="partner-registration__clinic-details-heading">
+                {{ t('user.partnerRegistration.form.personDetailsHeading') }}
+              </h2>
+              <!-- Tonal (light brand fill) + pencil icon, default size — Łukasz asked for an
+                   icon and a background so the action can't be missed (NEO-51 review, 2026-09-25). -->
+              <AppButton
+                variant="tonal"
+                color="primary"
+                type="button"
+                class="partner-registration__edit-button"
+                data-testid="edit-person"
+                @click="openEditDialog(undefined, 'person')"
+              >
+                <template #prepend><AppIcon name="pencil" /></template>
+                {{ t('user.partnerRegistration.form.editDetails') }}
+              </AppButton>
+            </div>
+            <p class="partner-registration__clinic-details-hint">
+              {{ t('user.partnerRegistration.form.personDetailsHint') }}
+            </p>
+            <dl class="partner-registration__clinic-details-list">
+              <div
+                v-for="field in personDetailFields"
+                :key="field.key"
+                class="partner-registration__clinic-details-row"
+                :data-field="field.key"
+              >
+                <dt>{{ t(field.labelKey) }}</dt>
+                <dd :class="{ 'partner-registration__clinic-details-empty': !field.value && field.required }">
+                  {{ field.value || t('user.partnerRegistration.form.notProvided') }}
+                </dd>
+                <!-- The API rejected this value (NEO-109): said here too, not only in the summary. -->
+                <dd
+                  v-if="mainErrors.serverError(field.key)"
+                  class="partner-registration__clinic-details-error"
+                  data-testid="clinic-detail-error"
+                >
+                  {{ mainErrors.serverError(field.key) }}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="partner-registration__clinic-details" data-testid="clinic-details">
             <div class="partner-registration__clinic-details-header">
               <h2 class="partner-registration__clinic-details-heading">
                 {{ t('user.partnerRegistration.form.clinicDetailsHeading') }}
@@ -111,7 +156,8 @@
                 color="primary"
                 type="button"
                 class="partner-registration__edit-button"
-                @click="openEditDialog()"
+                data-testid="edit-clinic"
+                @click="openEditDialog(undefined, 'clinic')"
               >
                 <template #prepend><AppIcon name="pencil" /></template>
                 {{ t('user.partnerRegistration.form.editDetails') }}
@@ -183,96 +229,153 @@
     <AppFormDialog
       v-model="showEditDialog"
       max-width="520"
-      :title="t('user.partnerRegistration.form.editModal.title')"
+      :title="t(editScope === 'person' ? 'user.partnerRegistration.form.editModal.personTitle' : 'user.partnerRegistration.form.editModal.title')"
       @close="cancelEditDialog"
->
+    >
       <VForm ref="editFormRef" @submit.prevent="saveEditDialog">
         <FormErrorSummary
           :errors="dialogErrorList"
           :title="t('app.formRenderer.errorSummary.title', { n: dialogErrorList.length })"
           @select="focusDialogField"
         />
-        <VRadioGroup
-          :ref="(el: unknown) => setFieldEl('practiceRole', el)"
-          v-model="draftPracticeRole"
-          :label="t('user.partnerRegistration.form.practiceRole')"
-          :hint="t('user.partnerRegistration.form.practiceRoleHint')"
-          persistent-hint
-          class="mb-3"
-          :error-messages="dialogErrors.serverError('practiceRole')"
-          @update:model-value="dialogErrors.clearServerError('practiceRole')"
-        >
-          <VRadio :label="t('user.partnerRegistration.form.practiceRoleOwner')" value="owner" />
-          <VRadio :label="t('user.partnerRegistration.form.practiceRoleStaff')" value="staff" />
-        </VRadioGroup>
-        <VTextField
-          :ref="(el: unknown) => setFieldEl('licenseNumber', el)"
-          v-model="draftLicenseNumber"
-          :label="licenseLabel"
-          :hint="licenseHint"
-          persistent-hint
-          variant="outlined"
-          density="comfortable"
-          class="mb-3"
-          inputmode="numeric"
-          :rules="[ruleLicenseNumber]"
-          :error-messages="dialogErrors.serverError('licenseNumber')"
-          @update:model-value="dialogErrors.clearServerError('licenseNumber')"
-        />
-        <VTextField
-          :ref="(el: unknown) => setFieldEl('clinicName', el)"
-          v-model="draftClinicName"
-          :label="t('user.partnerRegistration.form.clinicName')"
-          variant="outlined"
-          density="comfortable"
-          class="mb-3"
-          :rules="[ruleClinicNameRequired]"
-          :error-messages="dialogErrors.serverError('clinicName')"
-          @update:model-value="dialogErrors.clearServerError('clinicName')"
-        />
-        <VTextField
-          :ref="(el: unknown) => setFieldEl('clinicEmail', el)"
-          v-model="draftClinicEmail"
-          :label="t('user.partnerRegistration.form.clinicEmail')"
-          variant="outlined"
-          density="comfortable"
-          class="mb-3"
-          :rules="[ruleClinicEmailRequired]"
-          :error-messages="dialogErrors.serverError('clinicEmail')"
-          @update:model-value="dialogErrors.clearServerError('clinicEmail')"
-        />
-        <VTextField
-          :ref="(el: unknown) => setFieldEl('clinicPhone', el)"
-          v-model="draftClinicPhone"
-          :label="t('user.partnerRegistration.form.clinicPhone')"
-          variant="outlined"
-          density="comfortable"
-          class="mb-3"
-          :rules="[ruleClinicPhoneRequired]"
-          :error-messages="dialogErrors.serverError('clinicPhone')"
-          @update:model-value="dialogErrors.clearServerError('clinicPhone')"
-        />
-        <VTextField
-          :ref="(el: unknown) => setFieldEl('taxId', el)"
-          v-model="draftTaxId"
-          :label="draftPracticeRole === 'owner' ? t('user.partnerRegistration.form.taxId') : t('user.partnerRegistration.form.taxIdOptional')"
-          variant="outlined"
-          density="comfortable"
-          class="mb-3"
-          :rules="[ruleTaxId]"
-          :error-messages="dialogErrors.serverError('taxId')"
-          @update:model-value="dialogErrors.clearServerError('taxId')"
-        />
-        <VTextField
-          :ref="(el: unknown) => setFieldEl('billingAddress', el)"
-          v-model="draftBillingAddress"
-          :label="t('user.partnerRegistration.form.billingAddress')"
-          variant="outlined"
-          density="comfortable"
-          :rules="[ruleBillingAddressRequired]"
-          :error-messages="dialogErrors.serverError('billingAddress')"
-          @update:model-value="dialogErrors.clearServerError('billingAddress')"
-        />
+        <template v-if="editScope === 'person'">
+          <VTextField
+            :ref="(el: unknown) => setFieldEl('firstName', el)"
+            v-model="draftFirstName"
+            :label="t('user.partnerRegistration.form.firstName')"
+            variant="outlined"
+            density="comfortable"
+            class="mb-3"
+            autocomplete="given-name"
+            :rules="[ruleFirstNameRequired]"
+            :error-messages="dialogErrors.serverError('firstName')"
+            @update:model-value="dialogErrors.clearServerError('firstName')"
+          />
+          <VTextField
+            :ref="(el: unknown) => setFieldEl('lastName', el)"
+            v-model="draftLastName"
+            :label="t('user.partnerRegistration.form.lastName')"
+            variant="outlined"
+            density="comfortable"
+            class="mb-3"
+            autocomplete="family-name"
+            :rules="[ruleLastNameRequired]"
+            :error-messages="dialogErrors.serverError('lastName')"
+            @update:model-value="dialogErrors.clearServerError('lastName')"
+          />
+          <VTextField
+            :ref="(el: unknown) => setFieldEl('email', el)"
+            v-model="draftEmail"
+            type="email"
+            :label="t('user.partnerRegistration.form.email')"
+            :hint="t('user.partnerRegistration.form.emailHint')"
+            persistent-hint
+            variant="outlined"
+            density="comfortable"
+            class="mb-3"
+            autocomplete="email"
+            :rules="[ruleEmail]"
+            :error-messages="dialogErrors.serverError('email')"
+            @update:model-value="dialogErrors.clearServerError('email')"
+          />
+          <VTextField
+            :ref="(el: unknown) => setFieldEl('phone', el)"
+            v-model="draftPhone"
+            type="tel"
+            :label="t('user.partnerRegistration.form.phone')"
+            :hint="t('user.partnerRegistration.form.phoneHint')"
+            persistent-hint
+            variant="outlined"
+            density="comfortable"
+            class="mb-3"
+            autocomplete="tel"
+            :rules="[rulePhoneRequired]"
+            :error-messages="dialogErrors.serverError('phone')"
+            @update:model-value="dialogErrors.clearServerError('phone')"
+          />
+          <VTextField
+            :ref="(el: unknown) => setFieldEl('licenseNumber', el)"
+            v-model="draftLicenseNumber"
+            :label="licenseLabel"
+            :hint="licenseHint"
+            persistent-hint
+            variant="outlined"
+            density="comfortable"
+            inputmode="numeric"
+            :rules="[ruleLicenseNumber]"
+            :error-messages="dialogErrors.serverError('licenseNumber')"
+            @update:model-value="dialogErrors.clearServerError('licenseNumber')"
+          />
+        </template>
+        <template v-else>
+          <VRadioGroup
+            :ref="(el: unknown) => setFieldEl('practiceRole', el)"
+            v-model="draftPracticeRole"
+            :label="t('user.partnerRegistration.form.practiceRole')"
+            :hint="t('user.partnerRegistration.form.practiceRoleHint')"
+            persistent-hint
+            class="mb-3"
+            :error-messages="dialogErrors.serverError('practiceRole')"
+            @update:model-value="dialogErrors.clearServerError('practiceRole')"
+          >
+            <VRadio :label="t('user.partnerRegistration.form.practiceRoleOwner')" value="owner" />
+            <VRadio :label="t('user.partnerRegistration.form.practiceRoleStaff')" value="staff" />
+          </VRadioGroup>
+          <VTextField
+            :ref="(el: unknown) => setFieldEl('clinicName', el)"
+            v-model="draftClinicName"
+            :label="t('user.partnerRegistration.form.clinicName')"
+            variant="outlined"
+            density="comfortable"
+            class="mb-3"
+            :rules="[ruleClinicNameRequired]"
+            :error-messages="dialogErrors.serverError('clinicName')"
+            @update:model-value="dialogErrors.clearServerError('clinicName')"
+          />
+          <VTextField
+            :ref="(el: unknown) => setFieldEl('clinicEmail', el)"
+            v-model="draftClinicEmail"
+            :label="t('user.partnerRegistration.form.clinicEmail')"
+            variant="outlined"
+            density="comfortable"
+            class="mb-3"
+            :rules="[ruleClinicEmailRequired]"
+            :error-messages="dialogErrors.serverError('clinicEmail')"
+            @update:model-value="dialogErrors.clearServerError('clinicEmail')"
+          />
+          <VTextField
+            :ref="(el: unknown) => setFieldEl('clinicPhone', el)"
+            v-model="draftClinicPhone"
+            :label="t('user.partnerRegistration.form.clinicPhone')"
+            variant="outlined"
+            density="comfortable"
+            class="mb-3"
+            :rules="[ruleClinicPhoneRequired]"
+            :error-messages="dialogErrors.serverError('clinicPhone')"
+            @update:model-value="dialogErrors.clearServerError('clinicPhone')"
+          />
+          <VTextField
+            :ref="(el: unknown) => setFieldEl('taxId', el)"
+            v-model="draftTaxId"
+            :label="draftPracticeRole === 'owner' ? t('user.partnerRegistration.form.taxId') : t('user.partnerRegistration.form.taxIdOptional')"
+            variant="outlined"
+            density="comfortable"
+            class="mb-3"
+            :rules="[ruleTaxId]"
+            :error-messages="dialogErrors.serverError('taxId')"
+            @update:model-value="dialogErrors.clearServerError('taxId')"
+          />
+          <VTextField
+            :ref="(el: unknown) => setFieldEl('billingAddress', el)"
+            v-model="draftBillingAddress"
+            :label="t('user.partnerRegistration.form.billingAddress')"
+            variant="outlined"
+            density="comfortable"
+            :rules="[ruleBillingAddressRequired]"
+            :error-messages="dialogErrors.serverError('billingAddress')"
+            @update:model-value="dialogErrors.clearServerError('billingAddress')"
+          />
+        </template>
       </VForm>
 
       <template #actions>
@@ -353,7 +456,7 @@ let redirectTimer: ReturnType<typeof setInterval> | null = null;
 function goToLogin() {
   if (redirectTimer) clearInterval(redirectTimer);
   redirectTimer = null;
-  void router.push({ path: "/login", query: { email: preview.value?.email ?? "" } });
+  void router.push({ path: "/login", query: { email: confirmedEmail.value } });
 }
 
 function startLoginRedirect() {
@@ -371,11 +474,13 @@ onBeforeUnmount(() => {
 /** "unreachable": the invite could not be checked (network / server) — not the same as an invalid link (NEO-81). */
 type Step = "loading" | "invalid" | "unreachable" | "form" | "submitted";
 type PracticeRole = "owner" | "staff";
+type EditScope = "person" | "clinic";
 
 interface InvitePreview {
   email: string;
   firstName: string | null;
   lastName: string | null;
+  phone: string | null;
   clinicName: string | null;
   clinicEmail: string | null;
   clinicPhone: string | null;
@@ -402,6 +507,12 @@ const confirmPassword = ref("");
 // read-only in the template; only ever written to via saveEditDialog(), never
 // bound directly to an input, so a doctor can't change one by accident while
 // just reading the page.
+const firstName = ref("");
+const lastName = ref("");
+const email = ref("");
+const phone = ref("");
+/** The login email the API confirmed on accept (the doctor may have changed it). */
+const confirmedEmail = ref("");
 const clinicName = ref("");
 const clinicEmail = ref("");
 const clinicPhone = ref("");
@@ -433,13 +544,20 @@ interface ClinicDetailField {
   required: boolean;
 }
 
-const clinicDetailFields = computed<ClinicDetailField[]>(() => [
+const personDetailFields = computed<ClinicDetailField[]>(() => [
+  { key: "firstName", labelKey: "user.partnerRegistration.form.firstName", value: firstName.value, required: true },
+  { key: "lastName", labelKey: "user.partnerRegistration.form.lastName", value: lastName.value, required: true },
+  { key: "email", labelKey: "user.partnerRegistration.form.email", value: email.value, required: true },
+  { key: "phone", labelKey: "user.partnerRegistration.form.phone", value: phone.value, required: true },
   {
     key: "licenseNumber",
     labelKey: jurisdiction.value === "MX" ? "app.identity.form.cedula" : "app.identity.form.pwz",
     value: licenseNumber.value,
     required: true,
   },
+]);
+
+const clinicDetailFields = computed<ClinicDetailField[]>(() => [
   {
     key: "practiceRole",
     labelKey: "user.partnerRegistration.form.practiceRole",
@@ -470,7 +588,8 @@ const clinicDetailFields = computed<ClinicDetailField[]>(() => [
  * document, dead link) is a key-less summary line; only what the doctor
  * can't fix (network, 5xx) stays the red alert.
  */
-const CLINIC_KEYS = ["licenseNumber", "practiceRole", "clinicName", "clinicEmail", "clinicPhone", "taxId", "billingAddress"] as const;
+const PERSON_KEYS = ["firstName", "lastName", "email", "phone", "licenseNumber"] as const;
+const CLINIC_KEYS = ["practiceRole", "clinicName", "clinicEmail", "clinicPhone", "taxId", "billingAddress"] as const;
 const PASSWORD_KEYS = ["password", "confirmPassword"] as const;
 const mainErrors = useFormErrors();
 const dialogErrors = useFormErrors();
@@ -492,7 +611,7 @@ const mainFieldErrors = mainErrors.errorListFor((): FormErrorField[] => [
   },
   // No client rules here — an incomplete detail already keeps Finish disabled
   // (finishHintKey); these lines only carry what the API rejected.
-  ...clinicDetailFields.value.map((f) => ({ key: f.key, label: t(f.labelKey), value: f.value })),
+  ...[...personDetailFields.value, ...clinicDetailFields.value].map((f) => ({ key: f.key, label: t(f.labelKey), value: f.value })),
 ]);
 
 const mainErrorList = computed<FormErrorSummaryLine[]>(() => [
@@ -517,19 +636,19 @@ function focusMainField(key: string) {
 
 const clinicDetailsComplete = computed(
   () =>
-    clinicDetailFields.value.every((field) => !field.required || field.value.trim().length > 0) &&
+    [...personDetailFields.value, ...clinicDetailFields.value].every((field) => !field.required || field.value.trim().length > 0) &&
     !!jurisdiction.value &&
     isValidLicenseNumber(jurisdiction.value, licenseNumber.value)
 );
 
 /** What the documents print about the doctor — also what the preview shows, so the preview never differs from the PDF. */
 const partyFields = computed<Record<string, string>>(() => ({
-  doctor_name: `${preview.value?.firstName ?? ""} ${preview.value?.lastName ?? ""}`.trim() || (preview.value?.email ?? ""),
+  doctor_name: `${firstName.value} ${lastName.value}`.trim() || email.value,
   license_number: licenseNumber.value,
   clinic_name: clinicName.value,
   tax_id: taxId.value,
   clinic_address: billingAddress.value,
-  email: preview.value?.email ?? "",
+  email: email.value,
 }));
 
 // A signature covers the exact text the doctor saw. If they change a detail
@@ -557,6 +676,11 @@ const finishHintKey = computed<string | null>(() => {
 // Save; Cancel discards the drafts below untouched.
 const showEditDialog = ref(false);
 const editFormRef = ref<{ validate: () => Promise<{ valid: boolean }>; $el?: Element } | null>(null);
+const editScope = ref<EditScope>("clinic");
+const draftFirstName = ref("");
+const draftLastName = ref("");
+const draftEmail = ref("");
+const draftPhone = ref("");
 const draftClinicName = ref("");
 const draftClinicEmail = ref("");
 const draftClinicPhone = ref("");
@@ -566,8 +690,12 @@ const draftLicenseNumber = ref("");
 const draftPracticeRole = ref<PracticeRole>("staff");
 
 /** The committed value of each practice detail — what Save diffs the drafts against. */
-function committedDetails(): Record<(typeof CLINIC_KEYS)[number], string> {
+function committedDetails(): Record<(typeof PERSON_KEYS)[number] | (typeof CLINIC_KEYS)[number], string> {
   return {
+    firstName: firstName.value,
+    lastName: lastName.value,
+    email: email.value,
+    phone: phone.value,
     licenseNumber: licenseNumber.value,
     practiceRole: practiceRole.value,
     clinicName: clinicName.value,
@@ -578,18 +706,32 @@ function committedDetails(): Record<(typeof CLINIC_KEYS)[number], string> {
   };
 }
 
-const dialogErrorList = dialogErrors.errorListFor((): FormErrorField[] => [
+const dialogErrorList = dialogErrors.errorListFor((): FormErrorField[] =>
+  editScope.value === "person"
+    ? [
+        { key: "firstName", label: t("user.partnerRegistration.form.firstName"), value: draftFirstName.value, rules: [(v) => ruleFirstNameRequired(String(v ?? ""))] },
+        { key: "lastName", label: t("user.partnerRegistration.form.lastName"), value: draftLastName.value, rules: [(v) => ruleLastNameRequired(String(v ?? ""))] },
+        { key: "email", label: t("user.partnerRegistration.form.email"), value: draftEmail.value, rules: [(v) => ruleEmail(String(v ?? ""))] },
+        { key: "phone", label: t("user.partnerRegistration.form.phone"), value: draftPhone.value, rules: [(v) => rulePhoneRequired(String(v ?? ""))] },
+        { key: "licenseNumber", label: licenseLabel.value, value: draftLicenseNumber.value, rules: [(v) => ruleLicenseNumber(String(v ?? ""))] },
+      ]
+    : [
   { key: "practiceRole", label: t("user.partnerRegistration.form.practiceRole"), value: draftPracticeRole.value },
-  { key: "licenseNumber", label: licenseLabel.value, value: draftLicenseNumber.value, rules: [(v) => ruleLicenseNumber(String(v ?? ""))] },
   { key: "clinicName", label: t("user.partnerRegistration.form.clinicName"), value: draftClinicName.value, rules: [(v) => ruleClinicNameRequired(String(v ?? ""))] },
   { key: "clinicEmail", label: t("user.partnerRegistration.form.clinicEmail"), value: draftClinicEmail.value, rules: [(v) => ruleClinicEmailRequired(String(v ?? ""))] },
   { key: "clinicPhone", label: t("user.partnerRegistration.form.clinicPhone"), value: draftClinicPhone.value, rules: [(v) => ruleClinicPhoneRequired(String(v ?? ""))] },
   { key: "taxId", label: t("user.partnerRegistration.form.taxId"), value: draftTaxId.value, rules: [(v) => ruleTaxId(String(v ?? ""))] },
   { key: "billingAddress", label: t("user.partnerRegistration.form.billingAddress"), value: draftBillingAddress.value, rules: [(v) => ruleBillingAddressRequired(String(v ?? ""))] },
-]);
+      ],
+);
 
 /** Opens the details dialog; `focusKey` (from a summary link) puts the cursor in that field. */
-async function openEditDialog(focusKey?: string) {
+async function openEditDialog(focusKey?: string, scope?: EditScope) {
+  editScope.value = scope ?? ((PERSON_KEYS as readonly string[]).includes(focusKey ?? "") ? "person" : "clinic");
+  draftFirstName.value = firstName.value;
+  draftLastName.value = lastName.value;
+  draftEmail.value = email.value;
+  draftPhone.value = phone.value;
   draftClinicName.value = clinicName.value;
   draftClinicEmail.value = clinicEmail.value;
   draftClinicPhone.value = clinicPhone.value;
@@ -598,10 +740,11 @@ async function openEditDialog(focusKey?: string) {
   draftLicenseNumber.value = licenseNumber.value;
   draftPracticeRole.value = practiceRole.value;
   // The details the API rejected open already marked; otherwise the dialog starts clean.
+  const scopeKeys: readonly string[] = editScope.value === "person" ? PERSON_KEYS : CLINIC_KEYS;
   const rejected: FieldErrors = Object.fromEntries(
-    Object.entries(mainErrors.serverErrors.value).filter(([key]) => (CLINIC_KEYS as readonly string[]).includes(key)),
+    Object.entries(mainErrors.serverErrors.value).filter(([key]) => scopeKeys.includes(key)),
   );
-  if (Object.keys(rejected).length) dialogErrors.setServerErrors(rejected, CLINIC_KEYS);
+  if (Object.keys(rejected).length) dialogErrors.setServerErrors(rejected, scopeKeys);
   else dialogErrors.reset();
   showEditDialog.value = true;
   if (focusKey) {
@@ -623,7 +766,11 @@ async function saveEditDialog() {
   }
   // A rejected detail the doctor changed is no longer the value the API saw.
   const before = committedDetails();
-  const drafts: Record<(typeof CLINIC_KEYS)[number], string> = {
+  const drafts: Record<(typeof PERSON_KEYS)[number] | (typeof CLINIC_KEYS)[number], string> = {
+    firstName: draftFirstName.value.trim(),
+    lastName: draftLastName.value.trim(),
+    email: draftEmail.value.trim(),
+    phone: draftPhone.value.trim(),
     licenseNumber: draftLicenseNumber.value.trim(),
     practiceRole: draftPracticeRole.value,
     clinicName: draftClinicName.value.trim(),
@@ -632,16 +779,24 @@ async function saveEditDialog() {
     taxId: draftTaxId.value.trim(),
     billingAddress: draftBillingAddress.value.trim(),
   };
-  for (const key of CLINIC_KEYS) {
+  const keys = editScope.value === "person" ? PERSON_KEYS : CLINIC_KEYS;
+  for (const key of keys) {
     if (drafts[key] !== before[key]) mainErrors.clearServerError(key);
   }
-  clinicName.value = draftClinicName.value.trim();
-  clinicEmail.value = draftClinicEmail.value.trim();
-  clinicPhone.value = draftClinicPhone.value.trim();
-  taxId.value = draftTaxId.value.trim();
-  billingAddress.value = draftBillingAddress.value.trim();
-  licenseNumber.value = draftLicenseNumber.value.trim();
-  practiceRole.value = draftPracticeRole.value;
+  if (editScope.value === "person") {
+    firstName.value = drafts.firstName;
+    lastName.value = drafts.lastName;
+    email.value = drafts.email;
+    phone.value = drafts.phone;
+    licenseNumber.value = drafts.licenseNumber;
+  } else {
+    clinicName.value = drafts.clinicName;
+    clinicEmail.value = drafts.clinicEmail;
+    clinicPhone.value = drafts.clinicPhone;
+    taxId.value = drafts.taxId;
+    billingAddress.value = drafts.billingAddress;
+    practiceRole.value = drafts.practiceRole as PracticeRole;
+  }
   showEditDialog.value = false;
 }
 
@@ -701,6 +856,18 @@ function rulePasswordMin(v: string) {
 function rulePasswordMatch(v: string) {
   return v === password.value || t("user.partnerRegistration.form.validation.passwordMismatch");
 }
+function ruleFirstNameRequired(v: string) {
+  return !!v.trim() || t("user.partnerRegistration.form.validation.firstNameRequired");
+}
+function ruleLastNameRequired(v: string) {
+  return !!v.trim() || t("user.partnerRegistration.form.validation.lastNameRequired");
+}
+function ruleEmail(v: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()) || t("user.partnerRegistration.form.validation.emailInvalid");
+}
+function rulePhoneRequired(v: string) {
+  return !!v.trim() || t("user.partnerRegistration.form.validation.phoneRequired");
+}
 function ruleClinicNameRequired(v: string) {
   return !!v.trim() || t("user.partnerRegistration.form.validation.clinicNameRequired");
 }
@@ -734,6 +901,10 @@ async function loadInvite(): Promise<void> {
     if (res.ok) {
       const data = (await res.json()) as InvitePreview;
       preview.value = data;
+      firstName.value = data.firstName ?? "";
+      lastName.value = data.lastName ?? "";
+      email.value = data.email;
+      phone.value = data.phone ?? "";
       clinicName.value = data.clinicName ?? "";
       clinicEmail.value = data.clinicEmail ?? "";
       clinicPhone.value = data.clinicPhone ?? "";
@@ -795,6 +966,10 @@ async function onSubmit() {
       body: JSON.stringify({
         token,
         password: password.value,
+        firstName: firstName.value,
+        lastName: lastName.value,
+        email: email.value,
+        phone: phone.value,
         clinicName: clinicName.value,
         clinicEmail: clinicEmail.value,
         clinicPhone: clinicPhone.value,
@@ -810,6 +985,9 @@ async function onSubmit() {
       }),
     });
     if (res.ok) {
+      // benign: an unreadable body only means we fall back to the typed email
+      const body = (await res.json().catch(() => null)) as { email?: string } | null;
+      confirmedEmail.value = body?.email ?? email.value;
       step.value = "submitted";
       startLoginRedirect();
       return;
@@ -822,7 +1000,7 @@ async function onSubmit() {
       showFormErrors();
       return;
     }
-    if (fieldErrors && mainErrors.setServerErrors(fieldErrors, [...PASSWORD_KEYS, ...CLINIC_KEYS])) {
+    if (fieldErrors && mainErrors.setServerErrors(fieldErrors, [...PASSWORD_KEYS, ...PERSON_KEYS, ...CLINIC_KEYS])) {
       showFormErrors();
       return;
     }
