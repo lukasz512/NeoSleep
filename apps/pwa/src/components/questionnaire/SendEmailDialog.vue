@@ -22,6 +22,7 @@
           v-model="selected"
           :value="item.key"
           :label="itemTitle(item)"
+          :disabled="sending"
           :data-testid="`send-email-item-${item.key}`"
           color="primary"
           density="compact"
@@ -36,10 +37,12 @@
         v-if="recipient && items.length"
         v-model="copyToMe"
         :label="t('app.clinical.email.copyToMe')"
+        :disabled="sending"
         color="primary"
         density="compact"
         hide-details
       />
+      <AppInlineAlert v-if="error" type="error" :text="error" data-testid="send-email-error" />
       <p v-if="recipient" class="send-email__hint">
         <AppIcon name="info-circle" class="send-email__hint-icon" />{{ t("app.clinical.email.spamHint") }}
       </p>
@@ -60,7 +63,6 @@
     </form>
 
     <template #actions>
-      <AppButton v-if="lastUrl" variant="text" @click="copyLink">{{ t("app.clinical.email.copyLink") }}</AppButton>
       <VSpacer />
       <AppButton variant="text" @click="emit('update:modelValue', false)">{{ t("app.common.close") }}</AppButton>
       <AppButton
@@ -79,7 +81,6 @@
 </template>
 
 <script setup lang="ts">
-import { reportCaught } from "@api";
 import { AppInlineAlert } from "@ui";
 import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
@@ -87,7 +88,6 @@ import AppFormDialog from "../AppFormDialog.vue";
 import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import EmailLanguageSelect from "./EmailLanguageSelect.vue";
-import { useNotifications } from "../../composables/useNotifications";
 import type { ChecklistItem, EmailSend, EmailSendStatus } from "../../composables/usePatientChecklist";
 
 /**
@@ -95,7 +95,7 @@ import type { ChecklistItem, EmailSend, EmailSendStatus } from "../../composable
  * patient's online documents the emailed link covers, can ask for a
  * link-free confirmation for themselves, and sees what was sent before and
  * whether it arrived (delivery status from Resend, NEO-190). The link itself
- * is shown only as "Copy link" right after sending — it is a credential.
+ * is a credential: it is offered only as "Copy link" on the success toast (NEO-277).
  */
 const props = defineProps<{
   modelValue: boolean;
@@ -109,8 +109,8 @@ const props = defineProps<{
   language: string;
   sends: EmailSend[];
   sending: boolean;
-  /** Link of the email just sent, for "Copy link"; null before sending. */
-  lastUrl: string | null;
+  /** Why the last send failed (the dialog stays open); null otherwise. */
+  error: string | null;
   itemTitle: (item: ChecklistItem) => string;
   formatDateTime: (value: string) => string;
 }>();
@@ -119,7 +119,6 @@ const emit = defineEmits<{
   send: [payload: { items: string[]; copyToMe: boolean; language: string }];
 }>();
 const { t } = useI18n();
-const notifications = useNotifications();
 
 const selected = ref<string[]>([]);
 const copyToMe = ref(false);
@@ -155,15 +154,6 @@ function tone(status: EmailSendStatus): "ok" | "warn" | "bad" | "neutral" {
   return "bad";
 }
 
-async function copyLink() {
-  if (!props.lastUrl) return;
-  try {
-    await navigator.clipboard.writeText(props.lastUrl);
-    notifications.show(t("app.clinical.qr.copied"), "success", undefined, { icon: "mail" });
-  } catch (err) {
-    reportCaught(err, { where: "SendEmailDialog.copyLink", level: "warn" });
-  }
-}
 </script>
 
 <style scoped>
