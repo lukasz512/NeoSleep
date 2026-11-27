@@ -23,6 +23,7 @@ const routes: RouteRecordRaw[] = [
   { path: "/for-professionals", name: "for-professionals", component: ForProfessionalsView, meta: { layout: "default" } },
   { path: "/find-specialist", name: "find-specialist", component: FindSpecialistView, meta: { layout: "default" } },
   { path: "/evento", name: "evento", component: EventoView, meta: { layout: "default" } },
+  { path: "/julio", name: "julio", component: () => import("../views/JulioView.vue") },
   {
     path: "/:pathMatch(.*)*",
     redirect: "/",

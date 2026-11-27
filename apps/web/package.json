@@ -20,6 +20,7 @@
     "@vueuse/core": "catalog:",
     "flag-icons": "^7.5.0",
     "pinia": "catalog:",
+    "three": "0.170.0",
     "vue": "catalog:",
     "vue-gtag": "^3.7.1",
     "vue-i18n": "catalog:",
@@ -28,6 +29,7 @@
   },
   "devDependencies": {
     "@types/google.maps": "^3.66.4",
+    "@types/three": "0.170.0",
     "@vitejs/plugin-vue": "catalog:",
     "@vue/test-utils": "catalog:",
     "eslint": "catalog:",
