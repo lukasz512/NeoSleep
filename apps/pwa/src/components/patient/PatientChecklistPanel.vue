@@ -171,7 +171,7 @@
       :language="emailDialog.language"
       :sends="emailDialog.sends"
       :sending="emailing"
-      :last-url="emailDialog.lastUrl"
+      :error="emailDialog.error"
       :item-title="itemTitle"
       :format-date-time="formatDateTime"
       @send="onEmailSend"
@@ -867,12 +867,12 @@ watch(
  * delivery status, and can copy the link right after sending.
  */
 const emailing = ref(false);
-const emailDialog = reactive<{ open: boolean; recipient: string | null; language: string; sends: EmailSend[]; lastUrl: string | null }>({
+const emailDialog = reactive<{ open: boolean; recipient: string | null; language: string; sends: EmailSend[]; error: string | null }>({
   open: false,
   recipient: null,
   language: "en",
   sends: [],
-  lastUrl: null,
+  error: null,
 });
 const emailableItems = computed(() => (checklist.value?.items ?? []).filter((item) => item.actions.qr));
 const openEmailKeys = computed(() =>
@@ -886,16 +886,18 @@ async function refreshEmailSends() {
   emailDialog.sends = data.sends;
 }
 async function openEmailDialog() {
-  emailDialog.lastUrl = null;
+  emailDialog.error = null;
   emailDialog.open = true;
   await refreshEmailSends();
 }
 async function onEmailSend({ items, copyToMe, language }: { items: string[]; copyToMe: boolean; language: string }) {
   emailing.value = true;
+  emailDialog.error = null;
   try {
-    const sent = await checklistApi.sendByEmail({ items, copyToMe, language });
-    if (sent) emailDialog.lastUrl = sent.url;
-    await refreshEmailSends();
+    const result = await checklistApi.sendByEmail({ items, copyToMe, language });
+    // Success: the toast confirms and the dialog closes. Failure: it stays open with the reason.
+    if (result.ok) emailDialog.open = false;
+    else emailDialog.error = result.message;
   } finally {
     emailing.value = false;
   }

@@ -49,7 +49,7 @@ async function mountDialog(props: Record<string, unknown> = {}) {
       language: "mx",
       sends: SENDS,
       sending: false,
-      lastUrl: null,
+      error: null,
       itemTitle: (i: ChecklistItem) => i.key,
       formatDateTime: (v: string) => v.slice(0, 10),
       ...props,
@@ -90,6 +90,15 @@ describe("SendEmailDialog (NEO-192)", () => {
     (document.getElementById("send-email-form") as HTMLFormElement).requestSubmit();
     await nextTick();
     expect(w.emitted("send")).toEqual([[{ items: ["medicalHistory"], copyToMe: false, language: "mx" }]]);
+  });
+
+  // NEO-277: while sending the form is locked; a failure stays inline so the sender can retry.
+  it("locks the documents while sending and shows a failure inline", async () => {
+    await mountDialog({ sending: true });
+    expect(checkbox("medicalHistory").disabled).toBe(true);
+    document.body.innerHTML = "";
+    await mountDialog({ error: "The email couldn't be sent. Try again." });
+    expect(document.querySelector("[data-testid=send-email-error]")?.textContent).toContain("couldn't be sent");
   });
 
   // CORE-268: the sender sees the mail language, it starts at the recipient's own, and a change applies to this send.
