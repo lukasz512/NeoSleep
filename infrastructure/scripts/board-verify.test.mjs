@@ -34,6 +34,17 @@ test("only pending tickets are picked up, with the agent token", async () => {
   assert.equal(seen.headers["X-Agent-Token"], "tok");
 });
 
+test("a board API without the verifying status yields no work; other errors throw", async () => {
+  const unknown = async () => ({ ok: false, status: 400, json: async () => ({ error: "unknown status" }) });
+  assert.deepEqual(await pendingItems({ config, fetchImpl: unknown }), []);
+
+  const boom = async () => ({ ok: false, status: 500, json: async () => ({ error: "x" }) });
+  await assert.rejects(pendingItems({ config, fetchImpl: boom }), /500/);
+
+  const otherBadRequest = async () => ({ ok: false, status: 400, json: async () => ({ error: "bad token" }) });
+  await assert.rejects(pendingItems({ config, fetchImpl: otherBadRequest }), /400/);
+});
+
 test("posts the result; a 409 is skipped, other errors throw", async () => {
   const item = { key: "CORE-1", done_when: "- A" };
   const checks = [{ name: "tests", ok: true }];

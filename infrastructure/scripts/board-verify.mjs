@@ -57,7 +57,17 @@ function api(config, fetchImpl) {
 
 /** Tickets waiting for verification. */
 export async function pendingItems({ config, fetchImpl = fetch }) {
-  const { items } = await api(config, fetchImpl)("/items?status=verifying");
+  let items;
+  try {
+    ({ items } = await api(config, fetchImpl)("/items?status=verifying"));
+  } catch (err) {
+    // The board API runs on prod; until the dev -> prod promotion it does not know the status yet.
+    if (err instanceof Error && /→ 400: unknown status/.test(err.message)) {
+      console.warn("board API does not know the verifying status yet (not promoted to prod): nothing to verify");
+      return [];
+    }
+    throw err;
+  }
   return items.filter((item) => item.verify_state === "pending");
 }
 
