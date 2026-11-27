@@ -45,6 +45,8 @@ import { hashToken } from "../utils/hashToken.js";
 import { localeForCountry } from "../utils/patientEmailLocale.js";
 import { normalizeNationalIds } from "../utils/nationalIds.js";
 import { sendPartnerJoinThankYouEmail } from "../mailer.js";
+import { insertEmailSend } from "../db/emailSend.js";
+import { maskEmail } from "../utils/maskEmail.js";
 import { uploadPartnerDocument } from "../services/partnerDocuments.js";
 import { renderHtmlToPdf } from "../services/documentRenderer.js";
 import type { PartnerJurisdiction } from "../db/partnerSignatories.js";
@@ -202,7 +204,7 @@ export async function InvitePractitionerCommand(
   // commands/practitioner.ts), since capacitation can easily take longer
   // than 7 days and a token minted now would expire unused. This is just a
   // holding "thank you for joining" email.
-  await sendPartnerJoinThankYouEmail(
+  const thankYouMessageId = await sendPartnerJoinThankYouEmail(
     email,
     {
       title: lead.salutation,
@@ -211,8 +213,17 @@ export async function InvitePractitionerCommand(
       language: localeForCountry(lead.region),
       region: lead.region,
     },
-    { name: ctx.user.name ?? "NeoSleep", email: ctx.user.email }
+    { name: ctx.user.name ?? "NeoSleep", email: ctx.user.email },
+    { tenant: ctx.slug, kind: "partner_thank_you" }
   );
+  await insertEmailSend(ctx.client, {
+    recipientType: "practitioner",
+    recipientId: practitioner.id,
+    sentBy: ctx.user.id,
+    kind: "partner_thank_you",
+    sentToMasked: maskEmail(email),
+    providerMessageId: thankYouMessageId ?? null,
+  });
 
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,

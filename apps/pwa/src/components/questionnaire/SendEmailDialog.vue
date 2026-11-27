@@ -51,9 +51,7 @@
           <li v-for="send in sends" :key="send.id" class="send-email__row" :data-testid="`send-email-row-${send.status}`">
             <span class="send-email__row-what">{{ t(`app.clinical.email.kind.${send.kind}`) }} · {{ send.sent_to_masked }}</span>
             <span class="send-email__row-when">{{ formatDateTime(send.created_at) }}</span>
-            <span class="send-email__status" :class="`send-email__status--${tone(send.status)}`" :title="send.status_detail ?? undefined">
-              {{ t(`app.clinical.email.status.${send.status}`) }}
-            </span>
+            <EmailStatusChip class="send-email__status" :status="send.status" :detail="send.status_detail" />
           </li>
         </ul>
       </section>
@@ -88,7 +86,8 @@ import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import EmailLanguageSelect from "./EmailLanguageSelect.vue";
 import { useNotifications } from "../../composables/useNotifications";
-import type { ChecklistItem, EmailSend, EmailSendStatus } from "../../composables/usePatientChecklist";
+import EmailStatusChip from "../EmailStatusChip.vue";
+import type { ChecklistItem, EmailSend } from "../../composables/usePatientChecklist";
 
 /**
  * "Send by email" (NEO-192, NEO-162 stage 1): the doctor picks which of the
@@ -146,13 +145,6 @@ watch(
 function onSubmit() {
   if (!selected.value.length || props.sending) return;
   emit("send", { items: [...selected.value], copyToMe: copyToMe.value, language: mailLanguage.value });
-}
-
-function tone(status: EmailSendStatus): "ok" | "warn" | "bad" | "neutral" {
-  if (status === "delivered") return "ok";
-  if (status === "delayed") return "warn";
-  if (status === "sent") return "neutral";
-  return "bad";
 }
 
 async function copyLink() {
@@ -240,23 +232,5 @@ async function copyLink() {
 }
 .send-email__status {
   grid-area: status;
-  align-self: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  background: rgba(var(--v-theme-on-surface), 0.08);
-}
-.send-email__status--ok {
-  background: rgba(var(--v-theme-success), 0.14);
-  color: rgb(var(--v-theme-success));
-}
-.send-email__status--warn {
-  background: rgba(var(--v-theme-warning), 0.16);
-  color: rgb(var(--v-theme-warning));
-}
-.send-email__status--bad {
-  background: rgba(var(--v-theme-error), 0.14);
-  color: rgb(var(--v-theme-error));
 }
 </style>

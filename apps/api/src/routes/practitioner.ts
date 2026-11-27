@@ -15,6 +15,8 @@ import { GetPractitionerListQuery, GetPractitionerByIdQuery } from "../queries/p
 import { GetHistoryForPractitionerQuery } from "../queries/auditLog.js";
 import { GetPractitionerDocumentsQuery, GetPractitionerDocumentDownloadUrlQuery } from "../queries/entityDocuments.js";
 import { ValidationError } from "../errors.js";
+import { recentSendStats } from "../db/emailSend.js";
+import { INVITE_COOLDOWN_SECONDS } from "../env.js";
 import { parsePaginationParams, toFilterArray, routeParam } from "./utils.js";
 
 /**
@@ -328,6 +330,40 @@ practitionerRouter.post(
 
     if (!practitioner) { res.status(404).json({ error: "Practitioner not found" }); return; }
     res.json(practitioner);
+  })
+);
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/practitioner/:id/email-sends — NEO-273: invite delivery log for
+// the Activate/Resend modal, plus the seconds left in the resend cooldown so
+// the modal can start its countdown without a failed send.
+// ---------------------------------------------------------------------------
+practitionerRouter.get(
+  "/practitioner/:id/email-sends",
+  requireRole("admin", "manager"),
+  asyncHandler(async (req: Request, res: Response) => {
+    const id = routeParam(req, "id")?.trim();
+    if (!id) throw new ValidationError("Missing practitioner id");
+
+    const slug = tenantSlugFromHost(req.hostname);
+    const result = await withTenant(slug, async (client) => {
+      const { rows } = await client.query(
+        `SELECT s.id, s.kind, s.sent_to_masked, s.status, s.status_detail, s.status_at, s.created_at,
+                (SELECT NULLIF(concat_ws(' ', i.first_name, i.last_name), '')
+                   FROM users u JOIN identities i ON i.id = u.identity_id WHERE u.id = s.sent_by) AS sent_by_name
+           FROM email_send s
+          WHERE s.recipient_type = 'practitioner' AND s.recipient_id = $1
+            AND s.kind IN ('partner_invite', 'partner_thank_you')
+          ORDER BY s.created_at DESC LIMIT 50`,
+        [id]
+      );
+      const { lastAt } = await recentSendStats(client, "practitioner", id, "partner_invite");
+      const cooldownLeft = lastAt
+        ? Math.max(0, Math.ceil(INVITE_COOLDOWN_SECONDS - (Date.now() - lastAt.getTime()) / 1000))
+        : 0;
+      return { sends: rows, cooldownSeconds: cooldownLeft };
+    });
+    res.json(result);
   })
 );
 

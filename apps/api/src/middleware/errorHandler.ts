@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import type { RequestWithId } from "./requestId.js";
-import { AppError, EmailInUseError, ForbiddenError, PartnerOrderAlreadySubmittedError, ValidationError } from "../errors.js";
+import { AppError, EmailInUseError, ForbiddenError, PartnerOrderAlreadySubmittedError, TooManyRequestsError, ValidationError } from "../errors.js";
 import { insertDiagnostic, tenantSlugFromHost, type DiagnosticInsert } from "../db.js";
 import { notifyNewErrorKind } from "../services/issueNotifications.js";
 import { queueErrorTicket } from "../services/errorTickets.js";
@@ -51,6 +51,7 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
         : err instanceof EmailInUseError ? { field: err.field, reason: err.reason }
         : err instanceof PartnerOrderAlreadySubmittedError ? { externalId: err.externalId }
         : err instanceof ForbiddenError && err.reason ? { reason: err.reason }
+        : err instanceof TooManyRequestsError ? { retryAfter: err.retryAfter }
         : {};
       res.status(err.statusCode).json({ error: err.message, code: err.code, ...field });
     }

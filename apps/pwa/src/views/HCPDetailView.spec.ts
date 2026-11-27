@@ -175,15 +175,15 @@ describe("HCPDetailView — invite/resend status handling", () => {
     expect(activateButton(wrapper)).toBeUndefined();
   });
 
-  it("resending posts to the activate endpoint and shows the resend-specific success message", async () => {
+  it("resend opens the invite dialog, which loads the send log (NEO-273) instead of sending at once", async () => {
     const wrapper = await mountHCPDetail("invited");
-    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, {}));
-    apiFetch.mockResolvedValueOnce(jsonResponse(true, 200, hcpFixture("invited")));
+    apiFetch.mockResolvedValue(jsonResponse(true, 200, { sends: [], cooldownSeconds: 0 }));
 
     const button = wrapper.findAll("button").find((b) => b.attributes("aria-label") === "Resend invite");
     expect(button).toBeTruthy();
     await button!.trigger("click");
 
-    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/api/v1/practitioner/hcp-1/activate", { method: "POST" }));
+    await vi.waitFor(() => expect(apiFetch).toHaveBeenCalledWith("/api/v1/practitioner/hcp-1/email-sends", expect.anything()));
+    expect(apiFetch).not.toHaveBeenCalledWith("/api/v1/practitioner/hcp-1/activate", expect.anything());
   });
 });

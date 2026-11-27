@@ -85,7 +85,7 @@ describe("SendQuestionnaireEmailCommand", () => {
       // NEO-190: the send is logged with Resend's id, so its delivery status can follow.
       const messageId = await sendMock.mock.results[0]!.value;
       const { rows } = await client.query(
-        "SELECT kind, sent_to_masked, status, questionnaire_request_id, sent_by FROM patient_email_send WHERE provider_message_id = $1",
+        "SELECT kind, sent_to_masked, status, questionnaire_request_id, sent_by FROM email_send WHERE provider_message_id = $1",
         [messageId]
       );
       expect(rows).toEqual([{ kind: "questionnaire_link", sent_to_masked: "l***@example.mx", status: "sent", questionnaire_request_id: request.id, sent_by: ctx.user.id }]);

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import bcrypt from "bcrypt";
+import { randomUUID } from "node:crypto";
 import { withTenant, insertStaffUser, getGlobalTerritoryId, getCountryTerritoryId } from "../db.js";
 import type { TenantContext } from "../context/TenantContext.js";
 import { ForbiddenError, ValidationError } from "../errors.js";
@@ -40,7 +41,7 @@ async function buildTestContext(client: Parameters<typeof CreateUserCommand>[0][
 beforeEach(() => {
   sendPasswordResetEmailMock.mockClear();
   sendAccountCreatedEmailMock.mockReset();
-  sendAccountCreatedEmailMock.mockResolvedValue("msg-test-id");
+  sendAccountCreatedEmailMock.mockImplementation(async () => `msg-${randomUUID()}`);
 });
 
 describe("ResetUserPasswordCommand", () => {

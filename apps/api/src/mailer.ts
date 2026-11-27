@@ -164,7 +164,7 @@ export async function sendContactEmail(subject: string, rows: [string, string][]
   });
 }
 
-export async function sendPasswordResetEmail(to: string, resetLink: string, recipient: EmailRecipient): Promise<void> {
+export async function sendPasswordResetEmail(to: string, resetLink: string, recipient: EmailRecipient, tags?: EmailTags): Promise<string | null> {
   const locale = emailLocale(recipient);
   const greetingName = formatGreetingName(recipient, to);
 
@@ -187,11 +187,12 @@ export async function sendPasswordResetEmail(to: string, resetLink: string, reci
     socials,
   });
 
-  await sendEmail("password reset email", {
+  return sendEmail("password reset email", {
     to,
     subject: emailT(locale, "email.passwordReset.subject"),
     html,
     attachments: getEmailAttachments(socials),
+    ...(tags ? { tags } : {}),
   });
 }
 
@@ -211,7 +212,8 @@ export async function sendAccountCreatedEmail(
   to: string,
   setPasswordLink: string,
   recipient: EmailRecipient,
-  context: AccountCreatedContext
+  context: AccountCreatedContext,
+  tags?: EmailTags
 ): Promise<string | null> {
   const locale = emailLocale(recipient);
   const greetingName = formatGreetingName(recipient, to);
@@ -241,6 +243,7 @@ export async function sendAccountCreatedEmail(
     subject: emailT(locale, "email.accountCreated.subject", params),
     html,
     attachments: getEmailAttachments(socials),
+    ...(tags ? { tags } : {}),
   });
 }
 
@@ -510,8 +513,9 @@ export async function sendPartnerInviteEmail(
   to: string,
   registerLink: string,
   recipient: EmailRecipient,
-  sender: EmailSender
-): Promise<void> {
+  sender: EmailSender,
+  tags?: EmailTags
+): Promise<string | null> {
   const locale = emailLocale(recipient);
 
   const bodyHtml = `
@@ -533,12 +537,13 @@ export async function sendPartnerInviteEmail(
     socials,
   });
 
-  await sendEmail("partner invite email", {
+  return sendEmail("partner invite email", {
     to,
     subject: emailT(locale, "email.partnerInvite.subject"),
     html,
     attachments: getEmailAttachments(socials),
     replyTo: sender.email,
+    ...(tags ? { tags } : {}),
   });
 }
 
@@ -548,7 +553,7 @@ export async function sendPartnerInviteEmail(
  * actual set-password/register invite (sendPartnerInviteEmail) is deferred
  * to ActivatePractitionerCommand, once training/capacitation is finished.
  */
-export async function sendPartnerJoinThankYouEmail(to: string, recipient: EmailRecipient, sender: EmailSender): Promise<void> {
+export async function sendPartnerJoinThankYouEmail(to: string, recipient: EmailRecipient, sender: EmailSender, tags?: EmailTags): Promise<string | null> {
   const locale = emailLocale(recipient);
   const greetingName = formatGreetingName(recipient, to);
 
@@ -568,12 +573,13 @@ export async function sendPartnerJoinThankYouEmail(to: string, recipient: EmailR
     socials,
   });
 
-  await sendEmail("partner join thank-you email", {
+  return sendEmail("partner join thank-you email", {
     to,
     subject: emailT(locale, "email.partnerJoinThankYou.subject"),
     html,
     attachments: getEmailAttachments(socials),
     replyTo: sender.email,
+    ...(tags ? { tags } : {}),
   });
 }
 

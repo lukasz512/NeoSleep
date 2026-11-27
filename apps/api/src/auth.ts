@@ -24,6 +24,8 @@ import {
   revokeAllRememberMeTokensForUser,
 } from "./db.js";
 import { sendPasswordResetEmail } from "./mailer.js";
+import { insertEmailSend } from "./db/emailSend.js";
+import { maskEmail } from "./utils/maskEmail.js";
 import { hashToken } from "./utils/hashToken.js";
 import { DEFAULT_FRONTEND_ORIGIN, resolveFrontendOrigin } from "./utils/frontendOrigin.js";
 import { FRONTEND_URLS } from "./env.js";
@@ -385,15 +387,34 @@ authRouter.post("/auth/forgot-password", asyncHandler(async (req: Request, res: 
     // Always attempt to send — mailer.ts itself no-ops (with a console warning) if Resend
     // isn't configured, so this is safe locally too. The console log + devResetLink below
     // stay regardless, so local dev works without needing real Resend creds set up.
-    sendPasswordResetEmail(emailStr, resetLink, {
-      title: staff.salutation,
-      firstName: staff.first_name,
-      lastName: staff.last_name,
-      language: staff.language,
-      region: staff.region ?? staff.country_code,
-    }).catch((err) => {
+    let resetMessageId: string | null = null;
+    try {
+      resetMessageId = await sendPasswordResetEmail(
+        emailStr,
+        resetLink,
+        {
+          title: staff.salutation,
+          firstName: staff.first_name,
+          lastName: staff.last_name,
+          language: staff.language,
+          region: staff.region ?? staff.country_code,
+        },
+        { tenant: slug, kind: "password_reset" }
+      );
+    } catch (err) {
       console.error("[auth] Failed to send password reset email:", err);
-    });
+    }
+    if (resetMessageId) {
+      // Self-service reset: nobody "sent" it, so sent_by stays null.
+      await insertEmailSend(client, {
+        recipientType: "user",
+        recipientId: userId,
+        sentBy: null,
+        kind: "password_reset",
+        sentToMasked: maskEmail(emailStr),
+        providerMessageId: resetMessageId,
+      });
+    }
     if (process.env.NODE_ENV !== "production") {
       console.log("[auth] Password reset link for", emailStr, ":", resetLink);
     }

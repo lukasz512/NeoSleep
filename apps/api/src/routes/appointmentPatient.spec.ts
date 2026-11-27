@@ -104,7 +104,7 @@ describe("appointment emails to the patient (CORE-25)", () => {
     expect(google.searchParams.get("text")).toMatch(/\d{2}:\d{2}.* hora de Ciudad de México \(GMT-6\)$/);
 
     await withTenant(TENANT_SLUG, async (client) => {
-      const sends = await client.query(`SELECT kind, appointment_id FROM patient_email_send WHERE patient_id = $1`, [s.patientId]);
+      const sends = await client.query(`SELECT kind, appointment_id FROM email_send WHERE recipient_id = $1`, [s.patientId]);
       expect(sends.rows).toEqual([{ kind: "appointment", appointment_id: res.body.id }]);
       const audit = await client.query(`SELECT legal_basis FROM audit_log WHERE entity_id = $1 AND action = 'notify'`, [res.body.id]);
       expect(audit.rows).toEqual([{ legal_basis: "contract" }]);

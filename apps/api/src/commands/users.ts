@@ -20,6 +20,8 @@ import { assertTerritoryAccess } from "../middleware/requireScope.js";
 import { EmailInUseError, ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
 import { hashToken } from "../utils/hashToken.js";
 import { sendPasswordResetEmail, sendAccountCreatedEmail } from "../mailer.js";
+import { insertEmailSend } from "../db/emailSend.js";
+import { maskEmail } from "../utils/maskEmail.js";
 
 /**
  * COMMANDS — User (staff: rep/manager/kam/msl/admin/doctor) domain.
@@ -154,6 +156,7 @@ async function sendAccountCreatedInvite(ctx: TenantContext, user: User, frontend
   const tenantName = await getTenantName(ctx.client);
 
   let sent = false;
+  let sentMessageId: string | null = null;
   try {
     const messageId = await sendAccountCreatedEmail(
       user.email,
@@ -165,13 +168,23 @@ async function sendAccountCreatedInvite(ctx: TenantContext, user: User, frontend
         language: user.language,
         region: user.region ?? user.country_code,
       },
-      { inviterName: ctx.user.name?.trim() || ctx.user.email, tenantName }
+      { inviterName: ctx.user.name?.trim() || ctx.user.email, tenantName },
+      { tenant: ctx.slug, kind: "account_created" }
     );
     sent = messageId !== null;
+    sentMessageId = messageId;
   } catch (err) {
     console.error("[users] Welcome email failed; the account was kept:", err);
   }
   if (!sent) return "not_sent";
+  await insertEmailSend(ctx.client, {
+    recipientType: "user",
+    recipientId: user.id,
+    sentBy: ctx.user.id,
+    kind: "account_created",
+    sentToMasked: maskEmail(user.email),
+    providerMessageId: sentMessageId,
+  });
 
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,
@@ -263,12 +276,25 @@ export async function ResetUserPasswordCommand(
   await createPasswordResetToken(ctx.client, user.id, tokenHash, expiresAt);
 
   const resetLink = `${frontendOrigin}/reset-password?token=${encodeURIComponent(token)}`;
-  await sendPasswordResetEmail(user.email, resetLink, {
-    title: user.salutation,
-    firstName: user.first_name,
-    lastName: user.last_name,
-    language: user.language,
-    region: user.region ?? user.country_code,
+  const resetMessageId = await sendPasswordResetEmail(
+    user.email,
+    resetLink,
+    {
+      title: user.salutation,
+      firstName: user.first_name,
+      lastName: user.last_name,
+      language: user.language,
+      region: user.region ?? user.country_code,
+    },
+    { tenant: ctx.slug, kind: "password_reset" }
+  );
+  await insertEmailSend(ctx.client, {
+    recipientType: "user",
+    recipientId: user.id,
+    sentBy: ctx.user.id,
+    kind: "password_reset",
+    sentToMasked: maskEmail(user.email),
+    providerMessageId: resetMessageId ?? null,
   });
 
   await insertAuditLog(ctx.client, {

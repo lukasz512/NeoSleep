@@ -16,7 +16,9 @@ import {
 } from "../db.js";
 import { hashToken } from "../utils/hashToken.js";
 import type { TenantContext } from "../context/TenantContext.js";
-import { ConflictError, PartnerDocumentsNotReadyError, ValidationError } from "../errors.js";
+import { ConflictError, PartnerDocumentsNotReadyError, TooManyRequestsError, ValidationError } from "../errors.js";
+import { INVITE_COOLDOWN_SECONDS, INVITE_MAX_PER_DAY } from "../env.js";
+import { listEmailSends } from "../db/emailSend.js";
 import { CreatePractitionerCommand, ActivatePractitionerCommand, UpdatePractitionerCommand } from "./practitioner.js";
 import { setApprovedPartnerVersion } from "../db/partnerSignatories.js";
 import { insertOrganization } from "../db/organization.js";
@@ -60,6 +62,14 @@ async function buildTestContext(client: Parameters<typeof CreatePractitionerComm
 beforeEach(() => {
   sendPartnerInviteEmailMock.mockClear();
 });
+
+/** Moves this practitioner's logged sends `seconds` into the past, so the cooldown can be tested without sleeping. */
+async function backdateSends(client: Parameters<typeof CreatePractitionerCommand>[0]["client"], practitionerId: string, seconds: number): Promise<void> {
+  await client.query(
+    `UPDATE email_send SET created_at = created_at - make_interval(secs => $2) WHERE recipient_type = 'practitioner' AND recipient_id = $1`,
+    [practitionerId, seconds]
+  );
+}
 
 describe("ActivatePractitionerCommand", () => {
   // Regression test companion to leadOffer.spec.ts's — "send offer to the
@@ -113,6 +123,7 @@ describe("ActivatePractitionerCommand", () => {
 
       const first = await ActivatePractitionerCommand(ctx, practitioner.id);
       expect(first?.status).toBe("invited");
+      await backdateSends(client, practitioner.id, 600);
       const second = await ActivatePractitionerCommand(ctx, practitioner.id);
       expect(second?.status).toBe("invited");
 
@@ -125,6 +136,72 @@ describe("ActivatePractitionerCommand", () => {
       // not just leaves it to expire 7 days later alongside a second valid one.
       expect(await getInviteTokenByHash(client, hashToken(firstToken))).toBeNull();
       expect(await getInviteTokenByHash(client, hashToken(secondToken))).not.toBeNull();
+    });
+  }, 20000);
+
+  // NEO-273: invite throttle + delivery log.
+  it("logs the invite send with its provider message id", async () => {
+    sendPartnerInviteEmailMock.mockResolvedValueOnce(`msg-${uniqueSuffix()}`);
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Log", last_name: "Case", email: `qa-hcp-${uniqueSuffix()}@example.com`, phone: "600100200", region: "PL",
+      });
+      await ActivatePractitionerCommand(ctx, practitioner.id);
+      const sends = await listEmailSends(client, "practitioner", practitioner.id);
+      expect(sends).toHaveLength(1);
+      expect(sends[0]).toMatchObject({ kind: "partner_invite", status: "sent", sent_by: ctx.user.id });
+      expect(sends[0]!.provider_message_id).toMatch(/^msg-/);
+      expect(sends[0]!.sent_to_masked).not.toContain("qa-hcp");
+    });
+  }, 15000);
+
+  it("refuses a second invite inside the cooldown with 429 and the seconds left, without sending", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Cool", last_name: "Down", email: `qa-hcp-${uniqueSuffix()}@example.com`, phone: "600100200", region: "PL",
+      });
+      await ActivatePractitionerCommand(ctx, practitioner.id);
+      await backdateSends(client, practitioner.id, 100);
+      const err = await ActivatePractitionerCommand(ctx, practitioner.id).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(TooManyRequestsError);
+      const retryAfter = (err as TooManyRequestsError).retryAfter;
+      expect(retryAfter).toBeGreaterThan(190);
+      expect(retryAfter).toBeLessThanOrEqual(INVITE_COOLDOWN_SECONDS - 99);
+      expect(sendPartnerInviteEmailMock).toHaveBeenCalledTimes(1);
+    });
+  }, 20000);
+
+  it("refuses the sixth invite within 24 hours even after the cooldown", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const practitioner = await CreatePractitionerCommand(ctx, {
+        first_name: "Daily", last_name: "Cap", email: `qa-hcp-${uniqueSuffix()}@example.com`, phone: "600100200", region: "PL",
+      });
+      for (let i = 0; i < INVITE_MAX_PER_DAY; i++) {
+        await ActivatePractitionerCommand(ctx, practitioner.id);
+        await backdateSends(client, practitioner.id, 600);
+      }
+      const err = await ActivatePractitionerCommand(ctx, practitioner.id).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(TooManyRequestsError);
+      expect((err as TooManyRequestsError).retryAfter).toBeGreaterThan(0);
+      expect(sendPartnerInviteEmailMock).toHaveBeenCalledTimes(INVITE_MAX_PER_DAY);
+    });
+  }, 30000);
+
+  it("counts sends per recipient: another doctor is not throttled by this one", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const a = await CreatePractitionerCommand(ctx, {
+        first_name: "A", last_name: "One", email: `qa-hcp-${uniqueSuffix()}@example.com`, phone: "600100200", region: "PL",
+      });
+      const b = await CreatePractitionerCommand(ctx, {
+        first_name: "B", last_name: "Two", email: `qa-hcp-${uniqueSuffix()}@example.com`, phone: "600100200", region: "PL",
+      });
+      await ActivatePractitionerCommand(ctx, a.id);
+      const second = await ActivatePractitionerCommand(ctx, b.id);
+      expect(second?.status).toBe("invited");
     });
   }, 20000);
 

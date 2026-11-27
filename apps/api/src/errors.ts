@@ -101,6 +101,17 @@ export class ForbiddenError extends AppError {
 }
 
 /**
+ * 429 TOO_MANY_REQUESTS (NEO-273): a throttle refused the action. `retryAfter`
+ * is the seconds until it is allowed again; the error handler sends it as a
+ * body field so the client can show a countdown.
+ */
+export class TooManyRequestsError extends AppError {
+  constructor(message: string, public readonly retryAfter: number) {
+    super(message, "TOO_MANY_REQUESTS", 429);
+  }
+}
+
+/**
  * 403 DOCTOR_NOT_LINKED (CORE-173): a doctor login whose identity has no
  * practitioner record — they can't see a single patient. The client shows its
  * own message ("an admin has been told"), and the admins get a report.

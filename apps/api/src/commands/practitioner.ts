@@ -18,7 +18,10 @@ import {
   type Practitioner,
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
-import { ValidationError, ConflictError } from "../errors.js";
+import { ValidationError, ConflictError, TooManyRequestsError } from "../errors.js";
+import { INVITE_COOLDOWN_SECONDS, INVITE_MAX_PER_DAY } from "../env.js";
+import { insertEmailSend, recentSendStats } from "../db/emailSend.js";
+import { maskEmail } from "../utils/maskEmail.js";
 import { assertTerritoryWriteAccess } from "../middleware/requireScope.js";
 import { ConvertLeadCommand } from "./lead.js";
 import { localeForCountry, SUPPORTED_LANGUAGES } from "../utils/patientEmailLocale.js";
@@ -268,6 +271,26 @@ export async function DeletePractitionerCommand(ctx: TenantContext, id: string):
 
 const INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days — see invitePractitioner.ts's own constant/comment for why this is minted here, not at invite time.
 
+/** Throws TooManyRequestsError (429, with seconds left) inside the cooldown or past the daily cap. */
+async function assertInviteAllowed(client: TenantContext["client"], practitionerId: string): Promise<void> {
+  const { lastAt, countLastDay } = await recentSendStats(client, "practitioner", practitionerId, "partner_invite");
+  if (lastAt) {
+    const left = Math.ceil(INVITE_COOLDOWN_SECONDS - (Date.now() - lastAt.getTime()) / 1000);
+    if (left > 0) throw new TooManyRequestsError("An invite was sent a moment ago — wait before sending another", left);
+  }
+  if (countLastDay >= INVITE_MAX_PER_DAY) {
+    const { rows } = await client.query<{ left: number }>(
+      `SELECT ceil(extract(epoch FROM (min(created_at) + interval '24 hours' - now())))::int AS left
+         FROM (SELECT created_at FROM email_send
+                WHERE recipient_type = 'practitioner' AND recipient_id = $1 AND kind = 'partner_invite'
+                  AND created_at > now() - interval '24 hours'
+                ORDER BY created_at DESC LIMIT $2) recent`,
+      [practitionerId, INVITE_MAX_PER_DAY]
+    );
+    throw new TooManyRequestsError("Daily invite limit reached for this doctor", Math.max(1, rows[0]?.left ?? 1));
+  }
+}
+
 export async function ActivatePractitionerCommand(
   ctx: TenantContext,
   id: string,
@@ -295,6 +318,10 @@ export async function ActivatePractitionerCommand(
     );
   }
   await resolvePartnerDocumentSet(ctx.client, jurisdiction);
+
+  // NEO-273: throttle before anything is minted or sent. Counted per recipient
+  // and mail type, from the delivery log.
+  await assertInviteAllowed(ctx.client, practitioner.id);
 
   // Only provision a login when this identity has no users account yet —
   // a resend (status already "invited") reuses the account created on the
@@ -357,7 +384,7 @@ export async function ActivatePractitionerCommand(
     });
 
     const registerLink = `${frontendOrigin}/partner-register?token=${encodeURIComponent(token)}`;
-    await sendPartnerInviteEmail(
+    const providerMessageId = await sendPartnerInviteEmail(
       practitioner.email,
       registerLink,
       {
@@ -367,8 +394,17 @@ export async function ActivatePractitionerCommand(
         language: localeForCountry(jurisdiction),
         region: jurisdiction,
       },
-      { name: ctx.user.name ?? "NeoSleep", email: ctx.user.email }
+      { name: ctx.user.name ?? "NeoSleep", email: ctx.user.email },
+      { tenant: ctx.slug, kind: "partner_invite" }
     );
+    await insertEmailSend(ctx.client, {
+      recipientType: "practitioner",
+      recipientId: practitioner.id,
+      sentBy: ctx.user.id,
+      kind: "partner_invite",
+      sentToMasked: maskEmail(practitioner.email),
+      providerMessageId: providerMessageId ?? null,
+    });
 
     await updatePractitionerStatus(ctx.client, id, "invited");
   }

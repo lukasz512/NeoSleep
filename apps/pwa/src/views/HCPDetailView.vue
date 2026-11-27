@@ -4,6 +4,13 @@
       v-model="showAppointmentDialog"
       :practitioner="hcp ? { id: hcp.id, name: hcp.name } : null"
     />
+    <PractitionerInviteDialog
+      v-if="hcp"
+      v-model="showInviteDialog"
+      :practitioner-id="hcp.id"
+      :is-resend="hcp.status === 'invited'"
+      @sent="onInviteSent"
+    />
     <FormRenderer
       v-model="showEditModal"
       :fields="hcpFormFields"
@@ -44,10 +51,9 @@
               icon
               variant="flat"
               size="large"
-              :loading="activateLoading"
               :class="entityActionBtnClass('activatePractitioner')"
               :aria-label="t(activateLabelKey)"
-              @click="onActivate"
+              @click="showInviteDialog = true"
             >
               <AppIcon
                 :name="entityActionIcon('activatePractitioner')"
@@ -262,6 +268,9 @@ import { AppInlineAlert } from "@ui";
 const FormRenderer = defineAsyncComponent(
   () => import("../components/FormRenderer.vue"),
 );
+const PractitionerInviteDialog = defineAsyncComponent(
+  () => import("../components/practitioner/PractitionerInviteDialog.vue"),
+);
 const AppointmentDialog = defineAsyncComponent(() => import("../components/AppointmentDialog.vue"));
 
 interface HCP {
@@ -397,26 +406,20 @@ function onEdit() {
   showEditModal.value = true;
 }
 
-const { loading: activateLoading, run: onActivate } = useAsyncAction(
-  async () => {
-    const id = hcp.value?.id;
-    if (!id) return;
-    const isResend = hcp.value?.status === "invited";
-    const res = await apiFetch(`/api/v1/practitioner/${id}/activate`, {
-      method: "POST",
-    });
-    if (res.ok) {
-      notifications.show(
-        t(isResend ? "user.hcp.detail.resendInviteSuccess" : "user.hcp.detail.activateSuccess"),
-        "success",
-        undefined,
-        { icon: "mail", context: hcp.value?.name },
-      );
-      await loadHCP();
-      window.dispatchEvent(new Event("entity-list-refresh"));
-    }
-  },
-);
+const showInviteDialog = ref(false);
+
+/** The invite dialog sent the mail (NEO-273): tell the user, refresh the record and the list. */
+async function onInviteSent() {
+  const wasResend = hcp.value?.status === "invited";
+  notifications.show(
+    t(wasResend ? "user.hcp.detail.resendInviteSuccess" : "user.hcp.detail.activateSuccess"),
+    "success",
+    undefined,
+    { icon: "mail", context: hcp.value?.name },
+  );
+  await loadHCP();
+  window.dispatchEvent(new Event("entity-list-refresh"));
+}
 
 async function onContactSubmit(
   data: Record<string, unknown>,

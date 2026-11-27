@@ -271,7 +271,7 @@ describe("patient QR link — one link for everything the patient has to do", ()
       );
       expect(rows[0].entity_after).toMatchObject({ channel: "email", sent_to: "q***@example.test" });
       // NEO-190: logged for its delivery status, without a sender (the patient asked for it).
-      const sends = await client.query("SELECT kind, sent_by, sent_to_masked FROM patient_email_send WHERE patient_id = $1", [patient.id]);
+      const sends = await client.query("SELECT kind, sent_by, sent_to_masked FROM email_send WHERE recipient_id = $1", [patient.id]);
       expect(sends.rows).toEqual([{ kind: "signed_copy", sent_by: null, sent_to_masked: "q***@example.test" }]);
 
       // A family inbox: the same address on a second patient → no copy offered, none sent even if asked.

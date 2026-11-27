@@ -149,7 +149,7 @@ describe("SendHistoriaClinicaEmailCommand", () => {
       expect(download.bytes).toBe(bytes);
       expect(download.filename).toMatch(/^historiaEndo-\d{4}-\d{2}-\d{2}\.pdf$/);
 
-      const { rows: sends } = await client.query("SELECT kind, sent_to_masked, sent_by FROM patient_email_send WHERE patient_id = $1", [patientId]);
+      const { rows: sends } = await client.query("SELECT kind, sent_to_masked, sent_by FROM email_send WHERE recipient_id = $1", [patientId]);
       expect(sends).toEqual([{ kind: "document_link", sent_to_masked: sent_to, sent_by: ctx.user.id }]);
 
       const { rows: audit } = await client.query<{ action: string; entity_after: Record<string, unknown>; metadata: Record<string, unknown> | null }>(

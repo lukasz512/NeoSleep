@@ -130,3 +130,8 @@ export const RESEND_NOTIFY_TO: string | undefined = process.env.RESEND_NOTIFY_TO
  * docs/stories/partner-registration-legal-documents.md, 2026-09-16 addendum). Optional: unset
  * just means no cc, same degrade-gracefully shape as the other Resend vars above. */
 export const PARTNER_DOCS_CC_EMAIL: string | undefined = process.env.PARTNER_DOCS_CC_EMAIL;
+
+/** NEO-273: minimum seconds between two invite emails to the same recipient (default 5 min). */
+export const INVITE_COOLDOWN_SECONDS: number = Number(process.env.INVITE_COOLDOWN_SECONDS ?? 300);
+/** NEO-273: most invite emails of one kind per recipient in 24 h. */
+export const INVITE_MAX_PER_DAY: number = Number(process.env.INVITE_MAX_PER_DAY ?? 5);

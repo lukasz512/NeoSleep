@@ -50,7 +50,7 @@ describe("mailer — not configured", () => {
 
     await expect(
       sendPasswordResetEmail("doctor@example.com", "https://pwa.neosleepcare.com/reset-password?token=abc", RECIPIENT)
-    ).resolves.toBeUndefined();
+    ).resolves.toBeNull();
 
     expect(sendMock).not.toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Resend not configured"));

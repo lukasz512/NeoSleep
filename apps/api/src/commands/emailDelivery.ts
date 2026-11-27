@@ -1,12 +1,12 @@
 import type { PoolClient } from "pg";
 import type { WebhookEventPayload } from "resend";
 import { withTenant, getActiveTenantSlugs, tenantSlugFromHost } from "../db/tenant.js";
-import { applyPatientEmailStatus, patientEmailSendExists, type PatientEmailStatus } from "../db/patientEmailSend.js";
+import { applyEmailStatus, emailSendExists, type EmailSendStatus } from "../db/emailSend.js";
 import { claimWebhookEvent, finishWebhookEvent } from "../db/webhookEvent.js";
 
 /**
  * NEO-190: turns a verified Resend webhook event into a delivery status on
- * the patient_email_send row it belongs to. The webhook is one endpoint for
+ * the email_send row it belongs to. The webhook is one endpoint for
  * every tenant, so the tenant comes from the "tenant" tag the email was sent
  * with (mailer.ts EmailTags) and must be an active tenant (or the default one
  * this API serves) — a tag can't point the update at an arbitrary schema.
@@ -15,7 +15,7 @@ import { claimWebhookEvent, finishWebhookEvent } from "../db/webhookEvent.js";
  *
  * Opens and clicks are ignored on purpose: patient emails carry no tracking.
  */
-const STATUS_BY_EVENT: Partial<Record<WebhookEventPayload["type"], PatientEmailStatus>> = {
+const STATUS_BY_EVENT: Partial<Record<WebhookEventPayload["type"], EmailSendStatus>> = {
   "email.delivered": "delivered",
   "email.delivery_delayed": "delayed",
   "email.bounced": "bounced",
@@ -39,15 +39,15 @@ function statusDetail(event: WebhookEventPayload): string | null {
   }
 }
 
-/** What applying the event did to patient_email_send; throws only on a real failure. */
-async function applyToPatientEmail(client: PoolClient, event: WebhookEventPayload, tenant: string | null): Promise<EmailDeliveryOutcome> {
+/** What applying the event did to email_send; throws only on a real failure. */
+async function applyToEmailSend(client: PoolClient, event: WebhookEventPayload, tenant: string | null): Promise<EmailDeliveryOutcome> {
   const status = STATUS_BY_EVENT[event.type];
   if (!status || !("email_id" in event.data)) return "ignored_event";
   if (!tenant) return "no_tenant";
   const emailId = (event.data as { email_id: string }).email_id;
-  if (!(await patientEmailSendExists(client, emailId))) return "unknown_email";
+  if (!(await emailSendExists(client, emailId))) return "unknown_email";
   const at = new Date(event.created_at);
-  const moved = await applyPatientEmailStatus(client, emailId, status, statusDetail(event), Number.isNaN(at.getTime()) ? new Date() : at);
+  const moved = await applyEmailStatus(client, emailId, status, statusDetail(event), Number.isNaN(at.getTime()) ? new Date() : at);
   return moved ? "applied" : "stale";
 }
 
@@ -72,7 +72,7 @@ export async function ApplyResendEventCommand(event: WebhookEventPayload, delive
 
     await client.query("SAVEPOINT apply_webhook_event");
     try {
-      const outcome = await applyToPatientEmail(client, event, tenant);
+      const outcome = await applyToEmailSend(client, event, tenant);
       await finishWebhookEvent(client, row.id, outcome === "applied" || outcome === "stale" ? "processed" : "skipped", outcome);
       return outcome;
     } catch (err) {

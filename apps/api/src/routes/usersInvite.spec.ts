@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 import bcrypt from "bcrypt";
+import { randomUUID } from "node:crypto";
 
 // Resend is the external boundary — mocked; Postgres and the Express stack are real.
 const { sendAccountCreatedEmailMock } = vi.hoisted(() => ({
@@ -54,7 +55,7 @@ async function auditActions(userId: string): Promise<string[]> {
 
 beforeEach(() => {
   sendAccountCreatedEmailMock.mockReset();
-  sendAccountCreatedEmailMock.mockResolvedValue("msg-1");
+  sendAccountCreatedEmailMock.mockImplementation(async () => `msg-${randomUUID()}`);
 });
 
 describe("POST /api/v1/users — welcome email", () => {

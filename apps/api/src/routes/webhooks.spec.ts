@@ -69,7 +69,7 @@ async function sentEmail(): Promise<{ patientId: string; messageId: string }> {
 async function statusOf(messageId: string): Promise<{ status: string; status_detail: string | null }> {
   return withTenant(TENANT_SLUG, async (client) => {
     const { rows } = await client.query<{ status: string; status_detail: string | null }>(
-      "SELECT status, status_detail FROM patient_email_send WHERE provider_message_id = $1",
+      "SELECT status, status_detail FROM email_send WHERE provider_message_id = $1",
       [messageId]
     );
     return rows[0]!;
