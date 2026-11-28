@@ -388,7 +388,9 @@ export function usePatientChecklist(patientId: () => string) {
       icon: "mail",
       action: { labelKey: "app.clinical.email.copyLink", run: () => copyToClipboard(url) },
     });
-    await load();
+    // Refresh in the background: the caller closes its dialog the moment the send succeeded,
+    // not after the checklist round-trip (load() never rejects, it reports its own errors).
+    void load();
     return { ok: true, sent_to, url };
   }
 
