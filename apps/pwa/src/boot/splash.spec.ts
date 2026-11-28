@@ -102,6 +102,26 @@ describe("bootSplash runtime hand-off", () => {
     await expect(whenSplashLifts()).resolves.toBeUndefined();
   });
 
+  // CORE-201: Chrome on iOS left a finite intro animation unfinished forever,
+  // so the splash never lifted and the login card never entered.
+  it("never hangs on an intro animation that never finishes", async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = `<div id="${BOOT_SPLASH_ID}"></div>`;
+    const el = document.getElementById(BOOT_SPLASH_ID)!;
+    const stuck = { effect: { getComputedTiming: () => ({ iterations: 1 }) }, finished: new Promise(() => {}) };
+    Object.assign(el, { getAnimations: () => [stuck] });
+    const { dismissBootSplash, whenSplashLifts } = await import("./bootSplash");
+
+    let lifted = false;
+    void whenSplashLifts().then(() => (lifted = true));
+    dismissBootSplash();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(lifted).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(lifted).toBe(true);
+  });
+
   it("never hangs on a stylesheet that never loads", async () => {
     vi.useFakeTimers();
     document.head.innerHTML = `<link rel="preload" as="style" href="/a.css" ${DEFERRED_CSS_ATTR}>`;

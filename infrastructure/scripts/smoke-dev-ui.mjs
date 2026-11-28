@@ -10,6 +10,12 @@
 // screenshot per route (desktop + phone) so the result can go into the
 // Artifact. Read-only: it never clicks anything that creates, edits or deletes.
 //
+// Runs in Chromium (desktop + phone) and in WebKit with an iPhone profile:
+// Safari and Chrome on iOS both run on WebKit, and a Chromium-only run let a
+// login screen that hung on iPhones through (CORE-201). Any error the app
+// itself reports to /diagnostics during the run fails the check too, since a
+// hang throws no page error.
+//
 // Usage:
 //   node infrastructure/scripts/smoke-dev-ui.mjs --out /tmp/pwa-dev-shots \
 //     --check "/patients=.app-avatar__badge" --check "/hcp" --check "/sleep-studies=.identity-details"
@@ -21,7 +27,7 @@ import { execFileSync } from "node:child_process";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const require = createRequire(path.join(ROOT, "apps/pwa/package.json"));
-const { chromium } = require("@playwright/test");
+const { chromium, webkit, devices } = require("@playwright/test");
 
 const args = process.argv.slice(2);
 let credsFile = path.join(ROOT, ".claude/local/qa-dev.json");
@@ -53,18 +59,30 @@ fs.mkdirSync(out, { recursive: true });
 
 const problems = [];
 const warnings = [];
-const browser = await chromium.launch();
+const browsers = { chromium: await chromium.launch(), webkit: await webkit.launch() };
+const runs = [
+  { name: "desktop", browser: "chromium", options: { viewport: { width: 1440, height: 900 } } },
+  { name: "phone", browser: "chromium", options: { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 } },
+  { name: "iphone", browser: "webkit", options: { ...devices["iPhone 15"] } },
+];
 try {
-  for (const viewport of [{ name: "desktop", width: 1440, height: 900 }, { name: "phone", width: 390, height: 844, mobile: true }]) {
-    const context = await browser.newContext({
-      viewport: { width: viewport.width, height: viewport.height },
-      isMobile: !!viewport.mobile,
-      hasTouch: !!viewport.mobile,
-      deviceScaleFactor: viewport.mobile ? 3 : 1,
-      locale: "en-US",
-    });
+  for (const viewport of runs) {
+    const context = await browsers[viewport.browser].newContext({ ...viewport.options, locale: "en-US" });
     const page = await context.newPage();
-    page.on("pageerror", (e) => problems.push(`[${viewport.name}] page error: ${e.message}`));
+    page.on("pageerror", (e) => {
+      // Spec-benign, WebKit raises it for any layout that resizes in an observer callback.
+      if (e.message.startsWith("ResizeObserver loop")) return;
+      problems.push(`[${viewport.name}] page error: ${e.message}`);
+    });
+    page.on("request", (r) => {
+      if (r.method() !== "POST" || !new URL(r.url()).pathname.endsWith("/diagnostics")) return;
+      // Warnings include fetches this script itself cuts short by navigating
+      // on (WebKit: "Load failed"); only errors fail the check.
+      let entry = {};
+      try { entry = JSON.parse(r.postData() ?? "{}"); } catch { /* not JSON — treat as an error */ }
+      const line = `[${viewport.name}] app reported: ${String(entry.message ?? r.postData()).slice(0, 200)}`;
+      (entry.level === "warn" ? warnings : problems).push(line);
+    });
     page.on("response", (r) => {
       if (!r.url().includes("/api/") || r.status() < 500) return;
       const line = `[${viewport.name}] ${r.status()} ${r.request().method()} ${new URL(r.url()).pathname}`;
@@ -112,7 +130,7 @@ try {
     await context.close();
   }
 } finally {
-  await browser.close();
+  await Promise.all(Object.values(browsers).map((b) => b.close()));
 }
 
 if (warnings.length) {
@@ -122,4 +140,4 @@ if (problems.length) {
   console.log(`\nFAIL — ${problems.length} problem(s):\n  ${problems.join("\n  ")}`);
   process.exit(1);
 }
-console.log(`\nOK — ${checks.length} route(s) × 2 viewports rendered on ${base}, no page errors, no 5xx.`);
+console.log(`\nOK — ${checks.length} route(s) × ${runs.length} runs (Chromium desktop/phone, WebKit iPhone) rendered on ${base}, no page errors, no 5xx.`);
