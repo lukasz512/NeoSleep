@@ -12,6 +12,7 @@ import {
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
 import { ConflictError, ValidationError } from "../errors.js";
+import { assertTerritoryWriteAccess } from "../middleware/requireScope.js";
 
 /**
  * Whether the organization appears on the public website's find-a-specialist
@@ -135,6 +136,7 @@ export async function CreateOrganizationCommand(
 ): Promise<Organization> {
   const name = input.name?.trim() ?? "";
   if (!name) throw new ValidationError("name is required");
+  await assertTerritoryWriteAccess(ctx, input.territory_id);
 
   const email = input.email?.trim() ?? "";
   if (!email) throw new ValidationError("email is required");
@@ -263,6 +265,7 @@ export async function UpdateOrganizationCommand(
 
   const before = await getOrganizationById(ctx.client, id);
   if (!before) return null;
+  await assertTerritoryWriteAccess(ctx, before.territory_id, input.territory_id);
 
   let name: string | undefined;
   if (input.name !== undefined) {
@@ -346,6 +349,8 @@ export async function UpdateOrganizationCommand(
 export async function DeleteOrganizationCommand(ctx: TenantContext, id: string): Promise<void> {
   if (!id?.trim()) throw new ValidationError("organization id is required");
 
+  const before = await getOrganizationById(ctx.client, id);
+  if (before) await assertTerritoryWriteAccess(ctx, before.territory_id);
   await softDeleteOrganization(ctx.client, id);
 
   await insertAuditLog(ctx.client, {

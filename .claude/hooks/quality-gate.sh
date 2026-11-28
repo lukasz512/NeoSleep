@@ -86,6 +86,8 @@ PUSHED=0
 git rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1 && PUSHED=1
 # shellcheck source=lib/change-shape.sh
 source "$REPO_ROOT/.claude/hooks/lib/change-shape.sh"
+# shellcheck source=lib/ci-wait-lock.sh
+source "$REPO_ROOT/.claude/hooks/lib/ci-wait-lock.sh"
 
 branch_artifact_check() {
   [ -z "$BRANCH_CHANGED" ] && return 0
@@ -100,7 +102,7 @@ branch_artifact_check() {
   if [ "$PUSHED" -eq 0 ]; then
     [ -n "$ticket" ] || WARNS+=("Branch '${BRANCH}' has no ticket ID in its name — rename it before pushing (NEO-84).")
     [ -n "$ticket" ] && [ ! -f ".claude/local/artifacts/${ticket}.json" ] \
-      && WARNS+=("Not pushed yet: after the push, hand over $( [ "$(change_shape "$BRANCH_CHANGED")" = full ] && echo 'the full Artifact (/ship-artifact)' || echo 'with build.mjs light (one board comment + PR link)').")
+      && WARNS+=("Not pushed yet: after the push, hand over $( [ "$(change_shape "$BRANCH_CHANGED")" = full ] && echo 'the full Artifact (/ship-artifact)' || echo 'with build.mjs light --post (one board comment: summary, before/after, PR link)').")
     return 0
   fi
   if [ -n "$ticket" ] && [ "$(change_shape "$BRANCH_CHANGED")" = light ] \
@@ -108,7 +110,7 @@ branch_artifact_check() {
     marker=".claude/local/artifacts/${ticket}.json"
     # CORE-187: the board replaced Linear; markers written before the switch keep their linear* fields.
     jq -e '(.boardCommented == true or .linearCommented == true) and ((.prUrl // "") | test("^https://github.com/"))' "$marker" >/dev/null 2>&1 \
-      || FAILS+=("$marker (light): post the board comment with the PR link (pnpm board comment ${ticket} …), then build.mjs light --board-commented.")
+      || FAILS+=("$marker (light): the board comment is missing — one command posts it and moves the ticket: node .claude/skills/ship-artifact/build.mjs light --title … --summary … --before … --after … (or --new …) --post.")
     dev_mergeable_check
     ci_green_check "$marker"
     return 0
@@ -184,12 +186,12 @@ ci_green_check() {
     WARNS+=("'${BRANCH}' has commits that aren't pushed — after pushing, wait for CI (the next turn end checks it).")
     return 0
   fi
-  local on_ci=0 pattern
-  # read, not a for-loop: the patterns contain '*' and must not glob against the tree.
-  while IFS= read -r pattern; do
-    # shellcheck disable=SC2254
-    [ -n "$pattern" ] && case "$BRANCH" in $pattern) on_ci=1 ;; esac
-  done < <(jq -r '.ciBranchPatterns[]' .claude/ci-autofix.json 2>/dev/null)
+  local on_ci=0 waiting=0
+  on_ci_branch "$BRANCH" && on_ci=1
+  # CORE-247: a background ci-wait on this commit re-invokes Claude when it exits, so a
+  # block here would only buy one more full-context turn that waits again.
+  ci_wait_running "$head" && waiting=1
+  local wait_note="A background ci-wait is already waiting on '${BRANCH}' @ ${head:0:7} — end the turn without the PR link; you are re-invoked when it exits. Don't poll CI yourself."
   if ! command -v gh >/dev/null 2>&1 || ! status="$(node infrastructure/scripts/ci-status.mjs --branch "$BRANCH" --sha "$head" 2>/dev/null)"; then
     WARNS+=("Couldn't read GitHub CI for '${BRANCH}' (gh missing or offline) — check CI is green before handing over the PR link.")
     return 0
@@ -198,13 +200,19 @@ ci_green_check() {
   case "$state" in
     success) return 0 ;;
     none)
-      if [ "$on_ci" -eq 1 ]; then
-        FAILS+=("CI hasn't started for '${BRANCH}' @ ${head:0:7} yet (it runs on every push to this branch). Wait for it in the background with: node infrastructure/scripts/ci-wait.mjs --branch ${BRANCH} --sha ${head}. Don't hand over the PR link before CI is green.")
+      if [ "$on_ci" -eq 1 ] && [ "$waiting" -eq 1 ]; then
+        WARNS+=("$wait_note")
+      elif [ "$on_ci" -eq 1 ]; then
+        FAILS+=("CI hasn't started for '${BRANCH}' @ ${head:0:7} yet (it runs on every push to this branch). Start one wait, once, in the background: node infrastructure/scripts/ci-wait.mjs --branch ${BRANCH} --sha ${head} — then end the turn; you are re-invoked when it exits. Don't hand over the PR link before CI is green.")
       else
         WARNS+=("'${BRANCH}' doesn't match .claude/ci-autofix.json ciBranchPatterns, so CI only runs once a PR exists — check it then.")
       fi ;;
     pending)
-      FAILS+=("CI is running for '${BRANCH}' @ ${head:0:7}: $(printf '%s' "$status" | jq -r '.runUrl'). Wait for it in the background with: node infrastructure/scripts/ci-wait.mjs --branch ${BRANCH} --sha ${head} (one GitHub call a minute, shared with every session — never gh run watch, which polls every 3 s and drains the API limit, CORE-128) — the PR link goes to Łukasz only once CI is green (.claude/ci-autofix.json waitForGreenBeforePrLink).") ;;
+      if [ "$waiting" -eq 1 ]; then
+        WARNS+=("$wait_note")
+      else
+        FAILS+=("CI is running for '${BRANCH}' @ ${head:0:7}: $(printf '%s' "$status" | jq -r '.runUrl'). Start one wait, once, in the background: node infrastructure/scripts/ci-wait.mjs --branch ${BRANCH} --sha ${head} — then end the turn; you are re-invoked when it exits (one GitHub call a minute, shared with every session — never gh run watch, which polls every 3 s and drains the API limit, CORE-128). The PR link goes to Łukasz only once CI is green (.claude/ci-autofix.json waitForGreenBeforePrLink).")
+      fi ;;
     rate_limited)
       WARNS+=("GitHub is rate limiting the API until $(printf '%s' "$status" | jq -r '.until') (shared limit for all sessions, CORE-128) — CI for '${BRANCH}' is unknown. Don't retry sooner; check CI on github.com before handing over the PR link.") ;;
     failure)

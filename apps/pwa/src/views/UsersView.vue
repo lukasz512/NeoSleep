@@ -74,6 +74,7 @@
     <FormRenderer
       v-model="showForm"
       :fields="userFormFields"
+      :derive="userFormDerive"
       title-key="user.users.form.title"
       submit-label-key="user.users.form.submit"
       edit-submit-label-key="user.users.form.editSubmit"
@@ -83,6 +84,7 @@
     <FormRenderer
       v-model="showEditModal"
       :fields="userFormFields"
+      :derive="userFormDerive"
       :initial-data="selectedUser ?? undefined"
       title-key="user.users.form.title"
       edit-title-key="user.users.form.editTitle"
@@ -126,7 +128,7 @@ import { useNotifications } from "../composables/useNotifications";
 import { useEntitySubmit } from "../composables/useEntitySubmit";
 import { useAsyncAction } from "../composables/useAsyncAction";
 import type { FilterDefinition } from "../composables/useFilters";
-import { userFormFields } from "../config/forms/userForm";
+import { userFormFields, userFormDerive } from "../config/forms/userForm";
 import { useAuthStore } from "../stores/auth";
 
 const FormRenderer = defineAsyncComponent(() => import("../components/FormRenderer.vue"));
@@ -145,7 +147,7 @@ const { userDetails } = useIdentity();
 const notifications = useNotifications();
 const { submit } = useEntitySubmit();
 const authStore = useAuthStore();
-const isAdmin = computed(() => authStore.user?.role === "admin");
+const isAdmin = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
 
 const showForm = ref(false);
 const showEditModal = ref(false);
@@ -309,6 +311,18 @@ async function onSubmit(payload: Record<string, unknown>, done: (ok: boolean) =>
           body: JSON.stringify(payload),
         }),
       successMessage: t("user.users.form.success"),
+      // The API says whether the welcome email went out (CORE-199) — a failed
+      // send is a warning pointing at "Reset password", not a silent success.
+      successToast: async (result) => {
+        const body = (await result.clone?.().json()) as { invite_email?: string } | undefined;
+        if (body?.invite_email === "sent") {
+          return { message: t("user.users.form.successInvited", { email: String(payload.email ?? "") }), type: "success" };
+        }
+        if (body?.invite_email === "not_sent") {
+          return { message: t("user.users.form.successNotInvited"), type: "warning" };
+        }
+        return null;
+      },
       icon: "nav-users",
       errorMessage: t("user.users.form.errorSave"),
     },

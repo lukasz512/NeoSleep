@@ -2,8 +2,11 @@ import type { PoolClient } from "pg";
 import { toArray } from "./helpers.js";
 import { AppError, DatabaseError } from "../errors.js";
 import { displayNameSql } from "../utils/personName.js";
+import { localeForCountry } from "../utils/patientEmailLocale.js";
+import { getTerritoryCountryCode } from "./territory.js";
+import { assertEmailNotTaken } from "./identityEmail.js";
 
-export type StaffRole = "admin" | "manager" | "kam" | "msl" | "rep" | "doctor";
+export type StaffRole = "admin" | "manager" | "kam" | "msl" | "rep" | "doctor" | "support";
 
 export interface User {
   id: string;
@@ -222,11 +225,25 @@ export async function insertStaffUser(
   const normalizedEmail = email.trim().toLowerCase();
 
   try {
+    // CORE-261: the assigned territory is the only source of the initial region and language.
+    // An explicit country wins; both stay editable afterwards (identities.region / .language).
+    const territoryCountry = scopeTerritoryId ? await getTerritoryCountryCode(client, scopeTerritoryId) : null;
+    const region = countryCode ?? territoryCountry;
     const identityResult = await client.query<{ id: string }>(
-      `INSERT INTO identities (email, title, first_name, last_name, phone, country_code) VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO identities (email, title, first_name, last_name, phone, country_code, region, language)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT (email) WHERE NOT email_shared DO UPDATE SET email = EXCLUDED.email
        RETURNING id`,
-      [normalizedEmail, salutation?.trim() || null, firstName, lastName, phone ?? null, countryCode ?? null]
+      [
+        normalizedEmail,
+        salutation?.trim() || null,
+        firstName,
+        lastName,
+        phone ?? null,
+        countryCode ?? null,
+        region,
+        localeForCountry(region),
+      ]
     );
     const identityId = identityResult.rows[0]!.id;
 
@@ -430,7 +447,8 @@ export async function getUsersPaginated(
   const whereClause = `WHERE ${conditions.join(" AND ")}`;
   const orderCol = isUserSortColumn(sortBy) ? sortBy : "created_at";
   const orderDir = sortOrder === "asc" ? "ASC" : "DESC";
-  const safeOrder = orderCol === "created_at" ? "u.created_at" : `i."${orderCol}"`;
+  // created_at and status live on users; the name and email columns on identities.
+  const safeOrder = orderCol === "created_at" || orderCol === "status" ? `u.${orderCol}` : `i."${orderCol}"`;
 
   try {
     const countResult = await client.query<{ count: string }>(
@@ -458,8 +476,14 @@ export interface UpdateUserInput {
   first_name?: string;
   last_name?: string;
   phone?: string | null;
+  /** NEO-271: the login email. Written to identities.email (the one shared row), so a doctor who is also a user changes on both screens. */
+  email?: string;
   status?: "active" | "inactive" | "suspended";
   country_code?: string | null;
+  /** Country the identity belongs to (PL, MX…). Stored on identities, shared by user/HCP/patient. */
+  region?: string | null;
+  /** Language of every mail and notification to this identity (en, pl, mx). */
+  language?: string;
   role?: StaffRole;
   /** RBAC access scope for `role` — a territory id (country or global root).
    *  Defaults to the existing scope, or the global root for a brand-new role. */
@@ -501,11 +525,33 @@ export async function updateUser(
         [salutation, firstName, lastName, phone, id]
       );
     }
+    if (input.email !== undefined && input.email !== existing.email) {
+      await assertEmailNotTaken(client, input.email, existing.identity_id);
+      await client.query(`UPDATE identities SET email = $1, updated_at = now() WHERE id = $2`, [input.email, existing.identity_id]);
+      // The login email is the sign-in key: drop any override so it cannot
+      // keep the old address working, and kill every open session.
+      await client.query(
+        `UPDATE users SET login_email = NULL, token_version = token_version + 1, updated_at = now() WHERE id = $1`,
+        [id]
+      );
+    }
     if (input.status !== undefined) {
       await client.query(`UPDATE users SET status = $1, updated_at = now() WHERE id = $2`, [input.status, id]);
     }
     if (input.country_code !== undefined) {
       await client.query(`UPDATE identities SET country_code = $1, updated_at = now() WHERE id = $2`, [input.country_code, existing.identity_id]);
+    }
+    if (input.region !== undefined || input.language !== undefined) {
+      // One identity row feeds every mail and notification, so a doctor who
+      // is also a user changes language here and on the HCP screen at once.
+      await client.query(
+        `UPDATE identities SET
+           region     = CASE WHEN $1::boolean THEN $2 ELSE region END,
+           language   = CASE WHEN $3::boolean THEN $4 ELSE language END,
+           updated_at = now()
+         WHERE id = $5`,
+        [input.region !== undefined, input.region?.trim().toUpperCase() || null, input.language !== undefined, input.language, existing.identity_id]
+      );
     }
     if (input.role !== undefined || input.territory_id !== undefined) {
       // Single {role, scope} pair per user for now (no multi-role assignment

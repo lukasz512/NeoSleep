@@ -121,6 +121,14 @@
             <dt>{{ t("app.patients.detail.region") }}</dt>
             <dd>{{ regionBreadcrumb }}</dd>
           </div>
+          <div class="patient-details__row" data-testid="patient-country">
+            <dt>{{ t("app.patients.detail.country") }}</dt>
+            <dd>{{ patient.region || "—" }}</dd>
+          </div>
+          <div class="patient-details__row" data-testid="patient-language">
+            <dt>{{ t("app.patients.detail.language") }}</dt>
+            <dd>{{ patient.language ? t(`app.language.${patient.language}`) : "—" }}</dd>
+          </div>
           <div v-if="patient.created_at" class="patient-details__row">
             <dt>{{ t("app.patients.detail.patientSince") }}</dt>
             <dd>{{ formatDate(patient.created_at) }}</dd>
@@ -205,7 +213,7 @@
         </dl>
         <AppConfirmDialog
           :model-value="!!removing"
-          :text="removing ? t('app.patients.detail.careTeam.removeConfirm', { name: removing.name }) : ''"
+          :text="t('app.patients.detail.careTeam.removeConfirm', { name: removingName })"
           :secondary-label="t('app.common.cancel')"
           :secondary-color="null"
           :primary-label="t('app.patients.detail.careTeam.removeAction')"
@@ -370,6 +378,11 @@ function accessLine(member: CareTeamMember): string {
   return `${how} · ${since}`;
 }
 const removing = ref<CareTeamMember | null>(null);
+/** The name in the confirm text; kept after it closes so the text doesn't blank while it fades (CORE-195). */
+const removingName = ref("");
+watch(removing, (member) => {
+  if (member) removingName.value = member.name;
+});
 const adding = ref(false);
 const addPractitionerId = ref<string | null>(null);
 const allPractitioners = ref<{ id: string; name: string }[]>([]);

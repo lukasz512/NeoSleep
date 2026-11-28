@@ -7,8 +7,9 @@
     @close="emit('update:modelValue', false)"
   >
     <p class="doctor-signature__hint text-body-medium text-medium-emphasis">{{ t(purpose === "email" ? "app.clinical.doctorSignature.hintEmail" : "app.clinical.doctorSignature.hint") }}</p>
+    <EmailLanguageSelect v-if="purpose === 'email'" v-model="mailLanguage" class="doctor-signature__language" />
     <ConsentSignatureField
-      v-if="modelValue"
+      :key="opening"
       ref="fieldRef"
       data-testid="doctor-signature-field"
       :phone-start="phoneStart"
@@ -16,7 +17,7 @@
     />
     <template #actions>
       <!-- NEO-258 D3: what goes to the patient by email is always signed — no unsigned way out there. -->
-      <AppButton v-if="purpose === 'print'" variant="text" data-testid="doctor-signature-skip" @click="emit('print', null)">
+      <AppButton v-if="purpose === 'print'" variant="text" data-testid="doctor-signature-skip" @click="emit('print', null, mailLanguage)">
         {{ t("app.clinical.doctorSignature.printUnsigned") }}
       </AppButton>
       <AppButton color="primary" :disabled="empty" data-testid="doctor-signature-sign" @click="sign">
@@ -32,6 +33,7 @@ import { useI18n } from "vue-i18n";
 import AppButton from "../AppButton.vue";
 import AppFormDialog from "../AppFormDialog.vue";
 import ConsentSignatureField from "../questionnaire/ConsentSignatureField.vue";
+import EmailLanguageSelect from "../questionnaire/EmailLanguageSelect.vue";
 import { doctorHandoffStart } from "../../composables/signatureHandoffStart";
 
 /**
@@ -45,30 +47,48 @@ import { doctorHandoffStart } from "../../composables/signatureHandoffStart";
  * emailed to the patient — signing is required, `print` carries the signature.
  */
 
-const props = withDefaults(defineProps<{ modelValue: boolean; purpose?: "print" | "email" }>(), { purpose: "print" });
-const emit = defineEmits<{ "update:modelValue": [value: boolean]; print: [signature: string | null] }>();
+const props = withDefaults(defineProps<{ modelValue: boolean; purpose?: "print" | "email"; language?: string }>(), { purpose: "print", language: "en" });
+const emit = defineEmits<{ "update:modelValue": [value: boolean]; print: [signature: string | null, language: string] }>();
 
 const { t } = useI18n();
+/** CORE-268: for the email purpose the sender picks the mail language here; it starts at the patient's own. */
+const mailLanguage = ref(props.language);
+watch(
+  () => props.language,
+  (language) => {
+    mailLanguage.value = language;
+  }
+);
 const fieldRef = ref<InstanceType<typeof ConsentSignatureField> | null>(null);
 const empty = ref(true);
 /** CORE-172: a QR next to the pad on a computer — the phone signature comes back here, and the doctor still clicks Sign and print. */
 const phoneStart = doctorHandoffStart();
 
-// Every opening starts from an empty pad (the field is re-created by v-if).
+// Every opening starts from an empty pad: a new key re-creates the field. Only on open, so
+// a closing dialog keeps the signature on screen while it fades (CORE-195).
+const opening = ref(0);
 watch(
   () => props.modelValue,
-  () => (empty.value = true)
+  (open) => {
+    if (!open) return;
+    opening.value += 1;
+    empty.value = true;
+    mailLanguage.value = props.language;
+  }
 );
 
 function sign() {
   const field = fieldRef.value;
   if (!field || field.isEmpty()) return;
-  emit("print", field.toDataURL());
+  emit("print", field.toDataURL(), mailLanguage.value);
 }
 </script>
 
 <style scoped>
 .doctor-signature__hint {
+  margin: 0 0 12px;
+}
+.doctor-signature__language {
   margin: 0 0 12px;
 }
 </style>

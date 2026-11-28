@@ -180,13 +180,13 @@ export function toOaTreatmentDto(order: DeviceOrder, ctx: OaTreatmentContext): R
     multimedias: [],
     collectionRequest: false,
     // Always an object; active:true = ship to this address, which is always
-    // the ordering doctor's primary HCO (Łukasz, 2026-10-03, NEO-213).
+    // the doctor's clinic (NEO-213) or, by their choice, a typed-in address (NEO-265).
     deliveryAddress: {
       name: ctx.delivery.name.trim(),
       address: ctx.delivery.address.trim(),
       city: ctx.delivery.city.trim(),
-      // Province is required only for CA/ES/DE/US (rules §7); not collected for MX.
-      province: "",
+      // Province is required only for CA/ES/DE/US (rules §1.2); a clinic has none (MX), a custom address may (NEO-265).
+      province: ctx.delivery.province?.trim() ?? "",
       countryId,
       postalCode: ctx.delivery.postalCode.trim(),
       phone: ctx.delivery.phone.trim(),

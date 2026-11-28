@@ -164,7 +164,7 @@ export const hcoFormFields: FormFieldDef[] = [
     labelKey: "user.hco.form.status",
     options: STATUS_OPTIONS,
     default: "active",
-    hidden: () => useAuthStore().user?.role !== "admin",
+    hidden: () => !["admin", "manager"].includes(useAuthStore().user?.role ?? ""),
     cols: 12,
   },
   {
@@ -178,7 +178,7 @@ export const hcoFormFields: FormFieldDef[] = [
     labelKey: "user.hco.form.showOnPublicMap",
     hint: "user.hco.form.showOnPublicMapHint",
     default: true,
-    hidden: () => useAuthStore().user?.role !== "admin",
+    hidden: () => !["admin", "manager"].includes(useAuthStore().user?.role ?? ""),
     cols: 12,
   },
 ];

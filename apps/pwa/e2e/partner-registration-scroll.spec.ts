@@ -14,6 +14,7 @@ import { test, expect, type Page } from "@playwright/test";
 
 const PREVIEW = {
   email: "doctor@example.com",
+  phone: "+52 55 9876 5432",
   firstName: "Ana",
   lastName: "García",
   clinicName: "Clínica Sonrisa",
@@ -26,6 +27,14 @@ const PREVIEW = {
   practiceRole: "staff",
   documents: { agreementVersionId: "agr-1", dpaVersionId: "dpa-1", noticeVersionId: "not-1" },
 };
+
+// A cold page load plus the wheel gestures don't fit the 30s default on a slow
+// WebKit runner. The flake hunts of 2026-11-26 (ubuntu-latest) measured 12-15s
+// until the form rendered and ~5s per gesture or dialog step; every gesture
+// scrolled correctly and the tests died of the budget, first the desktop one,
+// then the dialog one. Same budget as the sibling partner-document-dialog spec;
+// the assertions are unchanged.
+test.describe.configure({ timeout: 90_000 });
 
 async function openRegistration(page: Page, width: number, height: number) {
   await page.setViewportSize({ width, height });
@@ -40,15 +49,18 @@ async function openRegistration(page: Page, width: number, height: number) {
   // A cold WebKit page on a busy CI runner can take longer than the 5s default
   // to render this first view (flaked on PR #233, even after the global warm-up).
   await expect(page.locator(".partner-registration__documents")).toBeVisible({ timeout: 20_000 });
-  // The card zooms in after the backdrop intro — measure once it has settled
-  // (the backdrop's gradient/orb loops are infinite and never settle; skip them).
-  await page.waitForFunction(() =>
+  // The card zooms in after the backdrop intro — measure once it has settled.
+  await animationsSettled(page);
+}
+
+// The backdrop's gradient/orb loops are infinite and never settle; skip them.
+const animationsSettled = (page: Page) =>
+  page.waitForFunction(() =>
     document
       .getAnimations()
       .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity)
       .every((a) => a.playState !== "running"),
   );
-}
 
 const scrollTop = (page: Page) =>
   page.evaluate(() => document.querySelector(".partner-registration")!.scrollTop);
@@ -71,11 +83,18 @@ for (const [label, width, height] of [
 ] as const) {
   test(`${label}: the form scrolls with the wheel over the card and over the background`, async ({ page }) => {
     await openRegistration(page, width, height);
-    const sc = await page.evaluate(() => {
-      const el = document.querySelector(".partner-registration")!;
-      return { scrollHeight: el.scrollHeight, clientHeight: el.clientHeight };
-    });
-    expect(sc.scrollHeight).toBeGreaterThan(sc.clientHeight);
+    // Polled, not measured once: on a loaded CI runner WebKit can report the
+    // documents block as visible one layout pass before the form below it has
+    // its full height (scrollHeight === clientHeight for a moment, flake hunt
+    // 2026-11-25). A page that really doesn't overflow still fails here.
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const el = document.querySelector(".partner-registration")!;
+          return el.scrollHeight - el.clientHeight;
+        }),
+      )
+      .toBeGreaterThan(0);
 
     await wheelAt(page, width / 2, height / 2); // over the card
     await wheelAt(page, 8, height / 2); // over the background, left edge
@@ -89,8 +108,16 @@ for (const [label, width, height] of [
 
 test("the form still scrolls after the Edit details dialog was opened and closed", async ({ page }) => {
   await openRegistration(page, 1280, 720);
-  await page.getByRole("button", { name: /edit details/i }).click();
+  // NEO-270: person and clinic cards each have an edit button, so target the clinic one.
+  await page.getByTestId("edit-clinic").click();
   await expect(page.locator(".v-dialog .v-card")).toBeVisible();
+  // Press Escape on a dialog that has finished opening, as a person would.
+  // Vuetify marks an overlay as the top one in a timer after it opens and
+  // ignores Escape until then; on a slow WebKit runner the key arrived ~0.1s
+  // after the card showed, before that timer, and the dialog stayed open
+  // (flake hunt 2026-11-26, reproduced locally by sending Escape in the same
+  // task as the click; a later Escape closes it).
+  await animationsSettled(page);
   await page.keyboard.press("Escape");
   await expect(page.locator(".v-dialog .v-card")).toBeHidden();
   await wheelAt(page, 640, 400);

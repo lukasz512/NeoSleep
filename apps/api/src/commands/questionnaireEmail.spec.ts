@@ -5,7 +5,11 @@ import { insertOrganization } from "../db/organization.js";
 import { insertPractitioner } from "../db/practitioner.js";
 import { linkPractitionerOrganization, setGlobalPrimaryOrganization } from "../db/practitionerOrganization.js";
 import { getAuditLogForEntities } from "../db/audit-log.js";
+import { getUserById } from "../db/users.js";
 import type { TenantContext } from "../context/TenantContext.js";
+import { ValidationError } from "../errors.js";
+import { emailLocale } from "../mailer.js";
+import { GetPatientEmailSendsQuery } from "../queries/patientEmailSend.js";
 import {
   SendQuestionnaireEmailCommand,
   PatientHasNoEmailError,
@@ -88,6 +92,43 @@ describe("SendQuestionnaireEmailCommand", () => {
     });
   });
 
+  it("lets the sender override the mail language, even en for an MX patient (CORE-268)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await insertPatient(client, { first_name: "Eva", last_name: `Idioma-${uniqueSuffix()}`, email: `eva.idioma.${uniqueSuffix()}@example.mx`, region: "MX" });
+
+      sendMock.mockImplementation(async () => `re_${uniqueSuffix()}`); // one provider id per send
+      await SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN, { language: "en" });
+      await SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN, { language: "pl" });
+      await SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN, {});
+
+      const recipients = sendMock.mock.calls.map((call) => call[2] as { language: string; region: string | null });
+      expect(emailLocale(recipients[0]!)).toBe("en");
+      expect(emailLocale(recipients[1]!)).toBe("pl");
+      expect(emailLocale(recipients[2]!)).toBe("mx"); // no override: the recipient's own language
+    });
+  });
+
+  it("rejects an unsupported language before a link is created or a mail is sent (CORE-268)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await insertPatient(client, { first_name: "Eva", last_name: `Idioma-${uniqueSuffix()}`, email: `eva.malidioma.${uniqueSuffix()}@example.mx`, region: "MX" });
+
+      await expect(SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN, { language: "de" })).rejects.toThrow(ValidationError);
+      expect(sendMock).not.toHaveBeenCalled();
+      const { rows } = await client.query("SELECT 1 FROM questionnaire_request WHERE patient_id = $1", [patient.id]);
+      expect(rows).toHaveLength(0);
+    });
+  });
+
+  it("the email-sends query reports the recipient's language for the picker default (CORE-268)", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildContext(client);
+      const patient = await insertPatient(client, { first_name: "Ola", last_name: `Jezyk-${uniqueSuffix()}`, email: `ola.jezyk.${uniqueSuffix()}@example.pl`, region: "PL" });
+      await expect(GetPatientEmailSendsQuery(ctx, patient.id)).resolves.toMatchObject({ language: "pl" });
+    });
+  });
+
   it("names the doctor's clinic from their affiliations when practitioner.organization_id is empty (NEO-178)", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildContext(client);
@@ -153,14 +194,18 @@ describe("SendQuestionnaireEmailCommand", () => {
   it("sends the doctor a confirmation without any link when asked (D4)", async () => {
     await withTenant(TENANT_SLUG, async (client) => {
       const ctx = await buildContext(client);
-      const patient = await insertPatient(client, { first_name: "Lucía", last_name: `Copia-${uniqueSuffix()}`, email: `lucia.${uniqueSuffix()}@example.mx`, region: "MX" });
+      const patient = await insertPatient(client, { first_name: "Lucía", last_name: `Copia-${uniqueSuffix()}`, email: `lucia.${uniqueSuffix()}@example.mx`, region: "PL" });
 
       await SendQuestionnaireEmailCommand(ctx, patient.id, ORIGIN, { copy_to_me: true });
 
       expect(confirmMock).toHaveBeenCalledTimes(1);
-      const [to, info] = confirmMock.mock.calls[0] as [string, Record<string, unknown>];
+      const [to, info, recipient] = confirmMock.mock.calls[0] as [string, Record<string, unknown>, Record<string, unknown>];
       expect(to).toBe(ctx.user.email);
-      expect(info).toMatchObject({ patient: "Lucía C.", sentTo: "l***@example.mx", count: 3, language: "mx" });
+      expect(info).toMatchObject({ patient: "Lucía C.", sentTo: "l***@example.mx", count: 3 });
+      // CORE-259: the language comes from the doctor (the recipient), never from the PL patient.
+      expect(info).not.toHaveProperty("language");
+      const doctor = await getUserById(client, ctx.user.id);
+      expect(recipient).toMatchObject({ language: doctor?.language, region: doctor?.region ?? doctor?.country_code });
       expect(JSON.stringify(info)).not.toContain("/q#");
     });
   });

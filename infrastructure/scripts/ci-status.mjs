@@ -10,7 +10,7 @@
 //        or { state: "rate_limited", until } while GitHub refuses (CORE-128)
 //   Answers are cached for all worktrees in .claude/local/gh-cache.json (gh-cache.mjs).
 //   To wait for a run, use ci-wait.mjs (one call a minute), never `gh run watch`.
-//   … --comment   → prints the markdown comment (PR + Linear use the same text)
+//   … --comment   → prints the markdown comment (PR + board ticket use the same text)
 //
 // English only (CLAUDE.md). No dependencies beyond Node.
 

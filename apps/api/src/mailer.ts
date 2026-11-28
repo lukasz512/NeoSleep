@@ -12,6 +12,8 @@ import {
   type EmailIconName,
 } from "@neo/email";
 import { maskEmail } from "./utils/maskEmail.js";
+import { utcOffsetLabel } from "./utils/timezones.js";
+import { patientEmailLocale } from "./utils/patientEmailLocale.js";
 import { AppError } from "./errors.js";
 import { RESEND_API_KEY, RESEND_FROM_EMAIL, RESEND_NOTIFY_TO, PARTNER_DOCS_CC_EMAIL, RESEND_WEBHOOK_SECRET } from "./env.js";
 
@@ -36,12 +38,13 @@ export interface EmailSender {
   email: string;
 }
 
-/** Active-market region -> email locale (see CLAUDE.md's active markets). Falls back to English elsewhere. */
-export function localeForRegion(region: string | null | undefined): string {
-  const normalized = (region ?? "").trim().toUpperCase();
-  if (normalized === "PL") return "pl";
-  if (normalized === "MX") return "mx";
-  return "en";
+/**
+ * Email language for any recipient (CORE-259): an explicit pl/es language wins, otherwise the
+ * recipient's region (identities.language defaults to 'en', so 'en' alone never beats a PL/MX region),
+ * otherwise English. Always resolve from the RECIPIENT, never from a third party such as the patient.
+ */
+export function emailLocale(recipient: EmailRecipient): string {
+  return patientEmailLocale(recipient.language ?? null, recipient.region ?? null);
 }
 
 /** Intl.DateTimeFormat locale for each supported email language — used to format the demo-booking meeting time. */
@@ -133,7 +136,7 @@ export async function sendContactEmail(subject: string, rows: [string, string][]
   }
 
   const tableRows = rows
-    .map(([label, value]) => `<tr><td style="padding:4px 12px 4px 0;font-weight:600;white-space:nowrap;vertical-align:top">${escapeHtml(label)}</td><td style="padding:4px 0">${escapeHtml(value)}</td></tr>`)
+    .map(([label, value]) => `<tr><td style="padding:4px 12px 4px 0;font-weight:600;white-space:nowrap;vertical-align:top">${escapeHtml(label)}</td><td style="padding:4px 0;white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(value)}</td></tr>`)
     .join("");
 
   // Internal notification (always to the fixed RESEND_NOTIFY_TO admin inbox), so this stays
@@ -162,7 +165,7 @@ export async function sendContactEmail(subject: string, rows: [string, string][]
 }
 
 export async function sendPasswordResetEmail(to: string, resetLink: string, recipient: EmailRecipient): Promise<void> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const greetingName = formatGreetingName(recipient, to);
 
   const bodyHtml = `
@@ -192,6 +195,55 @@ export async function sendPasswordResetEmail(to: string, resetLink: string, reci
   });
 }
 
+export interface AccountCreatedContext {
+  /** Who created the account (shown as "<inviter> created ..."). */
+  inviterName: string;
+  tenantName: string;
+}
+
+/**
+ * Welcome email for a staff account an admin/manager just created (CORE-199): a
+ * set-password link (reuses the password-reset token flow, 7-day expiry) plus a
+ * note that Google sign-in works too. Locale: the user's language, else their region's.
+ * Returns the Resend message id, or null when Resend isn't configured (nothing sent).
+ */
+export async function sendAccountCreatedEmail(
+  to: string,
+  setPasswordLink: string,
+  recipient: EmailRecipient,
+  context: AccountCreatedContext
+): Promise<string | null> {
+  const locale = emailLocale(recipient);
+  const greetingName = formatGreetingName(recipient, to);
+  const params = { inviter: context.inviterName, tenant: context.tenantName };
+
+  const bodyHtml = `
+    <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.accountCreated.title", params))}</h1>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.greeting", { name: greetingName }))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.accountCreated.body", params))}</p>
+    <p style="margin:0 0 16px;">${escapeHtml(emailT(locale, "email.accountCreated.google"))}</p>
+    <p style="margin:0;font-size:13px;color:#7a827e;">${escapeHtml(emailT(locale, "email.accountCreated.expiry"))}</p>`;
+
+  const socials = getSocialsForRegion(recipient.region);
+  const html = renderEmailLayout({
+    preheader: emailT(locale, "email.accountCreated.title", params),
+    bodyHtml,
+    cta: { text: emailT(locale, "email.accountCreated.cta"), href: setPasswordLink },
+    footerTagline: emailT(locale, "email.footer.tagline"),
+    footerCities: emailT(locale, "email.footer.cities"),
+    footerCopyright: emailT(locale, "email.footer.copyright", { year: String(new Date().getFullYear()) }),
+    supportLeadIn: emailT(locale, "email.footer.support"),
+    socials,
+  });
+
+  return sendEmail("account created email", {
+    to,
+    subject: emailT(locale, "email.accountCreated.subject", params),
+    html,
+    attachments: getEmailAttachments(socials),
+  });
+}
+
 /** Trackable reports: which reporter email — the receipt, or the closing one (D3). */
 export type ProblemReportEmailKind = "received" | "resolved" | "dismissed";
 
@@ -213,7 +265,7 @@ export interface ProblemReportEmail {
  * admin's reply. Pure, so the copy is testable without Resend.
  */
 export function buildProblemReportEmail(to: string, recipient: EmailRecipient, report: ProblemReportEmail): { subject: string; html: string } {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const t = (key: string, params?: Record<string, string>) => emailT(locale, `email.problemReport.${report.kind}.${key}`, params);
   const number = String(report.number);
   const muted = (text: string) => `<p style="margin:0 0 16px;font-size:13px;color:#7a827e;">${escapeHtml(text)}</p>`;
@@ -268,7 +320,7 @@ export async function sendQuestionnaireLinkEmail(
   tags?: EmailTags,
   validDays?: number
 ): Promise<string | null> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const greetingName = formatGreetingName(recipient, to);
   const clinicName = clinic.name ?? emailT(locale, "email.questionnaireLink.yourClinic");
 
@@ -317,7 +369,7 @@ export async function sendDocumentLinkEmail(
   validDays: number,
   tags?: EmailTags
 ): Promise<string | null> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const greetingName = formatGreetingName(recipient, to);
   const clinicName = clinic.name ?? emailT(locale, "email.questionnaireLink.yourClinic");
 
@@ -364,7 +416,7 @@ export async function sendLeadOfferEmail(
   recipient: EmailRecipient,
   sender: EmailSender
 ): Promise<void> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const greetingName = formatGreetingName(recipient, to);
 
   const bodyHtml = `
@@ -403,7 +455,7 @@ export interface DemoBookingMeeting {
 }
 
 export async function sendDemoBookingConfirmationEmail(to: string, meeting: DemoBookingMeeting, recipient: EmailRecipient): Promise<void> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const greetingName = formatGreetingName(recipient, to);
   const intlLocale = INTL_LOCALE[locale ?? "en"] ?? INTL_LOCALE.en;
   const formattedDateTime = `${new Intl.DateTimeFormat(intlLocale, {
@@ -448,7 +500,7 @@ export async function sendDemoBookingConfirmationEmail(to: string, meeting: Demo
  * so a missing salutation on the record falls back to the locale's "Dr" rather than dropping it.
  */
 function formatPartnerAddress(recipient: EmailRecipient, to: string): string {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const hasName = !!(recipient.firstName?.trim() || recipient.lastName?.trim());
   const title = recipient.title?.trim() || (hasName ? emailT(locale, "email.partner.defaultTitle") : null);
   return emailT(locale, "email.partner.address", { name: formatGreetingName({ ...recipient, title }, to) });
@@ -460,7 +512,7 @@ export async function sendPartnerInviteEmail(
   recipient: EmailRecipient,
   sender: EmailSender
 ): Promise<void> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
 
   const bodyHtml = `
     <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.partnerInvite.title"))}</h1>
@@ -497,7 +549,7 @@ export async function sendPartnerInviteEmail(
  * to ActivatePractitionerCommand, once training/capacitation is finished.
  */
 export async function sendPartnerJoinThankYouEmail(to: string, recipient: EmailRecipient, sender: EmailSender): Promise<void> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const greetingName = formatGreetingName(recipient, to);
 
   const bodyHtml = `
@@ -540,7 +592,7 @@ export async function sendPatientSignedCopyEmail(
   signedOn: string,
   tags?: EmailTags
 ): Promise<string | null> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const greetingName = formatGreetingName(recipient, to);
   const clinicName = clinic.name ?? emailT(locale, "email.questionnaireLink.yourClinic");
 
@@ -619,6 +671,24 @@ export function formatAppointmentWhen(startAt: string, endAt: string, timezone: 
   return { date, time: `${clock.format(new Date(startAt))} – ${clock.format(new Date(endAt))}` };
 }
 
+/**
+ * CORE-244: "Mexico City time (GMT-6)" — names the clinic's zone next to every
+ * time the patient reads, so a calendar app showing the viewer's own hour
+ * can't be mistaken for a different appointment. A zone without a name in
+ * i18n reads "clinic time (GMT+9)".
+ */
+export function clinicZoneLabel(startAt: string, timezone: string, locale: string | null | undefined): string {
+  const key = `timezoneName.${timezone.replaceAll("/", "_")}`;
+  const name = emailT(locale, key);
+  return `${name === key ? emailT(locale, "email.appointment.clinicTime") : name} (${utcOffsetLabel(startAt, timezone)})`;
+}
+
+/** "11:00 AM" — the start as the clinic's clock shows it, in the patient's language. */
+export function formatAppointmentStart(startAt: string, timezone: string, locale: string | null | undefined): string {
+  const intlLocale = INTL_LOCALE[locale ?? "en"] ?? INTL_LOCALE.en;
+  return new Intl.DateTimeFormat(intlLocale, { timeZone: timezone, hour: "2-digit", minute: "2-digit" }).format(new Date(startAt));
+}
+
 /** The pieces of the calendar-page date tile: "OCT 2031", "15", "WEDNESDAY", plus the start time on its own. */
 function dateTileParts(startAt: string, timezone: string, locale: string | null | undefined): { monthYear: string; day: string; weekday: string; start: string } {
   const intlLocale = INTL_LOCALE[locale ?? "en"] ?? INTL_LOCALE.en;
@@ -663,7 +733,7 @@ const iconImg = (name: EmailIconName, size = 20): string =>
  * link; the clinic leads the sender name and receives replies.
  */
 export async function sendAppointmentPatientEmail(to: string, recipient: EmailRecipient, appointment: AppointmentEmail, tags?: EmailTags): Promise<string | null> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
   const t = (key: string, params?: Record<string, string>): string => emailT(locale, `email.appointment.${key}`, params);
   const greetingName = formatGreetingName(recipient, to);
   const clinicName = appointment.clinicName ?? emailT(locale, "email.questionnaireLink.yourClinic");
@@ -691,7 +761,7 @@ export async function sendAppointmentPatientEmail(to: string, recipient: EmailRe
         <tr><td style="font-size:11px;color:${APPT.muted};padding:0 0 6px;">${escapeHtml(tile.weekday)}</td></tr>
       </table></td>
       <td valign="middle" style="padding-left:16px;"><div style="font-size:26px;font-weight:bold;color:${APPT.ink};${strike}">${escapeHtml(tile.start)}</div>
-      <div style="font-size:13px;color:${APPT.muted};">${escapeHtml(t("clinicTime"))} · ${escapeHtml(t("minutes", { n: String(minutes) }))}</div></td>
+      <div style="font-size:13px;color:${APPT.muted};">${escapeHtml(clinicZoneLabel(appointment.startAt, appointment.timezone, locale))} ·${escapeHtml(t("minutes", { n: String(minutes) }))}</div></td>
     </tr></table>`;
 
   const row = (icon: EmailIconName, label: string, valueHtml: string): string => `
@@ -831,7 +901,7 @@ export async function sendSignedDocumentsEmail(
   loginLink: string,
   ccEmail?: string | null
 ): Promise<string | null> {
-  const locale = recipient.language;
+  const locale = emailLocale(recipient);
 
   const bodyHtml = `
     <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.signedDocuments.title"))}</h1>
@@ -893,9 +963,10 @@ export function verifyResendWebhook(
  */
 export async function sendEmailSentConfirmation(
   to: string,
-  info: { patient: string; sentTo: string; count: number; clinic: string | null; language: string }
+  info: { patient: string; sentTo: string; count: number; clinic: string | null },
+  recipient: EmailRecipient
 ): Promise<void> {
-  const locale = info.language;
+  const locale = emailLocale(recipient);
   const when = new Intl.DateTimeFormat(INTL_LOCALE[locale] ?? "en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date());
   const bodyHtml = `
     <h1 style="margin:0 0 16px;font-size:20px;font-weight:bold;color:#128F83;text-align:center;">${escapeHtml(emailT(locale, "email.sendConfirmation.title"))}</h1>
@@ -956,7 +1027,7 @@ export async function sendDeviceOrderReconciliationAlert(to: string, alert: Reco
     ["Listed by the lab", String(alert.labTotal)],
   ];
   const tableRows = rows
-    .map(([label, value]) => `<tr><td style="padding:4px 12px 4px 0;font-weight:600;white-space:nowrap;vertical-align:top">${escapeHtml(label)}</td><td style="padding:4px 0">${escapeHtml(value)}</td></tr>`)
+    .map(([label, value]) => `<tr><td style="padding:4px 12px 4px 0;font-weight:600;white-space:nowrap;vertical-align:top">${escapeHtml(label)}</td><td style="padding:4px 0;white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(value)}</td></tr>`)
     .join("");
   const list =
     alert.lines.length > 0

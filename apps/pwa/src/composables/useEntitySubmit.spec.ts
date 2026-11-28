@@ -13,6 +13,46 @@ function failResponse(): Response {
   return { ok: false } as Response;
 }
 
+describe("useEntitySubmit successToast (CORE-199)", () => {
+  it("replaces the success toast with a warning when the callback says so", async () => {
+    const { submit } = useEntitySubmit();
+    const { current, dismissCurrent } = useNotifications();
+    await submit(
+      {
+        request: async () => okResponse(),
+        successMessage: "Saved",
+        errorMessage: "Failed",
+        icon: "nav-users",
+        successToast: async () => ({ message: "Saved, email not sent", type: "warning" }),
+      },
+      vi.fn(),
+    );
+    expect(current.value?.message).toBe("Saved, email not sent");
+    expect(current.value?.type).toBe("warning");
+    dismissCurrent();
+  });
+
+  it("falls back to successMessage when the callback returns null or throws", async () => {
+    const { submit } = useEntitySubmit();
+    const { current, dismissCurrent } = useNotifications();
+    await submit(
+      {
+        request: async () => okResponse(),
+        successMessage: "Saved",
+        errorMessage: "Failed",
+        icon: "nav-users",
+        successToast: async () => {
+          throw new Error("unreadable body");
+        },
+      },
+      vi.fn(),
+    );
+    expect(current.value?.message).toBe("Saved");
+    expect(current.value?.type).toBe("success");
+    dismissCurrent();
+  });
+});
+
 describe("useEntitySubmit", () => {
   it("on success: shows a success notification, calls done(true), then dispatches refresh and onSuccess", async () => {
     const { submit } = useEntitySubmit();

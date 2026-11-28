@@ -34,6 +34,7 @@ export interface InviteTokenWithIdentity extends InviteToken {
   email: string;
   first_name: string | null;
   last_name: string | null;
+  phone: string | null;
 }
 
 export async function createInviteToken(
@@ -64,7 +65,7 @@ export async function getInviteTokenByHash(
 ): Promise<InviteTokenWithIdentity | null> {
   try {
     const r = await client.query<InviteTokenWithIdentity>(
-      `SELECT it.id, it.user_id, it.lead_id, it.metadata, it.created_by, u.identity_id, i.email, i.first_name, i.last_name
+      `SELECT it.id, it.user_id, it.lead_id, it.metadata, it.created_by, u.identity_id, i.email, i.first_name, i.last_name, i.phone
        FROM invite_tokens it
        JOIN users u ON u.id = it.user_id
        JOIN identities i ON i.id = u.identity_id

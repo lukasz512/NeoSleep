@@ -11,7 +11,9 @@ import {
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
 import { ValidationError } from "../errors.js";
-import { sendLeadOfferEmail, localeForRegion } from "../mailer.js";
+import { assertTerritoryWriteAccess } from "../middleware/requireScope.js";
+import { sendLeadOfferEmail } from "../mailer.js";
+import { localeForCountry } from "../utils/patientEmailLocale.js";
 
 /**
  * COMMANDS — Lead domain.
@@ -109,6 +111,7 @@ export async function CreateLeadCommand(
   const lastName  = input.last_name?.trim() ?? "";
   if (!firstName) throw new ValidationError("first_name is required");
   if (!lastName)  throw new ValidationError("last_name is required");
+  await assertTerritoryWriteAccess(ctx, input.territory_id);
 
   const type = normalizeLeadType(input.type) ?? "other";
   const institution = typeof input.metadata?.institution === "string" ? input.metadata.institution.trim() : "";
@@ -188,6 +191,7 @@ export async function UpdateLeadCommand(
 
   const before = await getLeadById(ctx.client, id);
   if (!before) return null;
+  await assertTerritoryWriteAccess(ctx, before.territory_id, input.territory_id);
 
   const updateInput: UpdateLeadInput = {
     salutation:  input.salutation,
@@ -263,6 +267,7 @@ export async function ConvertLeadCommand(
 
   const before = await getLeadById(ctx.client, id);
   if (!before) return null;
+  await assertTerritoryWriteAccess(ctx, before.territory_id);
 
   const after = await convertLead(ctx.client, id, {
     converted_to_id:   convertedToId,
@@ -305,6 +310,7 @@ export async function SendLeadOfferEmailCommand(ctx: TenantContext, id: string):
 
   const lead = await getLeadById(ctx.client, id);
   if (!lead) return null;
+  await assertTerritoryWriteAccess(ctx, lead.territory_id);
   if (!lead.email) throw new ValidationError("Lead has no email address");
 
   await sendLeadOfferEmail(
@@ -314,7 +320,7 @@ export async function SendLeadOfferEmailCommand(ctx: TenantContext, id: string):
       title: lead.salutation,
       firstName: lead.first_name,
       lastName: lead.last_name,
-      language: localeForRegion(lead.region),
+      language: localeForCountry(lead.region),
       region: lead.region,
     },
     // Doctor sees this as coming from the rep who made the call, not a faceless system
@@ -453,6 +459,8 @@ export async function UpsertPublicLeadCommand(
 export async function DeleteLeadCommand(ctx: TenantContext, id: string): Promise<void> {
   if (!id?.trim()) throw new ValidationError("lead id is required");
 
+  const before = await getLeadById(ctx.client, id);
+  if (before) await assertTerritoryWriteAccess(ctx, before.territory_id);
   await softDeleteLead(ctx.client, id);
 
   await insertAuditLog(ctx.client, {

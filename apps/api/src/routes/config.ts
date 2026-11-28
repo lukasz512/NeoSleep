@@ -30,7 +30,7 @@ interface AppConfigPatchBody {
 /** PATCH /api/config/app – update theme (admin only). */
 configRouter.patch(
   "/config/app",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const body = req.body as AppConfigPatchBody;
     const updates: AppConfigUpdate = {};
@@ -83,7 +83,7 @@ configRouter.get(
  */
 configRouter.patch(
   "/config/i18n",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const { locale, overrides } = req.body as { locale?: string; overrides?: Record<string, string | null> };
     if (!locale || typeof locale !== "string" || !["en", "pl", "mx"].includes(locale)) {

@@ -147,6 +147,7 @@ import {
   useAppointments,
   APPOINTMENT_DURATIONS,
   DEFAULT_APPOINTMENT_DURATION,
+  forbiddenMessageKey,
   type Appointment,
   type AppointmentWriteResult,
 } from "../composables/useAppointments";
@@ -260,8 +261,10 @@ const chosenDoctorName = computed(
 watch(
   [() => props.modelValue, patientId],
   async ([open, patient]) => {
+    // Closing keeps what is shown until the dialog has faded (CORE-195).
+    if (!open) return;
     careTeamIds.value = null;
-    if (!open || !patient || isEdit.value || isDoctor.value) return;
+    if (!patient || isEdit.value || isDoctor.value) return;
     try {
       const res = await apiFetch(`/api/v1/patient/${patient}/care-team`, { handleErrors: false });
       if (!res.ok || patientId.value !== patient) return;
@@ -480,7 +483,7 @@ function close() {
 
 function explain(result: AppointmentWriteResult): string {
   if (result.conflict) return t("user.appointments.form.slotTaken");
-  if (result.forbidden) return isDoctor.value ? t("user.appointments.form.onlyOwnPatients") : t("user.appointments.form.outsideScope");
+  if (result.forbidden) return t(forbiddenMessageKey(result.forbiddenReason));
   return t("user.appointments.form.errorSave");
 }
 

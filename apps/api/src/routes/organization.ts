@@ -262,7 +262,7 @@ organizationRouter.patch(
 // ---------------------------------------------------------------------------
 organizationRouter.delete(
   "/organization/:id",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const id = routeParam(req, "id")?.trim();
     if (!id) throw new ValidationError("Missing organization id");

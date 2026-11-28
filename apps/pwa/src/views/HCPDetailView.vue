@@ -164,6 +164,14 @@
                   <dt class="view-item__label">{{ t("user.hcp.detail.region") }}</dt>
                   <dd class="view-item__value">{{ territoryLabel }}</dd>
                 </div>
+                <div class="view-item__row" data-testid="hcp-country">
+                  <dt class="view-item__label">{{ t("user.hcp.detail.country") }}</dt>
+                  <dd class="view-item__value">{{ hcp.region || "—" }}</dd>
+                </div>
+                <div class="view-item__row" data-testid="hcp-language">
+                  <dt class="view-item__label">{{ t("user.hcp.detail.language") }}</dt>
+                  <dd class="view-item__value">{{ hcp.language ? t(`app.language.${hcp.language}`) : "—" }}</dd>
+                </div>
                 <div v-if="licenseNumber" class="view-item__row">
                   <dt class="view-item__label view-item__label--icon"><AppIcon name="id-card" />{{ t(licenseNumber.labelKey) }}</dt>
                   <dd class="view-item__value">{{ licenseNumber.value }}</dd>

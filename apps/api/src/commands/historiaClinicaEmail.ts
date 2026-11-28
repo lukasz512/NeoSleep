@@ -11,7 +11,7 @@ import { sendDocumentLinkEmail } from "../mailer.js";
 import { hashToken } from "../utils/hashToken.js";
 import { generateToken } from "../utils/generateToken.js";
 import { maskEmail } from "../utils/maskEmail.js";
-import { patientEmailLocale } from "../utils/patientEmailLocale.js";
+import { resolveSendLanguage } from "../utils/patientEmailLocale.js";
 import { isSignatureDataUrl } from "../utils/signatureDataUrl.js";
 import { AppError, ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
 import { PatientHasNoEmailError, QuestionnaireEmailUnavailableError } from "./questionnaireRequest.js";
@@ -49,10 +49,11 @@ export async function SendHistoriaClinicaEmailCommand(
   ctx: TenantContext,
   patientId: string,
   frontendOrigin: string,
-  body: { doctorSignature?: unknown }
+  body: { doctorSignature?: unknown; language?: unknown }
 ): Promise<SentDocumentLink> {
   if (ctx.user.role !== "doctor") throw new ForbiddenError("Only a doctor can sign and send the Historia clínica");
   if (!isSignatureDataUrl(body.doctorSignature)) throw new ValidationError("A drawn signature (PNG) is required");
+  resolveSendLanguage(body.language, null, null); // CORE-268: reject a bad language before anything is stored
 
   const checklist = await GetPatientChecklistQuery(ctx, patientId); // territory-checked
   const sections = checklist.items.filter((i) => HC_SECTION_KEYS.includes(i.key));
@@ -95,6 +96,7 @@ export async function SendHistoriaClinicaEmailCommand(
     });
 
     // Token in the #fragment: browsers never send it to a server (same as /q and /a).
+    const mailLocale = resolveSendLanguage(body.language, context.patient_language, context.patient_region);
     const sent = await sendDocumentLinkEmail(
       email,
       `${frontendOrigin}/d#${token}`,
@@ -102,8 +104,8 @@ export async function SendHistoriaClinicaEmailCommand(
         title: context.patient_salutation,
         firstName: context.patient_first_name,
         lastName: context.patient_last_name,
-        language: patientEmailLocale(context.patient_language, context.patient_region),
-        region: context.patient_region,
+        language: mailLocale.language,
+        region: mailLocale.region,
       },
       { name: context.organization_name, email: context.organization_email },
       DOCUMENT_LINK_TTL_DAYS,

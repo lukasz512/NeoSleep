@@ -10,6 +10,7 @@ import { practitionerRouter } from "./routes/practitioner.js";
 import { organizationRouter } from "./routes/organization.js";
 import { presentationRouter } from "./routes/presentation.js";
 import { diagnosticsRouter } from "./routes/diagnostics.js";
+import { kpiRouter } from "./routes/kpi.js";
 import { encounterRouter } from "./routes/encounter.js";
 import { calendarRouter } from "./routes/calendar.js";
 import { configRouter } from "./routes/config.js";
@@ -38,9 +39,11 @@ import { territoryRouter } from "./routes/territory.js";
 import { doctorPanelRouter } from "./routes/doctorPanel.js";
 import { problemReportRouter } from "./routes/problemReport.js";
 import { workBoardRouter } from "./routes/workBoard.js";
+import { aiRouter } from "./routes/ai.js";
 import { runMigrations, getDb } from "./db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter, smokePdfLimiter } from "./middleware/rateLimiter.js";
+import { supportAllowlist } from "./middleware/supportAllowlist.js";
 import { renderHtmlToPdf } from "./services/documentRenderer.js";
 
 // Allow multiple origins (e.g. localhost + LAN IP for phone testing): set FRONTEND_URL="http://localhost:5173,http://192.168.1.x:5173"
@@ -72,25 +75,24 @@ function corsOrigin(origin: string | undefined, cb: (err: Error | null, allow?: 
 
 export const app: Express = express();
 
-// Registered before any other middleware (rate limiter, CORS, auth) so Render's
+// Registered before any other middleware (rate limiter, CORS, auth) so the host's
 // health checker never gets rate-limited or blocked by an unrelated dependency —
-// a 429/5xx here makes Render think the whole instance is down.
+// a 429/5xx here makes it think the whole instance is down.
 // `commit` is the git SHA this instance was built from — GIT_COMMIT on Cloud Run
-// (baked into the image by deploy-api.yml), RENDER_GIT_COMMIT on Render (set by
-// Render itself), null locally. The post-deploy smoke test
+// (baked into the image by deploy-api.yml), null locally. The post-deploy smoke test
 // (.github/workflows/post-deploy-smoke.yml) polls it to know when the pushed
 // commit is actually live.
 app.get("/health", (_req, res) =>
-  res.json({ ok: true, commit: process.env.GIT_COMMIT || process.env.RENDER_GIT_COMMIT || null })
+  res.json({ ok: true, commit: process.env.GIT_COMMIT || null })
 );
 
-// Render (and any reverse-proxy host) sits in front of this process and sets
+// Cloud Run's front end (like any reverse-proxy host) sits in front of this process and sets
 // X-Forwarded-For / X-Forwarded-Proto. Without this, express-rate-limit
 // refuses to trust X-Forwarded-For (ERR_ERL_UNEXPECTED_X_FORWARDED_FOR).
 app.set("trust proxy", 1);
 
 // Renders one fixed, data-free PDF through the same Chromium path as real
-// documents — the most fragile piece on Render (bundled Chromium + system
+// documents — the most fragile piece on the host (bundled Chromium + system
 // libraries), which /health alone can't vouch for. Used by the post-deploy
 // smoke test; tightly rate-limited because every call launches a render.
 // Loads Poppins from Google Fonts exactly like packages/documents/templates do:
@@ -148,6 +150,8 @@ app.use("/api/v1/patient/:id/historia-clinica/email", express.json({ limit: "600
 app.use("/api/v1/public/questionnaire/opened", express.text({ type: "text/plain", limit: "1kb" }));
 // Resend signs the exact bytes it sends — keep the raw body for that one path (NEO-190).
 app.use("/api/v1/webhooks/resend", express.raw({ type: "*/*", limit: "256kb" }));
+// One git report lists every ticket a commit ever cited, ~80 bytes each (CORE-221).
+app.use("/api/v1/platform/work/git-state", express.json({ limit: "600kb" }));
 app.use(express.json({ limit: "50kb" }));
 // Express 5 (body-parser 2) leaves req.body undefined when nothing was parsed — a
 // GET, a bodiless POST/DELETE, or a non-JSON content type. Express 4 always set {}.
@@ -175,6 +179,9 @@ app.use("/api/v1", (_req, res, next) => {
   next();
 });
 
+// CORE-197: NeoCRM support reaches only its allowlisted routes, whatever each router's own guard says.
+app.use("/api/v1", supportAllowlist);
+
 // All API routes are versioned under /api/v1 — auth router registers /auth/* paths separately
 app.use("/api/v1", authRouter);
 app.use("/api/v1", leadsRouter);
@@ -182,6 +189,7 @@ app.use("/api/v1", practitionerRouter);
 app.use("/api/v1", organizationRouter);
 app.use("/api/v1", presentationRouter);
 app.use("/api/v1", diagnosticsRouter);
+app.use("/api/v1", kpiRouter);
 app.use("/api/v1", encounterRouter);
 app.use("/api/v1", calendarRouter);
 app.use("/api/v1", configRouter);
@@ -210,6 +218,7 @@ app.use("/api/v1", territoryRouter);
 app.use("/api/v1", doctorPanelRouter);
 app.use("/api/v1", problemReportRouter);
 app.use("/api/v1", workBoardRouter);
+app.use("/api/v1", aiRouter);
 
 app.use(errorHandler);
 

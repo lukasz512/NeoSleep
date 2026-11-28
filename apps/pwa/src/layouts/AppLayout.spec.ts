@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import en from "@i18n/en.json";
-import { navRoutesForRole } from "../router/routes";
+import { navRoutesForRole, homePathForRole } from "../router/routes";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -113,10 +113,10 @@ describe("AppLayout", () => {
       expect(navRoutesForRole("rep").map((r) => r.path)).toEqual(expectedPaths);
     });
 
-    it("manager sees users management, leads, sleep studies (NEO-83), treatment plans and documents — not territories", () => {
+    it("manager sees users management, leads, sleep studies (NEO-83), treatment plans and documents and territories (NEO-266)", () => {
       const expectedPaths = [
         "/leads", "/hcp", "/hco", "/patients", "/calendar", "/sleep-studies",
-        "/treatment-plans", "/resources", "/users", "/documents",
+        "/treatment-plans", "/resources", "/users", "/documents", "/territories",
       ];
       expect(navRoutesForRole("manager").map((r) => r.path)).toEqual(expectedPaths);
     });
@@ -130,9 +130,15 @@ describe("AppLayout", () => {
     it("admin always sees every nav item, including leads, documents, and territories (isRoleAllowed bypasses role restrictions for admin)", () => {
       const expectedPaths = [
         "/dashboard", "/leads", "/hcp", "/hco", "/patients", "/calendar", "/sleep-studies",
-        "/treatment-plans", "/resources", "/users", "/documents", "/territories", "/issues", "/platform/board",
+        "/treatment-plans", "/resources", "/users", "/documents", "/territories", "/issues", "/platform/board", "/ai",
       ];
       expect(navRoutesForRole("admin").map((r) => r.path)).toEqual(expectedPaths);
+    });
+
+    it("NeoCRM support sees calendar, resources, documents, reports and the work board — nothing with patient or user records (CORE-197)", () => {
+      const expectedPaths = ["/calendar", "/resources", "/documents", "/issues", "/platform/board"];
+      expect(navRoutesForRole("support").map((r) => r.path)).toEqual(expectedPaths);
+      expect(homePathForRole("support")).toBe("/calendar");
     });
 
     it("only the work board is platformOnly — useVisibleNavRoutes hides it from tenant admins (CORE-177)", () => {

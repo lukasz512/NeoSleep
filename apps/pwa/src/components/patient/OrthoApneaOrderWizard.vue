@@ -54,8 +54,10 @@
 
           <div v-if="order.dentistId" class="oa-wizard__ship-to" data-field="delivery" data-testid="ship-to">
             <p class="oa-wizard__field-label">{{ t("app.deviceOrder.delivery.title") }}</p>
-            <!-- Admin only, when the doctor has several clinics: ship to another one than the primary (NEO-210 D2). -->
-            <div v-if="clinicItems.length > 1" data-field="deliveryOrganizationId" class="mb-2">
+            <!-- NEO-265: the clinic (default) or another address, typed in. -->
+            <DeliveryChoice v-model:mode="deliveryMode" :address="customDelivery" :error-for="fieldError" class="mb-2" @update:field="setCustomField" />
+            <!-- When the doctor has several clinics: ship to another one than the primary (NEO-210 D2). -->
+            <div v-if="deliveryMode === 'clinic' && clinicItems.length > 1" data-field="deliveryOrganizationId" class="mb-2">
               <VSelect
                 :model-value="selectedClinicId"
                 :items="clinicItems"
@@ -68,14 +70,14 @@
                 @update:model-value="onClinicPicked"
               />
             </div>
-            <p v-if="contextLoading" class="text-body-medium text-medium-emphasis">{{ t("app.deviceOrder.delivery.loading") }}</p>
-            <address v-else-if="context?.delivery" class="oa-wizard__address">
+            <p v-if="deliveryMode === 'clinic' && contextLoading" class="text-body-medium text-medium-emphasis">{{ t("app.deviceOrder.delivery.loading") }}</p>
+            <address v-else-if="deliveryMode === 'clinic' && context?.delivery" class="oa-wizard__address">
               <strong>{{ context.delivery.name }}</strong><br />
               {{ context.delivery.address }}<br />
               {{ [context.delivery.postalCode, context.delivery.city].filter(Boolean).join(" ") }}<template v-if="context.delivery.countryCode">, {{ context.delivery.countryCode }}</template><br />
               {{ [context.delivery.phone, context.delivery.email].filter(Boolean).join(" · ") }}
             </address>
-            <AppInlineAlert v-if="deliveryMessage" type="error" class="mt-2" data-testid="ship-to-error">
+            <AppInlineAlert v-if="deliveryMode === 'clinic' && deliveryMessage" type="error" class="mt-2" data-testid="ship-to-error">
               {{ deliveryMessage }}
               <a v-if="recordHref && !contextFailed" :href="recordHref" target="_blank" rel="noopener" class="oa-wizard__alert-link">{{ t("app.deviceOrder.delivery.openRecord") }}</a>
               <AppButton v-if="contextFailed" variant="text" size="small" color="primary" @click="refreshContext(true)">{{ t("app.deviceOrder.delivery.retry") }}</AppButton>
@@ -90,7 +92,12 @@
             {{ labOrdersDisabledMessage }}
           </AppInlineAlert>
           <!-- A doctor has no step 1: a problem with their clinic's address shows here, with whom to contact (NEO-210). -->
-          <div v-if="isDoctor && doctorDeliveryMessage" data-field="delivery" class="mb-4">
+          <!-- NEO-265: a doctor also picks the clinic or another address, here instead of step 1. -->
+          <div v-if="isDoctor" class="mb-4" data-testid="ship-to">
+            <p class="oa-wizard__field-label">{{ t("app.deviceOrder.delivery.title") }}</p>
+            <DeliveryChoice v-model:mode="deliveryMode" :address="customDelivery" :error-for="fieldError" @update:field="setCustomField" />
+          </div>
+          <div v-if="isDoctor && deliveryMode === 'clinic' && doctorDeliveryMessage" data-field="delivery" class="mb-4">
             <AppInlineAlert type="error" :title="t('app.deviceOrder.delivery.doctorTitle')" data-testid="doctor-address-error">
               {{ doctorDeliveryMessage }}
               <AppButton v-if="contextFailed" variant="text" size="small" color="primary" @click="refreshContext(true)">{{ t("app.deviceOrder.delivery.retry") }}</AppButton>
@@ -406,9 +413,70 @@
             <VRadio value="impression" :label="t('app.orthoApneaOrder.form.impressionTraditional')" />
             <VRadio value="scanner" :label="t('app.orthoApneaOrder.form.scannerIntraoral')" />
             <VRadio value="platform" :label="t('app.deviceOrder.registration.platform')" />
+            <VRadio value="files" :label="t('app.deviceOrder.registration.files')" />
           </VRadioGroup>
 
-          <template v-if="order.registration.method !== 'impression'">
+          <!-- NEO-262: scans go straight to private storage; the order carries their paths. -->
+          <div v-if="order.registration.method === 'files'" class="oa-wizard__scans" data-field="registration.files">
+            <input
+              ref="scanInput"
+              type="file"
+              multiple
+              class="oa-wizard__scan-input"
+              :accept="SCAN_ACCEPT"
+              data-testid="scan-file-input"
+              @change="onScanFilesChosen"
+            >
+            <ul v-if="order.registration.files.length > 0 || scanUploads.length > 0" class="oa-wizard__scan-list">
+              <li v-for="file in order.registration.files" :key="file.path" class="oa-wizard__scan" data-testid="scan-file">
+                <AppIcon name="check-circle" class="oa-wizard__scan-icon oa-wizard__scan-icon--done" />
+                <span class="oa-wizard__scan-name">{{ file.name }}</span>
+                <span class="oa-wizard__scan-size">{{ formatMegabytes(file.size) }}</span>
+                <AppButton
+                  icon
+                  variant="text"
+                  size="small"
+                  :aria-label="t('app.deviceOrder.registration.removeFile', { name: file.name })"
+                  @click="removeScanFile(file.path)"
+                >
+                  <AppIcon name="close" class="oa-wizard__scan-icon" />
+                </AppButton>
+              </li>
+              <li v-for="upload in scanUploads" :key="upload.key" class="oa-wizard__scan" data-testid="scan-upload">
+                <AppIcon :name="upload.state === 'failed' ? 'x-circle' : 'upload'" class="oa-wizard__scan-icon" :class="{ 'oa-wizard__scan-icon--failed': upload.state === 'failed' }" />
+                <span class="oa-wizard__scan-name">{{ upload.name }}</span>
+                <template v-if="upload.state === 'uploading'">
+                  <VProgressLinear
+                    :model-value="upload.progress * 100"
+                    color="primary"
+                    rounded
+                    class="oa-wizard__scan-progress"
+                    :aria-label="t('app.deviceOrder.registration.uploading', { name: upload.name })"
+                  />
+                </template>
+                <template v-else>
+                  <span class="oa-wizard__scan-error" role="alert">{{ t(`app.deviceOrder.errors.${upload.problem}`, SCAN_LIMITS) }}</span>
+                  <AppButton
+                    icon
+                    variant="text"
+                    size="small"
+                    :aria-label="t('app.deviceOrder.registration.removeFile', { name: upload.name })"
+                    @click="dismissScanUpload(upload.key)"
+                  >
+                    <AppIcon name="close" class="oa-wizard__scan-icon" />
+                  </AppButton>
+                </template>
+              </li>
+            </ul>
+            <AppButton variant="tonal" color="primary" data-testid="scan-file-add" @click="scanInput?.click()">
+              <template #prepend><AppIcon name="upload" class="oa-wizard__scan-icon" /></template>
+              {{ t("app.deviceOrder.registration.addFiles") }}
+            </AppButton>
+            <p class="oa-wizard__scan-hint">{{ t("app.deviceOrder.registration.filesHint", SCAN_LIMITS) }}</p>
+            <p v-if="fieldError('registration.files')" class="oa-wizard__scan-error" role="alert">{{ fieldError("registration.files") }}</p>
+          </div>
+
+          <template v-else-if="order.registration.method !== 'impression'">
             <VSelect
               v-if="order.registration.method === 'scanner'"
               :model-value="order.registration.scannerTreatment"
@@ -431,9 +499,6 @@
               density="comfortable"
               @update:model-value="setScanner"
             />
-            <AppInlineAlert type="info">
-              {{ t("app.orthoApneaOrder.fileUploadDeferredNotice") }}
-            </AppInlineAlert>
           </template>
         </div>
 
@@ -442,6 +507,9 @@
         <div v-else-if="step === 4">
           <AppInlineAlert v-if="labOrdersDisabledMessage" type="warning" class="mb-4" data-testid="lab-orders-disabled">
             {{ labOrdersDisabledMessage }}
+          </AppInlineAlert>
+          <AppInlineAlert v-if="scanUploading" type="info" class="mb-4" data-testid="scan-uploading">
+            {{ t("app.deviceOrder.registration.waitForUploads") }}
           </AppInlineAlert>
           <VCheckbox v-model="order.noContactDoctorForRedesign" color="primary" :label="t('app.orthoApneaOrder.form.noContactDoctorForRedesign')" />
         </div>
@@ -457,7 +525,7 @@
       <AppButton v-if="step < 4" icon size="x-large" variant="text" color="primary" :aria-label="t('app.orthoApneaOrder.actions.next')" @click="goNext">
         <AppIcon name="arrow-right" class="oa-wizard__nav-arrow" />
       </AppButton>
-      <AppButton v-else color="primary" variant="flat" :loading="submitLoading" @click="onConfirm">
+      <AppButton v-else color="primary" variant="flat" :loading="submitLoading" :disabled="scanUploading" @click="onConfirm">
         {{ t("app.orthoApneaOrder.actions.confirm") }}
       </AppButton>
     </template>
@@ -483,6 +551,8 @@ import { useI18n } from "vue-i18n";
 import { useDisplay } from "vuetify";
 import {
   CONFIRMABLE_WARNINGS,
+  MAX_SCAN_FILE_BYTES,
+  SCAN_FILE_EXTENSIONS,
   issuesFor,
   PRODUCT_CODES,
   SCANNER_PLATFORMS,
@@ -492,6 +562,7 @@ import {
   type ProductCode,
   type SequenceUnit,
 } from "@device-order";
+import DeliveryChoice from "./DeliveryChoice.vue";
 import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import IconOptionPicker, { type IconOption } from "./IconOptionPicker.vue";
@@ -538,7 +609,10 @@ import { useAuthStore } from "../../stores/auth";
  * - Step 3's registration is part of the order: the pickers show brand names
  *   and the order carries OA's enum names (Łukasz D2). No promotion-code field.
  *
- * Still deferred (flagged inline): photo/CBCT and scan-file upload.
+ * - Or the doctor uploads the scan files (NEO-262): straight to private
+ *   storage, Confirm waits for every upload, the API sends them to OA.
+ *
+ * Still deferred (flagged inline): photo/CBCT upload.
  */
 export type { OrthoApneaDraftPlan };
 
@@ -568,7 +642,7 @@ const scannerOptions = computed(() =>
 const platformOptions = SCANNER_PLATFORMS.map((name) => ({ value: name, title: PLATFORM_BRANDS[name] }));
 
 function onRegistrationMethodPicked(value: unknown) {
-  if (value === "impression" || value === "scanner" || value === "platform") setRegistrationMethod(value);
+  if (value === "impression" || value === "scanner" || value === "platform" || value === "files") setRegistrationMethod(value);
 }
 
 /** OrthoApnea's own reference images, downloaded locally (see assets/orthoapnea/ — public static files, not behind their auth). */
@@ -600,6 +674,14 @@ const TOOLTIP_IMG = {
 const FIELD_LABELS: Readonly<Record<string, string>> = {
   dentistId: "app.orthoApneaOrder.form.doctor",
   delivery: "app.deviceOrder.delivery.title",
+  "delivery.name": "app.deviceOrder.delivery.field.name",
+  "delivery.address": "app.deviceOrder.delivery.field.address",
+  "delivery.city": "app.deviceOrder.delivery.field.city",
+  "delivery.postalCode": "app.deviceOrder.delivery.field.postalCode",
+  "delivery.countryCode": "app.deviceOrder.delivery.field.countryCode",
+  "delivery.province": "app.deviceOrder.delivery.field.province",
+  "delivery.phone": "app.deviceOrder.delivery.field.phone",
+  "delivery.email": "app.deviceOrder.delivery.field.email",
   productCode: "app.orthoApneaOrder.selectProduct",
   retrusionMaxMm: "app.orthoApneaOrder.form.retrusionMax",
   protrusionMaxMm: "app.orthoApneaOrder.form.protrusionMax",
@@ -623,11 +705,14 @@ const FIELD_LABELS: Readonly<Record<string, string>> = {
   registration: "app.orthoApneaOrder.form.registrationMethod",
   "registration.scannerTreatment": "app.orthoApneaOrder.form.scanner",
   "registration.scannerPlatform": "app.deviceOrder.registration.platformField",
+  "registration.files": "app.deviceOrder.registration.files",
 };
 const FIELD_KEYS = Object.keys(FIELD_LABELS).sort((a, b) => b.length - a.length);
 
 /** An issue path → the field that shows it (longest matching prefix), e.g. sequence.values.1 → sequence. */
 function fieldKeyOf(path: string): string {
+  // The clinic's address is one block; only a typed-in address has a field per part.
+  if (deliveryMode.value === "clinic" && isDeliveryPath(path)) return "delivery";
   return FIELD_KEYS.find((k) => path === k || path.startsWith(`${k}.`)) ?? path;
 }
 
@@ -669,6 +754,8 @@ const {
   contextLoading,
   contextFailed,
   deliveryOrganizationId,
+  deliveryMode,
+  customDelivery,
   submitLoading,
   serverIssues,
   labOrdersDisabled,
@@ -685,6 +772,11 @@ const {
   setWarningAcknowledged,
   setRegistrationMethod,
   setScanner,
+  scanUploads,
+  scanUploading,
+  addScanFiles,
+  removeScanFile,
+  dismissScanUpload,
   resetForOpen,
   loadProducts,
   loadDoctorsAndDefault,
@@ -694,6 +786,24 @@ const {
 } = useOrthoApneaOrderWizard(() => isDoctor.value);
 
 watch(order, () => { touched.value = true; }, { deep: true });
+
+// ── Scan files (NEO-262) ────────────────────────────────────────────────────
+
+const SCAN_ACCEPT = SCAN_FILE_EXTENSIONS.map((ext) => `.${ext}`).join(",");
+const SCAN_LIMITS = { maxMb: MAX_SCAN_FILE_BYTES / (1024 * 1024), types: SCAN_FILE_EXTENSIONS.map((ext) => ext.toUpperCase()).join(", ") };
+const scanInput = ref<HTMLInputElement | null>(null);
+
+function formatMegabytes(bytes: number): string {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function onScanFilesChosen(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  // Cleared so picking the same file again (after removing it) fires change.
+  input.value = "";
+  if (files.length > 0) void addScanFiles(props.patientId, files);
+}
 
 // ── Product + sequence ──────────────────────────────────────────────────────
 
@@ -792,7 +902,7 @@ function onDoctorPicked(value: unknown) {
   order.dentistId = typeof value === "string" ? value : "";
 }
 
-/** The doctor's clinics as an admin's choice (the API sends them to an admin only), primary marked. */
+/** The doctor's clinics as the choice of an admin or doctor (the API sends them to both), primary marked. */
 const clinicItems = computed(() =>
   (context.value?.deliveryOptions ?? []).map((o) => ({
     value: o.organizationId,
@@ -919,7 +1029,13 @@ function issueMessage(issue: OrderIssue): string {
 }
 
 function messageFor(issue: OrderIssue): string {
+  // A typed-in address is the doctor's to fix: each field says what is wrong, no clinic-level notice.
+  if (deliveryMode.value === "custom") return issueMessage(issue);
   return isDeliveryPath(issue.path) ? ((isDoctor.value ? doctorDeliveryMessage.value : deliveryMessage.value) ?? issueMessage(issue)) : issueMessage(issue);
+}
+
+function setCustomField(field: keyof typeof customDelivery, value: string) {
+  customDelivery[field] = value;
 }
 
 /** The message under a field — its first visible error. */
@@ -1383,6 +1499,68 @@ watch(
 /* Paso 3 (band/finish pickers) and Paso 4 (teeth diagram) share this same
    max-width, centered, so both sections read as equally wide instead of the
    teeth diagram looking narrower/off-center next to the pickers above it. */
+/* NEO-262 scan files: one quiet row per file, the same height uploading or done. */
+.oa-wizard__scans {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.oa-wizard__scan-input {
+  display: none;
+}
+.oa-wizard__scan-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.oa-wizard__scan {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 4px 0 12px;
+  border-radius: 8px;
+  background: rgba(var(--v-theme-on-surface), 0.04);
+}
+.oa-wizard__scan-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oa-wizard__scan-size,
+.oa-wizard__scan-hint {
+  font-size: 0.875rem;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+  margin: 0;
+}
+.oa-wizard__scan-progress {
+  flex: 0 0 96px;
+  margin-right: 12px;
+}
+.oa-wizard__scan-icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+.oa-wizard__scan-icon--done {
+  color: rgb(var(--v-theme-success));
+}
+.oa-wizard__scan-icon--failed,
+.oa-wizard__scan-error {
+  color: rgb(var(--v-theme-error));
+}
+.oa-wizard__scan-error {
+  font-size: 0.875rem;
+  margin: 0;
+}
+
 .oa-wizard__section--centered {
   max-width: 800px;
   margin: 0 auto;

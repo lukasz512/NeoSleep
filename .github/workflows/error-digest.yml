@@ -1,0 +1,55 @@
+# Morning error digest (CORE-190, decision core190-r1 D4): one email with the
+# app errors that became board tickets in the last 24 h and the auto-error
+# tickets the nightly worker moved to Needs Review. Also refreshes ticket
+# priorities by affected users (D3) and adds one "Daily:" counter comment per
+# ticket whose hits changed.
+#
+# Dev and prod share one database (and so one board), so this runs once, against
+# prod; it falls back to dev while API_URL_PROD is unset.
+# Secrets: API_URL_PROD / API_URL_DEV and INTERNAL_JOB_SECRET (same value as the
+# APIs' INTERNAL_JOB_SECRET in Secret Manager). Without them the job only warns.
+
+name: Error digest (daily 07:00 Warsaw)
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: error-digest
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Send the error digest
+        env:
+          API_URL_DEV: ${{ secrets.API_URL_DEV }}
+          API_URL_PROD: ${{ secrets.API_URL_PROD }}
+          JOB_SECRET: ${{ secrets.INTERNAL_JOB_SECRET }}
+        run: |
+          API_URL="${API_URL_PROD:-$API_URL_DEV}"
+          if [ -z "$API_URL" ]; then
+            echo "::warning::No API URL set — skipped."
+            exit 0
+          fi
+          if [ -z "$JOB_SECRET" ]; then
+            echo "::warning::INTERNAL_JOB_SECRET not set in GitHub secrets — skipped."
+            exit 0
+          fi
+          status=$(curl -s -o result.json -w "%{http_code}" --max-time 120 -X POST \
+            -H "Authorization: Bearer $JOB_SECRET" -H "Content-Type: application/json" -d '{}' \
+            "$API_URL/api/v1/diagnostics/jobs/digest")
+          echo "HTTP $status"
+          if [ "$status" = "404" ]; then
+            echo "::warning::No digest endpoint yet (404) — skipped until it is deployed."
+            exit 0
+          fi
+          jq '{created: (.created | length), fixed: (.fixed | length), active: (.active | length), emailed}' result.json || cat result.json
+          [ "$status" = "200" ]

@@ -168,9 +168,10 @@
       :items="emailableItems"
       :open-keys="openEmailKeys"
       :recipient="emailDialog.recipient"
+      :language="emailDialog.language"
       :sends="emailDialog.sends"
       :sending="emailing"
-      :last-url="emailDialog.lastUrl"
+      :error="emailDialog.error"
       :item-title="itemTitle"
       :format-date-time="formatDateTime"
       @send="onEmailSend"
@@ -452,7 +453,7 @@ const props = defineProps<{
 const { t, locale } = useI18n();
 const notifications = useNotifications();
 const authStore = useAuthStore();
-const isAdmin = computed(() => authStore.user?.role === "admin");
+const isAdmin = computed(() => authStore.user?.role === "admin" || authStore.user?.role === "manager");
 
 const checklistApi = usePatientChecklist(() => props.patientId);
 const checklist = computed(() => checklistApi.checklist.value);
@@ -866,11 +867,12 @@ watch(
  * delivery status, and can copy the link right after sending.
  */
 const emailing = ref(false);
-const emailDialog = reactive<{ open: boolean; recipient: string | null; sends: EmailSend[]; lastUrl: string | null }>({
+const emailDialog = reactive<{ open: boolean; recipient: string | null; language: string; sends: EmailSend[]; error: string | null }>({
   open: false,
   recipient: null,
+  language: "en",
   sends: [],
-  lastUrl: null,
+  error: null,
 });
 const emailableItems = computed(() => (checklist.value?.items ?? []).filter((item) => item.actions.qr));
 const openEmailKeys = computed(() =>
@@ -880,19 +882,22 @@ async function refreshEmailSends() {
   const data = await checklistApi.loadEmailSends();
   if (!data) return;
   emailDialog.recipient = data.recipient;
+  emailDialog.language = data.language;
   emailDialog.sends = data.sends;
 }
 async function openEmailDialog() {
-  emailDialog.lastUrl = null;
+  emailDialog.error = null;
   emailDialog.open = true;
   await refreshEmailSends();
 }
-async function onEmailSend({ items, copyToMe }: { items: string[]; copyToMe: boolean }) {
+async function onEmailSend({ items, copyToMe, language }: { items: string[]; copyToMe: boolean; language: string }) {
   emailing.value = true;
+  emailDialog.error = null;
   try {
-    const sent = await checklistApi.sendByEmail({ items, copyToMe });
-    if (sent) emailDialog.lastUrl = sent.url;
-    await refreshEmailSends();
+    const result = await checklistApi.sendByEmail({ items, copyToMe, language });
+    // Success: the toast confirms and the dialog closes. Failure: it stays open with the reason.
+    if (result.ok) emailDialog.open = false;
+    else emailDialog.error = result.message;
   } finally {
     emailing.value = false;
   }

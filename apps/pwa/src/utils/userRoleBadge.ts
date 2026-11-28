@@ -10,6 +10,7 @@
  * - kam → hospital, msl → presentation, dark disc
  * - rep → map-pin on a light outline disc — reps are most users, so theirs
  *   is the quietest mark
+ * - support (NeoCRM staff, CORE-197) → id-card on a light outline disc
  * - a user holding several roles shows one badge: admin > doctor > manager >
  *   kam > msl > rep
  *
@@ -41,7 +42,7 @@ export interface UserRoleBadge {
 }
 
 /** Highest priority first. */
-export const USER_ROLE_PRIORITY = ["admin", "doctor", "manager", "kam", "msl", "rep"] as const;
+export const USER_ROLE_PRIORITY = ["admin", "doctor", "manager", "kam", "msl", "rep", "support"] as const;
 
 const DEFAULT_BADGES: Record<string, { icon: AppIconName; tone: UserRoleBadgeTone }> = {
   admin: { icon: "star", tone: "primary" },
@@ -49,6 +50,7 @@ const DEFAULT_BADGES: Record<string, { icon: AppIconName; tone: UserRoleBadgeTon
   kam: { icon: "hco-hospital", tone: "dark" },
   msl: { icon: "nav-presentations", tone: "dark" },
   rep: { icon: "map-pin", tone: "light" },
+  support: { icon: "id-card", tone: "light" },
 };
 
 /** Icons a tenant may assign to a role through app_config. */

@@ -1,0 +1,64 @@
+# Nightly KPI snapshot (CORE-213): freezes yesterday's dashboard counts (patients,
+# encounters, PCFs, device orders, purchase orders) per tenant / rep / territory
+# into each tenant's kpi_snapshot. A rerun replaces the day, so a manual run
+# is always safe; workflow_dispatch can name a past day to backfill it.
+#
+# 00:30 UTC = the UTC day that just ended is complete.
+# Dev and prod share one database, so this runs once, against prod; it falls back
+# to dev while API_URL_PROD is unset (same as error-digest.yml).
+# Secrets: API_URL_PROD / API_URL_DEV and INTERNAL_JOB_SECRET (same value as the
+# APIs' INTERNAL_JOB_SECRET in Secret Manager). Without them the job only warns.
+
+name: KPI snapshot (nightly)
+
+on:
+  schedule:
+    - cron: "30 0 * * *"
+  workflow_dispatch:
+    inputs:
+      day:
+        description: "Past UTC day to (re)compute, YYYY-MM-DD (empty = yesterday)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kpi-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Write the snapshot
+        env:
+          API_URL_DEV: ${{ secrets.API_URL_DEV }}
+          API_URL_PROD: ${{ secrets.API_URL_PROD }}
+          JOB_SECRET: ${{ secrets.INTERNAL_JOB_SECRET }}
+          DAY: ${{ inputs.day }}
+        run: |
+          API_URL="${API_URL_PROD:-$API_URL_DEV}"
+          if [ -z "$API_URL" ]; then
+            echo "::warning::No API URL set — skipped."
+            exit 0
+          fi
+          if [ -z "$JOB_SECRET" ]; then
+            echo "::warning::INTERNAL_JOB_SECRET not set in GitHub secrets — skipped."
+            exit 0
+          fi
+          body=$(jq -n --arg day "$DAY" 'if $day == "" then {} else {day: $day} end')
+          status=$(curl -s -o result.json -w "%{http_code}" --max-time 300 -X POST \
+            -H "Authorization: Bearer $JOB_SECRET" -H "Content-Type: application/json" -d "$body" \
+            "$API_URL/api/v1/kpi/jobs/snapshot")
+          echo "HTTP $status"
+          if [ "$status" = "404" ]; then
+            echo "::warning::No KPI snapshot endpoint yet (404) — skipped until it is deployed."
+            exit 0
+          fi
+          jq '{day, tenantsFailed, tenants}' result.json || cat result.json
+          [ "$status" = "200" ]
+          # A tenant whose snapshot crashed is a failure of the job.
+          [ "$(jq '.tenantsFailed' result.json)" = "0" ]

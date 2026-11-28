@@ -6,6 +6,8 @@ import type { UserRole } from "../stores/auth";
 export { PublicLayout, AppLayout };
 
 const ALL_STAFF_ROLES: UserRole[] = ["rep", "doctor", "manager", "admin", "kam", "msl"];
+// NeoCRM support (CORE-197) is not staff of the tenant: it opens only the screens that name it below.
+const STAFF_AND_SUPPORT: UserRole[] = [...ALL_STAFF_ROLES, "support"];
 
 /** App starts at login; root and unknown paths send unauthenticated users to /login. */
 // Nav order: dashboard, leads, hcp, hco, patients, calendar, presentations
@@ -63,7 +65,7 @@ export const routes: RouteRecordRaw[] = [
   // the separate Planificador (encounters) and Citas (appointments) screens/calendars with one union
   // list; what each role sees within it (own / territory / redacted) is still decided by the API
   // (queries/encounter.ts + queries/appointment.ts, merged in queries/calendar.ts).
-  { path: "/calendar", name: "calendar", component: () => import("../views/CalendarView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES, phoneOwnHeader: true } },
+  { path: "/calendar", name: "calendar", component: () => import("../views/CalendarView.vue"), meta: { layout: "app", requiresAuth: true, roles: STAFF_AND_SUPPORT, phoneOwnHeader: true } },
   // Old routes, kept so bookmarks/links still work — no `layout: "app"` meta, so appNavRoutes (below)
   // never lists them in the sidebar/bottom bar.
   { path: "/planner", redirect: "/calendar" },
@@ -73,7 +75,7 @@ export const routes: RouteRecordRaw[] = [
   { path: "/treatment-plans", name: "treatment-plans", component: () => import("../views/TreatmentPlansView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["doctor", "manager", "admin"] } },
   // Hidden from nav while the OrthoApnea resources module ships (not deleted — see the `hidden` filter in appNavRoutes below).
   { path: "/presentations", name: "presentations", component: () => import("../views/PresentationsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES, hidden: true } },
-  { path: "/resources", name: "resources", component: () => import("../views/ResourcesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ALL_STAFF_ROLES, partner: "orthoapnea" } },
+  { path: "/resources", name: "resources", component: () => import("../views/ResourcesView.vue"), meta: { layout: "app", requiresAuth: true, roles: STAFF_AND_SUPPORT, partner: "orthoapnea" } },
   { path: "/users", name: "users", component: () => import("../views/UsersView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
   { path: "/users/:id", name: "user-detail", component: () => import("../views/UserDetailView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
   // Admin/manager-only WYSIWYG editor for generated-document body content
@@ -86,18 +88,20 @@ export const routes: RouteRecordRaw[] = [
   // a genuinely different feature from this admin/manager content editor.
   // The URL path stays the clean "/documents" (paths aren't what that test
   // reserves, only route `name`s), only the internal name differs.
-  { path: "/documents", name: "document-content", component: () => import("../views/DocumentsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
-  { path: "/documents/:templateKey/:locale", name: "document-content-detail", component: () => import("../views/DocumentContentEditorView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
+  { path: "/documents", name: "document-content", component: () => import("../views/DocumentsView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager", "support"] } },
+  { path: "/documents/:templateKey/:locale", name: "document-content-detail", component: () => import("../views/DocumentContentEditorView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager", "support"] } },
   // Geographic hierarchy (country > region > city > village > district) data entry — admin-only,
   // narrow reference-data CRUD inside the existing app, not a separate portal/admin deployment.
-  { path: "/territories", name: "territories", component: () => import("../views/TerritoriesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin"] } },
+  { path: "/territories", name: "territories", component: () => import("../views/TerritoriesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "manager"] } },
   // Admin: reports from users (tenant admin) and grouped production errors (platform admin, second tab).
   // Every signed-in user: their own reports and what happened to them. Opened from the user menu, not the nav.
   { path: "/my-reports", name: "my-reports", component: () => import("../views/MyReportsView.vue"), meta: { layout: "app", requiresAuth: true, hidden: true } },
-  { path: "/issues", name: "issues", component: () => import("../views/IssuesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin"] } },
+  { path: "/issues", name: "issues", component: () => import("../views/IssuesView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "support"] } },
   // Platform work board (CORE-177): every team's tickets, platform admins only (`platformOnly` hides the nav
   // entry from tenant admins; the API answers them 403 anyway).
-  { path: "/platform/board", name: "work-board", component: () => import("../views/WorkBoardView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin"], platformOnly: true } },
+  { path: "/platform/board", name: "work-board", component: () => import("../views/WorkBoardView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "support"], platformOnly: true } },
+  // NeoSleep AI stage 1 (CORE-274): admin-only Q&A over the product docs. The API enforces the role too.
+  { path: "/ai", name: "ai", component: () => import("../views/AiChatView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin"] } },
   { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
 ];
 

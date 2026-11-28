@@ -390,7 +390,7 @@ authRouter.post("/auth/forgot-password", asyncHandler(async (req: Request, res: 
       firstName: staff.first_name,
       lastName: staff.last_name,
       language: staff.language,
-      region: staff.region,
+      region: staff.region ?? staff.country_code,
     }).catch((err) => {
       console.error("[auth] Failed to send password reset email:", err);
     });

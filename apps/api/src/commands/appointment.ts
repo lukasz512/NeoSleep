@@ -174,10 +174,10 @@ export async function CreateAppointmentCommand(ctx: TenantContext, input: Create
   let practitionerId = input.practitioner_id ?? patient.practitioner_id ?? undefined;
   if (viewer.kind === "doctor") {
     if (input.practitioner_id && input.practitioner_id !== viewer.practitionerId) {
-      throw new ForbiddenError("A doctor can only book appointments with themselves");
+      throw new ForbiddenError("A doctor can only book appointments with themselves", "OTHER_DOCTOR");
     }
     if (!(await isOnCareTeam(ctx.client, patient.id, viewer.practitionerId!))) {
-      throw new ForbiddenError("A doctor can only book their own patients");
+      throw new ForbiddenError("A doctor can only book their own patients", "NOT_OWN_PATIENT");
     }
     practitionerId = viewer.practitionerId!;
   } else if (viewer.kind !== "admin") {
@@ -194,7 +194,7 @@ export async function CreateAppointmentCommand(ctx: TenantContext, input: Create
   }
 
   if (viewer.kind === "field" && (input.notes || input.sleep_study_id || input.treatment_plan_id)) {
-    throw new ForbiddenError("Notes and clinical links are for clinical staff only");
+    throw new ForbiddenError("Notes and clinical links are for clinical staff only", "CLINICAL_FIELDS");
   }
   await assertClinicalLinks(ctx, patient.id, input.sleep_study_id, input.treatment_plan_id);
 
@@ -255,17 +255,17 @@ export async function UpdateAppointmentCommand(ctx: TenantContext, id: string, i
   await assertCanSeeAppointment(ctx, viewer, before);
 
   const isBooker = before.created_by_user_id === ctx.user.id;
-  if (viewer.kind === "field" && !isBooker) throw new ForbiddenError("Only whoever booked this appointment can change it");
+  if (viewer.kind === "field" && !isBooker) throw new ForbiddenError("Only whoever booked this appointment can change it", "NOT_BOOKER");
 
   const status = input.status as AppointmentStatus | undefined;
   if (status !== undefined && !APPOINTMENT_STATUSES.includes(status)) {
     throw new ValidationError(`Invalid status '${input.status}' — expected one of ${APPOINTMENT_STATUSES.join(", ")}`);
   }
   if (status && status !== "cancelled" && !canCloseAppointments(viewer)) {
-    throw new ForbiddenError("Only the doctor, a manager or an admin can mark an appointment completed or no-show");
+    throw new ForbiddenError("Only the doctor, a manager or an admin can mark an appointment completed or no-show", "CANNOT_CLOSE");
   }
   const touchesClinical = input.notes !== undefined || input.sleep_study_id !== undefined || input.treatment_plan_id !== undefined;
-  if (viewer.kind === "field" && touchesClinical) throw new ForbiddenError("Notes and clinical links are for clinical staff only");
+  if (viewer.kind === "field" && touchesClinical) throw new ForbiddenError("Notes and clinical links are for clinical staff only", "CLINICAL_FIELDS");
   await assertClinicalLinks(ctx, before.patient_id, input.sleep_study_id, input.treatment_plan_id);
   if (input.patient_response !== undefined && input.patient_response !== "confirmed") {
     throw new ValidationError("patient_response can only be set to 'confirmed'", "patient_response");

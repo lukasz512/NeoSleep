@@ -4,7 +4,7 @@ import bcrypt from "bcrypt";
 import { randomUUID } from "node:crypto";
 import type { Request, Response } from "express";
 import { app } from "../server.js";
-import { getDb, withTenant, insertStaffUser } from "../db.js";
+import { getDb, withTenant, insertStaffUser, listPlatformAudit, createWorkItem, updateWorkItem, addWorkItemComment } from "../db.js";
 import { signAuthToken } from "../utils/jwt.js";
 import { errorHandler } from "../middleware/errorHandler.js";
 import { ValidationError } from "../errors.js";
@@ -19,6 +19,8 @@ import type { StaffRole } from "../db/users.js";
 const TENANT_SLUG = process.env.DEFAULT_TENANT_SLUG ?? "test";
 const SUFFIX = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const DESCRIPTION = "The patient list does not load after I save a visit.";
+const TEAM = `I${Math.random().toString(36).slice(2, 8).toUpperCase().replace(/[^A-Z0-9]/g, "X")}`;
+const TRACKER = { name: "qa-issues-spec", kind: "agent" as const };
 
 interface Account { id: string; email: string; auth: string }
 
@@ -41,6 +43,7 @@ describe("problem reports and admin issues", () => {
   let doctor: Account;
   let rep: Account;
   const errorMarker = `zzissuesspec ${uniqueWord()}`;
+  const groupMarker = `zzissuesgroup ${uniqueWord()}`;
   const previousDiagnostics = process.env.ENABLE_DIAGNOSTICS_DB;
 
   beforeAll(async () => {
@@ -52,6 +55,7 @@ describe("problem reports and admin issues", () => {
       `INSERT INTO platform.users (email, name, role, is_active) VALUES ($1, 'QA Platform', 'owner', true)`,
       [platformAdmin.email.toUpperCase()]
     );
+    await getDb().query(`INSERT INTO platform.work_team (key, name, kind, sort_order) VALUES ($1, 'QA issues', 'client', 999)`, [TEAM]);
   });
 
   afterAll(async () => {
@@ -60,7 +64,21 @@ describe("problem reports and admin issues", () => {
     await getDb().query("DELETE FROM platform.problem_report WHERE reporter_email LIKE $1", [`qa-rp-%-${SUFFIX}@%`]);
     await getDb().query("DELETE FROM platform.users WHERE lower(email) LIKE $1", [`qa-rp-%-${SUFFIX}@%`]);
     await getDb().query("DELETE FROM platform.diagnostics WHERE message LIKE $1", [`%${errorMarker}%`]);
+    await getDb().query("DELETE FROM platform.diagnostics WHERE message LIKE $1", [`${groupMarker}%`]);
+    await getDb().query("DELETE FROM platform.work_item WHERE team_key = $1", [TEAM]);
+    await getDb().query("DELETE FROM platform.work_team WHERE key = $1", [TEAM]);
   });
+
+  /** An error group written straight to the table: the list reads it, nothing else is under test. */
+  async function errorGroup(env: string, requestId: string | null = null): Promise<{ id: string; ref: string }> {
+    const hash = randomUUID().replace(/-/g, "");
+    const { rows } = await getDb().query<{ id: string }>(
+      `INSERT INTO platform.diagnostics (level, message, message_hash, source, env, request_id)
+       VALUES ('error', $1, $2, 'api', $3, $4) RETURNING id`,
+      [`${groupMarker} ${hash}`, hash, env, requestId]
+    );
+    return { id: rows[0]!.id, ref: `diag:api:${hash}` };
+  }
 
   describe("POST /api/v1/problem-reports", () => {
     it("requires a signed-in user", async () => {
@@ -208,6 +226,45 @@ describe("problem reports and admin issues", () => {
       expect((await request(app).patch("/api/v1/admin/problem-reports/not-a-uuid").set("Authorization", admin.auth).send({ status: "new" })).status).toBe(404);
     });
 
+    it("writes a platform.audit row for a status change, with who and before → after, and none for a note", async () => {
+      const reporter = await account("doctor", "audited");
+      const created = await request(app).post("/api/v1/problem-reports").set("Authorization", reporter.auth).send({ description: DESCRIPTION });
+      const url = `/api/v1/admin/problem-reports/${created.body.id}`;
+
+      await request(app).patch(url).set("Authorization", admin.auth).send({ admin_note: "Only a note" });
+      await request(app).patch(url).set("Authorization", admin.auth).send({ status: "new" });
+      expect(await listPlatformAudit("problem_report", created.body.id)).toHaveLength(0);
+
+      await request(app).patch(url).set("Authorization", admin.auth).send({ status: "in_progress" });
+      await request(app).patch(url).set("Authorization", platformAdmin.auth).send({ status: "resolved" });
+      const trail = await listPlatformAudit("problem_report", created.body.id);
+      expect(trail).toHaveLength(2);
+      expect(trail.map((row) => [row.action, row.before, row.after, row.actor_email])).toEqual(
+        expect.arrayContaining([
+          ["problem_report.status", { status: "new" }, { status: "in_progress" }, admin.email],
+          ["problem_report.status", { status: "in_progress" }, { status: "resolved" }, platformAdmin.email],
+        ])
+      );
+      // A tenant admin has no platform.users row; the email is the trail.
+      expect(trail.find((row) => row.actor_email === admin.email)!.actor_id).toBeNull();
+      expect(trail.find((row) => row.actor_email === platformAdmin.email)!.actor_id).not.toBeNull();
+    });
+
+    it("shows the state of the error a report is linked to, without the ticket itself", async () => {
+      const requestId = `req-${uniqueWord()}`;
+      const group = await errorGroup("local", requestId);
+      const item = await createWorkItem({ team: TEAM, title: "Linked error", status: "approved", source: "error", external_ref: group.ref }, TRACKER);
+      await updateWorkItem(item.team_key, item.number, { status: "building" }, TRACKER);
+      const reporter = await account("doctor", "state");
+      const linked = await request(app).post("/api/v1/problem-reports").set("Authorization", reporter.auth).send({ description: DESCRIPTION, request_ids: [requestId] });
+      const plain = await request(app).post("/api/v1/problem-reports").set("Authorization", reporter.auth).send({ description: DESCRIPTION });
+
+      const list = await request(app).get("/api/v1/admin/problem-reports").set("Authorization", admin.auth);
+      const byId = (id: string) => list.body.items.find((r: { id: string }) => r.id === id);
+      expect(byId(linked.body.id).linked_error).toEqual({ status: "open", ticket_status: "building", blocked: false });
+      expect(byId(plain.body.id).linked_error).toBeNull();
+    });
+
     it("answers 404 for the attachment of a report without one", async () => {
       const created = await request(app).post("/api/v1/problem-reports").set("Authorization", doctor.auth).send({ description: DESCRIPTION });
       const res = await request(app).get(`/api/v1/admin/problem-reports/${created.body.id}/attachment`).set("Authorization", admin.auth);
@@ -247,7 +304,7 @@ describe("problem reports and admin issues", () => {
         .set("Authorization", reporter.auth)
         .send({ description: DESCRIPTION, request_ids: [requestId] });
 
-      const list = await request(app).get("/api/v1/admin/diagnostics?env=test").set("Authorization", platformAdmin.auth);
+      const list = await request(app).get("/api/v1/admin/diagnostics?env=local").set("Authorization", platformAdmin.auth);
       expect(list.status).toBe(200);
       const item = list.body.items.find((d: { id: string }) => d.id === row!.id);
       expect(item).toBeTruthy();
@@ -256,13 +313,82 @@ describe("problem reports and admin issues", () => {
       const resolved = await request(app).patch(`/api/v1/admin/diagnostics/${row!.id}`).set("Authorization", platformAdmin.auth).send({ status: "resolved" });
       expect(resolved.status).toBe(200);
       expect(resolved.body.status).toBe("resolved");
+      // CORE-213: the status change is in platform.audit, with who and before → after.
+      const trail = await listPlatformAudit("diagnostic", row!.id);
+      expect(trail).toHaveLength(1);
+      expect(trail[0]).toMatchObject({ action: "diagnostic.status", before: { status: "open" }, after: { status: "resolved" } });
+      expect(trail[0]!.actor_email).toBe(platformAdmin.email);
+      expect(trail[0]!.actor_id).not.toBeNull();
 
-      const openOnly = await request(app).get("/api/v1/admin/diagnostics?env=test").set("Authorization", platformAdmin.auth);
+      const openOnly = await request(app).get("/api/v1/admin/diagnostics?env=local").set("Authorization", platformAdmin.auth);
       expect(openOnly.body.items.some((d: { id: string }) => d.id === row!.id)).toBe(false);
-      const all = await request(app).get("/api/v1/admin/diagnostics?status=all&env=test").set("Authorization", platformAdmin.auth);
+      const all = await request(app).get("/api/v1/admin/diagnostics?status=all&env=local").set("Authorization", platformAdmin.auth);
       expect(all.body.items.some((d: { id: string }) => d.id === row!.id)).toBe(true);
 
       expect((await request(app).patch(`/api/v1/admin/diagnostics/${row!.id}`).set("Authorization", platformAdmin.auth).send({ status: "nope" })).status).toBe(400);
+    });
+
+    it("returns each error's board ticket: key, status, branch, artifact link and the blocked reason", async () => {
+      const bare = await errorGroup("local");
+      const ticketed = await errorGroup("local");
+      const legacy = await errorGroup("production");
+      const item = await createWorkItem(
+        { team: TEAM, title: "Ticketed error", status: "approved", source: "error", external_ref: ticketed.ref },
+        TRACKER
+      );
+      // The same fingerprint under the legacy label must not pick the ticket up (archive is view only).
+      await getDb().query(
+        `UPDATE platform.diagnostics SET message_hash = (SELECT message_hash FROM platform.diagnostics WHERE id = $2) WHERE id = $1`,
+        [legacy.id, ticketed.id]
+      );
+
+      const find = async (env: string, id: string) => {
+        const list = await request(app).get(`/api/v1/admin/diagnostics?status=all&env=${env}`).set("Authorization", platformAdmin.auth);
+        expect(list.status).toBe(200);
+        return list.body.items.find((d: { id: string }) => d.id === id);
+      };
+
+      expect((await find("local", bare.id)).ticket).toBeNull();
+      expect((await find("production", legacy.id)).ticket).toBeNull();
+      expect((await find("local", ticketed.id)).ticket).toMatchObject({
+        key: item.key,
+        status: "approved",
+        branch: null,
+        artifact_url: null,
+        pr_url: null,
+        blocked_reason: null,
+      });
+
+      await updateWorkItem(
+        item.team_key,
+        item.number,
+        {
+          status: "building",
+          branch: "worktree-qa-issues",
+          add_links: [
+            { kind: "other", url: "https://example.com/notes" },
+            { kind: "artifact", url: "https://claude.ai/artifact/qa-issues-old" },
+            { kind: "artifact", url: "https://claude.ai/artifact/qa-issues" },
+            { kind: "pr", url: "https://github.com/example/repo/compare/dev...worktree-qa-issues" },
+          ],
+        },
+        TRACKER
+      );
+      await addWorkItemComment(item.team_key, item.number, "Blocked: cannot reproduce\nTried the saved request twice.", TRACKER);
+      const building = (await find("local", ticketed.id)).ticket;
+      expect(building).toMatchObject({
+        key: item.key,
+        status: "building",
+        branch: "worktree-qa-issues",
+        artifact_url: "https://claude.ai/artifact/qa-issues",
+        pr_url: "https://github.com/example/repo/compare/dev...worktree-qa-issues",
+        blocked_reason: "cannot reproduce",
+      });
+      expect(typeof building.status_changed_at).toBe("string");
+
+      // The ticket moved after the comment: the block is over.
+      await updateWorkItem(item.team_key, item.number, { status: "needs_review" }, TRACKER);
+      expect((await find("local", ticketed.id)).ticket).toMatchObject({ status: "needs_review", blocked_reason: null });
     });
   });
 });

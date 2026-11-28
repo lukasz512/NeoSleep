@@ -490,7 +490,7 @@ async function onSavePermissions(): Promise<void> {
 }
 
 .doc-editor__token-hint {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   font-size: 0.8125rem;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }

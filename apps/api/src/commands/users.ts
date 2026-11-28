@@ -9,15 +9,17 @@ import {
   getUserById,
   getTerritoryById,
   createPasswordResetToken,
+  getTenantName,
   type UpdateUserInput,
   type StaffRole,
   type User,
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
+import { syncSupportPlatformAccess } from "../db/platformAdmin.js";
 import { assertTerritoryAccess } from "../middleware/requireScope.js";
 import { EmailInUseError, ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
 import { hashToken } from "../utils/hashToken.js";
-import { sendPasswordResetEmail } from "../mailer.js";
+import { sendPasswordResetEmail, sendAccountCreatedEmail } from "../mailer.js";
 
 /**
  * COMMANDS — User (staff: rep/manager/kam/msl/admin/doctor) domain.
@@ -33,7 +35,21 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // *new* value on CreateUserCommand/UpdateUserCommand (see below). An
 // existing doctor user's unchanged role is allowed to round-trip through
 // UpdateUserCommand — this list only gates role being newly assigned.
-const VALID_ROLES: StaffRole[] = ["admin", "manager", "kam", "msl", "rep"];
+const VALID_ROLES: StaffRole[] = ["admin", "manager", "kam", "msl", "rep", "support"];
+/** Roles only an admin may grant, change, or hold the credentials of (NEO-266). A manager
+ *  could otherwise promote themselves, or reset an admin's/NeoCRM-support's password and
+ *  take the account over. */
+const ADMIN_ONLY_ROLES: readonly StaffRole[] = ["admin", "support"];
+function assertMayGrantRole(ctx: TenantContext, role: StaffRole | undefined): void {
+  if (role && ADMIN_ONLY_ROLES.includes(role) && ctx.user.role !== "admin") {
+    throw new ForbiddenError(`Only an admin can assign the ${role} role`);
+  }
+}
+function assertMayManageUser(ctx: TenantContext, target: { role: StaffRole }): void {
+  if (ADMIN_ONLY_ROLES.includes(target.role) && ctx.user.role !== "admin") {
+    throw new ForbiddenError(`Only an admin can manage ${target.role} users`);
+  }
+}
 const BCRYPT_ROUNDS = 12;
 
 /** A user's own RBAC scope must be a country or the global root (migration
@@ -46,6 +62,8 @@ async function assertValidScopeKind(ctx: TenantContext, territoryId: string): Pr
   }
 }
 const PASSWORD_RESET_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
+/** A new staff member may not open the welcome email the same day (CORE-199). */
+const ACCOUNT_INVITE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // ---------------------------------------------------------------------------
 // CREATE USER
@@ -66,7 +84,19 @@ export interface CreateUserInput {
   territory_id?: string | null;
 }
 
-export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInput): Promise<User> {
+export type InviteEmailStatus = "sent" | "not_sent";
+
+/**
+ * A mail failure never rolls the user back: the account exists either way, and
+ * `invite_email` tells the caller whether the welcome email went out so the UI
+ * can point the admin at "Reset password" when it did not.
+ */
+export async function CreateUserCommand(
+  ctx: TenantContext,
+  input: CreateUserInput,
+  /** Resolved by the route from the request (see utils/frontendOrigin.ts) — commands have no req/res. */
+  frontendOrigin: string
+): Promise<User & { invite_email: InviteEmailStatus }> {
   const firstName = input.first_name?.trim() ?? "";
   const lastName = input.last_name?.trim() ?? "";
   const email = input.email?.trim().toLowerCase() ?? "";
@@ -77,9 +107,7 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
   if (input.role && !VALID_ROLES.includes(input.role)) {
     throw new ValidationError(`role must be one of: ${VALID_ROLES.join(", ")}`);
   }
-  if (input.role && input.role !== "rep" && ctx.user.role !== "admin") {
-    throw new ForbiddenError("Only admin can set a user's role");
-  }
+  assertMayGrantRole(ctx, input.role);
   if (input.territory_id) await assertValidScopeKind(ctx, input.territory_id);
 
   const existingId = await getUserIdByEmail(ctx.client, email);
@@ -103,6 +131,7 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
     input.country_code ?? null
   );
   if (!user) throw new EmailInUseError(email);
+  await syncSupportPlatformAccess(ctx.client, ctx.user.email, user);
 
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,
@@ -113,7 +142,45 @@ export async function CreateUserCommand(ctx: TenantContext, input: CreateUserInp
     request_id: ctx.requestId,
   });
 
-  return user;
+  const invite_email = await sendAccountCreatedInvite(ctx, user, frontendOrigin);
+
+  return { ...user, invite_email };
+}
+
+async function sendAccountCreatedInvite(ctx: TenantContext, user: User, frontendOrigin: string): Promise<InviteEmailStatus> {
+  // DB work stays outside the try: a failing query would poison the transaction, so it must surface.
+  const token = crypto.randomBytes(32).toString("hex");
+  await createPasswordResetToken(ctx.client, user.id, hashToken(token), new Date(Date.now() + ACCOUNT_INVITE_EXPIRY_MS));
+  const tenantName = await getTenantName(ctx.client);
+
+  let sent = false;
+  try {
+    const messageId = await sendAccountCreatedEmail(
+      user.email,
+      `${frontendOrigin}/reset-password?token=${encodeURIComponent(token)}`,
+      {
+        title: user.salutation,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        language: user.language,
+        region: user.region ?? user.country_code,
+      },
+      { inviterName: ctx.user.name?.trim() || ctx.user.email, tenantName }
+    );
+    sent = messageId !== null;
+  } catch (err) {
+    console.error("[users] Welcome email failed; the account was kept:", err);
+  }
+  if (!sent) return "not_sent";
+
+  await insertAuditLog(ctx.client, {
+    user_id: ctx.user.id,
+    action: "invite_sent",
+    entity_type: "User",
+    entity_id: user.id,
+    request_id: ctx.requestId,
+  });
+  return "sent";
 }
 
 // ---------------------------------------------------------------------------
@@ -130,10 +197,15 @@ export async function UpdateUserCommand(
     throw new ValidationError("Invalid status");
   }
   if (input.territory_id) await assertValidScopeKind(ctx, input.territory_id);
+  if (input.email !== undefined) {
+    input = { ...input, email: input.email.trim().toLowerCase() };
+    if (!input.email || !EMAIL_REGEX.test(input.email)) throw new ValidationError("A valid email is required", "email");
+  }
 
   const target = await getUserById(ctx.client, id);
   if (!target) return null;
   await assertTerritoryAccess(ctx, target.country_code);
+  assertMayManageUser(ctx, target);
 
   // Only validate/authorize `role` when it's actually changing — an
   // unchanged doctor/kam/msl value must round-trip through an edit of
@@ -141,9 +213,7 @@ export async function UpdateUserCommand(
   // which deliberately excludes 'doctor' (ADR-014: doctor accounts are only
   // ever provisioned via InvitePractitionerCommand's GDPR-consent flow).
   if (input.role !== undefined && input.role !== target.role) {
-    if (ctx.user.role !== "admin") {
-      throw new ForbiddenError("Only admin can change a user's role");
-    }
+    assertMayGrantRole(ctx, input.role);
     if (!VALID_ROLES.includes(input.role)) {
       throw new ValidationError(`role must be one of: ${VALID_ROLES.join(", ")}`);
     }
@@ -151,13 +221,19 @@ export async function UpdateUserCommand(
 
   const before = await updateUser(ctx.client, id, input, ctx.user.id);
   if (!before) return null;
+  const after = await getUserById(ctx.client, id);
+  if (after) await syncSupportPlatformAccess(ctx.client, ctx.user.email, after);
 
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,
     action: "update",
     entity_type: "User",
     entity_id: id,
-    entity_after: { status: before.status, region: before.region, role: before.role, territory_id: before.scope_territory_id },
+    entity_before: input.email !== undefined && input.email !== target.email ? { email: target.email } : undefined,
+    entity_after: {
+      status: before.status, region: before.region, role: before.role, territory_id: before.scope_territory_id,
+      ...(input.email !== undefined && input.email !== target.email ? { email: input.email } : {}),
+    },
     request_id: ctx.requestId,
   });
 
@@ -179,6 +255,7 @@ export async function ResetUserPasswordCommand(
 
   const user = await getUserById(ctx.client, id);
   if (!user) throw new NotFoundError("User", id);
+  assertMayManageUser(ctx, user);
 
   const token = crypto.randomBytes(32).toString("hex");
   const tokenHash = hashToken(token);
@@ -191,7 +268,7 @@ export async function ResetUserPasswordCommand(
     firstName: user.first_name,
     lastName: user.last_name,
     language: user.language,
-    region: user.region,
+    region: user.region ?? user.country_code,
   });
 
   await insertAuditLog(ctx.client, {
@@ -213,8 +290,10 @@ export async function DeleteUserCommand(ctx: TenantContext, id: string): Promise
   const target = await getUserById(ctx.client, id);
   if (!target) throw new NotFoundError("User", id);
   await assertTerritoryAccess(ctx, target.country_code);
+  assertMayManageUser(ctx, target);
 
   await softDeleteUser(ctx.client, id);
+  await syncSupportPlatformAccess(ctx.client, ctx.user.email, { ...target, deleted: true });
 
   await insertAuditLog(ctx.client, {
     user_id: ctx.user.id,

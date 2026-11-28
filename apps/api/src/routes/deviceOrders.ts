@@ -3,6 +3,7 @@ import {
   parseDeviceOrder,
   PRODUCT_CODES,
   RULES_VERSION,
+  scanFileProblem,
   validateDeliveryAddress,
   validateDeviceOrder,
   type DeliveryAddress,
@@ -28,6 +29,8 @@ import type { DeliveryOrganization } from "../db/practitionerOrganization.js";
 import { buildContext, type TenantContext } from "../context/TenantContext.js";
 import { getViewer, requirePatientInScope, requirePractitionerInScope } from "../queries/entityAccess.js";
 import { getDeviceOrderProvider } from "../services/deviceOrders/index.js";
+import { isOwnScanFilePath, newScanFilePath } from "../services/deviceOrders/scanFiles.js";
+import { createPartnerDocumentUploadUrl } from "../services/partnerDocuments.js";
 import { notify } from "../notifications/notify.js";
 import { ForbiddenError, LabOrdersDisabledError, NotFoundError } from "../errors.js";
 import { getLabOrdersSendConfig, setLabOrdersSendEnabled } from "../db/config.js";
@@ -71,6 +74,25 @@ function toDeliveryAddress(org: DeliveryOrganization): DeliveryAddress {
   };
 }
 
+/** A typed-in address (NEO-265): strings only, anything else becomes empty so validation reports it as required. */
+function toCustomDelivery(raw: Record<string, unknown>): DeliveryAddress {
+  const str = (key: string): string => {
+    const value = raw[key];
+    return typeof value === "string" ? value.trim() : "";
+  };
+  const province = str("province");
+  return {
+    name: str("name"),
+    address: str("address"),
+    city: str("city"),
+    postalCode: str("postalCode"),
+    countryCode: str("countryCode"),
+    ...(province ? { province } : {}),
+    phone: str("phone"),
+    email: str("email"),
+  };
+}
+
 /** One of the doctor's clinics, as the admin's delivery choice in the wizard (NEO-210 D2). */
 interface DeliveryOption {
   organizationId: string;
@@ -104,14 +126,16 @@ async function resolveDelivery(
 }
 
 /**
- * The clinic an admin picked as the delivery address, or null for the
- * default (primary). Only an admin may choose (Łukasz, 2026-10-03, NEO-210
- * D2); anyone else sending one is refused rather than silently ignored.
+ * The clinic picked as the delivery address, or null for the default
+ * (primary). An admin (NEO-210 D2) or the ordering doctor, among their own
+ * saved clinics (NEO-265 D1), may choose; anyone else sending one is refused
+ * rather than silently ignored. A clinic that isn't the dentist's own ends as
+ * an "invalid" issue in resolveDelivery.
  */
 function chosenDeliveryOrganization(ctx: TenantContext, raw: unknown): string | null {
   const id = typeof raw === "string" ? raw.trim() : "";
   if (!id) return null;
-  if (ctx.user.role !== "admin") throw new ForbiddenError("Only an admin can choose another delivery clinic");
+  if (ctx.user.role !== "admin" && ctx.user.role !== "doctor") throw new ForbiddenError("Only an admin or the doctor can choose another delivery clinic");
   // A malformed id can match no clinic, so it ends as the same "invalid" issue as a stranger's clinic.
   return UUID_RE.test(id) ? id : "00000000-0000-0000-0000-000000000000";
 }
@@ -152,11 +176,11 @@ deviceOrdersRouter.get(
     }
 
     const slug = tenantSlugFromHost(req.hostname);
-    const { dentistId, delivery, organizationId, issues, options, isAdmin } = await withTenant(slug, async (client) => {
+    const { dentistId, delivery, organizationId, issues, options, canChoose } = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
       const chosen = chosenDeliveryOrganization(ctx, req.query.organization_id);
       const dentistId = (await ownPractitionerId(ctx)) ?? requested;
-      return { dentistId, isAdmin: ctx.user.role === "admin", ...(await resolveDelivery(ctx, dentistId, chosen)) };
+      return { dentistId, canChoose: ctx.user.role === "admin" || ctx.user.role === "doctor", ...(await resolveDelivery(ctx, dentistId, chosen)) };
     });
     const minDesiredDate = await getDeviceOrderProvider().minDesiredDate(productCode);
     // Read-only: the wizard shows this before the doctor fills anything, so the kill
@@ -169,8 +193,8 @@ deviceOrdersRouter.get(
       // organizationId lets the wizard link to the HCO record to complete it.
       delivery: delivery ? { ...delivery, organizationId } : null,
       deliveryIssues: issues,
-      // The doctor's clinics, primary first — only an admin may ship elsewhere (NEO-210 D2).
-      ...(isAdmin ? { deliveryOptions: options } : {}),
+      // The doctor's clinics, primary first — an admin (NEO-210 D2) or the doctor (NEO-265 D1) may pick one.
+      ...(canChoose ? { deliveryOptions: options } : {}),
       minDesiredDate,
       rulesVersion: RULES_VERSION,
       // Per-tenant kill switch (NEO-210): false means the wizard's Confirm will 409.
@@ -192,10 +216,16 @@ deviceOrdersRouter.post(
   "/device-orders",
   requireStudyRole,
   asyncHandler(async (req: Request, res: Response) => {
-    const body = (req.body ?? {}) as { treatment_plan_id?: unknown; patient_id?: unknown; delivery_organization_id?: unknown; order?: unknown };
+    const body = (req.body ?? {}) as { treatment_plan_id?: unknown; patient_id?: unknown; delivery_organization_id?: unknown; custom_delivery?: unknown; order?: unknown };
     const treatmentPlanId = typeof body.treatment_plan_id === "string" ? body.treatment_plan_id.trim() : "";
     const patientId = typeof body.patient_id === "string" ? body.patient_id.trim() : "";
     const idIssues: OrderIssue[] = [];
+    // Either a clinic or a custom address, never both: no ambiguity about where it ships (NEO-265).
+    const custom = body.custom_delivery;
+    const hasCustom = custom !== undefined && custom !== null;
+    const customIsObject = typeof custom === "object" && !Array.isArray(custom);
+    const clinicSent = typeof body.delivery_organization_id === "string" && body.delivery_organization_id.trim() !== "";
+    if (hasCustom && (!customIsObject || clinicSent)) idIssues.push({ path: "custom_delivery", code: "invalid" });
     if (!UUID_RE.test(treatmentPlanId)) idIssues.push({ path: "treatment_plan_id", code: treatmentPlanId ? "invalid" : "required" });
     if (!UUID_RE.test(patientId)) idIssues.push({ path: "patient_id", code: patientId ? "invalid" : "required" });
     if (idIssues.length > 0) {
@@ -217,7 +247,7 @@ deviceOrdersRouter.post(
     const slug = tenantSlugFromHost(req.hostname);
     const { ctx, delivery, deliveryIssues, planIssues } = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      const chosen = chosenDeliveryOrganization(ctx, body.delivery_organization_id);
+      const chosen = hasCustom ? null : chosenDeliveryOrganization(ctx, body.delivery_organization_id);
       await requirePatientInScope(ctx, patientId);
       const plan = await getTreatmentPlanById(client, treatmentPlanId);
       if (!plan) throw new NotFoundError("TreatmentPlan", treatmentPlanId);
@@ -233,6 +263,11 @@ deviceOrdersRouter.post(
       // A doctor orders only as themselves, hence only to their own clinic (NEO-210).
       const own = await ownPractitionerId(ctx);
       if (own !== null && own !== dentistId) throw new ForbiddenError("A doctor can only order as themselves");
+      if (hasCustom) {
+        // The doctor's own address instead of a clinic (rules §1.2 "Dirección alternativa"): same required fields as OA.
+        const delivery = toCustomDelivery(custom as Record<string, unknown>);
+        return { ctx, delivery, deliveryIssues: validateDeliveryAddress(delivery), planIssues };
+      }
       const { delivery, issues } = await resolveDelivery(ctx, dentistId, chosen);
       return { ctx, delivery, deliveryIssues: issues, planIssues };
     });
@@ -248,6 +283,17 @@ deviceOrdersRouter.post(
     if (!order) {
       sendValidationError(res, [{ path: "order", code: "invalid" }], localValidation.warnings);
       return;
+    }
+    // Scan files: only paths this API issued for this tenant and patient (NEO-262).
+    if (order.registration.method === "files") {
+      const foreign: OrderIssue[] = order.registration.files
+        .map((file, i) => ({ file, i }))
+        .filter(({ file }) => !isOwnScanFilePath(file.path, slug, patientId))
+        .map(({ i }) => ({ path: `registration.files.${i}`, code: "invalid" }));
+      if (foreign.length > 0) {
+        sendValidationError(res, foreign, localValidation.warnings);
+        return;
+      }
     }
     // Then the one rule that needs the lab: the earliest desired date. When the
     // lab can't be asked (null), the lab itself is the judge on submit.
@@ -329,6 +375,40 @@ deviceOrdersRouter.post(
 );
 
 // ---------------------------------------------------------------------------
+// POST /api/v1/device-orders/scan-uploads { patient_id, file_name, size }
+// A one-path signed upload URL for a scan file (NEO-262). The browser PUTs
+// the bytes straight to private storage; the order then carries the path.
+// ---------------------------------------------------------------------------
+
+deviceOrdersRouter.post(
+  "/device-orders/scan-uploads",
+  requireStudyRole,
+  asyncHandler(async (req: Request, res: Response) => {
+    const body = (req.body ?? {}) as { patient_id?: unknown; file_name?: unknown; size?: unknown };
+    const patientId = typeof body.patient_id === "string" ? body.patient_id.trim() : "";
+    const fileName = typeof body.file_name === "string" ? body.file_name.trim() : "";
+    const size = typeof body.size === "number" && Number.isInteger(body.size) ? body.size : -1;
+    const issues: OrderIssue[] = [];
+    if (!UUID_RE.test(patientId)) issues.push({ path: "patient_id", code: patientId ? "invalid" : "required" });
+    const problem = fileName ? scanFileProblem(fileName, size) : null;
+    if (!fileName) issues.push({ path: "file_name", code: "required" });
+    else if (problem) issues.push({ path: "file", code: problem });
+    if (issues.length > 0) {
+      sendValidationError(res, issues);
+      return;
+    }
+
+    const slug = tenantSlugFromHost(req.hostname);
+    await withTenant(slug, async (client) => {
+      const ctx = await buildContext(req, client, slug);
+      await requirePatientInScope(ctx, patientId);
+    });
+    const upload = await createPartnerDocumentUploadUrl(newScanFilePath(slug, patientId, fileName));
+    res.status(201).json({ path: upload.path, uploadUrl: upload.signedUrl });
+  })
+);
+
+// ---------------------------------------------------------------------------
 // Reconciliation (NEO-218): do our orders match the lab's?
 // The full run lists lab patient names → admin only, and every read of it is
 // audited. A manager sees the match counter only (Łukasz Q3).
@@ -349,7 +429,7 @@ function counterOnly(run: { status: string; summary: { matchLevel?: number | nul
 // POST /api/v1/device-orders/reconciliation/run — "Check now" (admin).
 deviceOrdersRouter.post(
   "/device-orders/reconciliation/run",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const slug = tenantSlugFromHost(req.hostname);
     const ctx = await withTenant(slug, (client) => buildContext(req, client, slug));
@@ -387,7 +467,7 @@ deviceOrdersRouter.get(
 // GET /api/v1/device-orders/reconciliation/runs?limit=30 — admin history (summaries, no orders).
 deviceOrdersRouter.get(
   "/device-orders/reconciliation/runs",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const raw = Number(req.query.limit ?? 30);
     const limit = Number.isInteger(raw) && raw > 0 ? Math.min(raw, 100) : 30;
@@ -412,7 +492,7 @@ deviceOrdersRouter.get(
 // GET /api/v1/device-orders/lab-orders-config — admin only.
 deviceOrdersRouter.get(
   "/device-orders/lab-orders-config",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (_req: Request, res: Response) => {
     const config = await getLabOrdersSendConfig();
     res.json({ ...config, environment: DEPLOY_ENV });
@@ -422,7 +502,7 @@ deviceOrdersRouter.get(
 // PATCH /api/v1/device-orders/lab-orders-config — body: { sendEnabled: boolean }. Admin only, audited.
 deviceOrdersRouter.patch(
   "/device-orders/lab-orders-config",
-  requireRole("admin"),
+  requireRole("admin", "manager"),
   asyncHandler(async (req: Request, res: Response) => {
     const body = req.body as { sendEnabled?: unknown };
     if (typeof body.sendEnabled !== "boolean") {

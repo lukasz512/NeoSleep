@@ -72,12 +72,11 @@ project).
   (push to `dev`) and `neosleep-api-prod` (push to `prod`), deployed by
   `.github/workflows/deploy-api.yml`. See ADR-025 and
   `docs/RUNBOOK_API_CLOUD_RUN.md`.
-  - **Transition (NEO-45)**: the old **Render** service (`render.yaml`, Frankfurt,
-    one service for both environments) keeps running as the rollback target until
-    prod has been stable on Cloud Run for a week, then it is removed.
+  - The old **Render** service (Frankfurt) was the rollback target during NEO-45;
+    prod has run on Cloud Run since 2026-10-04 and CORE-188 removed `render.yaml`
+    and the `RENDER_API_URL_*` fallbacks.
 - **Database**: **Supabase** (managed PostgreSQL, us-west-1), schema-per-tenant.
-  Connection string is the `DATABASE_URL` secret in Secret Manager (and on Render
-  during the transition), never in frontend code.
+  Connection string is the `DATABASE_URL` secret in Secret Manager, never in frontend code.
   Supabase Free plan has no restorable backups, so a nightly GitHub Actions job
   dumps the DB + Storage, encrypts them and uploads them to a Google Cloud Storage
   bucket (Mexico region, 30-day retention). See `docs/RUNBOOK_BACKUP_RESTORE.md`.
@@ -89,9 +88,9 @@ project).
   SMTP). Start here when you don't know which account to log into.
 - `secrets/deploy-notes.md` — GoDaddy/cPanel specifics: FTP accounts, document
   roots, and incident history for that side.
-- Actual API keys/secrets for the API server: Render dashboard → `neosleep-bff`
-  → Environment tab (`sync: false` in `render.yaml` means "set once in Render,
-  never committed").
+- Actual API keys/secrets for the API server: Google Secret Manager, project
+  `neosleep-api` (names in `infrastructure/cloud-run/secrets.list`); non-secret
+  config in `infrastructure/cloud-run/<env>.env.yaml`.
 - GitHub Actions secrets: repo → Settings → Secrets and variables → Actions.
 
 Both `secrets/*.md` files are gitignored on purpose (`secrets/` is in

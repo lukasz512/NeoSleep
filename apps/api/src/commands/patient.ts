@@ -9,6 +9,7 @@ import {
   type Patient,
 } from "../db.js";
 import { insertAuditLog } from "../db.js";
+import { SUPPORTED_LANGUAGES } from "../utils/patientEmailLocale.js";
 import { ForbiddenError, ValidationError } from "../errors.js";
 import { assertTerritoryAccessByTerritoryId } from "../middleware/requireScope.js";
 import { assertCanSeePatient, practitionerIdForWrite } from "../queries/entityAccess.js";
@@ -124,6 +125,9 @@ export async function CreatePatientCommand(
 
   // Support legacy hcp_id → practitioner_id. A doctor's new patient is always their own (CORE-104).
   const practitionerId = (await practitionerIdForWrite(ctx, input.practitioner_id?.trim() || input.hcp_id?.trim() || undefined)) ?? undefined;
+  // A new patient can't land in a territory its creator doesn't cover (CORE-226) — same
+  // check UpdatePatientCommand runs on a territory change. Doctors are scoped by care team.
+  if (ctx.user.role !== "doctor") await assertTerritoryAccessByTerritoryId(ctx, input.territory_id);
 
   const insertInput: PatientInsert = {
     salutation:     input.salutation?.trim() || undefined,
@@ -191,6 +195,8 @@ export interface UpdatePatientPayload {
   medical_record?: string;
   status?: string;
   region?: string;
+  /** identities.language (CORE-261): mail and notification language. */
+  language?: string;
   territory_id?: string | null;
   country_code?: string | null;
   metadata?: Record<string, unknown>;
@@ -224,8 +230,19 @@ export async function UpdatePatientCommand(
   const dateOfBirth = normalizeDateOfBirth(input.date_of_birth);
   if (dateOfBirth === null) throw new ValidationError("date_of_birth cannot be blank", "date_of_birth");
 
+  if (input.language !== undefined && !(SUPPORTED_LANGUAGES as readonly string[]).includes(input.language)) {
+    throw new ValidationError("language must be one of: " + SUPPORTED_LANGUAGES.join(", "), "language");
+  }
+
   const before = await getPatientById(ctx.client, id);
   if (!before) return null;
+  // Region and language steer which language mail goes out in (CORE-261): only admin, manager and
+  // the patient's doctor change them. Re-sending the current values (the edit form does) is fine.
+  const changesLocale = (input.language !== undefined && input.language !== before.language)
+    || (input.region !== undefined && input.region !== before.region);
+  if (changesLocale && !["admin", "manager", "doctor"].includes(ctx.user.role)) {
+    throw new ForbiddenError("Only an admin, manager or the patient's doctor can change region and language");
+  }
   // Same check as GetPatientByIdQuery — editing must not reach further than
   // reading (CORE-104: a doctor only their own patients). A territory change is
   // checked against the target too, so a patient can't be moved into a
@@ -270,6 +287,7 @@ export async function UpdatePatientCommand(
     medical_record: input.medical_record !== undefined ? input.medical_record : undefined,
     status:         input.status,
     region:         input.region,
+    language:       input.language,
     territory_id:   input.territory_id,
     country_code:   input.country_code,
     metadata:       input.metadata,
@@ -283,8 +301,8 @@ export async function UpdatePatientCommand(
     action:        "update",
     entity_type:   "Patient",
     entity_id:     id,
-    entity_before: { status: before.status, region: before.region, practitioner_id: before.practitioner_id },
-    entity_after:  { status: after.status,  region: after.region, practitioner_id: after.practitioner_id },
+    entity_before: { status: before.status, region: before.region, language: before.language, practitioner_id: before.practitioner_id },
+    entity_after:  { status: after.status,  region: after.region, language: after.language, practitioner_id: after.practitioner_id },
     request_id:    ctx.requestId,
   });
 

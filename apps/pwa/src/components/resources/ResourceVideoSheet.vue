@@ -7,16 +7,17 @@
     class="video-sheet-overlay"
     :z-index="OVER_BOTTOM_NAV"
     @update:model-value="(open: boolean) => !open && emit('close')"
+    @after-leave="onAfterLeave"
   >
-    <div v-if="video" class="video-sheet" data-testid="resource-video-sheet">
+    <div v-if="shown" class="video-sheet" data-testid="resource-video-sheet">
       <div class="video-sheet__stage" :data-state="state">
-        <img v-if="video.posterUrl" class="video-sheet__backdrop" :src="video.posterUrl" alt="" aria-hidden="true" />
+        <img v-if="shown.posterUrl" class="video-sheet__backdrop" :src="shown.posterUrl" alt="" aria-hidden="true" />
         <video
           :key="src"
           ref="player"
           class="video-sheet__video"
           :src="src"
-          :poster="video.posterUrl ?? undefined"
+          :poster="shown.posterUrl ?? undefined"
           controls
           :autoplay="resumeFrom === null"
           playsinline
@@ -72,14 +73,14 @@
 
       <div class="video-sheet__info">
         <div class="video-sheet__text">
-          <h2 class="video-sheet__title">{{ video.title }}</h2>
+          <h2 class="video-sheet__title">{{ shown.title }}</h2>
           <span class="video-sheet__meta">
-            {{ [video.description, video.durationSec ? formatDuration(video.durationSec) : ""].filter(Boolean).join(" · ") }}
+            {{ [shown.description, shown.durationSec ? formatDuration(shown.durationSec) : ""].filter(Boolean).join(" · ") }}
           </span>
         </div>
-        <div v-if="video.languages.length > 1" class="video-sheet__langs" role="group" :aria-label="t('user.resources.video.language')">
+        <div v-if="shown.languages.length > 1" class="video-sheet__langs" role="group" :aria-label="t('user.resources.video.language')">
           <button
-            v-for="lang in video.languages"
+            v-for="lang in shown.languages"
             :key="lang.code"
             type="button"
             class="video-sheet__lang"
@@ -91,9 +92,9 @@
             {{ lang.code.toUpperCase() }}
           </button>
         </div>
-        <span v-else-if="video.languages[0]" class="video-sheet__lang video-sheet__lang--static" :title="languageName(video.languages[0].code, locale)">
-          <PartnerLanguageFlag :code="video.languages[0].code" />
-          {{ video.languages[0].code.toUpperCase() }}
+        <span v-else-if="shown.languages[0]" class="video-sheet__lang video-sheet__lang--static" :title="languageName(shown.languages[0].code, locale)">
+          <PartnerLanguageFlag :code="shown.languages[0].code" />
+          {{ shown.languages[0].code.toUpperCase() }}
         </span>
       </div>
     </div>
@@ -119,13 +120,15 @@ import { useResourceProgress, resumeAt } from "../../composables/useResourceProg
  * MB streamed through the API in 8 MiB slices, so the first frame can take
  * 10–20 s: the sheet says so honestly (elapsed seconds, not a made-up
  * percentage — the real size to buffer isn't known before the first frame).
- * Closing unmounts the <video>, which aborts its download, so only one video
+ * Closing unmounts the <video> (after the fade), which aborts its download, so only one video
  * ever loads at a time. Opens with the app's dialog motion (a spring from the
  * clicked tile; a slide-up sheet on phones). No automatic full screen
  * (Łukasz, NEO-151) — the player's own full-screen button is there.
  */
 const props = defineProps<{ video: PartnerResourceItem | null }>();
 const emit = defineEmits<{ close: [] }>();
+/** The video on screen; outlives `video` until the close transition ends. */
+const shown = ref<PartnerResourceItem | null>(null);
 const { t, locale } = useI18n();
 const { smAndDown } = useDisplay();
 const sheet = smAndDown;
@@ -214,11 +217,18 @@ function startAt(sec: number): void {
   void el.play();
 }
 
+// Closing pauses the player and keeps the frame on screen while the sheet fades;
+// the <video> unmounts (aborting its download) after the leave (CORE-195).
 watch(
   () => props.video,
   (video, previous) => {
     if (previous) save(false, previous);
     stopTimer();
+    if (!video) {
+      player.value?.pause();
+      return;
+    }
+    shown.value = video;
     state.value = "loading";
     src.value = video ? (video.languages.find((l) => l.mediaUrl === video.mediaUrl)?.mediaUrl ?? video.mediaUrl) : "";
     resumeFrom.value = video ? resumeAt(progress[video.id], video.durationSec ?? null) : null;
@@ -227,6 +237,12 @@ watch(
   },
   { immediate: true }
 );
+
+function onAfterLeave(): void {
+  if (props.video) return;
+  shown.value = null;
+  src.value = "";
+}
 
 onBeforeUnmount(() => {
   save(false);

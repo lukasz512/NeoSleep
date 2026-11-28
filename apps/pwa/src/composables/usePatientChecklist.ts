@@ -350,41 +350,60 @@ export function usePatientChecklist(patientId: () => string) {
   }
 
   /** Where the next email would go (masked) and what was sent before (NEO-192). */
-  async function loadEmailSends(): Promise<{ recipient: string | null; sends: EmailSend[] } | null> {
+  async function loadEmailSends(): Promise<{ recipient: string | null; language: string; sends: EmailSend[] } | null> {
     const res = await apiFetch(`/api/v1/patient/${patientId()}/email-sends`, { handleErrors: false });
     if (!res.ok) return null;
-    return (await res.json()) as { recipient: string | null; sends: EmailSend[] };
+    return (await res.json()) as { recipient: string | null; language: string; sends: EmailSend[] };
   }
 
   /**
    * Emails the patient one personal link to the picked items (all open ones
    * when none are given). A patient without an email gets a clear "add one
    * to the record" message, not a generic failure. Returns the masked
-   * address and the link (for "Copy link"), or null.
+   * address and the link, or the reason it failed (shown inline by the
+   * dialog, which stays open so the sender can fix it and try again).
+   * The success toast carries "Copy link" — the dialog closes on success.
    */
-  async function sendByEmail(options: { items?: string[]; copyToMe?: boolean } = {}): Promise<{ sent_to: string; url: string } | null> {
-    const body = { ...(options.items ? { items: options.items } : {}), ...(options.copyToMe ? { copy_to_me: true } : {}) };
+  async function sendByEmail(
+    options: { items?: string[]; copyToMe?: boolean; language?: string } = {},
+  ): Promise<{ ok: true; sent_to: string; url: string } | { ok: false; message: string }> {
+    const body = {
+      ...(options.items ? { items: options.items } : {}),
+      ...(options.copyToMe ? { copy_to_me: true } : {}),
+      ...(options.language ? { language: options.language } : {}),
+    };
     const res = await apiFetch(`/api/v1/patient/${patientId()}/questionnaire-requests/email`, { ...json(body), handleErrors: false });
     if (res.status === 422) {
       // 422 is either "no email on the record" or "the mail server refused this address" (NEO-202).
       const { code } = (await res.clone().json().catch(() => ({}))) as { code?: string };
       const key = code === "EMAIL_REJECTED" ? "app.clinical.email.rejected" : "app.clinical.email.noEmail";
-      notifications.show(t(key), "warning", undefined, { icon: "mail" });
-      return null;
+      return { ok: false, message: t(key) };
     }
     if (!res.ok) {
-      await failWith(res, "app.clinical.email.failed", "mail", () => sendByEmail(options));
-      return null;
+      await reportFailedResponse(res, { where: "usePatientChecklist:app.clinical.email.failed" });
+      return { ok: false, message: t("app.clinical.email.failed") };
     }
     const { sent_to, url } = (await res.json()) as { sent_to: string; url: string };
-    notifications.show(t("app.clinical.email.sent", { email: sent_to }), "success", undefined, { icon: "mail" });
+    notifications.show(t("app.clinical.email.sent", { email: sent_to }), "success", undefined, {
+      icon: "mail",
+      action: { labelKey: "app.clinical.email.copyLink", run: () => copyToClipboard(url) },
+    });
     await load();
-    return { sent_to, url };
+    return { ok: true, sent_to, url };
+  }
+
+  async function copyToClipboard(text: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(text);
+      notifications.show(t("app.clinical.qr.copied"), "success", undefined, { icon: "mail" });
+    } catch (err) {
+      reportCaught(err, { where: "usePatientChecklist.copyToClipboard", level: "warn" });
+    }
   }
 
   /** NEO-258: the finished Historia clínica, signed by the doctor, emailed to the patient as a 7-day link. */
-  async function sendHistoriaByEmail(doctorSignature: string): Promise<boolean> {
-    const res = await apiFetch(`/api/v1/patient/${patientId()}/historia-clinica/email`, { ...json({ doctorSignature }), handleErrors: false });
+  async function sendHistoriaByEmail(doctorSignature: string, language?: string): Promise<boolean> {
+    const res = await apiFetch(`/api/v1/patient/${patientId()}/historia-clinica/email`, { ...json({ doctorSignature, ...(language ? { language } : {}) }), handleErrors: false });
     if (res.status === 422) {
       notifications.show(t("app.clinical.email.noEmail"), "warning", undefined, { icon: "mail" });
       return false;

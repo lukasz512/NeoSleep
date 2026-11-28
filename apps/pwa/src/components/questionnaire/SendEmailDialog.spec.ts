@@ -8,6 +8,7 @@ import { createI18n } from "vue-i18n";
 import { createPinia } from "pinia";
 import en from "@i18n/en.json";
 import SendEmailDialog from "./SendEmailDialog.vue";
+import EmailLanguageSelect from "./EmailLanguageSelect.vue";
 import type { ChecklistItem, EmailSend } from "../../composables/usePatientChecklist";
 
 /** NEO-192: the "Send by email" dialog — what is pre-checked, what gets sent, how the history reads. */
@@ -45,9 +46,10 @@ async function mountDialog(props: Record<string, unknown> = {}) {
       items: [item("informedConsent", "done"), item("medicalHistory", "missing"), item("stopBang", "pending_patient")],
       openKeys: ["medicalHistory", "stopBang"],
       recipient: "l***@example.mx",
+      language: "mx",
       sends: SENDS,
       sending: false,
-      lastUrl: null,
+      error: null,
       itemTitle: (i: ChecklistItem) => i.key,
       formatDateTime: (v: string) => v.slice(0, 10),
       ...props,
@@ -87,7 +89,42 @@ describe("SendEmailDialog (NEO-192)", () => {
     await nextTick();
     (document.getElementById("send-email-form") as HTMLFormElement).requestSubmit();
     await nextTick();
-    expect(w.emitted("send")).toEqual([[{ items: ["medicalHistory"], copyToMe: false }]]);
+    expect(w.emitted("send")).toEqual([[{ items: ["medicalHistory"], copyToMe: false, language: "mx" }]]);
+  });
+
+  // NEO-277: while sending the form is locked; a failure stays inline so the sender can retry.
+  it("locks the documents while sending and shows a failure inline", async () => {
+    await mountDialog({ sending: true });
+    expect(checkbox("medicalHistory").disabled).toBe(true);
+    document.body.innerHTML = "";
+    await mountDialog({ error: "The email couldn't be sent. Try again." });
+    expect(document.querySelector("[data-testid=send-email-error]")?.textContent).toContain("couldn't be sent");
+  });
+
+  // CORE-268: the sender sees the mail language, it starts at the recipient's own, and a change applies to this send.
+  it("shows the language picker preselected with the recipient's language", async () => {
+    const w = await mountDialog({ language: "pl" });
+    expect(document.querySelector("[data-testid=email-language]")).not.toBeNull();
+    expect(w.findComponent(EmailLanguageSelect).props("modelValue")).toBe("pl");
+    expect(document.body.textContent).toContain(en["app.language.pl"]);
+  });
+
+  it("sends the language the sender picked instead of the recipient's", async () => {
+    const w = await mountDialog({ language: "mx" });
+    w.findComponent(EmailLanguageSelect).vm.$emit("update:modelValue", "en");
+    await nextTick();
+    (document.getElementById("send-email-form") as HTMLFormElement).requestSubmit();
+    await nextTick();
+    expect(w.emitted("send")).toEqual([[{ items: ["medicalHistory", "stopBang"], copyToMe: false, language: "en" }]]);
+  });
+
+  it("starts from the recipient's language again on the next opening", async () => {
+    const w = await mountDialog({ language: "mx" });
+    w.findComponent(EmailLanguageSelect).vm.$emit("update:modelValue", "en");
+    await w.setProps({ modelValue: false });
+    await w.setProps({ modelValue: true });
+    await nextTick();
+    expect(w.findComponent(EmailLanguageSelect).props("modelValue")).toBe("mx");
   });
 
   it("shows each past email's delivery status, a bounce as 'Didn't arrive'", async () => {
@@ -100,5 +137,6 @@ describe("SendEmailDialog (NEO-192)", () => {
     await mountDialog({ recipient: null });
     expect(document.body.textContent).toContain(en["app.clinical.email.noEmail"]);
     expect(document.querySelector("button[form=send-email-form]")).toBeNull();
+    expect(document.querySelector("[data-testid=email-language]")).toBeNull();
   });
 });

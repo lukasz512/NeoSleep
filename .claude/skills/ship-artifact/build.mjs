@@ -9,6 +9,11 @@
 //   node .claude/skills/ship-artifact/build.mjs finalize --url <artifact-url>
 //        [--board-linked] [--board-commented] [--board-status "<status>"]
 //     → writes .claude/local/artifacts/<TICKET>.json and upserts the artifact index
+//   node .claude/skills/ship-artifact/build.mjs pr-url --title <t> --summary <s> [--kind <k>] [--rollback <text>]
+//     → prints the "Create PR" compare URL whose body fills the PR template (CORE-188)
+//   node .claude/skills/ship-artifact/build.mjs light --title <t> --summary <s> (--before <b> --after <a> | --new <n>) --post
+//     → the whole handover of a non-UI change: one board comment (summary, before/after,
+//       PR link), the ticket moved to Needs Review, the marker written (CORE-247)
 //   node .claude/skills/ship-artifact/build.mjs index [--page | --all]
 //     → writes this branch's index row JSON and prints the ArtifactData calls that store it
 //       (--page: the static index shell, republished only when its template changes;
@@ -31,8 +36,10 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { dirname, join, extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ticketFromBranch, ticketTeams } from "./ticket.mjs";
+import { prBody } from "./pr-body.mjs";
 import { COLLECTION, docId, toRow, importBatches } from "./index-rows.mjs";
-import { cardUrl } from "../../../infrastructure/scripts/board.mjs";
+import { cardUrl, run as board } from "../../../infrastructure/scripts/board.mjs";
+import { beforeAfterLines, lightComment, normalizeBeforeAfter, renderWarning } from "./handover.mjs";
 import { validateQuestions, widget } from "../decision-form/decisions.mjs";
 import { storyGate, coverageHtml, coverageMap } from "./coverage.mjs";
 import { cacheGet, cacheSet, defaultCachePath, isRateLimitError, noteRateLimit, rateLimitedUntil } from "../../../infrastructure/scripts/gh-cache.mjs";
@@ -163,12 +170,12 @@ function markerPath(ticket) {
   return join(MARKER_DIR, ticket ? `${ticket}.json` : `branch-${BRANCH.replaceAll("/", "-")}.json`);
 }
 
-function prUrl(ticket, prTitle, summary) {
+function prUrl(ticket, prTitle, content = {}) {
   const slug = repoSlug();
   if (!slug || !BRANCH) return null;
   const title = [ticket, prTitle].filter(Boolean).join(" ");
-  const plain = summary?.replace(/<[^>]+>/g, "");
-  const body = [ticket, plain, "🤖 Generated with [Claude Code](https://claude.com/claude-code)"].filter(Boolean).join("\n\n");
+  const selfUrl = ticket ? readJson(markerPath(ticket), {}).url : undefined;
+  const body = prBody({ ...content, ticket, files: changedFiles(), boardUrl: ticket ? boardUrlOf(ticket) : undefined, artifactUrl: selfUrl });
   return `https://github.com/${slug}/compare/dev...${BRANCH}?quick_pull=1&title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
 }
 
@@ -215,6 +222,11 @@ function render(contentPath) {
     throw new Error(`every change needs a board ticket (NEO-84): create it first (pnpm board create …) and work on a branch named after it (worktree-<key>-<n>-<slug>, key one of ${ticketTeams().join("/")})`);
   }
   if (!SESSION_ID) throw new Error("CLAUDE_CODE_SESSION_ID is not set — run this from the Claude Code session that made the change (needed for the VS Code link)");
+  // CORE-247: the board card shows this text, so every change states it, screenshots or not.
+  const ba = normalizeBeforeAfter(c);
+  if (!ba) {
+    throw new Error("content.beforeAfter (or before + after for a changed element, or added for a new one) is required: the board card shows it");
+  }
   checkLimits(c);
   // CORE-182: every acceptance criterion of the ticket's story has a tagged test, and a UI
   // change has a real-backend e2e — otherwise there is nothing to hand over yet.
@@ -224,7 +236,7 @@ function render(contentPath) {
   const sessionId = SESSION_ID;
   const pushed = isPushed();
   const existing = existingPr();
-  const pr = existing?.url ?? (pushed ? prUrl(ticket, c.prTitle ?? c.headline, c.summary) : null);
+  const pr = existing?.url ?? (pushed ? prUrl(ticket, c.prTitle ?? c.headline, c) : null);
   const boardUrl = boardUrlOf(ticket);
   // The Artifact's own URL is known from the second render on (finalize stores it).
   const selfUrl = readJson(markerPath(ticket), {}).url ?? null;
@@ -255,7 +267,6 @@ function render(contentPath) {
     ? `<div class="defaults"><h2>Decided without asking — the test proves it</h2><ul>${c.defaults.map((d) => `<li>${d.text} <code>${esc(d.test)}</code></li>`).join("")}</ul></div>`
     : "";
 
-  const ba = c.beforeAfter;
   const table = ba
     ? `${ba.caption ? `<p>${ba.caption}</p>` : ""}<div class="matrix"><table><thead><tr>${(ba.columns ?? ["Case", "Before", "After"]).map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${ba.rows
         .map((r) => `<tr>${r.map((v) => `<td>${cell(v)}</td>`).join("")}</tr>`)
@@ -300,16 +311,19 @@ function render(contentPath) {
   writeFileSync(out, html);
 
   mkdirSync(MARKER_DIR, { recursive: true });
+  const previousDraft = readJson(DRAFT, {});
+  const renders = (previousDraft.ticket === ticket ? (previousDraft.renders ?? 1) : 0) + 1;
   writeFileSync(
     DRAFT,
     JSON.stringify(
-      { ticket, title: c.title, headline: plainText(c.headline), sessionId, prUrl: pr, uiChanged, hoisting: c.hoisting, testCoverageMap: gate.c.story ? coverageMap(gate.c) : c.testCoverageMap, visualComparison: c.visualComparison },
+      { ticket, title: c.title, headline: plainText(c.headline), sessionId, prUrl: pr, uiChanged, hoisting: c.hoisting, testCoverageMap: gate.c.story ? coverageMap(gate.c) : c.testCoverageMap, visualComparison: c.visualComparison, renders },
       null,
       2
     )
   );
 
   console.log(`page: ${out}`);
+  if (renderWarning(renders)) console.log(`WARNING: ${renderWarning(renders)}`);
   if (dw) console.log('decisions: publish with capabilities {"comments": {}} so "Send to Claude" works');
   console.log(`marker: ${markerPath(ticket)} (written by finalize)`);
   console.log(
@@ -324,6 +338,10 @@ function render(contentPath) {
   console.log(
     [
       plainText(c.summary),
+      "",
+      "Before → after:",
+      ...beforeAfterLines(ba),
+      ...(c.images?.length ? [`${c.images.length} screenshot(s) in the Artifact`] : []),
       "",
       `Artifact: ${selfUrl ?? "<ARTIFACT_URL>"}`,
       `Board: ${boardUrl}`,
@@ -445,7 +463,7 @@ function renderIndex(argv) {
 
 // A non-UI change (lib/change-shape.sh says "light", CORE-175 D2) is handed over with one
 // board comment carrying the PR link — no page, no Change Index row.
-function light(argv) {
+async function light(argv) {
   const arg = (name) => {
     const i = argv.indexOf(name);
     return i === -1 ? undefined : argv[i + 1];
@@ -453,24 +471,51 @@ function light(argv) {
   if (!TICKET_FROM_BRANCH) throw new Error(`branch ${BRANCH} has no ticket id`);
   const gate = storyGate(ROOT, TICKET_FROM_BRANCH, changedFiles());
   if (gate.problems.length) throw new Error(`story coverage (CORE-182):\n- ${gate.problems.join("\n- ")}`);
-  const pr = arg("--pr") ?? prUrl(TICKET_FROM_BRANCH, arg("--title"), "");
+  const post = argv.includes("--post");
+  if (!arg("--summary") && (post || !arg("--pr"))) throw new Error("--summary <2 sentences> is required: it becomes the board comment and the PR description's Summary (CORE-188)");
+  const pr = arg("--pr") ?? prUrl(TICKET_FROM_BRANCH, arg("--title"), { summary: arg("--summary"), kind: arg("--kind"), rollback: arg("--rollback") });
   if (!pr) throw new Error("--pr <compare or pull url> is required (no GitHub remote found)");
   const path = markerPath(TICKET_FROM_BRANCH);
   const previous = existsSync(path) ? JSON.parse(readFileSync(path, "utf-8")) : {};
+  // CORE-247: the card states what changed, so a light handover carries it too.
+  const beforeAfter = normalizeBeforeAfter({ before: arg("--before"), after: arg("--after"), added: arg("--new") }) ?? previous.beforeAfter;
+  if (!beforeAfter) throw new Error("--before <how it was> --after <how it is now> (or --new <what was added>) is required: the board card shows it");
   const marker = {
     ...previous,
     light: true,
     ticket: TICKET_FROM_BRANCH,
     boardUrl: boardUrlOf(TICKET_FROM_BRANCH),
     prUrl: pr,
+    beforeAfter,
     ...(argv.includes("--board-commented") ? { boardCommented: true } : {}),
     ...(arg("--board-status") ? { boardStatus: arg("--board-status") } : {}),
   };
+  const comment = lightComment({ summary: arg("--summary") ?? "<2 sentences: what changed and why>", lines: beforeAfterLines(beforeAfter), pr, branch: BRANCH });
+  if (post) {
+    const quiet = { log: () => {} };
+    await board(["comment", TICKET_FROM_BRANCH, "--body", comment], quiet);
+    marker.boardCommented = true;
+    const moved = await board(["move", TICKET_FROM_BRANCH, arg("--board-status") ?? "needs_review"], quiet);
+    marker.boardStatus = moved.status;
+  }
   mkdirSync(MARKER_DIR, { recursive: true });
   writeFileSync(path, JSON.stringify(marker, null, 2) + "\n");
   console.log(`light marker written: ${path}`);
-  console.log(`board comment for ${TICKET_FROM_BRANCH} (pnpm board comment ${TICKET_FROM_BRANCH} "…"): <2 sentences: what changed and why>\nPR: ${pr}\nBranch: \`${BRANCH}\``);
+  if (post) console.log(`posted on ${TICKET_FROM_BRANCH} and moved to ${marker.boardStatus}:\n${comment}`);
+  else console.log(`board comment for ${TICKET_FROM_BRANCH} (add --post to send it and move the ticket):\n${comment}`);
   if (!marker.boardCommented) console.log("still missing for the quality gate: boardCommented");
+}
+
+// The pre-filled "Create PR" link alone, e.g. for the nightly worker's completion comment (CORE-188).
+function prUrlCommand(argv) {
+  const arg = (name) => {
+    const i = argv.indexOf(name);
+    return i === -1 ? undefined : argv[i + 1];
+  };
+  if (!arg("--summary")) throw new Error("--summary <2 sentences> is required");
+  const url = prUrl(TICKET_FROM_BRANCH, arg("--title"), { summary: arg("--summary"), kind: arg("--kind"), rollback: arg("--rollback") });
+  if (!url) throw new Error("no GitHub remote or branch found");
+  console.log(url);
 }
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -478,8 +523,9 @@ try {
   if (cmd === "render") render(rest[0] ?? "");
   else if (cmd === "finalize") finalize(rest);
   else if (cmd === "index") renderIndex(rest);
-  else if (cmd === "light") light(rest);
-  else throw new Error("usage: build.mjs render <content.json> | finalize --url <artifact-url> [--board-linked] [--board-commented] [--board-status <status>] | index [--page | --all | --published <url>] | light [--pr <url>] [--board-commented] [--board-status <status>]");
+  else if (cmd === "light") await light(rest);
+  else if (cmd === "pr-url") prUrlCommand(rest);
+  else throw new Error("usage: build.mjs render <content.json> | finalize --url <artifact-url> [--board-linked] [--board-commented] [--board-status <status>] | index [--page | --all | --published <url>] | pr-url --title <t> --summary <s> [--kind <k>] [--rollback <text>] | light --title <t> --summary <s> (--before <b> --after <a> | --new <n>) [--kind <k>] [--rollback <text>] [--pr <url>] [--post | --board-commented] [--board-status <status>]");
 } catch (err) {
   console.error(`ship-artifact: ${err.message}`);
   process.exit(1);

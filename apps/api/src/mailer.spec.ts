@@ -121,9 +121,16 @@ describe("mailer — configured", () => {
   it("sendEmailSentConfirmation tells the doctor who/what/when in their language, with no patient link (NEO-192)", async () => {
     const { sendEmailSentConfirmation } = await importMailer(true);
 
-    await sendEmailSentConfirmation("doctor@neosleepcare.com", { patient: "Lucía C.", sentTo: "l***@example.mx", count: 2, clinic: "Clínica Sonrisa", language: "pl" });
+    await sendEmailSentConfirmation("doctor@neosleepcare.com", { patient: "Lucía C.", sentTo: "l***@example.mx", count: 2, clinic: "Clínica Sonrisa" }, { language: "en", region: "MX" });
 
     const call = sendMock.mock.calls[0]![0];
+    // CORE-259: the doctor's region (MX) decides the language, not the default 'en' and not the patient's.
+    expect(call.html).toContain("Lucía C.");
+    const { emailLocale } = await importMailer(true);
+    expect(emailLocale({ language: "en", region: "MX" })).toBe("mx");
+    expect(emailLocale({ language: "en", region: "PL" })).toBe("pl");
+    expect(emailLocale({ language: "pl", region: "MX" })).toBe("pl");
+    expect(emailLocale({ language: null, region: "TH" })).toBe("en");
     expect(call.to).toBe("doctor@neosleepcare.com");
     expect(call.from).toBe('"Clínica Sonrisa | NeoSleep" <notifications@mail.neosleepcare.com>');
     expect(call.subject).toContain("Lucía C.");
@@ -274,6 +281,7 @@ describe("sendAppointmentPatientEmail (CORE-25 / CORE-26)", () => {
     const args = sendMock.mock.calls[0]![0];
     expect(args.subject).toContain("Clínica Sonrisa");
     expect(args.html).toContain("09:00"); // 15:00 UTC = 09:00 in Mexico City
+    expect(args.html).toContain("hora de Ciudad de México (GMT-6)"); // CORE-244: the zone is named, not just "clinic time"
     expect(args.html).toContain("tel:+525512345678");
     expect(args.html).toContain("mailto:hola@sonrisa.mx");
     expect(args.html).toContain("Confirmo mi asistencia");
@@ -376,5 +384,58 @@ describe("sendAppointmentPatientEmail (CORE-25 / CORE-26)", () => {
     expect(args.html).toContain('href="https://calendar.google.com/x"');
     expect(args.html).toContain('href="https://outlook.live.com/x"');
     expect(args.attachments.map((a: { contentId?: string }) => a.contentId)).toContain("icon-calendar");
+  });
+});
+
+describe("sendAccountCreatedEmail (CORE-199)", () => {
+  const LINK = "https://pwa.neosleepcare.com/reset-password?token=abc123";
+  const CONTEXT = { inviterName: "Ana Admin", tenantName: "Acme Pharma" };
+
+  it.each([
+    ["en", "Your Acme Pharma account is ready", "Set your password", "Ana Admin created a Acme Pharma account", "sign in with Google"],
+    ["pl", "Twoje konto Acme Pharma jest gotowe", "Ustaw hasło", "Ana Admin utworzył(a) dla Ciebie konto w Acme Pharma", "zalogować się przez Google"],
+    ["mx", "Tu cuenta de Acme Pharma está lista", "Establecer contraseña", "Ana Admin creó una cuenta de Acme Pharma", "iniciar sesión con Google"],
+  ])("renders the %s template with inviter, tenant, button link and Google line", async (language, subject, cta, body, google) => {
+    const { sendAccountCreatedEmail } = await importMailer(true);
+
+    const id = await sendAccountCreatedEmail("new.rep@example.com", LINK, { ...RECIPIENT, language, region: "TH" }, CONTEXT);
+
+    expect(id).toBe("test-email-id");
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    const sent = sendMock.mock.calls[0]![0] as { to: string; subject: string; html: string };
+    expect(sent.to).toBe("new.rep@example.com");
+    expect(sent.subject).toBe(subject);
+    expect(sent.html).toContain(cta);
+    expect(sent.html).toContain(`href="${LINK}"`);
+    expect(sent.html).toContain(body);
+    expect(sent.html).toContain(google);
+  });
+
+  it("falls back to the region's locale when the user has no language", async () => {
+    const { sendAccountCreatedEmail } = await importMailer(true);
+
+    await sendAccountCreatedEmail("new.rep@example.com", LINK, { ...RECIPIENT, language: null, region: "MX" }, CONTEXT);
+
+    expect((sendMock.mock.calls[0]![0] as { subject: string }).subject).toBe("Tu cuenta de Acme Pharma está lista");
+  });
+
+  it("escapes the inviter name", async () => {
+    const { sendAccountCreatedEmail } = await importMailer(true);
+
+    await sendAccountCreatedEmail("new.rep@example.com", LINK, RECIPIENT, { ...CONTEXT, inviterName: "<b>Eve</b>" });
+
+    const html = (sendMock.mock.calls[0]![0] as { html: string }).html;
+    expect(html).not.toContain("<b>Eve</b>");
+    expect(html).toContain("&lt;b&gt;Eve&lt;/b&gt;");
+  });
+
+  it("returns null without calling Resend when it is not configured", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { sendAccountCreatedEmail } = await importMailer(false);
+
+    await expect(sendAccountCreatedEmail("new.rep@example.com", LINK, RECIPIENT, CONTEXT)).resolves.toBeNull();
+
+    expect(sendMock).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });

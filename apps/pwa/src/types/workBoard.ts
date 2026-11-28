@@ -8,15 +8,34 @@ export type WorkStatus =
   | "approved"
   | "building"
   | "needs_review"
+  | "verifying"
   | "done"
   | "canceled";
 
 export type WorkLinkKind = "artifact" | "spec" | "pr" | "ci" | "other";
 
+/** What a CI run ended with; a CI link without it is still running or was never reported (CORE-219). */
+export type WorkCiState = "passed" | "failed";
+
 export interface WorkLink {
   kind: WorkLinkKind;
   url: string;
   title?: string;
+  /** Only on a `ci` link. */
+  state?: WorkCiState;
+}
+
+export type WorkLabelColor = "blue" | "teal" | "green" | "amber" | "orange" | "red" | "pink" | "purple";
+
+/** How the board is laid out: one priority-sorted board, or a lane per label. */
+export type WorkBoardSort = "priority" | "label";
+
+/** One label of the catalog (CORE-219). Items carry labels by name; the catalog gives the colour. */
+export interface WorkLabel {
+  id: string;
+  name: string;
+  color: WorkLabelColor;
+  created_at: string;
 }
 
 export interface WorkTeam {
@@ -39,16 +58,45 @@ export interface WorkItem {
   labels: string[];
   links: WorkLink[];
   branch: string | null;
+  /** A platform admin's email (CORE-192). */
+  assignee: string | null;
+  /** YYYY-MM-DD */
+  due_date: string | null;
   source: string;
   created_at: string;
   updated_at: string;
   status_changed_at: string;
   completed_at: string | null;
+  /** The newest event a Claude session wrote on the item, for the live dot (CORE-219). */
+  session_active_at?: string | null;
+  /** Where the code is, read from git by CI (CORE-221); null until the first report. */
+  git_state: WorkGitState | null;
+  /** Newest commit citing the ticket. */
+  git_sha: string | null;
+  git_checked_at: string | null;
+  /** The post-landing test run (CORE-277); null when the ticket was never verified. */
+  verify_state: WorkVerifyState | null;
+  verify_checked_at: string | null;
+  verify_run_url: string | null;
+  /** AC -> test map of the last run. */
+  verify_results: WorkVerifyResult[] | null;
+  /** Key of the fix ticket a failed run created. */
+  fix_item: string | null;
+}
+
+export type WorkGitState = "none" | "dev" | "prod";
+
+export type WorkVerifyState = "pending" | "pass" | "fail";
+
+export interface WorkVerifyResult {
+  ac: string;
+  test: string;
+  status: "pass" | "fail";
 }
 
 export interface WorkItemEvent {
   id: string;
-  kind: "created" | "status" | "comment" | "edit" | "link";
+  kind: "created" | "status" | "comment" | "edit" | "link" | "attachment";
   from_status: WorkStatus | null;
   to_status: WorkStatus | null;
   body: string | null;
@@ -65,6 +113,9 @@ export interface WorkItemDraft {
   done_when?: string | null;
   priority?: number;
   status?: WorkStatus;
+  assignee?: string | null;
+  due_date?: string | null;
+  labels?: string[];
 }
 
 export interface WorkItemPatch {
@@ -74,6 +125,28 @@ export interface WorkItemPatch {
   done_when?: string | null;
   priority?: number;
   status?: WorkStatus;
+  assignee?: string | null;
+  due_date?: string | null;
+  /** The whole label set, not a delta. */
+  labels?: string[];
+}
+
+/** An image or PDF on an item, or on one of its comments (`event_id`). The bytes stay private; ask for a signed URL. */
+export interface WorkAttachment {
+  id: string;
+  item_id: string;
+  event_id: string | null;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  uploaded_by: string | null;
+  created_at: string;
+}
+
+/** Someone an item can be assigned to. */
+export interface WorkPerson {
+  email: string;
+  name: string | null;
 }
 
 /** A device's token for Claude Code sessions (CORE-187); the plaintext only comes back once, on issue. */

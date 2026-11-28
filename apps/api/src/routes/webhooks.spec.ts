@@ -13,6 +13,7 @@ const SECRET_KEY = vi.hoisted(() => {
 import { app } from "../server.js";
 import { withTenant, insertPatient, insertStaffUser } from "../db.js";
 import { insertPatientEmailSend } from "../db/patientEmailSend.js";
+import { getWebhookEvent } from "../db/webhookEvent.js";
 import { verifyResendWebhook, ResendWebhookNotConfiguredError } from "../mailer.js";
 import { signAuthToken } from "../utils/jwt.js";
 import type { StaffRole } from "../db/users.js";
@@ -131,6 +132,34 @@ describe("POST /webhooks/resend", () => {
     expect((await post(event("email.delivered", `re_${randomUUID()}`))).body.outcome).toBe("unknown_email");
     expect((await post(event("email.opened", messageId))).body.outcome).toBe("ignored_event");
     expect((await statusOf(messageId)).status).toBe("sent");
+  });
+
+  it("stores the raw event first and applies a repeated delivery once (CORE-213)", async () => {
+    const { messageId } = await sentEmail();
+    const body = event("email.delivered", messageId);
+    const headers = sign(body);
+    const first = await post(body, headers);
+    expect(first.body.outcome).toBe("applied");
+
+    // Resend retries with the same svix-id; a later complaint must not be undone by it.
+    await post(event("email.complained", messageId));
+    const retry = await post(body, headers);
+    expect(retry.status).toBe(200);
+    expect(retry.body.outcome).toBe("duplicate");
+    expect((await statusOf(messageId)).status).toBe("complained");
+
+    const stored = await withTenant(TENANT_SLUG, (client) => getWebhookEvent(client, "resend", headers["svix-id"]!));
+    expect(stored).toMatchObject({ source: "resend", event_type: "email.delivered", status: "processed", attempts: 1, metadata: { outcome: "applied" } });
+    expect(stored!.payload).toMatchObject({ type: "email.delivered", data: { email_id: messageId } });
+  });
+
+  it("keeps an event that matches nothing, marked skipped", async () => {
+    const body = event("email.delivered", `re_${randomUUID()}`, {}, null);
+    const headers = sign(body);
+    expect((await post(body, headers)).body.outcome).toBe("no_tenant");
+    const stored = await withTenant(TENANT_SLUG, (client) => getWebhookEvent(client, "resend", headers["svix-id"]!));
+    expect(stored).toMatchObject({ status: "skipped", metadata: { outcome: "no_tenant" } });
+    expect((await post(body, headers)).body.outcome).toBe("duplicate");
   });
 
   it("refuses to verify anything without a configured secret", () => {

@@ -144,6 +144,7 @@
         <!-- CORE-153: on wide screens "+" sits in the page header, where the lists keep theirs. -->
         <Teleport :to="pageHeader.to" defer :disabled="headerAddOff">
           <button
+            v-if="canBook"
             type="button"
             class="cal__add"
             :class="{ 'cal__add--header': !headerAddOff }"
@@ -230,7 +231,7 @@ const AppointmentDetailDialog = defineAsyncComponent(() => import("../components
 
 const { t, locale } = useI18n();
 const { smAndUp } = useDisplay();
-const { isDoctor } = useAppointments();
+const { isDoctor, canBook } = useAppointments();
 
 const lang = computed(() => intlLocale(locale.value));
 
@@ -649,6 +650,7 @@ function onSlot(dayKey: string, minutes: number) {
 // The Cita/Evento choice (CORE-117) comes back when events are needed again.
 // prefillWall is the clicked slot as wall time — a booking keeps it in the clinic's zone (CORE-120).
 function openAdd(prefillStartIso?: string, prefillWall?: string) {
+  if (!canBook.value) return;
   openBooking({ start: prefillStartIso, startLocal: prefillWall ?? null });
 }
 
@@ -1211,7 +1213,7 @@ function onEntryClick(entry: CalendarEntry) {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 14px 12px 24px;
+  padding: 16px 12px 24px;
   border-top: 0.5px solid var(--cal-line-strong);
 }
 
@@ -1227,7 +1229,8 @@ function onEntryClick(entry: CalendarEntry) {
   z-index: 25;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 10px 10px 8px 12px;
+  /* CORE-196: one 12px inset all round (was 10/10/8/12 — the last event sat closest to the edge). */
+  padding: 12px;
   background: var(--cal-glass-strong);
 }
 

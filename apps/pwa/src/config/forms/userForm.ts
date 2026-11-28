@@ -1,8 +1,8 @@
 import type { FormFieldDef } from "../../types/formField";
-import { useConfigStore } from "../../stores/config";
 import { useAuthStore } from "../../stores/auth";
 import { identityFields } from "./identityFields";
-import { loadScopeTerritoryOptions } from "./territoryOptions";
+import { languageField, languageForCountry } from "./localeFields";
+import { countryOfTerritory, loadScopeTerritoryOptions } from "./territoryOptions";
 
 // A user's own RBAC access scope (territory_id field below) is coarse — a
 // country, or everywhere — see requireScope.ts. Not the same field as
@@ -14,15 +14,14 @@ import { loadScopeTerritoryOptions } from "./territoryOptions";
  * Staff user entity config for the generic FormRenderer (apps/pwa/src/
  * components/FormRenderer.vue + useFormRenderer.ts).
  *
- * No password field here: new accounts are created without a password —
- * ensureInitialUserPasswords() (apps/api/src/auth.ts) sets one on next
- * server startup, or an admin can immediately trigger the "reset password"
- * row action to email the new user a set-password link. Admins never
- * type/see another person's password.
+ * No password field here: new accounts are created without a password. On
+ * create the API emails the new user a set-password link (7 days, CORE-199)
+ * and reports `invite_email: "sent" | "not_sent"`; when it is "not_sent" the
+ * admin can trigger the "reset password" row action to send a fresh link.
+ * Admins never type/see another person's password.
  *
- * `email` is marked `immutableOnEdit` — FormRenderer disables it once
- * initialData.id is set, so the edit dialog no longer shows a live-looking
- * field that UpdateUserCommand silently ignores.
+ * `email` stays editable (NEO-271): changing it writes identities.email and signs
+ * the user out everywhere.
  *
  * Reuses the shared Identity block (prefix key overridden to "salutation",
  * matching patientForm.ts/hcpForm.ts's DB-layer naming convention).
@@ -50,6 +49,7 @@ const ROLE_OPTIONS = [
   { title: "user.users.role.manager", value: "manager" },
   { title: "user.users.role.doctor", value: "doctor" },
   { title: "user.users.role.rep", value: "rep" },
+  { title: "user.users.role.support", value: "support" },
 ];
 
 const STATUS_OPTIONS = [
@@ -58,17 +58,23 @@ const STATUS_OPTIONS = [
   { title: "user.users.status.suspended", value: "suspended" },
 ];
 
-async function loadRegionOptions() {
-  const configStore = useConfigStore();
-  if (configStore.options.regions.length === 0) {
-    await configStore.loadOptions();
-  }
-  return configStore.regionItems;
+/**
+ * Choosing a territory fills country and language (CORE-261); both stay
+ * editable afterwards. Only a real change of territory_id triggers it, so
+ * opening an existing user never overwrites what is stored.
+ */
+export function userFormDerive(
+  form: Record<string, unknown>,
+  prev: Record<string, unknown>,
+): Partial<Record<string, unknown>> | void {
+  if (!("territory_id" in prev) || prev.territory_id === form.territory_id) return;
+  const country = countryOfTerritory(form.territory_id);
+  if (!country) return;
+  return { region: country, language: languageForCountry(country) };
 }
 
 const identity = identityFields();
 identity[0] = { ...identity[0], key: "salutation" };
-identity[3] = { ...identity[3], immutableOnEdit: true };
 
 export const userFormFields: FormFieldDef[] = [
   ...identity,
@@ -80,19 +86,12 @@ export const userFormFields: FormFieldDef[] = [
     options: ROLE_OPTIONS,
     default: "rep",
     required: true,
-    // Only admin can change (or set, on create) a user's role — mirrors
-    // hcoForm.ts's own admin-only 'status' field. The backend
-    // (commands/users.ts) is the real enforcement boundary; this only keeps
-    // a non-admin from seeing a control they can't use.
-    hidden: () => useAuthStore().user?.role !== "admin",
-    cols: 6,
-  },
-  {
-    key: "region",
-    section: "territory",
-    type: "autocomplete",
-    labelKey: "user.users.form.fieldRegion",
-    options: loadRegionOptions,
+    // Admin and manager can set a user's role; only an admin can hand out the
+    // admin/support roles (the backend, commands/users.ts, is the real
+    // enforcement boundary — this only hides options a manager can't use).
+    hidden: () => !["admin", "manager"].includes(useAuthStore().user?.role ?? ""),
+    optionFilter: (option) =>
+      useAuthStore().user?.role === "admin" || !["admin", "support"].includes(String(option.value)),
     cols: 6,
   },
   {
@@ -106,6 +105,10 @@ export const userFormFields: FormFieldDef[] = [
     icon: "nav-territories",
     cols: 6,
   },
+  // Country is derived from the territory (hidden, still sent to the API);
+  // the language stays visible and editable (CORE-261).
+  { key: "region", section: "territory", type: "text", labelKey: "user.users.form.fieldRegion", default: "", hidden: () => true },
+  languageField("user.users.form.fieldLanguage"),
   {
     key: "status",
     section: "access",

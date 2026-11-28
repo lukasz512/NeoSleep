@@ -7,6 +7,7 @@
     :avatar-name="appointment?.patient_name ?? ''"
     @update:model-value="close"
     @close="close"
+    @after-leave="error = null"
   >
     <div v-if="appointment" class="appointment-detail__body">
         <div class="appointment-detail__when">
@@ -208,7 +209,7 @@ import { useI18n } from "vue-i18n";
 import { reportCaught } from "@api";
 import { intlLocale } from "@i18n/language-options";
 import { useNotifications } from "../composables/useNotifications";
-import { useAppointments, APPOINTMENT_STATUS_COLOR, appointmentResponseState, type Appointment, type AppointmentStatus } from "../composables/useAppointments";
+import { useAppointments, APPOINTMENT_STATUS_COLOR, appointmentResponseState, forbiddenMessageKey, type Appointment, type AppointmentStatus } from "../composables/useAppointments";
 import { formatTimeRange, formatDayLabel, timeZoneLabel } from "../utils/appointmentTime";
 import { formatRelativeTime } from "../utils/relativeTime";
 import AppButton from "./AppButton.vue";
@@ -227,7 +228,7 @@ const emit = defineEmits<{
 
 const { t, locale } = useI18n();
 const notifications = useNotifications();
-const { canClose, canChange, isFieldForce, update } = useAppointments();
+const { canBook, canClose, canChange, isFieldForce, update } = useAppointments();
 
 const busy = ref<AppointmentStatus | "keep" | null>(null);
 const confirmCancel = ref(false);
@@ -244,10 +245,10 @@ const declined = computed(() => responseState.value === "cannot_attend");
 const patientPhone = computed(() => props.appointment?.patient_phone?.trim() || null);
 const answeredAgo = computed(() => (props.appointment?.patient_responded_at ? formatRelativeTime(props.appointment.patient_responded_at, locale.value) : ""));
 /** "Book the next visit" after a completed one (Łukasz, 2026-09-26) — offered to whoever can book for this patient. */
-const canBookNext = computed(() => !isFieldForce.value || changeable.value);
+const canBookNext = computed(() => canBook.value && (!isFieldForce.value || changeable.value));
 
 function close() {
-  error.value = null;
+  // The error clears after the leave (CORE-195), so the closing dialog doesn't redraw.
   emit("update:modelValue", false);
 }
 
@@ -258,7 +259,7 @@ async function save(key: AppointmentStatus | "keep", body: Record<string, unknow
   try {
     const result = await update(props.appointment.id, body);
     if (!result.ok || !result.appointment) {
-      error.value = t("user.appointments.form.errorSave");
+      error.value = t(result.forbidden ? forbiddenMessageKey(result.forbiddenReason) : "user.appointments.form.errorSave");
       return;
     }
     notifications.show(savedMessage, "success", undefined, {

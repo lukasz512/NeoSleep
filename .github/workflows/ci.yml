@@ -45,7 +45,12 @@ jobs:
     # (e.g. renovate/*); a skipped job counts as passed for required checks. Head dev =
     # the dev→prod promote PR: it runs, but only to copy the dev run's result (Scope step).
     if: github.event_name != 'pull_request' || !(startsWith(github.head_ref, 'worktree-') || startsWith(github.head_ref, 'worker/') || startsWith(github.head_ref, 'claude/'))
-    runs-on: ubuntu-latest
+    # CORE-208: pinned, not ubuntu-latest. On ubuntu-26.04 Playwright's WebKit barely
+    # renders frames (2 animation frames in 670 ms, wheel scroll never lands), so the
+    # same WebKit e2e specs failed on every dev run; on 24.04 the same build is green.
+    # e2e-flake-hunt.yml measures both images every night; move to ubuntu-latest once
+    # ci-health.yml reports 3 green nights there on CORE-242 (CORE-58).
+    runs-on: ubuntu-24.04
     # CORE-151: a hung e2e used to hold the job (and the session waiting on it) for up
     # to an hour; the default limit is 6 h. The nightly 3-engine e2e alone takes ~23 min
     # (2026-10-06: 507 tests in 22.8 min), so the nightly/manual run gets more room.
@@ -290,8 +295,9 @@ jobs:
       - name: Tooling self-tests
         run: |
           git config --global user.name ci && git config --global user.email ci@example.com
-          node --test .claude/skills/ship-artifact/ticket.test.mjs .claude/skills/ship-artifact/index-rows.test.mjs .claude/skills/ship-artifact/coverage.test.mjs infrastructure/scripts/story-coverage.test.mjs infrastructure/scripts/board.test.mjs
+          node --test .claude/skills/ship-artifact/ticket.test.mjs .claude/skills/ship-artifact/index-rows.test.mjs .claude/skills/ship-artifact/pr-body.test.mjs .claude/skills/ship-artifact/handover.test.mjs .claude/skills/ship-artifact/coverage.test.mjs infrastructure/scripts/story-coverage.test.mjs infrastructure/scripts/board.test.mjs infrastructure/scripts/board-git-state.test.mjs
           bash .claude/hooks/pre-tool-linear-readonly.test.sh
+          bash .claude/hooks/post-push.test.sh
           bash infrastructure/scripts/worktree-clean.test.sh
           bash infrastructure/scripts/test-db.test.sh
       # CORE-182: every acceptance criterion of the branch's ticket story has a test tagged

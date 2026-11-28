@@ -6,6 +6,7 @@ import {
   SCANNER_PLATFORMS,
   SCANNER_TREATMENTS,
   TOOTH_STATES,
+  scanFileProblem,
   type DeliveryAddress,
   type DeviceOrder,
 } from "./model.js";
@@ -36,6 +37,9 @@ export const ORDER_ISSUE_CODES = [
   "emailInvalid",
   "tooLong",
   "warningNotConfirmed",
+  "scanFileEmpty",
+  "scanFileType",
+  "scanFileTooLarge",
 ] as const;
 export type OrderIssueCode = (typeof ORDER_ISSUE_CODES)[number];
 
@@ -102,6 +106,10 @@ const deviceOrderShape = z.object({
       z.object({ method: z.literal("impression") }),
       z.object({ method: z.literal("scanner"), scannerTreatment: z.enum(SCANNER_TREATMENTS).nullable() }),
       z.object({ method: z.literal("platform"), scannerPlatform: z.enum(SCANNER_PLATFORMS).nullable() }),
+      z.object({
+        method: z.literal("files"),
+        files: z.array(z.object({ path: z.string().min(1), name: z.string().min(1), size: z.number().int() })),
+      }),
     ])
     .default({ method: "impression" }),
   acknowledgedWarnings: z.array(z.string()).default([]),
@@ -179,6 +187,14 @@ function crossFieldIssues(order: DeviceOrder, ctx: OrderContext, broken: Readonl
     const reg = order.registration;
     if (reg?.method === "scanner" && reg.scannerTreatment === null) errors.push({ path: "registration.scannerTreatment", code: "required" });
     if (reg?.method === "platform" && reg.scannerPlatform === null) errors.push({ path: "registration.scannerPlatform", code: "required" });
+    // NEO-262: uploading means at least one scan, each one a scan the wizard would have taken.
+    if (reg?.method === "files") {
+      if (reg.files.length === 0) errors.push({ path: "registration.files", code: "required" });
+      reg.files.forEach((file, i) => {
+        const problem = scanFileProblem(file.name, file.size);
+        if (problem) errors.push({ path: `registration.files.${i}`, code: problem });
+      });
+    }
   }
 
   // The desired date can't be earlier than OA's manufacturing date for the product.
@@ -225,21 +241,27 @@ const deliveryShape = z.object({
   city: z.string().trim().min(1),
   postalCode: z.string().trim().min(1),
   countryCode: z.string().trim().length(2),
+  province: z.string().trim().optional(),
   phone: z.string().trim().min(1),
   email: z.string().trim().min(1).pipe(z.email()),
 });
 
+/** Countries where OA requires a province on a delivery address (rules §1.2). */
+export const PROVINCE_REQUIRED_COUNTRIES: readonly string[] = ["CA", "ES", "DE", "US"];
+
 export function validateDeliveryAddress(input: Partial<DeliveryAddress> | null | undefined): OrderIssue[] {
   const parsed = deliveryShape.safeParse(input ?? {});
-  if (parsed.success) return [];
-  return parsed.error.issues.map((issue) => {
+  const needsProvince = PROVINCE_REQUIRED_COUNTRIES.includes((input?.countryCode ?? "").trim().toUpperCase()) && !(input?.province ?? "").trim();
+  const provinceIssue: OrderIssue[] = needsProvince ? [{ path: "delivery.province", code: "required" }] : [];
+  if (parsed.success) return provinceIssue;
+  return [...parsed.error.issues.map((issue): OrderIssue => {
     const path = `delivery.${issue.path.join(".")}`;
     const field = issue.path[0];
     if (issue.code === "too_big" && field === "name") return { path, code: "tooLong", params: { max: 40 } };
     if (field === "email" && issue.code !== "too_small" && issue.code !== "invalid_type") return { path, code: "emailInvalid" };
     if (issue.code === "too_small" || (issue.code === "invalid_type" && valueAt(input ?? {}, issue.path) === undefined)) return { path, code: "required" };
     return { path, code: "invalid" };
-  });
+  }), ...provinceIssue];
 }
 
 /** Errors only for the given paths (prefix match) — the wizard validates one step at a time. */

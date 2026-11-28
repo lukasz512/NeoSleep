@@ -38,13 +38,17 @@ function dumpNormalized(databaseUrl: string, schema: string): string {
   // Same stripping as sync-test-schema.ts (psql meta-commands, and a PG17+
   // client preamble line an older server rejects), plus dropping comment
   // lines (they carry no structural info and their wording can vary).
+  // Postgres 15.20 (postgres:15 image since 2026-11-13) also stamps every
+  // column with a pg_attver option whose value differs per schema — not
+  // structure, so it is dropped too.
   const lines = dump
     .split("\n")
     .filter(
       (line) =>
         !line.startsWith("\\") &&
         !line.startsWith("SET transaction_timeout") &&
-        !line.startsWith("--")
+        !line.startsWith("--") &&
+        !/ALTER COLUMN .* SET \(pg_attver=\d+\);$/.test(line)
     );
 
   // Normalize schema-qualification (dot) AND the historical "neosleep_"
@@ -119,6 +123,15 @@ async function run(): Promise<void> {
           `Regenerate it (pg_dump --schema-only --schema=${REFERENCE_SCHEMA}, convert to the parameterized ` +
           `function — see 027_sync_create_tenant_schema.sql's header for the exact approach) and add a new migration.`
       );
+      // Print the blocks that differ, so a red CI run says what drifted.
+      const referenceBlocks = new Set(reference.split("\n\n"));
+      const generatedBlocks = new Set(generated.split("\n\n"));
+      for (const block of referenceBlocks) {
+        if (!generatedBlocks.has(block)) console.error(`--- only in "${REFERENCE_SCHEMA}":\n${block}`);
+      }
+      for (const block of generatedBlocks) {
+        if (!referenceBlocks.has(block)) console.error(`+++ only in create_tenant_schema():\n${block}`);
+      }
       process.exit(1);
     }
 

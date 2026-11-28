@@ -9,6 +9,11 @@ const STEPS: { unit: Intl.RelativeTimeFormatUnit; ms: number }[] = [
   { unit: "minute", ms: 60 * 1000 },
 ];
 
+/** "14:05" / "2:05 PM", the way the app's locale writes a time of day. */
+export function formatClockTime(date: Date, locale: string): string {
+  return new Intl.DateTimeFormat(INTL_LOCALE[locale] ?? locale, { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
 export function formatRelativeTime(iso: string, locale: string, now: number = Date.now()): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return "";

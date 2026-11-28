@@ -209,6 +209,7 @@ interface PatientDetail {
   date_of_birth?: string | null;
   status?: string;
   region?: string;
+  language?: string | null;
   territory_id?: string | null;
   /** Root-first ancestor chain ("mx" → "cdmx" → "polanco") — null until a
    *  territory is assigned, or if territory_id points at a since-deleted

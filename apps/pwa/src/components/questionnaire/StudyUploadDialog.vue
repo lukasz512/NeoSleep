@@ -7,17 +7,25 @@
     @close="emit('update:modelValue', false)"
   >
     <form id="study-upload-form" class="study-upload" novalidate @submit.prevent="onSubmit">
-      <VFileInput
-        id="study-upload-file"
-        v-model="file"
-        :label="t('app.clinical.upload.file')"
-        accept="application/pdf,image/jpeg,image/png"
-        prepend-icon=""
-        variant="outlined"
-        density="comfortable"
-        show-size
-        :error-messages="showErrors && !file ? t('app.clinical.upload.fileRequired') : ''"
-      />
+      <div class="study-upload__file" :class="{ 'study-upload__file--error': showErrors && !pickedFile }">
+        <input
+          id="study-upload-file"
+          ref="fileInput"
+          type="file"
+          class="study-upload__file-input"
+          accept="application/pdf,image/jpeg,image/png"
+          data-testid="study-upload-file"
+          @change="onFileChosen"
+        >
+        <span class="study-upload__file-label">{{ t("app.clinical.upload.file") }}</span>
+        <div class="study-upload__file-row">
+          <AppButton variant="tonal" color="primary" data-testid="study-upload-pick" @click="fileInput?.click()">
+            {{ pickedFile ? t("app.clinical.upload.changeFile") : t("app.clinical.upload.chooseFile") }}
+          </AppButton>
+          <span v-if="pickedFile" class="study-upload__file-name">{{ pickedFile.name }} · {{ formatSize(pickedFile.size) }}</span>
+        </div>
+        <span v-if="showErrors && !pickedFile" class="study-upload__file-error">{{ t("app.clinical.upload.fileRequired") }}</span>
+      </div>
       <VTextField
         id="study-upload-title"
         v-model="title"
@@ -84,7 +92,9 @@ const emit = defineEmits<{ "update:modelValue": [open: boolean]; submit: [form: 
 const { t } = useI18n();
 
 const NEW_STUDY = "";
-const file = ref<File | File[] | null>(null);
+const file = ref<File | null>(null);
+const fileInput = ref<HTMLInputElement | null>(null);
+const pickedFile = computed(() => file.value);
 const title = ref("");
 const notes = ref("");
 const attachTo = ref<string>(NEW_STUDY);
@@ -100,6 +110,7 @@ watch(
   (open) => {
     if (!open) return;
     file.value = null;
+    if (fileInput.value) fileInput.value.value = "";
     notes.value = "";
     showErrors.value = false;
     attachTo.value = props.initialItem ?? NEW_STUDY;
@@ -109,9 +120,17 @@ watch(
   { immediate: true }
 );
 
+function onFileChosen(event: Event) {
+  file.value = (event.target as HTMLInputElement).files?.[0] ?? null;
+}
+
+function formatSize(bytes: number): string {
+  return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function onSubmit() {
   showErrors.value = true;
-  const picked = Array.isArray(file.value) ? file.value[0] : file.value;
+  const picked = file.value;
   if (!picked || !title.value.trim()) return;
   const form = new FormData();
   form.append("file", picked);
@@ -126,5 +145,32 @@ function onSubmit() {
 .study-upload {
   display: grid;
   gap: 8px;
+}
+.study-upload__file {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+.study-upload__file-input {
+  display: none;
+}
+.study-upload__file-label {
+  font-size: 12px;
+  color: rgba(var(--v-theme-on-surface), 0.6);
+}
+.study-upload__file-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.study-upload__file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+.study-upload__file-error {
+  font-size: 12px;
+  color: rgb(var(--v-theme-error));
 }
 </style>

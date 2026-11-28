@@ -5,7 +5,8 @@
  * doctor; the API is answered in the page (window.fetch stub).
  * `?doctor=team` books with a doctor already on the patient's care team,
  * `?doctor=unknown` makes the team list fail and the API refuse the booking (CORE-138),
- * anything else books with one outside it. `?lang=pl|mx|en`, `?theme=dark`.
+ * anything else books with one outside it. `?refuse=<ForbiddenReason>` makes the
+ * API answer the booking with that 403 (CORE-224). `?lang=pl|mx|en`, `?theme=dark`.
  */
 import { createApp, defineComponent, h } from "vue";
 import { createPinia } from "pinia";
@@ -26,6 +27,7 @@ if (lang === "pl" || lang === "mx") {
 const onTeam = params.get("doctor") === "team";
 /** CORE-138: the team list fails to load and the API then refuses the booking without grant_access. */
 const teamUnknown = params.get("doctor") === "unknown";
+const refuse = params.get("refuse");
 
 const json = (body: unknown, status = 200) =>
   Promise.resolve(new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } }));
@@ -36,11 +38,19 @@ window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
   if (teamUnknown && init?.method === "POST" && /\/api\/v1\/appointments$/.test(url)) {
     return json({ error: "grant_access must be confirmed", code: "VALIDATION_ERROR", field: "grant_access" }, 400);
   }
+  if (refuse && init?.method === "POST" && /\/api\/v1\/appointments$/.test(url)) {
+    return json({ error: "Forbidden", code: "FORBIDDEN", reason: refuse }, 403);
+  }
   if (url.includes("/care-team")) return json(onTeam ? [{ practitioner_id: "h-1" }, { practitioner_id: "h-2" }] : [{ practitioner_id: "h-1" }]);
   if (url.includes("/booking-zone")) return json({ timezone: "America/Mexico_City" });
   if (url.includes("/api/v1/")) return json({ items: [] });
   return realFetch(input, init);
 };
+
+// Tomorrow 15:00 UTC, never a fixed date: the dialog refuses a past date, so a
+// hardcoded one turned the CORE-138 submit test red once that day had passed.
+const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+const startAt = `${tomorrow.toISOString().slice(0, 10)}T15:00:00Z`;
 
 const Harness = defineComponent({
   setup() {
@@ -49,8 +59,7 @@ const Harness = defineComponent({
         modelValue: true,
         patient: { id: "p-1", name: "María Fernanda López Ruiz", practitioner_id: "h-1" },
         practitioner: { id: "h-2", name: "Dra. Lucía Fernández Ortega" },
-        // Always tomorrow 15:00 UTC: a fixed date turned into "can't be in the past" on 2026-10-10.
-        startAt: new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate() + 1, 15)).toISOString(),
+        startAt,
       });
   },
 });

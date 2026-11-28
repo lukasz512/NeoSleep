@@ -171,3 +171,17 @@ export const problemReportLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many reports, please try again later" },
 });
+
+/**
+ * Applied to POST /ai/chat (CORE-274) — per signed-in user, not IP: 20 questions per
+ * 10 minutes each. Every question costs tokens, so this is also the budget cap.
+ * Mount it after requireAuth.
+ */
+export const aiChatLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 20,
+  keyGenerator: (req) => `ai-chat:${req.user?.sub ?? "anonymous"}`,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many questions, please try again later" },
+});

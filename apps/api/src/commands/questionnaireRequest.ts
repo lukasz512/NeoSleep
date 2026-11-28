@@ -30,10 +30,11 @@ import { hashToken } from "../utils/hashToken.js";
 import { generateToken } from "../utils/generateToken.js";
 import { AppError, NotFoundError, ValidationError } from "../errors.js";
 import { sendQuestionnaireLinkEmail, sendPatientSignedCopyEmail, sendEmailSentConfirmation } from "../mailer.js";
+import { getUserById } from "../db/users.js";
 import { isPatientEmailHeldByAnother } from "../db/identityEmail.js";
 import { insertPatientEmailSend } from "../db/patientEmailSend.js";
 import { maskEmail } from "../utils/maskEmail.js";
-import { patientEmailLocale } from "../utils/patientEmailLocale.js";
+import { patientEmailLocale, resolveSendLanguage } from "../utils/patientEmailLocale.js";
 import { PRIVACY_NOTICE_URL } from "../env.js";
 import { validateMedicalHistory, validateStop } from "./clinicalRecordFields.js";
 import { isSignatureDataUrl } from "../utils/signatureDataUrl.js";
@@ -173,8 +174,10 @@ export async function SendQuestionnaireEmailCommand(
   ctx: TenantContext,
   patientId: string,
   frontendOrigin: string,
-  body: { items?: unknown; copy_to_me?: unknown } = {}
+  body: { items?: unknown; copy_to_me?: unknown; language?: unknown } = {}
 ): Promise<{ request: CreatedQuestionnaireRequest["request"]; sent_to: string; url: string }> {
+  // CORE-268: reject a bad language before a link is created.
+  resolveSendLanguage(body.language, null, null);
   // NEO-192: the doctor picks the items in the send dialog; none picked = everything still open.
   const created = await CreateQuestionnaireRequestCommand(
     ctx,
@@ -188,6 +191,7 @@ export async function SendQuestionnaireEmailCommand(
   const email = context.patient_email?.trim();
   if (!email) throw new PatientHasNoEmailError();
 
+  const mailLocale = resolveSendLanguage(body.language, context.patient_language, context.patient_region);
   const sent = await sendQuestionnaireLinkEmail(
     email,
     created.url,
@@ -195,8 +199,8 @@ export async function SendQuestionnaireEmailCommand(
       title: context.patient_salutation,
       firstName: context.patient_first_name,
       lastName: context.patient_last_name,
-      language: patientEmailLocale(context.patient_language, context.patient_region),
-      region: context.patient_region,
+      language: mailLocale.language,
+      region: mailLocale.region,
     },
     { name: context.organization_name, email: context.organization_email },
     created.request.items.length,
@@ -226,13 +230,17 @@ export async function SendQuestionnaireEmailCommand(
 
   // D4: the doctor's own confirmation — who, how many, when; never the patient's link.
   if (body.copy_to_me === true && ctx.user.email) {
-    await sendEmailSentConfirmation(ctx.user.email, {
-      patient: shortPatientName(context.patient_first_name, context.patient_last_name),
-      sentTo,
-      count: created.request.items.length,
-      clinic: context.organization_name,
-      language: patientEmailLocale(context.patient_language, context.patient_region),
-    }).catch((err: unknown) => console.error("[questionnaireRequest] send confirmation email failed:", err));
+    const doctor = await getUserById(ctx.client, ctx.user.id);
+    await sendEmailSentConfirmation(
+      ctx.user.email,
+      {
+        patient: shortPatientName(context.patient_first_name, context.patient_last_name),
+        sentTo,
+        count: created.request.items.length,
+        clinic: context.organization_name,
+      },
+      { language: doctor?.language, region: doctor?.region ?? doctor?.country_code }
+    ).catch((err: unknown) => console.error("[questionnaireRequest] send confirmation email failed:", err));
   }
   return { request: created.request, sent_to: sentTo, url: created.url };
 }

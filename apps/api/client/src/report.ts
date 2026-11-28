@@ -236,6 +236,8 @@ export function reportCaught(err: unknown, ctx: ReportContext): void {
   } catch {
     // benign: the in-session buffer is best effort and must never throw into a catch block.
   }
+  // A 4xx is the app saying no (validation, auth, not found), not a bug: logged, never reported (CORE-190).
+  if (api?.status != null && api.status >= 400 && api.status < 500) return;
   if (!shouldSend(`${ctx.where}|${message}`)) return;
   try {
     if (payload) sendDiagnosticPayload(payload);

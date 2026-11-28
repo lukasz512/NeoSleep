@@ -7,6 +7,7 @@ import {
   type DeviceOrder,
   type ProductCode,
   type Registration,
+  type ScanFile,
   type Sequence,
   type SequenceUnit,
   type ToothState,
@@ -200,7 +201,13 @@ function registrationFrom(v: unknown): Registration | null {
   if (v.method === "impression") return { method: "impression" };
   if (v.method === "scanner") return { method: "scanner", scannerTreatment: isScannerTreatment(v.scannerTreatment) ? v.scannerTreatment : null };
   if (v.method === "platform") return { method: "platform", scannerPlatform: isScannerPlatform(v.scannerPlatform) ? v.scannerPlatform : null };
+  if (v.method === "files") return { method: "files", files: Array.isArray(v.files) ? v.files.filter(isScanFile) : [] };
   return null;
+}
+
+/** An uploaded scan as the order stores it (NEO-262); a broken entry is dropped and the doctor uploads again. */
+function isScanFile(v: unknown): v is ScanFile {
+  return isObject(v) && typeof v.path === "string" && v.path !== "" && typeof v.name === "string" && v.name !== "" && typeof v.size === "number";
 }
 
 /** Before D2 the choice lived beside the order: `{ registrationMethod, scanner: <brand label> }`. */

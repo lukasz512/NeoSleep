@@ -17,11 +17,11 @@ afterEach(() => {
   fetchPlatformAdmin.mockReset();
 });
 
-async function navPathsFor(platformAdmin: boolean): Promise<string[]> {
+async function navPathsFor(platformAdmin: boolean, role: "admin" | "support" = "admin"): Promise<string[]> {
   fetchPlatformAdmin.mockResolvedValue(platformAdmin);
   setActivePinia(createPinia());
   const auth = useAuthStore();
-  auth.$patch({ user: { id: "u-1", role: "admin" } } as never);
+  auth.$patch({ user: { id: "u-1", role } } as never);
   let paths: string[] = [];
   const Probe = defineComponent({
     setup() {
@@ -45,5 +45,13 @@ describe("useVisibleNavRoutes · platformOnly", () => {
 
   it("shows the work board to a platform admin", async () => {
     expect(await navPathsFor(true)).toContain("/platform/board");
+  });
+
+  it("shows NeoCRM support its five screens when it has a platform.users row (CORE-197)", async () => {
+    expect(await navPathsFor(true, "support")).toEqual(["/calendar", "/resources", "/documents", "/issues", "/platform/board"]);
+  });
+
+  it("hides the work board from a support user without a platform.users row", async () => {
+    expect(await navPathsFor(false, "support")).toEqual(["/calendar", "/resources", "/documents", "/issues"]);
   });
 });

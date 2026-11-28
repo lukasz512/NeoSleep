@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import { reportCaught, reportFailedResponse, type ApiFetchOptions } from "@api";
 
-export type UserRole = "admin" | "manager" | "kam" | "msl" | "rep" | "doctor";
+export type UserRole = "admin" | "manager" | "kam" | "msl" | "rep" | "doctor" | "support";
 
 export interface AuthUser {
   id: string;

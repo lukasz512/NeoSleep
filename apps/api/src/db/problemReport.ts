@@ -1,4 +1,5 @@
 import { getDb } from "./connection.js";
+import { inPlatformTransaction, insertPlatformAudit, type PlatformAuditActor } from "./platformAudit.js";
 
 /** Platform-schema SQL for user problem reports and the admin errors list. */
 
@@ -126,9 +127,52 @@ export async function setProblemReportAttachment(
   );
 }
 
-export async function listProblemReports(tenantSlug: string, status: ProblemReportStatus | null): Promise<ProblemReportRow[]> {
-  const { rows } = await getDb().query<ProblemReportRow>(
-    `SELECT ${PUBLIC_COLUMNS} FROM platform.problem_report
+/**
+ * The fix an error kind is tracked by on the board: 'diag:<source>:<hash>' is the ticket's
+ * external_ref (CORE-190). Legacy 'production' rows never have one: the archive is view only (CORE-227).
+ */
+const TICKET_OF_DIAGNOSTIC = `d.env <> 'production' AND i.external_ref = 'diag:' || d.source || ':' || d.message_hash`;
+
+/**
+ * The worker leaves a blocked ticket in Building with a comment that starts with "Blocked:".
+ * It counts while it is newer than the ticket's last move; this is its first line.
+ */
+const BLOCKED_REASON = `(
+  SELECT left(btrim(split_part(substr(e.body, 9), E'\\n', 1)), 200)
+    FROM platform.work_item_event e
+   WHERE e.item_id = i.id AND e.kind = 'comment' AND e.body LIKE 'Blocked:%'
+     AND i.status = 'building' AND e.created_at >= i.status_changed_at
+   ORDER BY e.created_at DESC, e.id DESC
+   LIMIT 1)`;
+
+/** The newest link of one kind on the ticket (links keep the order they were added in). */
+function lastLinkOfKind(kind: "artifact" | "pr"): string {
+  return `(SELECT l.link ->> 'url'
+             FROM jsonb_array_elements(i.links) WITH ORDINALITY AS l(link, position)
+            WHERE l.link ->> 'kind' = '${kind}'
+            ORDER BY l.position DESC
+            LIMIT 1)`;
+}
+
+/** What a tenant admin may know about the error behind a report: its state, not the ticket. */
+export interface LinkedErrorState {
+  status: DiagnosticStatus;
+  ticket_status: string | null;
+  blocked: boolean;
+}
+
+export type ProblemReportListRow = ProblemReportRow & { linked_error: LinkedErrorState | null };
+
+export async function listProblemReports(tenantSlug: string, status: ProblemReportStatus | null): Promise<ProblemReportListRow[]> {
+  const { rows } = await getDb().query<ProblemReportListRow>(
+    `SELECT ${PUBLIC_COLUMNS},
+            (SELECT json_build_object('status', d.status, 'ticket_status', i.status, 'blocked', ${BLOCKED_REASON} IS NOT NULL)
+               FROM platform.diagnostics d
+               LEFT JOIN platform.work_item i ON ${TICKET_OF_DIAGNOSTIC}
+              WHERE d.request_id = ANY (r.request_ids)
+              ORDER BY d.last_seen DESC
+              LIMIT 1) AS linked_error
+       FROM platform.problem_report r
       WHERE tenant_slug = $1 AND ($2::text IS NULL OR status = $2)
       ORDER BY created_at DESC
       LIMIT 200`,
@@ -144,45 +188,60 @@ export interface ProblemReportPatch {
   reporter_reply?: string | null;
 }
 
-/** The updated row plus the status it had before, so the caller can tell a real transition. */
+/**
+ * The updated row plus the status it had before, so the caller can tell a real transition.
+ * A status change leaves a platform.audit row (before → after) in the same transaction (CORE-227).
+ */
 export async function updateProblemReport(
   tenantSlug: string,
   id: string,
-  patch: ProblemReportPatch
+  patch: ProblemReportPatch,
+  actor: PlatformAuditActor
 ): Promise<{ row: ProblemReportRow; previousStatus: ProblemReportStatus } | null> {
-  const { rows } = await getDb().query<ProblemReportRow & { previous_status: ProblemReportStatus }>(
-    `WITH prev AS (
-       SELECT status AS previous_status FROM platform.problem_report WHERE id = $1 AND tenant_slug = $2 FOR UPDATE
-     )
-     UPDATE platform.problem_report
-        SET status         = COALESCE($3, status),
-            admin_note     = CASE WHEN $4 THEN $5 ELSE admin_note END,
-            tracker_ref    = CASE WHEN $6 THEN $7 ELSE tracker_ref END,
-            reporter_reply = CASE WHEN $8 THEN $9 ELSE reporter_reply END,
-            resolved_at    = CASE
-                               WHEN COALESCE($3, status) = 'resolved' THEN COALESCE(resolved_at, now())
-                               ELSE NULL
-                             END,
-            updated_at     = now()
-       FROM prev
-      WHERE id = $1 AND tenant_slug = $2
-      RETURNING ${PUBLIC_COLUMNS}, prev.previous_status`,
-    [
-      id,
-      tenantSlug,
-      patch.status ?? null,
-      patch.admin_note !== undefined,
-      patch.admin_note ?? null,
-      patch.tracker_ref !== undefined,
-      patch.tracker_ref ?? null,
-      patch.reporter_reply !== undefined,
-      patch.reporter_reply ?? null,
-    ]
-  );
-  const updated = rows[0];
-  if (!updated) return null;
-  const { previous_status: previousStatus, ...row } = updated;
-  return { row, previousStatus };
+  return inPlatformTransaction(async (client) => {
+    const { rows } = await client.query<ProblemReportRow & { previous_status: ProblemReportStatus }>(
+      `WITH prev AS (
+         SELECT status AS previous_status FROM platform.problem_report WHERE id = $1 AND tenant_slug = $2 FOR UPDATE
+       )
+       UPDATE platform.problem_report
+          SET status         = COALESCE($3, status),
+              admin_note     = CASE WHEN $4 THEN $5 ELSE admin_note END,
+              tracker_ref    = CASE WHEN $6 THEN $7 ELSE tracker_ref END,
+              reporter_reply = CASE WHEN $8 THEN $9 ELSE reporter_reply END,
+              resolved_at    = CASE
+                                 WHEN COALESCE($3, status) = 'resolved' THEN COALESCE(resolved_at, now())
+                                 ELSE NULL
+                               END,
+              updated_at     = now()
+         FROM prev
+        WHERE id = $1 AND tenant_slug = $2
+        RETURNING ${PUBLIC_COLUMNS}, prev.previous_status`,
+      [
+        id,
+        tenantSlug,
+        patch.status ?? null,
+        patch.admin_note !== undefined,
+        patch.admin_note ?? null,
+        patch.tracker_ref !== undefined,
+        patch.tracker_ref ?? null,
+        patch.reporter_reply !== undefined,
+        patch.reporter_reply ?? null,
+      ]
+    );
+    const updated = rows[0];
+    if (!updated) return null;
+    const { previous_status: previousStatus, ...row } = updated;
+    if (row.status !== previousStatus) {
+      await insertPlatformAudit(client, actor, {
+        action: "problem_report.status",
+        targetType: "problem_report",
+        targetId: id,
+        before: { status: previousStatus },
+        after: { status: row.status },
+      });
+    }
+    return { row, previousStatus };
+  });
 }
 
 /** The signed-in user's own reports in this tenant, newest first. */
@@ -222,6 +281,19 @@ export interface DiagnosticListRow {
   status: DiagnosticStatus;
   metadata: Record<string, unknown> | null;
   linked_reports: { id: string; number: number }[];
+  ticket: DiagnosticTicket | null;
+}
+
+/** The board ticket that tracks the fix of an error kind, as the Issues screen needs it (CORE-227). */
+export interface DiagnosticTicket {
+  key: string;
+  status: string;
+  branch: string | null;
+  status_changed_at: string;
+  artifact_url: string | null;
+  /** The pull request or the pre-filled compare page, once the branch is pushed. */
+  pr_url: string | null;
+  blocked_reason: string | null;
 }
 
 export async function listDiagnostics(filter: {
@@ -236,8 +308,22 @@ export async function listDiagnostics(filter: {
               SELECT json_agg(json_build_object('id', r.id, 'number', r.number) ORDER BY r.number)
                 FROM platform.problem_report r
                WHERE d.request_id IS NOT NULL AND d.request_id = ANY (r.request_ids)
-            ), '[]'::json) AS linked_reports
+            ), '[]'::json) AS linked_reports,
+            t.ticket
        FROM platform.diagnostics d
+       LEFT JOIN LATERAL (
+         SELECT json_build_object(
+                  'key', i.team_key || '-' || i.number,
+                  'status', i.status,
+                  'branch', i.branch,
+                  'status_changed_at', i.status_changed_at,
+                  'artifact_url', ${lastLinkOfKind("artifact")},
+                  'pr_url', ${lastLinkOfKind("pr")},
+                  'blocked_reason', ${BLOCKED_REASON}
+                ) AS ticket
+           FROM platform.work_item i
+          WHERE ${TICKET_OF_DIAGNOSTIC}
+       ) t ON true
       WHERE ($1::text IS NULL OR d.status = $1)
         AND ($2::text IS NULL OR d.env = $2)
         AND ($3::text IS NULL OR d.level = $3)
@@ -248,12 +334,28 @@ export async function listDiagnostics(filter: {
   return rows;
 }
 
-export async function setDiagnosticStatus(id: string, status: DiagnosticStatus): Promise<{ id: string; status: DiagnosticStatus } | null> {
-  const { rows } = await getDb().query<{ id: string; status: DiagnosticStatus }>(
-    `UPDATE platform.diagnostics SET status = $2 WHERE id = $1 RETURNING id, status`,
-    [id, status]
-  );
-  return rows[0] ?? null;
+/** Moves the error ticket and leaves a platform.audit row (before → after) in the same transaction (CORE-213). */
+export async function setDiagnosticStatus(
+  id: string,
+  status: DiagnosticStatus,
+  actor: PlatformAuditActor
+): Promise<{ id: string; status: DiagnosticStatus } | null> {
+  return inPlatformTransaction(async (client) => {
+    const before = await client.query<{ status: DiagnosticStatus }>(`SELECT status FROM platform.diagnostics WHERE id = $1 FOR UPDATE`, [id]);
+    if (!before.rows[0]) return null;
+    const { rows } = await client.query<{ id: string; status: DiagnosticStatus }>(
+      `UPDATE platform.diagnostics SET status = $2 WHERE id = $1 RETURNING id, status`,
+      [id, status]
+    );
+    await insertPlatformAudit(client, actor, {
+      action: "diagnostic.status",
+      targetType: "diagnostic",
+      targetId: id,
+      before: { status: before.rows[0].status },
+      after: { status },
+    });
+    return rows[0] ?? null;
+  });
 }
 
 /** Is there still an open (new / in progress) report from this user whose description starts with `prefix`? Dedups automatic reports (CORE-173). */

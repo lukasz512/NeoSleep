@@ -29,8 +29,7 @@
 
     <!-- Teleported to <body>, so its clicks never reach the card's toggle. -->
     <AppFormDialog v-model="lightbox" :title="title" :max-width="560" @close="lightbox = false">
-      <!-- No actions row under it, so the body needs its own bottom breathing room. -->
-      <div data-testid="addon-lightbox" class="pb-4">
+      <div data-testid="addon-lightbox">
         <img :src="image" :alt="title" class="addon-card__lightbox-img" @click="lightbox = false" />
         <p v-if="details" class="text-body-2 mt-4 mb-0">{{ details }}</p>
       </div>

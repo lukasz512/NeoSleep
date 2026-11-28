@@ -3,6 +3,7 @@ import { apiFetch } from "../../composables/useApi";
 import { useConfigStore } from "../../stores/config";
 import { useAuthStore } from "../../stores/auth";
 import { identityFields } from "./identityFields";
+import { countryField, languageField } from "./localeFields";
 import { loadTerritoryOptions } from "./territoryOptions";
 import { licenseNumberFields } from "./licenseNumberFields";
 import { inSection } from "./sections";
@@ -310,13 +311,8 @@ export const hcpFormFields: FormFieldDef[] = [
     default: "A",
     cols: 6,
   },
-  {
-    key: "region",
-    section: "territory",
-    type: "text",
-    labelKey: "user.hcp.form.region",
-    hidden: true,
-  },
+  // CORE-261: country follows the clinic (hcpFormDerive) but is visible and editable.
+  countryField("user.hcp.form.region"),
   {
     key: "territory_id",
     section: "territory",
@@ -328,14 +324,7 @@ export const hcpFormFields: FormFieldDef[] = [
     icon: "nav-territories",
     cols: 6,
   },
-  {
-    key: "language",
-    section: "profile",
-    type: "text",
-    labelKey: "user.hcp.form.language",
-    hidden: true,
-    default: () => useAuthStore().user?.language ?? "en",
-  },
+  languageField("user.hcp.form.language"),
   // PL PWZ / MX cédula — replaces the old generic "National ID" field
   // (national_ids.primary), migrated by apps/api/migrations/028 (NEO-51).
   ...inSection("profile", ...licenseNumberFields({ nestUnder: "national_ids" })),
@@ -382,7 +371,7 @@ export const hcpFormFields: FormFieldDef[] = [
     labelKey: "user.hcp.form.status",
     options: STATUS_OPTIONS,
     default: "pending_approval",
-    hidden: () => useAuthStore().user?.role !== "admin",
+    hidden: () => !["admin", "manager"].includes(useAuthStore().user?.role ?? ""),
     cols: 12,
   },
 ];

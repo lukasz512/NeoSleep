@@ -184,6 +184,10 @@ async function acceptInput(
   return {
     token,
     password: "correct-horse-battery-staple",
+    firstName: preview!.firstName ?? "",
+    lastName: preview!.lastName ?? "",
+    email: preview!.email,
+    phone: preview!.phone ?? "600100200",
     clinicName: "Accept Flow Clinic",
     clinicEmail: "clinic@example.com",
     clinicPhone: "600100200",
@@ -337,6 +341,103 @@ describe("AcceptPractitionerInviteCommand", () => {
           AcceptPractitionerInviteCommand(client, await acceptInput(client, token, override), META()),
         ).rejects.toMatchObject({ code: "VALIDATION_ERROR", field });
       }
+    });
+  }, 30000);
+});
+
+describe("AcceptPractitionerInviteCommand → NEO-270 person data", () => {
+  async function accept(overrides: Partial<AcceptInviteInput>, region: "PL" | "MX" = "PL") {
+    return withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const email = `qa-person-${uniqueSuffix()}@example.com`;
+      const { practitionerId, token } = await activateAndCaptureToken(ctx, email, { region });
+      const input = await acceptInput(client, token, overrides);
+      return { client, email, practitionerId, token, input };
+    });
+  }
+
+  it("previews the doctor's personal phone", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const { token } = await activateAndCaptureToken(ctx, `qa-person-${uniqueSuffix()}@example.com`, { region: "PL" });
+      expect((await ValidateInviteTokenQuery(client, token))?.phone).toBe("600100200");
+    });
+  }, 30000);
+
+  it("names the rejected person field by the key the page submits", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const { token } = await activateAndCaptureToken(ctx, `qa-person-${uniqueSuffix()}@example.com`, { region: "PL" });
+      const cases: [Partial<AcceptInviteInput>, string][] = [
+        [{ firstName: " " }, "firstName"],
+        [{ lastName: "" }, "lastName"],
+        [{ email: "not-an-email" }, "email"],
+        [{ phone: "" }, "phone"],
+      ];
+      for (const [override, field] of cases) {
+        await expect(
+          AcceptPractitionerInviteCommand(client, await acceptInput(client, token, override), META()),
+        ).rejects.toMatchObject({ code: "VALIDATION_ERROR", field });
+      }
+    });
+  }, 30000);
+
+  it("saves name, phone and a new login email, prints the new name + email on the contract, keeps the phone off it, and audits the change", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const { practitionerId, token } = await activateAndCaptureToken(ctx, `qa-person-${uniqueSuffix()}@example.com`, { region: "PL" });
+      const newEmail = `qa-new-${uniqueSuffix()}@example.com`;
+
+      const result = await AcceptPractitionerInviteCommand(
+        client,
+        await acceptInput(client, token, { firstName: "Anna", lastName: "Nowak", email: newEmail.toUpperCase(), phone: "+48 700 800 900" }),
+        META(),
+      );
+
+      expect(result.email).toBe(newEmail);
+      const row = await client.query<{ email: string; first_name: string; last_name: string; phone: string }>(
+        `SELECT i.email, i.first_name, i.last_name, i.phone FROM users u JOIN identities i ON i.id = u.identity_id WHERE u.id = $1`,
+        [result.userId],
+      );
+      expect(row.rows[0]).toEqual({ email: newEmail, first_name: "Anna", last_name: "Nowak", phone: "+48 700 800 900" });
+
+      const [, agreementOptions] = renderHtmlToPdfMock.mock.calls[0]!;
+      expect(JSON.stringify(agreementOptions.dataFields)).toContain("Anna Nowak");
+      expect(JSON.stringify(agreementOptions.dataFields)).toContain(newEmail);
+      expect(JSON.stringify(agreementOptions.dataFields)).not.toContain("700 800 900");
+
+      const audit = await client.query<{ entity_before: Record<string, string>; entity_after: Record<string, string> }>(
+        `SELECT entity_before, entity_after FROM audit_log WHERE user_id = $1 AND action = 'edit_person_details'`,
+        [result.userId],
+      );
+      expect(audit.rows).toHaveLength(1);
+      expect(audit.rows[0]!.entity_before).toMatchObject({ first_name: "Accept", last_name: "Flow", phone: "600100200" });
+      expect(audit.rows[0]!.entity_after).toMatchObject({ first_name: "Anna", last_name: "Nowak", phone: "+48 700 800 900", email: newEmail });
+      expect(practitionerId).toBeTruthy();
+    });
+  }, 30000);
+
+  it("writes no person audit entry when nothing about the person changed", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const { token } = await activateAndCaptureToken(ctx, `qa-person-${uniqueSuffix()}@example.com`, { region: "PL" });
+      const result = await AcceptPractitionerInviteCommand(client, await acceptInput(client, token), META());
+      const audit = await client.query(`SELECT 1 FROM audit_log WHERE user_id = $1 AND action = 'edit_person_details'`, [result.userId]);
+      expect(audit.rows).toHaveLength(0);
+    });
+  }, 30000);
+
+  it("refuses an email another user or doctor already has (NEO-111) and leaves the invite untouched", async () => {
+    await withTenant(TENANT_SLUG, async (client) => {
+      const ctx = await buildTestContext(client);
+      const taken = `qa-taken-${uniqueSuffix()}@example.com`;
+      await activateAndCaptureToken(ctx, taken, { region: "PL" });
+      const { practitionerId, token } = await activateAndCaptureToken(ctx, `qa-person-${uniqueSuffix()}@example.com`, { region: "PL" });
+
+      await expect(
+        AcceptPractitionerInviteCommand(client, await acceptInput(client, token, { email: taken }), META()),
+      ).rejects.toMatchObject({ code: "EMAIL_IN_USE", field: "email" });
+      expect((await getPractitionerById(client, practitionerId))?.status).toBe("invited");
     });
   }, 30000);
 });

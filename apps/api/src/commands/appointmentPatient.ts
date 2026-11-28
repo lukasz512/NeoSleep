@@ -19,7 +19,7 @@ import {
 } from "../db.js";
 import { insertPatientEmailSend } from "../db/patientEmailSend.js";
 import { AppError, ConflictError, ValidationError } from "../errors.js";
-import { sendAppointmentPatientEmail, type AppointmentEmailKind } from "../mailer.js";
+import { clinicZoneLabel, formatAppointmentStart, sendAppointmentPatientEmail, type AppointmentEmailKind } from "../mailer.js";
 import { notify } from "../notifications/notify.js";
 import { emailT } from "@neo/email";
 import { RESEND_FROM_EMAIL } from "../env.js";
@@ -156,11 +156,13 @@ export function appointmentCalendar(
 ): { ics: string; google: string; outlook: string } {
   const contact = appointmentContact(context);
   const clinicName = context.organization_name ?? emailT(locale, "email.questionnaireLink.yourClinic");
-  const summary = `${emailT(locale, "publicAppointment.title")} · ${clinicName}`;
+  // CORE-244: the title carries the clinic's hour and zone — a calendar app shows the viewer's own hour next to it.
+  const clinicHour = `${formatAppointmentStart(appointment.start_at, appointment.timezone, locale)} ${clinicZoneLabel(appointment.start_at, appointment.timezone, locale)}`;
+  const summary = `${emailT(locale, "publicAppointment.title")} · ${clinicName} · ${clinicHour}`;
   const contactLine = [contact.phone, contact.email].filter(Boolean).join(" · ");
   const description = contactLine ? `${emailT(locale, "email.appointment.contactToChange", { clinic: clinicName })} ${contactLine}` : null;
   const location = appointment.location_type === "online" ? appointment.online_url : context.organization_address;
-  const calendar = { startAt: appointment.start_at, endAt: appointment.end_at, summary, location, description };
+  const calendar = { startAt: appointment.start_at, endAt: appointment.end_at, timezone: appointment.timezone, summary, location, description };
   const organizerEmail = contact.email ?? RESEND_FROM_EMAIL ?? "no-reply@neosleepcare.com";
   return {
     ics: buildAppointmentIcs({
