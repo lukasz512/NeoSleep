@@ -8,6 +8,7 @@ import { apiFetch, backgroundApiFetch } from "./useApi";
 import type {
   WorkAttachment,
   WorkGitState,
+  WorkVerifyState,
   WorkItem,
   WorkItemDraft,
   WorkItemEvent,
@@ -31,6 +32,7 @@ export const WORK_BOARD_COLUMNS: readonly WorkStatus[] = [
   "approved",
   "building",
   "needs_review",
+  "verifying",
   "done",
 ];
 
@@ -136,6 +138,11 @@ export async function addWorkItemComment(key: string, body: string): Promise<Wor
   ).event;
 }
 
+/** Queues a fresh test run for a ticket (CORE-277); the CI workflow picks it up. */
+export async function rerunWorkVerify(key: string): Promise<WorkItem> {
+  return (await request<{ item: WorkItem }>("useWorkBoard.verify", `${BASE}/items/${encodeURIComponent(key)}/verify`, jsonInit("POST", {}))).item;
+}
+
 /** Case-insensitive match on key and title; an empty query matches everything. */
 export function matchesQuery(item: WorkItem, query: string): boolean {
   const q = query.trim().toLowerCase();
@@ -184,6 +191,17 @@ export const GIT_ICONS: Record<WorkGitState, string> = {
   prod: "mdi-rocket-launch-outline",
 };
 
+/** The verify badge (CORE-277): null when the ticket was never verified. */
+export function verifyMarker(item: WorkItem): WorkVerifyState | null {
+  return item.verify_state ?? null;
+}
+
+export const VERIFY_ICONS: Record<WorkVerifyState, string> = {
+  pending: "mdi-timer-sand",
+  pass: "mdi-check-decagram-outline",
+  fail: "mdi-alert-circle-outline",
+};
+
 /** A Needs Review ticket git disagrees with: nothing merged, or on prod and not held. */
 export function outOfStep(item: WorkItem): boolean {
   if (item.status !== "needs_review") return false;
@@ -202,6 +220,28 @@ export function closesByItself(item: WorkItem): boolean {
 export function reviewGroups(items: readonly WorkItem[]): { waiting: WorkItem[]; merged: WorkItem[] } {
   const waiting = items.filter((item) => !closesByItself(item)).sort((a, b) => a.status_changed_at.localeCompare(b.status_changed_at));
   return { waiting, merged: items.filter(closesByItself) };
+}
+
+/** Label that sets a Backlog ticket aside; the tidy run adds it after 60 untouched days (CORE-234). */
+export const LATER_LABEL = "later";
+
+/** Backlog in two groups (CORE-234): what is still meant to be done, and what was set aside. */
+export function backlogGroups(items: readonly WorkItem[]): { current: WorkItem[]; later: WorkItem[] } {
+  const isLater = (item: WorkItem) => item.labels.some((label) => label.toLowerCase() === LATER_LABEL);
+  return { current: items.filter((item) => !isLater(item)), later: items.filter(isLater) };
+}
+
+/**
+ * What a ticket still lacks to enter Approved (CORE-234), the same rule the API enforces: a
+ * priority and a Done when. A build given back from Building already passed it.
+ */
+export function approvedBlocker(
+  item: Pick<WorkItem, "status" | "priority" | "done_when">,
+  target: WorkStatus
+): "priority" | "done_when" | null {
+  if (target !== "approved" || item.status === "approved" || item.status === "building") return null;
+  if (!item.priority) return "priority";
+  return item.done_when?.trim() ? null : "done_when";
 }
 
 /** Handed over for review with no artifact to read (CORE-233). */

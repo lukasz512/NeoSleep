@@ -352,6 +352,13 @@ const ICONS = {
             <rect x="10" y="3" width="5" height="9" rx="1" />
             <rect x="17" y="3" width="4" height="18" rx="1" />`,
   },
+  // Speech bubble with a spark — NeoSleep AI (CORE-274).
+  "nav-ai": {
+    strokeWidth: 2,
+    paths: `<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />
+            <path d="M12 8v6" />
+            <path d="M9 11h6" />`,
+  },
   // Speech bubble with an exclamation mark — "report a problem / feedback" in the account menu.
   // The bubble is a circle around the viewBox centre (12, 12) with its tail at the lower left,
   // so the "!" sits in its middle (CORE-158).

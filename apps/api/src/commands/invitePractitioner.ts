@@ -40,7 +40,9 @@ import {
   StaleDocumentVersionError,
   ValidationError,
 } from "../errors.js";
+import { assertEmailNotTaken } from "../db/identityEmail.js";
 import { hashToken } from "../utils/hashToken.js";
+import { localeForCountry } from "../utils/patientEmailLocale.js";
 import { normalizeNationalIds } from "../utils/nationalIds.js";
 import { sendPartnerJoinThankYouEmail } from "../mailer.js";
 import { uploadPartnerDocument } from "../services/partnerDocuments.js";
@@ -81,13 +83,6 @@ import {
  */
 
 const BCRYPT_ROUNDS = 12;
-
-export function inferLanguage(region: string | null | undefined): string {
-  const r = (region || "").toUpperCase();
-  if (r === "PL") return "pl";
-  if (r === "MX") return "mx";
-  return "en";
-}
 
 /** Best-effort single display line from Organization's structured address columns — the
  * invite form still collects/edits clinic address as one free-text field (see
@@ -213,7 +208,7 @@ export async function InvitePractitionerCommand(
       title: lead.salutation,
       firstName,
       lastName,
-      language: inferLanguage(lead.region),
+      language: localeForCountry(lead.region),
       region: lead.region,
     },
     { name: ctx.user.name ?? "NeoSleep", email: ctx.user.email }
@@ -237,6 +232,8 @@ export interface InvitePreview {
   email: string;
   firstName: string | null;
   lastName: string | null;
+  /** The doctor's personal phone (identities.phone) — prefilled, editable, never printed in the contract (NEO-270). */
+  phone: string | null;
   /** Pre-fill for the registration form's clinic-details review step — all nullable, since it
    * depends on a rep/KAM having already created a proper HCO record linked to this practitioner
    * (practitioner.organization_id). Absent that, the invitee sees empty, still-editable fields. */
@@ -304,6 +301,7 @@ export async function ValidateInviteTokenQuery(client: PoolClient, token: string
     email: invite.email,
     firstName: invite.first_name,
     lastName: invite.last_name,
+    phone: invite.phone,
     clinicName: organization?.name ?? null,
     clinicEmail: organization?.email ?? null,
     clinicPhone: organization?.phone ?? null,
@@ -391,6 +389,13 @@ export async function GetPartnerDocumentPreviewQuery(
 export interface AcceptInviteInput {
   token: string;
   password: string;
+  /** NEO-270 — the doctor's own data, reviewed on the "Tus datos" card. */
+  firstName: string;
+  lastName: string;
+  /** Becomes the sign-in email when it differs from the invited one. */
+  email: string;
+  /** Personal phone: stored on the profile only, never printed in the contract. */
+  phone: string;
   clinicName: string;
   clinicEmail: string;
   clinicPhone: string;
@@ -452,6 +457,11 @@ export async function AcceptPractitionerInviteCommand(
   const tokenStr = input.token?.trim();
   if (!tokenStr) throw new ValidationError("Invitation token is required", "token");
   if (!input.password || input.password.length < 8) throw new ValidationError("Password must be at least 8 characters", "password");
+  if (!input.firstName?.trim()) throw new ValidationError("First name is required", "firstName");
+  if (!input.lastName?.trim()) throw new ValidationError("Last name is required", "lastName");
+  const newEmail = (input.email ?? "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) throw new ValidationError("A valid email is required", "email");
+  if (!input.phone?.trim()) throw new ValidationError("Phone is required", "phone");
   if (!input.clinicName?.trim()) throw new ValidationError("Clinic name is required", "clinicName");
   if (!input.clinicEmail?.trim()) throw new ValidationError("Clinic email is required", "clinicEmail");
   if (!input.clinicPhone?.trim()) throw new ValidationError("Clinic phone is required", "clinicPhone");
@@ -497,7 +507,13 @@ export async function AcceptPractitionerInviteCommand(
     throw new StaleDocumentVersionError();
   }
 
-  const signerName = `${invite.first_name ?? ""} ${invite.last_name ?? ""}`.trim() || invite.email;
+  // NEO-111: refuse an email another user or doctor holds — before any write.
+  await assertEmailNotTaken(client, newEmail, invite.identity_id);
+
+  const firstName = input.firstName.trim();
+  const lastName = input.lastName.trim();
+  const phone = input.phone.trim();
+  const signerName = `${firstName} ${lastName}`.trim();
   const signedAt = new Date();
   const counterpartySignedAt = invite.metadata?.counterparty_signed_at
     ? new Date(invite.metadata.counterparty_signed_at)
@@ -514,7 +530,7 @@ export async function AcceptPractitionerInviteCommand(
       clinicName: input.clinicName.trim(),
       taxId: input.taxId?.trim() ?? "",
       clinicAddress: input.billingAddress.trim(),
-      email: invite.email,
+      email: newEmail,
       practiceRole,
     },
     { counterpartySignedAt, signerSignedAt: signedAtLabel },
@@ -540,6 +556,37 @@ export async function AcceptPractitionerInviteCommand(
   const passwordHash = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
   await setUserPassword(client, user.id, passwordHash, false);
   await updateUser(client, user.id, { status: "active" });
+
+  // 2a. The doctor's own data (NEO-270). A changed email becomes the sign-in
+  // (login_email cleared so it can't shadow it); the change is audited.
+  const personBefore = {
+    first_name: invite.first_name,
+    last_name: invite.last_name,
+    email: invite.email,
+    phone: invite.phone,
+  };
+  const personAfter = { first_name: firstName, last_name: lastName, email: newEmail, phone };
+  const personChanged = (Object.keys(personAfter) as (keyof typeof personAfter)[]).some(
+    (key) => (personBefore[key] ?? "") !== personAfter[key],
+  );
+  if (personChanged) {
+    await updateUser(client, user.id, { first_name: firstName, last_name: lastName, phone });
+    if (personBefore.email !== newEmail) {
+      await client.query(`UPDATE identities SET email = $1, updated_at = now() WHERE id = $2`, [newEmail, invite.identity_id]);
+      await client.query(`UPDATE users SET login_email = NULL, updated_at = now() WHERE id = $1`, [user.id]);
+    }
+    await insertAuditLog(client, {
+      user_id: user.id,
+      action: "edit_person_details",
+      entity_type: "User",
+      entity_id: user.id,
+      entity_before: personBefore,
+      entity_after: personAfter,
+      user_ip: meta.ip,
+      user_agent: meta.userAgent,
+      request_id: meta.requestId,
+    });
+  }
 
   // 2b. This is the real "doctor accepted" moment — practitioner.status
   // only becomes "active" here, not when staff clicked Activate/Resend
@@ -764,11 +811,11 @@ export async function AcceptPractitionerInviteCommand(
 
   return {
     userId: user.id,
-    email: invite.email,
+    email: newEmail,
     locale: set.locale,
     title: practitioner?.salutation ?? null,
-    firstName: invite.first_name ?? practitioner?.first_name ?? null,
-    lastName: invite.last_name ?? practitioner?.last_name ?? null,
+    firstName,
+    lastName,
     region: practitioner?.region ?? user.region ?? null,
     ccEmail: set.signatory.ccEmail,
     documents: documents.map(({ type, filename, bytes }) => ({ type, filename, bytes })),

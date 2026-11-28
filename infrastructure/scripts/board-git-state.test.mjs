@@ -60,7 +60,7 @@ test("reports a complete snapshot with the agent token", async () => {
   await report({ items: ITEMS, config: CONFIG, fetchImpl: impl });
   assert.equal(calls[0].url, "https://api.test/api/v1/platform/work/git-state");
   assert.equal(calls[0].headers["X-Agent-Token"], "agent_x");
-  assert.deepEqual(calls[0].body, { items: ITEMS, complete: true, tidy: { branches: [] } });
+  assert.deepEqual(calls[0].body, { items: ITEMS, complete: true, verify: true, tidy: { branches: [] } });
 });
 
 test("lists the keys cited by remote branch names, without dev and prod", () => {

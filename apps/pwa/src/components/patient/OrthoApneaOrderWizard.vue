@@ -54,8 +54,10 @@
 
           <div v-if="order.dentistId" class="oa-wizard__ship-to" data-field="delivery" data-testid="ship-to">
             <p class="oa-wizard__field-label">{{ t("app.deviceOrder.delivery.title") }}</p>
-            <!-- Admin only, when the doctor has several clinics: ship to another one than the primary (NEO-210 D2). -->
-            <div v-if="clinicItems.length > 1" data-field="deliveryOrganizationId" class="mb-2">
+            <!-- NEO-265: the clinic (default) or another address, typed in. -->
+            <DeliveryChoice v-model:mode="deliveryMode" :address="customDelivery" :error-for="fieldError" class="mb-2" @update:field="setCustomField" />
+            <!-- When the doctor has several clinics: ship to another one than the primary (NEO-210 D2). -->
+            <div v-if="deliveryMode === 'clinic' && clinicItems.length > 1" data-field="deliveryOrganizationId" class="mb-2">
               <VSelect
                 :model-value="selectedClinicId"
                 :items="clinicItems"
@@ -68,14 +70,14 @@
                 @update:model-value="onClinicPicked"
               />
             </div>
-            <p v-if="contextLoading" class="text-body-medium text-medium-emphasis">{{ t("app.deviceOrder.delivery.loading") }}</p>
-            <address v-else-if="context?.delivery" class="oa-wizard__address">
+            <p v-if="deliveryMode === 'clinic' && contextLoading" class="text-body-medium text-medium-emphasis">{{ t("app.deviceOrder.delivery.loading") }}</p>
+            <address v-else-if="deliveryMode === 'clinic' && context?.delivery" class="oa-wizard__address">
               <strong>{{ context.delivery.name }}</strong><br />
               {{ context.delivery.address }}<br />
               {{ [context.delivery.postalCode, context.delivery.city].filter(Boolean).join(" ") }}<template v-if="context.delivery.countryCode">, {{ context.delivery.countryCode }}</template><br />
               {{ [context.delivery.phone, context.delivery.email].filter(Boolean).join(" · ") }}
             </address>
-            <AppInlineAlert v-if="deliveryMessage" type="error" class="mt-2" data-testid="ship-to-error">
+            <AppInlineAlert v-if="deliveryMode === 'clinic' && deliveryMessage" type="error" class="mt-2" data-testid="ship-to-error">
               {{ deliveryMessage }}
               <a v-if="recordHref && !contextFailed" :href="recordHref" target="_blank" rel="noopener" class="oa-wizard__alert-link">{{ t("app.deviceOrder.delivery.openRecord") }}</a>
               <AppButton v-if="contextFailed" variant="text" size="small" color="primary" @click="refreshContext(true)">{{ t("app.deviceOrder.delivery.retry") }}</AppButton>
@@ -90,7 +92,12 @@
             {{ labOrdersDisabledMessage }}
           </AppInlineAlert>
           <!-- A doctor has no step 1: a problem with their clinic's address shows here, with whom to contact (NEO-210). -->
-          <div v-if="isDoctor && doctorDeliveryMessage" data-field="delivery" class="mb-4">
+          <!-- NEO-265: a doctor also picks the clinic or another address, here instead of step 1. -->
+          <div v-if="isDoctor" class="mb-4" data-testid="ship-to">
+            <p class="oa-wizard__field-label">{{ t("app.deviceOrder.delivery.title") }}</p>
+            <DeliveryChoice v-model:mode="deliveryMode" :address="customDelivery" :error-for="fieldError" @update:field="setCustomField" />
+          </div>
+          <div v-if="isDoctor && deliveryMode === 'clinic' && doctorDeliveryMessage" data-field="delivery" class="mb-4">
             <AppInlineAlert type="error" :title="t('app.deviceOrder.delivery.doctorTitle')" data-testid="doctor-address-error">
               {{ doctorDeliveryMessage }}
               <AppButton v-if="contextFailed" variant="text" size="small" color="primary" @click="refreshContext(true)">{{ t("app.deviceOrder.delivery.retry") }}</AppButton>
@@ -555,6 +562,7 @@ import {
   type ProductCode,
   type SequenceUnit,
 } from "@device-order";
+import DeliveryChoice from "./DeliveryChoice.vue";
 import AppButton from "../AppButton.vue";
 import AppIcon from "../AppIcon.vue";
 import IconOptionPicker, { type IconOption } from "./IconOptionPicker.vue";
@@ -666,6 +674,14 @@ const TOOLTIP_IMG = {
 const FIELD_LABELS: Readonly<Record<string, string>> = {
   dentistId: "app.orthoApneaOrder.form.doctor",
   delivery: "app.deviceOrder.delivery.title",
+  "delivery.name": "app.deviceOrder.delivery.field.name",
+  "delivery.address": "app.deviceOrder.delivery.field.address",
+  "delivery.city": "app.deviceOrder.delivery.field.city",
+  "delivery.postalCode": "app.deviceOrder.delivery.field.postalCode",
+  "delivery.countryCode": "app.deviceOrder.delivery.field.countryCode",
+  "delivery.province": "app.deviceOrder.delivery.field.province",
+  "delivery.phone": "app.deviceOrder.delivery.field.phone",
+  "delivery.email": "app.deviceOrder.delivery.field.email",
   productCode: "app.orthoApneaOrder.selectProduct",
   retrusionMaxMm: "app.orthoApneaOrder.form.retrusionMax",
   protrusionMaxMm: "app.orthoApneaOrder.form.protrusionMax",
@@ -695,6 +711,8 @@ const FIELD_KEYS = Object.keys(FIELD_LABELS).sort((a, b) => b.length - a.length)
 
 /** An issue path → the field that shows it (longest matching prefix), e.g. sequence.values.1 → sequence. */
 function fieldKeyOf(path: string): string {
+  // The clinic's address is one block; only a typed-in address has a field per part.
+  if (deliveryMode.value === "clinic" && isDeliveryPath(path)) return "delivery";
   return FIELD_KEYS.find((k) => path === k || path.startsWith(`${k}.`)) ?? path;
 }
 
@@ -736,6 +754,8 @@ const {
   contextLoading,
   contextFailed,
   deliveryOrganizationId,
+  deliveryMode,
+  customDelivery,
   submitLoading,
   serverIssues,
   labOrdersDisabled,
@@ -882,7 +902,7 @@ function onDoctorPicked(value: unknown) {
   order.dentistId = typeof value === "string" ? value : "";
 }
 
-/** The doctor's clinics as an admin's choice (the API sends them to an admin only), primary marked. */
+/** The doctor's clinics as the choice of an admin or doctor (the API sends them to both), primary marked. */
 const clinicItems = computed(() =>
   (context.value?.deliveryOptions ?? []).map((o) => ({
     value: o.organizationId,
@@ -1009,7 +1029,13 @@ function issueMessage(issue: OrderIssue): string {
 }
 
 function messageFor(issue: OrderIssue): string {
+  // A typed-in address is the doctor's to fix: each field says what is wrong, no clinic-level notice.
+  if (deliveryMode.value === "custom") return issueMessage(issue);
   return isDeliveryPath(issue.path) ? ((isDoctor.value ? doctorDeliveryMessage.value : deliveryMessage.value) ?? issueMessage(issue)) : issueMessage(issue);
+}
+
+function setCustomField(field: keyof typeof customDelivery, value: string) {
+  customDelivery[field] = value;
 }
 
 /** The message under a field — its first visible error. */

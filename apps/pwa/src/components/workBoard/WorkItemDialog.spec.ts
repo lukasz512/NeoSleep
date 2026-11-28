@@ -44,6 +44,7 @@ function item(overrides: Partial<WorkItem> = {}): WorkItem {
     git_state: null,
     git_sha: null,
     git_checked_at: null,
+    verify_state: null, verify_checked_at: null, verify_run_url: null, verify_results: null, fix_item: null,
     ...overrides,
   };
 }
@@ -327,6 +328,44 @@ describe("WorkItemDialog open/close (CORE-195)", () => {
   });
 });
 
+describe("WorkItemDialog Approved rule (CORE-234)", () => {
+  async function pick(chip: "status" | "priority", text: string): Promise<void> {
+    (q(`work-item-${chip}`) as HTMLElement).click();
+    await flushPromises();
+    const option = Array.from(document.querySelectorAll(`[data-testid='work-item-${chip}-menu'] .v-list-item`)).find((el) => el.textContent?.includes(text));
+    (option as HTMLElement).click();
+    await flushPromises();
+  }
+
+  it("says what is missing and keeps Save off until the ticket may enter Approved", async () => {
+    serve(item({ status: "backlog", priority: 0, done_when: "- It works" }));
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(q("work-item-approved-blocker")).toBeNull();
+    await pick("status", "Approved");
+    expect(q("work-item-approved-blocker")?.textContent).toBe("Approved takes a ticket only with a priority.");
+    expect(q("work-item-approved-blocker")?.getAttribute("role")).toBe("alert");
+    expect((q("work-item-save") as HTMLButtonElement).disabled).toBe(true);
+    await pick("priority", "High");
+    expect(q("work-item-approved-blocker")).toBeNull();
+    (q("work-item-save") as HTMLButtonElement).click();
+    await flushPromises();
+    expect(JSON.parse(String(calls.find((c) => c.method === "PATCH")!.body))).toEqual({ status: "approved", priority: 2 });
+  });
+
+  it("asks for a Done when once the priority is there", async () => {
+    serve(item({ status: "backlog", priority: 2, done_when: null }));
+    await render({ itemKey: "CORE-9", creating: false });
+    await pick("status", "Approved");
+    expect(q("work-item-approved-blocker")?.textContent).toBe("Approved takes a ticket only with a Done when.");
+  });
+
+  it("leaves a ticket that is already in Approved alone", async () => {
+    serve(item({ status: "approved", priority: 0, done_when: null }));
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(q("work-item-approved-blocker")).toBeNull();
+  });
+});
+
 describe("WorkItemDialog git state and hold (CORE-221)", () => {
   it("shows where the code is and saves Hold as a label", async () => {
     serve(item({ status: "needs_review", git_state: "prod", git_sha: "0123456789abcdef", labels: ["session"] }));
@@ -357,6 +396,55 @@ describe("WorkItemDialog git state and hold (CORE-221)", () => {
     serve(null);
     await render({ itemKey: null, creating: true });
     expect(q("work-item-hold")).toBeNull();
+  });
+});
+
+describe("WorkItemDialog verification (CORE-277)", () => {
+  const failed = () =>
+    item({
+      status: "needs_review",
+      verify_state: "fail",
+      verify_run_url: "https://ci.test/run/7",
+      fix_item: "CORE-10",
+      verify_results: [
+        { ac: "Rejects a move without an artifact", test: "workBoard.spec", status: "pass" },
+        { ac: "Shows the badge", test: "WorkItemCard.spec", status: "fail" },
+      ],
+    });
+
+  it("shows the result, the AC to test rows, the run and the fix ticket", async () => {
+    serve(failed());
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(q("work-item-verify")?.textContent).toContain("Tests failed");
+    const rows = Array.from(document.querySelectorAll("[data-testid='work-item-verify-row']"));
+    expect(rows.map((r) => r.getAttribute("data-status"))).toEqual(["pass", "fail"]);
+    expect(rows[0].textContent).toContain("Rejects a move without an artifact");
+    expect(rows[1].textContent).toContain("WorkItemCard.spec");
+    expect(q("work-item-verify-run")?.getAttribute("href")).toBe("https://ci.test/run/7");
+    expect(q("work-item-verify-fix")?.textContent).toContain("CORE-10");
+  });
+
+  it("queues the tests again and reports the updated ticket", async () => {
+    serve(failed());
+    const wrapper = await render({ itemKey: "CORE-9", creating: false });
+    (q("work-item-verify-rerun") as HTMLElement).click();
+    await flushPromises();
+    expect(calls.some((c) => c.method === "POST" && c.path.endsWith("/items/CORE-9/verify"))).toBe(true);
+    expect(wrapper.emitted("saved")).toBeTruthy();
+  });
+
+  it("offers no re-run while the tests are queued", async () => {
+    serve(item({ status: "verifying", verify_state: "pending" }));
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(q("work-item-verify")?.textContent).toContain("Tests queued");
+    expect(q("work-item-verify-rerun")).toBeNull();
+  });
+
+  it("shows nothing for a ticket that was never verified", async () => {
+    serve(item({ status: "needs_review" }));
+    await render({ itemKey: "CORE-9", creating: false });
+    expect(q("work-item-verify")).toBeNull();
+    expect(q("work-item-verify-section")).toBeNull();
   });
 });
 
@@ -594,7 +682,7 @@ describe("WorkItemDialog status and priority marks (CORE-225)", () => {
     const groups = Array.from(menu.querySelectorAll("[data-testid='work-item-menu-group']")).map((el) => el.textContent?.trim());
     expect(groups).toEqual(["Intake", "Specification", "Delivery", "Closed"]);
     const glyphs = Array.from(menu.querySelectorAll(".v-list-item svg[data-status]")).map((el) => el.getAttribute("data-status"));
-    expect(glyphs).toEqual(["triage", "backlog", "to_spec", "spec_ready", "approved", "building", "needs_review", "done", "canceled"]);
+    expect(glyphs).toEqual(["triage", "backlog", "to_spec", "spec_ready", "approved", "building", "needs_review", "verifying", "done", "canceled"]);
     expect(menu.querySelector(".v-list-item--active")!.textContent).toContain("Building");
   });
 

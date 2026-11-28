@@ -15,6 +15,7 @@ function item(done_when: string | null): WorkItem {
     status: "building", priority: 0, labels: [], links: [], branch: null, assignee: null, due_date: null, source: "manual",
     created_at: "2026-11-10T10:00:00Z", updated_at: "2026-11-10T10:00:00Z", status_changed_at: "2026-11-10T10:00:00Z", completed_at: null,
     git_state: null, git_sha: null, git_checked_at: null,
+    verify_state: null, verify_checked_at: null, verify_run_url: null, verify_results: null, fix_item: null,
   };
 }
 
@@ -180,5 +181,36 @@ describe("WorkItemCard priority mark (CORE-225)", () => {
   it("gives only an urgent card the leading edge", () => {
     expect(renderPriority(1).classes()).toContain("work-card--urgent");
     expect(renderPriority(2).classes()).not.toContain("work-card--urgent");
+  });
+});
+
+/** The card shows the post-landing test result (CORE-277). */
+describe("WorkItemCard verify badge (CORE-277)", () => {
+  function renderVerify(verify_state: WorkItem["verify_state"], dense = false) {
+    const i18n = createI18n({ legacy: false, locale: "en", messages: { en } });
+    const vuetify = createVuetify({ components: vuetifyComponents });
+    return mount(WorkItemCard, {
+      props: { item: { ...item(null), status: "needs_review", verify_state } },
+      global: {
+        plugins: [i18n, vuetify],
+        provide: { [WORK_BOARD_CONTEXT as symbol]: { colors: ref({}), dense: ref(dense), now: ref(Date.parse("2026-11-16T12:00:00Z")) } },
+      },
+    });
+  }
+  const badge = (wrapper: ReturnType<typeof renderVerify>) => wrapper.find("[data-testid='work-card-verify']");
+
+  it("shows no badge when the ticket was never verified", () => {
+    expect(badge(renderVerify(null)).exists()).toBe(false);
+  });
+
+  it("labels a pass, marks a fail as an alert, and shows pending", () => {
+    expect(badge(renderVerify("pass")).text()).toBe("Tests passed");
+    expect(badge(renderVerify("fail")).text()).toBe("Tests failed");
+    expect(badge(renderVerify("fail")).classes()).toContain("work-card__git--alert");
+    expect(badge(renderVerify("pending")).text()).toBe("Tests queued");
+  });
+
+  it("also shows on a compact card", () => {
+    expect(badge(renderVerify("fail", true)).exists()).toBe(true);
   });
 });

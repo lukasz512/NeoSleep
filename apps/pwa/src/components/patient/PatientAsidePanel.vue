@@ -34,7 +34,7 @@
             :aria-label="t('app.patients.detail.aside.hcEmail')"
             :title="patient.email ? t('app.patients.detail.aside.hcEmail') : t('app.patients.detail.aside.hcNoEmail')"
             data-testid="next-step-email"
-            @click="signFor = 'email'"
+            @click="openEmailSign"
           >
             <AppIcon name="mail" />
           </AppButton>
@@ -58,7 +58,13 @@
           {{ patientItems.length ? t("app.patients.detail.aside.qr") : t("app.patients.detail.aside.allDone") }}
         </AppButton>
       </template>
-      <DoctorSignatureDialog :model-value="signFor !== null" :purpose="signFor ?? 'print'" @update:model-value="signFor = null" @print="onSigned" />
+      <DoctorSignatureDialog
+        :model-value="signFor !== null"
+        :purpose="signFor ?? 'print'"
+        :language="emailLanguage"
+        @update:model-value="signFor = null"
+        @print="onSigned"
+      />
     </section>
 
     <p class="patient-aside__facts" :aria-label="t('app.patients.detail.aside.keyFacts')">
@@ -223,6 +229,14 @@ const printing = ref(false);
 const emailing = ref(false);
 /** Which action the signature pad is open for (a doctor signs before printing or emailing, NEO-255/258). */
 const signFor = ref<"print" | "email" | null>(null);
+/** CORE-268: the patient's own mail language, the starting point of the picker next to the signature pad. */
+const emailLanguage = ref("en");
+
+async function openEmailSign(): Promise<void> {
+  signFor.value = "email";
+  const data = await checklistApi.loadEmailSends();
+  if (data) emailLanguage.value = data.language;
+}
 
 async function printHistoria(signature?: string): Promise<void> {
   printing.value = true;
@@ -238,7 +252,7 @@ function onPrint(): void {
   else void printHistoria();
 }
 
-async function onSigned(signature: string | null): Promise<void> {
+async function onSigned(signature: string | null, language?: string): Promise<void> {
   const purpose = signFor.value;
   signFor.value = null;
   if (purpose === "print") {
@@ -248,7 +262,7 @@ async function onSigned(signature: string | null): Promise<void> {
   if (purpose !== "email" || !signature) return;
   emailing.value = true;
   try {
-    await checklistApi.sendHistoriaByEmail(signature);
+    await checklistApi.sendHistoriaByEmail(signature, language);
   } finally {
     emailing.value = false;
   }

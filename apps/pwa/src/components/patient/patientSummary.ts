@@ -33,6 +33,7 @@ export interface PatientDetailsTabPatient {
   practitioner_specialties?: string[] | null;
   status?: string;
   region?: string;
+  language?: string | null;
   territory_path?: { id: string; name: string; code: string | null; kind: string }[] | null;
   ahi_baseline?: number | null;
   /** NEO-231: entered once on the card; STOP-BANG takes it from here. */

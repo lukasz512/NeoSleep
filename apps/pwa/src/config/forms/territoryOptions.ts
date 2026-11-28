@@ -16,6 +16,14 @@ export interface TerritoryOptionRow {
   country_code: string;
 }
 
+/** Country of every territory the pickers have loaded, so a form can derive region and language from the chosen one (CORE-261). */
+const territoryCountries = new Map<string, string>();
+
+/** Country code of a loaded territory, or "" for a global/unknown one. */
+export function countryOfTerritory(id: unknown): string {
+  return typeof id === "string" ? (territoryCountries.get(id) ?? "") : "";
+}
+
 /**
  * @param kinds Restrict to these hierarchy levels. Private — kept separate
  *   from the two exported loaders below so each keeps the plain
@@ -29,6 +37,10 @@ async function fetchTerritoryOptions(kinds?: string[]): Promise<FormFieldOption[
   const res = await apiFetch(`/api/v1/territory?limit=-1${query ? `&${query}` : ""}`, { handleErrors: false });
   if (!res.ok) return [];
   const json = (await res.json()) as { items?: TerritoryOptionRow[] };
+  for (const t of json.items ?? []) {
+    // A global territory has no country of its own: it must not set a region or language.
+    territoryCountries.set(t.id, t.kind === "global" ? "" : t.country_code);
+  }
   return (json.items ?? []).map((t) => ({
     title: t.kind === "global" ? t.name : (t.code ? `${t.name} (${t.code}) — ${t.country_code}` : `${t.name} — ${t.country_code}`),
     value: t.id,

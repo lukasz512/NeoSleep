@@ -41,7 +41,7 @@ Details for each step live in `references/`; read the matching file when you rea
 6. **Implement** - follow CLAUDE.md unconditionally, only what the ticket asks. If step 5 flagged `ambiguous`, run the double-implementation pass: `references/double-implementation.md`.
 7. **Self-check** (run it yourself, do not rely on the Stop hook): DB reachability probe, build compiled packages, lint, typecheck, tests, depcruise, docs diff, spec for risk-touched files, then the backward consistency check (7.5). Full list: `references/self-check.md`.
 8. **On any self-check failure**: stop, no fix, no retry. `git reset --hard`, remove untracked files, delete the local branch, comment the exact failing checks (`Blocked:`), end the turn.
-9. **On success**: commit (agent co-author trailer), branch `worker/<ticket-id>-<slug>` from `dev`, `git push -u origin`, never push dev/prod, never open a PR. Completion Artifact with the marker file, pre-filled compare URL in the board comment, wait for CI, move to `needs_review`. Full details: `references/on-success.md`.
+9. **On success**: commit (agent co-author trailer), branch `worker/<ticket-id>-<slug>` from `dev`, `git push -u origin`, never push dev/prod, never open a PR. Completion Artifact with the marker file, pre-filled compare URL in the board comment, wait for CI, add the `ci` run link (with the artifact link it is required, CORE-277), move to `needs_review`. Full details: `references/on-success.md`.
 
 ---
 

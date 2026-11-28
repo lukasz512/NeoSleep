@@ -3,6 +3,7 @@ import { apiFetch } from "../../composables/useApi";
 import { useConfigStore } from "../../stores/config";
 import { useAuthStore } from "../../stores/auth";
 import { identityFields, GENDERED_SALUTATIONS, salutationMarket, type SalutationMarket } from "./identityFields";
+import { countryField, languageField } from "./localeFields";
 import { loadTerritoryOptions } from "./territoryOptions";
 import { useSpecialtyLabel } from "../../composables/useSpecialtyLabel";
 
@@ -33,14 +34,6 @@ const STATUS_OPTIONS: FormFieldOption[] = [
 export const DEFAULT_HEIGHT_CM: Partial<Record<string, Record<"male" | "female", number>>> = {
   MX: { male: 165, female: 155 },
 };
-
-async function loadRegionOptions() {
-  const configStore = useConfigStore();
-  if (configStore.options.regions.length === 0) {
-    await configStore.loadOptions();
-  }
-  return configStore.regionItems;
-}
 
 /**
  * The bulk `?limit=-1` fetch below is still capped at the API's page-size
@@ -260,16 +253,10 @@ export const patientFormFields: FormFieldDef[] = [
     // A full row (it stood alone anyway), so it never pairs with AHI and leaves Talla alone (NEO-241).
     cols: 12,
   },
-  {
-    key: "region",
-    section: "territory",
-    type: "autocomplete",
-    labelKey: "app.patients.form.region",
-    options: loadRegionOptions,
-    // NEO-226: doctors don't place patients in the territory tree (for now).
-    hidden: isDoctor,
-    cols: 6,
-  },
+  // CORE-261: country + language are visible to everyone who may edit them
+  // (admin, manager, a patient's doctor); the API enforces the same rule.
+  countryField("app.patients.form.region"),
+  languageField("app.patients.form.language"),
   {
     key: "territory_id",
     section: "territory",

@@ -118,6 +118,17 @@
           {{ t(`workBoard.git.${git}`) }}
         </VChip>
 
+        <VChip
+          v-if="verify"
+          :prepend-icon="VERIFY_ICONS[verify]"
+          :color="verify === 'fail' ? 'error' : undefined"
+          variant="outlined"
+          size="small"
+          data-testid="work-item-verify"
+        >
+          {{ t(`workBoard.verify.${verify}`) }}
+        </VChip>
+
         <VMenu v-if="developmentCount">
           <template #activator="{ props: activator }">
             <VChip v-bind="activator" prepend-icon="mdi-source-branch" variant="tonal" size="small" data-testid="work-item-development">
@@ -251,6 +262,36 @@
       <p v-if="rejectionText" class="work-dialog__rejected" role="alert" data-testid="work-item-rejected">{{ rejectionText }}</p>
       <p v-else class="work-dialog__hint">{{ t(dragging ? "workBoard.dialog.dropHere" : "workBoard.dialog.attachHint") }}</p>
 
+      <div v-if="verify && !session.creating" class="work-dialog__section" data-testid="work-item-verify-section">
+        <span class="work-dialog__label">{{ t("workBoard.verify.title") }}</span>
+        <ul v-if="current?.verify_results?.length" class="work-dialog__verify-rows" data-testid="work-item-verify-rows">
+          <li v-for="(row, index) in current.verify_results" :key="index" class="work-dialog__verify-row" :data-status="row.status" data-testid="work-item-verify-row">
+            <VIcon
+              :icon="row.status === 'pass' ? 'mdi-check-circle-outline' : 'mdi-close-circle-outline'"
+              :color="row.status === 'pass' ? 'success' : 'error'"
+              size="16"
+              :aria-label="t(row.status === 'pass' ? 'workBoard.verify.rowPass' : 'workBoard.verify.rowFail')"
+            />
+            <span>{{ row.ac }}</span>
+            <span class="work-dialog__hint">{{ row.test }}</span>
+          </li>
+        </ul>
+        <div class="work-dialog__verify-actions">
+          <a v-if="current?.verify_run_url" :href="current.verify_run_url" target="_blank" rel="noopener" data-testid="work-item-verify-run">{{ t("workBoard.verify.openRun") }}</a>
+          <span v-if="current?.fix_item" data-testid="work-item-verify-fix">{{ t("workBoard.verify.fixTicket", { key: current.fix_item }) }}</span>
+          <VBtn
+            v-if="verify !== 'pending'"
+            size="small"
+            variant="text"
+            :loading="rerunning"
+            data-testid="work-item-verify-rerun"
+            @click="rerun"
+          >
+            {{ t("workBoard.verify.rerun") }}
+          </VBtn>
+        </div>
+      </div>
+
       <div v-if="!session.creating" class="work-dialog__section">
         <span class="work-dialog__label">{{ t("workBoard.dialog.history") }}</span>
         <AppSkeletonLines v-if="!loaded" :lines="2" data-testid="work-item-history-skeleton" />
@@ -347,6 +388,7 @@
       </AppFormDialog>
     </div>
     <template #actions>
+      <p v-if="approvedText" class="work-dialog__rejected" role="alert" data-testid="work-item-approved-blocker">{{ approvedText }}</p>
       <VSpacer />
       <AppButton variant="text" @click="emit('close')">{{ t("app.common.close") }}</AppButton>
       <AppButton color="primary" variant="flat" :loading="saving" :disabled="!canSave" data-testid="work-item-save" @click="save">
@@ -366,11 +408,15 @@ import AppSkeletonLines from "../AppSkeletonLines.vue";
 import AppErrorState from "../AppErrorState.vue";
 import {
   GIT_ICONS,
+  VERIFY_ICONS,
+  verifyMarker,
+  rerunWorkVerify,
   HOLD_LABEL,
   WORK_PRIORITIES,
   WORK_STATUS_OPTIONS,
   gitMarker,
   addWorkItemComment,
+  approvedBlocker,
   createWorkItem,
   deleteWorkAttachment,
   fetchAttachmentUrl,
@@ -576,6 +622,25 @@ const listChips = computed<ListChip[]>(() => {
 const hiddenSections = computed(() => SECTION_FIELDS.filter((name) => !shown[name]));
 /** Where the code is, as CI last reported it (CORE-221). */
 const git = computed(() => (current.value ? gitMarker(current.value) : null));
+/** The post-landing test result (CORE-277). */
+const verify = computed(() => (current.value ? verifyMarker(current.value) : null));
+const rerunning = ref(false);
+/** Queues the checks again; the board returns the ticket to Verifying. */
+async function rerun(): Promise<void> {
+  if (!current.value || rerunning.value) return;
+  rerunning.value = true;
+  try {
+    const item = await rerunWorkVerify(current.value.key);
+    if (loaded.value) loaded.value.item = item;
+    else seed.value = item;
+    showItem(item);
+    emit("saved", item);
+  } catch {
+    // benign: useWorkBoard already reported it
+  } finally {
+    rerunning.value = false;
+  }
+}
 /** Hold only means something while the ticket is open. */
 const canHold = computed(() => !session.creating && !!current.value && form.status !== "done" && form.status !== "canceled");
 /** Hold is the label `hold`, so the button and the label picker edit the same list. */
@@ -624,8 +689,15 @@ const patch = computed<WorkItemPatch>(() => {
   return out;
 });
 
+/** Why the ticket may not enter Approved yet (CORE-234); the API refuses the same save. */
+const approvedText = computed(() => {
+  const from = session.creating ? "backlog" : current.value?.status;
+  const missing = from ? approvedBlocker({ status: from, priority: form.priority, done_when: form.done_when }, form.status) : null;
+  return missing ? t(`workBoard.approved.${missing}`) : "";
+});
+
 const canSave = computed(() => {
-  if (!form.title.trim()) return false;
+  if (!form.title.trim() || approvedText.value) return false;
   return session.creating ? !!form.team : Object.keys(patch.value).length > 0;
 });
 const canComment = computed(() => !!comment.value.trim() || commentQueue.pending.value.length > 0);
@@ -1091,6 +1163,30 @@ function eventText(event: WorkItemEvent): string {
   border-radius: 50%;
   background: rgb(var(--v-theme-surface));
   box-shadow: 0 0 0 1px rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.work-dialog__verify-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.work-dialog__verify-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+
+.work-dialog__verify-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.875rem;
 }
 
 .work-dialog__hint,

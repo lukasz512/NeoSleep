@@ -439,7 +439,7 @@ patientRouter.post(
     const origin = resolveFrontendOrigin(req);
     const result = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return SendQuestionnaireEmailCommand(ctx, id, origin, (req.body ?? {}) as { items?: unknown; copy_to_me?: unknown });
+      return SendQuestionnaireEmailCommand(ctx, id, origin, (req.body ?? {}) as { items?: unknown; copy_to_me?: unknown; language?: unknown });
     });
     res.status(201).json({ ...result.request, sent_to: result.sent_to, url: result.url });
   })
@@ -455,7 +455,7 @@ patientRouter.post(
     const origin = resolveFrontendOrigin(req);
     const result = await withTenant(slug, async (client) => {
       const ctx = await buildContext(req, client, slug);
-      return SendHistoriaClinicaEmailCommand(ctx, id, origin, { doctorSignature: req.body?.doctorSignature });
+      return SendHistoriaClinicaEmailCommand(ctx, id, origin, { doctorSignature: req.body?.doctorSignature, language: req.body?.language });
     });
     res.status(201).json({ sent_to: result.sent_to, expires_at: result.link.expires_at });
   })
@@ -618,7 +618,7 @@ patientRouter.patch(
       email?: string; phone?: string;
       gender?: string | null; date_of_birth?: string | null;
       practitioner_id?: string; hcp_id?: string;
-      status?: string; region?: string; territory_id?: string | null;
+      status?: string; region?: string; language?: string; territory_id?: string | null;
       country_code?: string | null;
       ahi_baseline?: number; cpap_device?: string; medical_record?: string;
       height_cm?: number | string | null;
@@ -640,6 +640,7 @@ patientRouter.patch(
         hcp_id:          body.hcp_id           !== undefined ? body.hcp_id            : undefined,
         status:          typeof body.status    === "string"  ? body.status            : undefined,
         region:          typeof body.region    === "string"  ? body.region            : undefined,
+        language:        typeof body.language  === "string"  ? body.language          : undefined,
         territory_id:    body.territory_id === null ? null : typeof body.territory_id === "string" ? body.territory_id || null : undefined,
         country_code:    body.country_code     !== undefined ? body.country_code      : undefined,
         ahi_baseline:    typeof body.ahi_baseline === "number" ? body.ahi_baseline    : undefined,

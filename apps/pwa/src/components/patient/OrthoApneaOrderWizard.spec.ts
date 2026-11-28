@@ -213,6 +213,129 @@ describe("OrthoApneaOrderWizard — step 1: admin picks which of the doctor's cl
   });
 });
 
+/** NEO-265: ship to the clinic (default) or to an address typed in — 1:1 with OrthoApnea's own radio. */
+describe("OrthoApneaOrderWizard — ship to the clinic or to another address (NEO-265)", () => {
+  const ADDRESS = { name: "Jan Kowalski", address: "ul. Prosta 1", city: "Warszawa", postalCode: "00-001", countryCode: "PL", phone: "+48 600 000 000", email: "jan@example.com" };
+  const FIELDS = Object.keys(ADDRESS) as (keyof typeof ADDRESS)[];
+
+  async function chooseOtherAddress() {
+    await click($("input[type=radio][value=custom]"));
+  }
+  async function fillAddress(values: Partial<typeof ADDRESS> = {}) {
+    const merged = { ...ADDRESS, ...values };
+    for (const f of FIELDS) await type(`[data-field="delivery.${f}"]`, merged[f]);
+  }
+  function postBody() {
+    return JSON.parse(String((apiFetch.mock.calls.find((c) => c[0] === "/api/v1/device-orders")![1] as RequestInit).body));
+  }
+
+  it("defaults to the clinic: no address form until the other address is chosen", async () => {
+    stubBackend();
+    await openWizard();
+    expect(document.querySelector('[data-field="delivery.name"]')).toBeNull();
+    expect(($("input[type=radio][value=clinic]") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("choosing the other address shows the form and hides the clinic's address", async () => {
+    stubBackend();
+    await openWizard();
+    await chooseOtherAddress();
+    for (const f of FIELDS) expect(document.querySelector(`[data-field="delivery.${f}"]`)).not.toBeNull();
+    expect($("[data-testid=ship-to]").textContent).not.toContain("Av. Reforma 1");
+  });
+
+  it("a filled address orders with custom_delivery and no delivery_organization_id", async () => {
+    stubBackend();
+    await openWizard();
+    await chooseOtherAddress();
+    await fillAddress();
+    await fillStep2();
+    await next();
+    await next();
+    await confirm();
+    const body = postBody();
+    expect(body.custom_delivery).toEqual(ADDRESS);
+    expect(body).not.toHaveProperty("delivery_organization_id");
+  });
+
+  it("an empty address blocks Next with a message under each required field", async () => {
+    stubBackend();
+    await openWizard();
+    await chooseOtherAddress();
+    await next();
+    expect(stepTitle()).toBe(messages["app.orthoApneaOrder.step1.title"]);
+    for (const f of FIELDS) expect(fieldMessage(`delivery.${f}`)).toBe(messages["app.deviceOrder.errors.required"]);
+  });
+
+  it("a name over 40 characters is rejected, naming the limit", async () => {
+    stubBackend();
+    await openWizard();
+    await chooseOtherAddress();
+    await fillAddress({ name: "x".repeat(41) });
+    await next();
+    expect(stepTitle()).toBe(messages["app.orthoApneaOrder.step1.title"]);
+    expect(fieldMessage("delivery.name")).toBe(msg("app.deviceOrder.errors.tooLong", { max: 40 }));
+  });
+
+  it("the province is required only for CA, ES, DE and US", async () => {
+    stubBackend();
+    await openWizard();
+    await chooseOtherAddress();
+    await fillAddress({ countryCode: "PL" });
+    await next();
+    expect(stepTitle()).toBe(messages["app.orthoApneaOrder.step2.title"]);
+  });
+
+  it("a Spanish address without a province stays on the step and asks for it", async () => {
+    stubBackend();
+    await openWizard();
+    await chooseOtherAddress();
+    await fillAddress({ countryCode: "ES" });
+    await next();
+    expect(stepTitle()).toBe(messages["app.orthoApneaOrder.step1.title"]);
+    expect(fieldMessage("delivery.province")).toBe(messages["app.deviceOrder.errors.required"]);
+  });
+
+  it("switching back to the clinic orders to the clinic again", async () => {
+    stubBackend();
+    await openWizard();
+    await chooseOtherAddress();
+    await fillAddress();
+    await click($("input[type=radio][value=clinic]"));
+    await fillStep2();
+    await next();
+    await next();
+    await confirm();
+    expect(postBody()).not.toHaveProperty("custom_delivery");
+  });
+
+  it("a doctor sees the same choice on their first step, clinics included", async () => {
+    stubBackend({
+      context: () =>
+        response(200, {
+          dentistId: "doc-self",
+          delivery: { ...DELIVERY, organizationId: "org-1" },
+          deliveryOptions: [{ organizationId: "org-1", name: DELIVERY.name, city: DELIVERY.city, isPrimary: true }],
+          deliveryIssues: [],
+          minDesiredDate: "2026-10-21",
+          rulesVersion: "1",
+        }),
+    });
+    await openWizard("doctor");
+    expect(stepTitle()).toBe(messages["app.orthoApneaOrder.step2.title"]);
+    expect(($("input[type=radio][value=clinic]") as HTMLInputElement).checked).toBe(true);
+    await chooseOtherAddress();
+    await fillAddress();
+    await type('[data-field="retrusionMaxMm"]', "-2");
+    await type('[data-field="protrusionMaxMm"]', "6");
+    await type("[data-testid=sp-mm]", "2");
+    await next();
+    await next();
+    await confirm();
+    expect(postBody().custom_delivery).toEqual(ADDRESS);
+  });
+});
+
 describe("OrthoApneaOrderWizard — step 1: doctor and ship-to", () => {
   it("opens without any error — errors wait for the first Next", async () => {
     stubBackend({ doctors: [] });
@@ -234,13 +357,14 @@ describe("OrthoApneaOrderWizard — step 1: doctor and ship-to", () => {
     expect(notify).not.toHaveBeenCalled();
   });
 
-  it("shows the doctor's HCO read-only — no alternative-address choice", async () => {
+  it("shows the doctor's HCO by default, with the clinic selected in the clinic / other-address choice", async () => {
     stubBackend();
     await openWizard();
 
     expect($("[data-testid=ship-to]").textContent).toContain("Clínica Centro");
     expect($("[data-testid=ship-to]").textContent).toContain("Av. Reforma 1");
-    expect(document.querySelector("input[type=radio]")).toBeNull();
+    expect(($("input[type=radio][value=clinic]") as HTMLInputElement).checked).toBe(true);
+    expect(($("input[type=radio][value=custom]") as HTMLInputElement).checked).toBe(false);
     expect(apiFetch).toHaveBeenCalledWith("/api/v1/device-orders/context?dentist_id=doc-1&product_code=002", expect.anything());
   });
 

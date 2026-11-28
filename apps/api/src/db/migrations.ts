@@ -1,7 +1,8 @@
 import { readFileSync, readdirSync } from "fs";
 import { fileURLToPath } from "url";
 import { join, dirname } from "path";
-import { getDb } from "./connection.js";
+import type { PoolClient } from "pg";
+import { createSessionPool } from "./connection.js";
 
 const DEFAULT_MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), "../../migrations");
 
@@ -21,7 +22,16 @@ const MIGRATIONS_LOCK_KEY = 4_512_045;
  * applied but unrecorded (which would re-run it on the next start).
  */
 export async function runMigrations(migrationsDir: string = DEFAULT_MIGRATIONS_DIR): Promise<void> {
-  const client = await getDb().connect();
+  // Own session-mode connection: the advisory lock must stay on one server connection for the
+  // whole run, even when runtime queries go through the transaction pooler (CORE-266).
+  const pool = createSessionPool();
+  let client: PoolClient;
+  try {
+    client = await pool.connect();
+  } catch (err) {
+    await pool.end().catch(() => undefined);
+    throw err;
+  }
   let hadError = false;
   try {
     await client.query("SELECT pg_advisory_lock($1)", [MIGRATIONS_LOCK_KEY]);
@@ -66,5 +76,6 @@ export async function runMigrations(migrationsDir: string = DEFAULT_MIGRATIONS_D
     // same pattern as withTenant() (a broken connection must never go back into the pool).
     if (!hadError) await client.query("SELECT pg_advisory_unlock($1)", [MIGRATIONS_LOCK_KEY]).catch(() => undefined);
     client.release(hadError);
+    await pool.end().catch(() => undefined);
   }
 }

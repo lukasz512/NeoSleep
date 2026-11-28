@@ -241,21 +241,27 @@ const deliveryShape = z.object({
   city: z.string().trim().min(1),
   postalCode: z.string().trim().min(1),
   countryCode: z.string().trim().length(2),
+  province: z.string().trim().optional(),
   phone: z.string().trim().min(1),
   email: z.string().trim().min(1).pipe(z.email()),
 });
 
+/** Countries where OA requires a province on a delivery address (rules §1.2). */
+export const PROVINCE_REQUIRED_COUNTRIES: readonly string[] = ["CA", "ES", "DE", "US"];
+
 export function validateDeliveryAddress(input: Partial<DeliveryAddress> | null | undefined): OrderIssue[] {
   const parsed = deliveryShape.safeParse(input ?? {});
-  if (parsed.success) return [];
-  return parsed.error.issues.map((issue) => {
+  const needsProvince = PROVINCE_REQUIRED_COUNTRIES.includes((input?.countryCode ?? "").trim().toUpperCase()) && !(input?.province ?? "").trim();
+  const provinceIssue: OrderIssue[] = needsProvince ? [{ path: "delivery.province", code: "required" }] : [];
+  if (parsed.success) return provinceIssue;
+  return [...parsed.error.issues.map((issue): OrderIssue => {
     const path = `delivery.${issue.path.join(".")}`;
     const field = issue.path[0];
     if (issue.code === "too_big" && field === "name") return { path, code: "tooLong", params: { max: 40 } };
     if (field === "email" && issue.code !== "too_small" && issue.code !== "invalid_type") return { path, code: "emailInvalid" };
     if (issue.code === "too_small" || (issue.code === "invalid_type" && valueAt(input ?? {}, issue.path) === undefined)) return { path, code: "required" };
     return { path, code: "invalid" };
-  });
+  }), ...provinceIssue];
 }
 
 /** Errors only for the given paths (prefix match) — the wizard validates one step at a time. */

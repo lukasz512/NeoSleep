@@ -3,6 +3,7 @@ import { requirePatientInScope } from "./entityAccess.js";
 import { listPatientEmailSends, type PatientEmailSend } from "../db/patientEmailSend.js";
 import { getPatientPdfContext } from "../db/patientPdfContext.js";
 import { maskEmail } from "../utils/maskEmail.js";
+import { patientEmailLocale } from "../utils/patientEmailLocale.js";
 
 export type PatientEmailSendView = Pick<
   PatientEmailSend,
@@ -18,7 +19,7 @@ export type PatientEmailSendView = Pick<
 export async function GetPatientEmailSendsQuery(
   ctx: TenantContext,
   patientId: string
-): Promise<{ recipient: string | null; sends: PatientEmailSendView[] }> {
+): Promise<{ recipient: string | null; language: string; sends: PatientEmailSendView[] }> {
   await requirePatientInScope(ctx, patientId);
   const context = await getPatientPdfContext(ctx.client, patientId, ctx.user.id);
   const email = context?.patient_email?.trim();
@@ -33,5 +34,7 @@ export async function GetPatientEmailSendsQuery(
     created_at,
     questionnaire_request_id,
   }));
-  return { recipient: email ? maskEmail(email) : null, sends };
+  // CORE-268: the send dialog preselects the recipient's mail language.
+  const language = patientEmailLocale(context?.patient_language ?? null, context?.patient_region ?? null);
+  return { recipient: email ? maskEmail(email) : null, language, sends };
 }

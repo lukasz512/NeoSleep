@@ -213,6 +213,18 @@ describe("validateDeliveryAddress — the doctor's HCO must be complete (OA KJ)"
   ])("blocks: %s", (_name, patch, expected) => {
     expect(codes(validateDeliveryAddress({ ...hco, ...patch }))).toEqual([expected]);
   });
+  describe("province by country (rules §1.2: required only for CA/ES/DE/US)", () => {
+    it.each(["CA", "ES", "DE", "US"])("requires a province for %s", (countryCode) => {
+      expect(codes(validateDeliveryAddress({ ...hco, countryCode }))).toEqual(["delivery.province:required"]);
+      expect(validateDeliveryAddress({ ...hco, countryCode, province: "Madrid" })).toEqual([]);
+    });
+    it.each(["MX", "PL", "TH"])("does not ask for a province for %s", (countryCode) => {
+      expect(validateDeliveryAddress({ ...hco, countryCode })).toEqual([]);
+    });
+    it("matches the country case-insensitively", () => {
+      expect(codes(validateDeliveryAddress({ ...hco, countryCode: "es" }))).toEqual(["delivery.province:required"]);
+    });
+  });
   it("lists every missing field when the HCO has no address at all", () => {
     expect(validateDeliveryAddress({ name: "Clínica" }).map((i) => i.path)).toEqual([
       "delivery.address",

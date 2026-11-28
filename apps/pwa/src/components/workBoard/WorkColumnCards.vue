@@ -37,6 +37,41 @@
       </template>
     </template>
   </template>
+  <!-- Backlog: what was set aside as "later" is folded below the rest (CORE-234). -->
+  <template v-else-if="status === 'backlog'">
+    <WorkItemCard
+      v-for="item in backlog.current"
+      :key="item.id"
+      :item="item"
+      :draggable="draggable"
+      @open="(key) => emit('open', key)"
+      @move="(key, step) => emit('move', key, step)"
+      @label="(name) => emit('label', name)"
+    />
+    <template v-if="backlog.later.length">
+      <button
+        type="button"
+        class="work-cards__group work-cards__fold"
+        :aria-expanded="laterOpen"
+        data-testid="work-backlog-later-toggle"
+        @click="laterOpen = !laterOpen"
+      >
+        <VIcon :icon="laterOpen ? 'mdi-chevron-down' : 'mdi-chevron-right'" size="16" aria-hidden="true" />
+        {{ t("workBoard.backlog.later") }} <span class="work-cards__count">{{ backlog.later.length }}</span>
+      </button>
+      <template v-if="laterOpen">
+        <WorkItemCard
+          v-for="item in backlog.later"
+          :key="item.id"
+          :item="item"
+          :draggable="draggable"
+          @open="(key) => emit('open', key)"
+          @move="(key, step) => emit('move', key, step)"
+          @label="(name) => emit('label', name)"
+        />
+      </template>
+    </template>
+  </template>
   <template v-else>
     <WorkItemCard
       v-for="item in shown"
@@ -57,13 +92,14 @@
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import WorkItemCard from "./WorkItemCard.vue";
-import { reviewGroups } from "../../composables/useWorkBoard";
+import { backlogGroups, reviewGroups } from "../../composables/useWorkBoard";
 import type { WorkItem, WorkStatus } from "../../types/workBoard";
 
 /**
  * The cards of one status, for a column, a phone tab or a list section. Needs Review comes in
  * two groups (CORE-233): "Waiting for you" (not merged, or on hold) with the longest wait
- * first, and "Merged, closes by itself", folded until asked. Done shows its newest few.
+ * first, and "Merged, closes by itself", folded until asked. Backlog folds the tickets labeled
+ * `later` the same way (CORE-234). Done shows its newest few.
  */
 const props = withDefaults(defineProps<{ status: WorkStatus; items: readonly WorkItem[]; draggable?: boolean }>(), { draggable: true });
 const emit = defineEmits<{ open: [key: string]; move: [key: string, step: -1 | 1]; label: [name: string] }>();
@@ -71,6 +107,9 @@ const { t } = useI18n();
 
 const review = computed(() => reviewGroups(props.items));
 const mergedOpen = ref(false);
+
+const backlog = computed(() => backlogGroups(props.items));
+const laterOpen = ref(false);
 
 /** Done keeps growing (all of Linear's history lands there), so it shows the newest few until asked. */
 const DONE_PREVIEW = 20;

@@ -36,21 +36,48 @@ function poolMax(): number {
   return Number.isInteger(n) && n > 0 ? n : 25;
 }
 
-export function getDb(): Pool {
-  if (db) return db;
-  const url = process.env.DATABASE_URL;
-  if (!url?.trim()) {
-    throw new DatabaseError("getDb", new Error("DATABASE_URL is not set — cannot start without a database connection"));
-  }
-  db = new Pool({
+function createPool(url: string, max: number, min: number): Pool {
+  return new Pool({
     connectionString: url,
-    max: poolMax(),
-    min: 2,
+    max,
+    min,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 15_000,
     statement_timeout: 30_000,
     application_name: "neocrm-api",
   });
+}
+
+/**
+ * A one-connection pool on DATABASE_URL (session mode) for work that needs a session: the
+ * migration runner's pg_advisory_lock lives as long as its connection, which a transaction
+ * pooler would hand to someone else mid-run. The caller must end() it.
+ */
+export function createSessionPool(): Pool {
+  const url = process.env.DATABASE_URL;
+  if (!url?.trim()) {
+    throw new DatabaseError("createSessionPool", new Error("DATABASE_URL is not set"));
+  }
+  const pool = createPool(url, 1, 0);
+  pool.on("error", (err) => console.error("[session-pool] idle client error:", err.message));
+  return pool;
+}
+
+/**
+ * Runtime queries use DATABASE_POOL_URL (Supabase transaction pooler, port 6543, CORE-266)
+ * when it is set: a request then holds a server connection only while its transaction runs,
+ * so the 15-slot session pooler can no longer be exhausted (prod outage 2026-11-16).
+ * Without it the runtime falls back to DATABASE_URL (session mode), as before. Runtime SQL
+ * is transaction-safe: tenant scoping uses SET LOCAL and the advisory locks are
+ * pg_advisory_xact_lock. Only the migration runner needs a session (createSessionPool).
+ */
+export function getDb(): Pool {
+  if (db) return db;
+  const url = process.env.DATABASE_POOL_URL?.trim() || process.env.DATABASE_URL;
+  if (!url?.trim()) {
+    throw new DatabaseError("getDb", new Error("DATABASE_URL is not set — cannot start without a database connection"));
+  }
+  db = createPool(url, poolMax(), 2);
 
   // Pool-level error handler — REQUIRED in Node 15+.
   // Without this, a connection-level error (e.g. Postgres restarted) becomes an

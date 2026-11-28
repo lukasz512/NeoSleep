@@ -100,6 +100,8 @@ export const routes: RouteRecordRaw[] = [
   // Platform work board (CORE-177): every team's tickets, platform admins only (`platformOnly` hides the nav
   // entry from tenant admins; the API answers them 403 anyway).
   { path: "/platform/board", name: "work-board", component: () => import("../views/WorkBoardView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin", "support"], platformOnly: true } },
+  // NeoSleep AI stage 1 (CORE-274): admin-only Q&A over the product docs. The API enforces the role too.
+  { path: "/ai", name: "ai", component: () => import("../views/AiChatView.vue"), meta: { layout: "app", requiresAuth: true, roles: ["admin"] } },
   { path: "/:pathMatch(.*)*", redirect: "/dashboard" },
 ];
 

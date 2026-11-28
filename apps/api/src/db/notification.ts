@@ -1,5 +1,6 @@
 import type { PoolClient } from "pg";
 import { DatabaseError } from "../errors.js";
+import { patientEmailLocale } from "../utils/patientEmailLocale.js";
 
 /**
  * Notification Center — in-app inbox. See ADR-012.
@@ -328,11 +329,18 @@ export async function getActiveAdminManagerIdentityIds(client: PoolClient): Prom
   }
 }
 
-/** The recipient's UI language (identities.language), for rendering copy. */
+/**
+ * The recipient's language for notification copy: identities.language resolved by the same function
+ * mail uses (CORE-261), so a notification and an email to one person can never diverge.
+ */
 export async function getIdentityLanguage(client: PoolClient, identityId: string): Promise<string | null> {
   try {
-    const { rows } = await client.query<{ language: string }>("SELECT language FROM identities WHERE id = $1", [identityId]);
-    return rows[0]?.language ?? null;
+    const { rows } = await client.query<{ language: string; region: string | null; country_code: string | null }>(
+      "SELECT language, region, country_code FROM identities WHERE id = $1",
+      [identityId]
+    );
+    const row = rows[0];
+    return row ? patientEmailLocale(row.language, row.region ?? row.country_code) : null;
   } catch (err) {
     throw new DatabaseError("getIdentityLanguage", err);
   }

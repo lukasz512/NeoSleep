@@ -8,6 +8,10 @@
 // JSON file: [{"label": "...", "text": "..."}]. Exit 1 when any marker is
 // missing or the site/chunks don't load.
 //
+// A marker must be a string the code names literally: a data-testid, a CSS
+// class or an i18n key. UI copy cannot be a marker: i18n messages are compiled
+// at build time, so their text never appears in the bundle as written.
+//
 // Usage:
 //   node infrastructure/scripts/smoke-dev-bundle.mjs \
 //     --url https://pwa-dev.neosleepcare.com \
@@ -26,9 +30,11 @@ for (let i = 0; i < args.length; i++) {
     const eq = raw.indexOf("=");
     markers.push(eq > 0 ? { label: raw.slice(0, eq), text: raw.slice(eq + 1) } : { label: raw, text: raw });
   } else if (args[i] === "--markers") {
-    // Either a plain [{label,text}] array, or an Artifact marker file carrying "smokeMarkers".
+    // Either a plain [{label,text}] array, or an Artifact marker file carrying "smokeMarkers"
+    // (the same array, or a {label: text} object).
     const parsed = JSON.parse(fs.readFileSync(args[++i], "utf8"));
-    markers.push(...(Array.isArray(parsed) ? parsed : parsed.smokeMarkers ?? []));
+    const list = Array.isArray(parsed) ? parsed : (parsed.smokeMarkers ?? []);
+    markers.push(...(Array.isArray(list) ? list : Object.entries(list).map(([label, text]) => ({ label, text }))));
   }
 }
 if (markers.length === 0) {
@@ -70,4 +76,11 @@ for (const { label, text } of markers) {
   console.log(`${ok ? "OK  " : "MISS"}  ${label}`);
 }
 console.log(`\n${base} — ${seen.size} files scanned, ${markers.length - missing}/${markers.length} markers found.`);
+if (missing) {
+  console.error(
+    "\nA missing marker is not always a missing deploy. UI copy cannot be a marker: i18n messages are " +
+      "compiled, so their text is never in the bundle. Use a string the code names literally: " +
+      "a data-testid, a CSS class or an i18n key.",
+  );
+}
 process.exit(missing ? 1 : 0);

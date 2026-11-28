@@ -35,6 +35,8 @@ export interface Patient {
   height_cm: number | null;
   cpap_device: string | null;
   medical_record: string | null;
+  /** identities.language: the one source of this patient's mail and notification language (CORE-261). */
+  language: string;
   region: string;
   territory_id: string | null;
   territory_name: string | null;
@@ -106,6 +108,7 @@ export interface PatientUpdate {
   cpap_device?: string;
   medical_record?: string;
   status?: string;
+  language?: string;
   region?: string;
   territory_id?: string | null;
   country_code?: string | null;
@@ -123,7 +126,7 @@ const PATIENT_SELECT_COLS = `
   i.title AS salutation, i.first_name, i.last_name, i.email, i.phone,
   i.gender, to_char(i.date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
   pr.primary_specialty AS practitioner_specialty, pr.specialties AS practitioner_specialties,
-  COALESCE(i.region, '') AS region, i.territory_id, t.name AS territory_name,
+  COALESCE(i.region, '') AS region, i.language, i.territory_id, t.name AS territory_name,
   pi.title AS practitioner_salutation, pi.first_name AS practitioner_first_name, pi.last_name AS practitioner_last_name`.trim();
 
 // Shared FROM/JOIN fragment for the two read queries below — resolves the
@@ -159,6 +162,7 @@ type PatientRow = {
   height_cm: string | null;
   cpap_device: string | null;
   medical_record: string | null;
+  language: string;
   region: string;
   territory_id: string | null;
   territory_name: string | null;
@@ -201,6 +205,7 @@ function serialize(row: PatientRow): Patient & { name: string } {
     cpap_device: row.cpap_device,
     medical_record: row.medical_record,
     region: row.region,
+    language: row.language,
     territory_id: row.territory_id,
     territory_name: row.territory_name,
     status: row.status,
@@ -384,6 +389,7 @@ export async function updatePatient(
       email: "email",
       phone: "phone",
       region: "region",
+      language: "language",
       territory_id: "territory_id",
       country_code: "country_code",
       gender: "gender",

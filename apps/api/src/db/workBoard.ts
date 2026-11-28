@@ -1,6 +1,10 @@
 import type { PoolClient } from "pg";
 import { getDb } from "./connection.js";
-import { inPlatformTransaction, insertPlatformAudit, type PlatformAuditActor } from "./platformAudit.js";
+import {
+  inPlatformTransaction,
+  insertPlatformAudit,
+  type PlatformAuditActor,
+} from "./platformAudit.js";
 
 /**
  * Platform-schema SQL for the work board (CORE-177, docs/stories/platform-work-board.md).
@@ -17,12 +21,19 @@ export const WORK_STATUSES = [
   "approved",
   "building",
   "needs_review",
+  "verifying",
   "done",
   "canceled",
 ] as const;
 export type WorkStatus = (typeof WORK_STATUSES)[number];
 
-export const WORK_LINK_KINDS = ["artifact", "spec", "pr", "ci", "other"] as const;
+export const WORK_LINK_KINDS = [
+  "artifact",
+  "spec",
+  "pr",
+  "ci",
+  "other",
+] as const;
 export type WorkLinkKind = (typeof WORK_LINK_KINDS)[number];
 
 export type WorkActorKind = "human" | "agent" | "session" | "import";
@@ -43,7 +54,16 @@ export interface WorkLink {
 }
 
 /** The label palette; the PWA maps each key to a theme colour. Same list as the CHECK in migration 068. */
-export const WORK_LABEL_COLORS = ["blue", "teal", "green", "amber", "orange", "red", "pink", "purple"] as const;
+export const WORK_LABEL_COLORS = [
+  "blue",
+  "teal",
+  "green",
+  "amber",
+  "orange",
+  "red",
+  "pink",
+  "purple",
+] as const;
 export type WorkLabelColor = (typeof WORK_LABEL_COLORS)[number];
 
 /** Marks a ticket a Claude Code session created (CORE-187). Never a catalog label. */
@@ -60,11 +80,43 @@ export interface WorkLabelRow {
 export const WORK_GIT_STATES = ["none", "dev", "prod"] as const;
 export type WorkGitState = (typeof WORK_GIT_STATES)[number];
 
+/** How the post-landing test run of a ticket stands (CORE-277). null = never verified. */
+export const WORK_VERIFY_STATES = ["pending", "pass", "fail"] as const;
+export type WorkVerifyState = (typeof WORK_VERIFY_STATES)[number];
+
+/** One line of the AC → test map a verification reports (CORE-277). */
+export interface WorkVerifyResult {
+  ac: string;
+  test: string;
+  status: "pass" | "fail";
+}
+
+/** Priority of the fix ticket a failed verification creates (1 = urgent … 4 = low; 0 = none). */
+export const VERIFY_FIX_PRIORITY = 2;
+
 /** Keeps a ticket where it is when the board closes or tidies tickets (CORE-221, CORE-223). */
 export const HOLD_LABEL = "hold";
 
 /** Days a ticket may sit in Building without a branch before the tidy returns it to Backlog (CORE-223). */
 export const BUILDING_WITHOUT_BRANCH_DAYS = 3;
+
+/** Sets a Backlog ticket aside: the board folds it under "Later" (board-upkeep-r1 P3, CORE-234). */
+export const LATER_LABEL = "later";
+
+/** Days a Backlog ticket may go untouched before the tidy labels it `later` (CORE-234). */
+export const BACKLOG_UNTOUCHED_DAYS = 60;
+
+/** Tickets all sessions together may move from Backlog to Approved per 7 days (core-234-decisions D2). */
+export const SESSION_APPROVED_PER_WEEK = 3;
+
+/** What a backlog review may decide about one ticket (CORE-234). */
+export const WORK_REVIEW_DECISIONS = [
+  "keep",
+  "later",
+  "cancel",
+  "shipped",
+] as const;
+export type WorkReviewDecision = (typeof WORK_REVIEW_DECISIONS)[number];
 
 export interface WorkTeamRow {
   key: string;
@@ -106,6 +158,13 @@ export interface WorkItemRow {
   git_state: WorkGitState | null;
   git_sha: string | null;
   git_checked_at: string | null;
+  /** null until the first verification is queued (CORE-277). */
+  verify_state: WorkVerifyState | null;
+  verify_checked_at: string | null;
+  verify_run_url: string | null;
+  verify_results: WorkVerifyResult[] | null;
+  /** Key of the fix ticket a failed verification created. */
+  fix_item: string | null;
 }
 
 export interface WorkItemEventRow {
@@ -123,25 +182,33 @@ const ITEM_COLUMNS = `id, team_key || '-' || number AS key, team_key, number, ti
   done_when, status, priority, labels, links, branch, assignee, to_char(due_date, 'YYYY-MM-DD') AS due_date,
   source, linear_identifier, external_ref, created_by,
   created_at, updated_at, status_changed_at, completed_at, git_state, git_sha, git_checked_at,
+  verify_state, verify_checked_at, verify_run_url, verify_results, fix_item,
   (SELECT max(e.created_at) FROM platform.work_item_event e
     WHERE e.item_id = work_item.id AND e.actor_kind = 'session') AS session_active_at`;
 
 /** CORE-12 → { team: "CORE", number: 12 }; null when the key is not shaped like one. */
-export function parseWorkItemKey(key: string): { team: string; number: number } | null {
-  const match = /^([A-Z][A-Z0-9]{1,9})-(\d{1,7})$/.exec(key.trim().toUpperCase());
+export function parseWorkItemKey(
+  key: string,
+): { team: string; number: number } | null {
+  const match = /^([A-Z][A-Z0-9]{1,9})-(\d{1,7})$/.exec(
+    key.trim().toUpperCase(),
+  );
   return match ? { team: match[1]!, number: Number(match[2]) } : null;
 }
 
 export async function listWorkTeams(): Promise<WorkTeamRow[]> {
   const { rows } = await getDb().query<WorkTeamRow>(
     `SELECT key, name, kind, company_id, sort_order FROM platform.work_team
-      WHERE NOT archived ORDER BY sort_order, key`
+      WHERE NOT archived ORDER BY sort_order, key`,
   );
   return rows;
 }
 
 export async function workTeamExists(key: string): Promise<boolean> {
-  const { rows } = await getDb().query(`SELECT 1 FROM platform.work_team WHERE key = $1 AND NOT archived`, [key]);
+  const { rows } = await getDb().query(
+    `SELECT 1 FROM platform.work_team WHERE key = $1 AND NOT archived`,
+    [key],
+  );
   return rows.length > 0;
 }
 
@@ -150,37 +217,47 @@ export interface WorkItemFilter {
   statuses?: readonly WorkStatus[] | null;
 }
 
-export async function listWorkItems(filter: WorkItemFilter = {}): Promise<WorkItemRow[]> {
+export async function listWorkItems(
+  filter: WorkItemFilter = {},
+): Promise<WorkItemRow[]> {
   const { rows } = await getDb().query<WorkItemRow>(
     `SELECT ${ITEM_COLUMNS} FROM platform.work_item
       WHERE ($1::text IS NULL OR team_key = $1)
         AND ($2::text[] IS NULL OR status = ANY($2))
       ORDER BY priority = 0, priority, status_changed_at DESC`,
-    [filter.team ?? null, filter.statuses ?? null]
+    [filter.team ?? null, filter.statuses ?? null],
   );
   return rows;
 }
 
-export async function getWorkItem(team: string, number: number): Promise<WorkItemRow | null> {
+export async function getWorkItem(
+  team: string,
+  number: number,
+): Promise<WorkItemRow | null> {
   const { rows } = await getDb().query<WorkItemRow>(
     `SELECT ${ITEM_COLUMNS} FROM platform.work_item WHERE team_key = $1 AND number = $2`,
-    [team, number]
+    [team, number],
   );
   return rows[0] ?? null;
 }
 
-export async function getWorkItemByExternalRef(ref: string): Promise<WorkItemRow | null> {
-  const { rows } = await getDb().query<WorkItemRow>(`SELECT ${ITEM_COLUMNS} FROM platform.work_item WHERE external_ref = $1`, [
-    ref,
-  ]);
+export async function getWorkItemByExternalRef(
+  ref: string,
+): Promise<WorkItemRow | null> {
+  const { rows } = await getDb().query<WorkItemRow>(
+    `SELECT ${ITEM_COLUMNS} FROM platform.work_item WHERE external_ref = $1`,
+    [ref],
+  );
   return rows[0] ?? null;
 }
 
-export async function listWorkItemEvents(itemId: string): Promise<WorkItemEventRow[]> {
+export async function listWorkItemEvents(
+  itemId: string,
+): Promise<WorkItemEventRow[]> {
   const { rows } = await getDb().query<WorkItemEventRow>(
     `SELECT id, kind, from_status, to_status, body, actor, actor_kind, created_at
        FROM platform.work_item_event WHERE item_id = $1 ORDER BY created_at, id`,
-    [itemId]
+    [itemId],
   );
   return rows;
 }
@@ -189,19 +266,34 @@ async function insertEvent(
   client: PoolClient,
   itemId: string,
   actor: WorkActor,
-  event: { kind: WorkItemEventRow["kind"]; from_status?: WorkStatus | null; to_status?: WorkStatus | null; body?: string | null }
+  event: {
+    kind: WorkItemEventRow["kind"];
+    from_status?: WorkStatus | null;
+    to_status?: WorkStatus | null;
+    body?: string | null;
+  },
 ): Promise<void> {
   await client.query(
     `INSERT INTO platform.work_item_event (item_id, kind, from_status, to_status, body, actor, actor_kind)
      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [itemId, event.kind, event.from_status ?? null, event.to_status ?? null, event.body ?? null, actor.name, actor.kind]
+    [
+      itemId,
+      event.kind,
+      event.from_status ?? null,
+      event.to_status ?? null,
+      event.body ?? null,
+      actor.name,
+      actor.kind,
+    ],
   );
 }
 
 const LABEL_COLUMNS = "id, name, color, created_at";
 
 export async function listWorkLabels(): Promise<WorkLabelRow[]> {
-  const { rows } = await getDb().query<WorkLabelRow>(`SELECT ${LABEL_COLUMNS} FROM platform.work_label ORDER BY lower(name)`);
+  const { rows } = await getDb().query<WorkLabelRow>(
+    `SELECT ${LABEL_COLUMNS} FROM platform.work_label ORDER BY lower(name)`,
+  );
   return rows;
 }
 
@@ -210,7 +302,10 @@ export async function listWorkLabels(): Promise<WorkLabelRow[]> {
  * (names match in any case). A new label takes the palette colour the fewest labels use.
  * `session` passes through untouched.
  */
-async function ensureWorkLabels(client: PoolClient, names: readonly string[]): Promise<string[]> {
+async function ensureWorkLabels(
+  client: PoolClient,
+  names: readonly string[],
+): Promise<string[]> {
   const wanted = names.filter((n) => n.toLowerCase() !== WORK_SESSION_LABEL);
   for (const name of wanted) {
     await client.query(
@@ -220,13 +315,14 @@ async function ensureWorkLabels(client: PoolClient, names: readonly string[]): P
            LEFT JOIN platform.work_label l ON l.color = p.color
           GROUP BY p.color, p.ord ORDER BY count(l.id), p.ord LIMIT 1)
        ON CONFLICT (lower(name)) DO NOTHING`,
-      [name, [...WORK_LABEL_COLORS]]
+      [name, [...WORK_LABEL_COLORS]],
     );
   }
   const { rows } = wanted.length
-    ? await client.query<{ name: string }>(`SELECT name FROM platform.work_label WHERE lower(name) = ANY($1)`, [
-        wanted.map((n) => n.toLowerCase()),
-      ])
+    ? await client.query<{ name: string }>(
+        `SELECT name FROM platform.work_label WHERE lower(name) = ANY($1)`,
+        [wanted.map((n) => n.toLowerCase())],
+      )
     : { rows: [] };
   const spelling = new Map(rows.map((r) => [r.name.toLowerCase(), r.name]));
   return [...new Set(names.map((n) => spelling.get(n.toLowerCase()) ?? n))];
@@ -240,28 +336,39 @@ async function ensureWorkLabels(client: PoolClient, names: readonly string[]): P
 export async function updateWorkLabel(
   id: string,
   patch: { name?: string; color?: WorkLabelColor },
-  actor: WorkActor
+  actor: WorkActor,
 ): Promise<WorkLabelRow | "duplicate" | null> {
   return inPlatformTransaction(async (client) => {
-    const current = (await client.query<WorkLabelRow>(`SELECT ${LABEL_COLUMNS} FROM platform.work_label WHERE id = $1 FOR UPDATE`, [id]))
-      .rows[0];
+    const current = (
+      await client.query<WorkLabelRow>(
+        `SELECT ${LABEL_COLUMNS} FROM platform.work_label WHERE id = $1 FOR UPDATE`,
+        [id],
+      )
+    ).rows[0];
     if (!current) return null;
     const name = patch.name ?? current.name;
     if (name.toLowerCase() !== current.name.toLowerCase()) {
-      const taken = await client.query(`SELECT 1 FROM platform.work_label WHERE lower(name) = lower($1) AND id <> $2`, [name, id]);
+      const taken = await client.query(
+        `SELECT 1 FROM platform.work_label WHERE lower(name) = lower($1) AND id <> $2`,
+        [name, id],
+      );
       if (taken.rows.length) return "duplicate";
     }
     const { rows } = await client.query<WorkLabelRow>(
       `UPDATE platform.work_label SET name = $2, color = $3 WHERE id = $1 RETURNING ${LABEL_COLUMNS}`,
-      [id, name, patch.color ?? current.color]
+      [id, name, patch.color ?? current.color],
     );
     if (name !== current.name) {
       const touched = await client.query<{ id: string }>(
         `UPDATE platform.work_item SET labels = array_replace(labels, $1, $2), updated_at = now()
           WHERE labels @> ARRAY[$1]::text[] RETURNING id`,
-        [current.name, name]
+        [current.name, name],
       );
-      for (const item of touched.rows) await insertEvent(client, item.id, actor, { kind: "edit", body: "labels" });
+      for (const item of touched.rows)
+        await insertEvent(client, item.id, actor, {
+          kind: "edit",
+          body: "labels",
+        });
     }
     return rows[0]!;
   });
@@ -284,15 +391,29 @@ export interface WorkItemInsert {
 }
 
 /** Takes the team's next number under a row lock, so KEY-n never repeats. */
-export async function createWorkItem(input: WorkItemInsert, actor: WorkActor): Promise<WorkItemRow> {
-  return inPlatformTransaction(async (client) => {
+export async function createWorkItem(
+  input: WorkItemInsert,
+  actor: WorkActor,
+): Promise<WorkItemRow> {
+  return inPlatformTransaction((client) =>
+    insertWorkItem(client, input, actor),
+  );
+}
+
+async function insertWorkItem(
+  client: PoolClient,
+  input: WorkItemInsert,
+  actor: WorkActor,
+): Promise<WorkItemRow> {
+  {
     const team = await client.query<{ number: number }>(
       `UPDATE platform.work_team SET next_number = next_number + 1
         WHERE key = $1 AND NOT archived RETURNING next_number - 1 AS number`,
-      [input.team]
+      [input.team],
     );
     const number = team.rows[0]?.number;
-    if (number === undefined) throw new Error(`unknown work team ${input.team}`);
+    if (number === undefined)
+      throw new Error(`unknown work team ${input.team}`);
     const status = input.status ?? "backlog";
     const { rows } = await client.query<WorkItemRow>(
       `INSERT INTO platform.work_item
@@ -311,17 +432,23 @@ export async function createWorkItem(input: WorkItemInsert, actor: WorkActor): P
         input.priority ?? 0,
         await ensureWorkLabels(client, input.labels ?? []),
         JSON.stringify(input.links ?? []),
-        input.source ?? (actor.kind === "agent" || actor.kind === "session" ? actor.kind : "manual"),
+        input.source ??
+          (actor.kind === "agent" || actor.kind === "session"
+            ? actor.kind
+            : "manual"),
         actor.name,
         input.assignee ?? null,
         input.due_date ?? null,
         input.external_ref ?? null,
-      ]
+      ],
     );
     const item = rows[0]!;
-    await insertEvent(client, item.id, actor, { kind: "created", to_status: status });
+    await insertEvent(client, item.id, actor, {
+      kind: "created",
+      to_status: status,
+    });
     return item;
-  });
+  }
 }
 
 export interface WorkItemPatch {
@@ -339,7 +466,17 @@ export interface WorkItemPatch {
   remove_links?: string[];
 }
 
-const EDITABLE_FIELDS = ["title", "problem", "change", "done_when", "priority", "labels", "branch", "assignee", "due_date"] as const;
+const EDITABLE_FIELDS = [
+  "title",
+  "problem",
+  "change",
+  "done_when",
+  "priority",
+  "labels",
+  "branch",
+  "assignee",
+  "due_date",
+] as const;
 
 /**
  * Applies a patch and logs it: one `status` event for a move, one `edit` event naming the
@@ -351,21 +488,27 @@ export async function updateWorkItem(
   number: number,
   patch: WorkItemPatch,
   actor: WorkActor,
-  check?: (current: WorkItemRow) => void
+  check?: (current: WorkItemRow, client: PoolClient) => void | Promise<void>,
 ): Promise<WorkItemRow | null> {
   return inPlatformTransaction(async (client) => {
     const current = (
       await client.query<WorkItemRow>(
         `SELECT ${ITEM_COLUMNS} FROM platform.work_item WHERE team_key = $1 AND number = $2 FOR UPDATE`,
-        [team, number]
+        [team, number],
       )
     ).rows[0];
     if (!current) return null;
-    check?.(current);
+    await check?.(current, client);
 
-    if (patch.labels) patch = { ...patch, labels: await ensureWorkLabels(client, patch.labels) };
+    if (patch.labels)
+      patch = {
+        ...patch,
+        labels: await ensureWorkLabels(client, patch.labels),
+      };
     const changed = EDITABLE_FIELDS.filter(
-      (f) => patch[f] !== undefined && JSON.stringify(patch[f]) !== JSON.stringify(current[f])
+      (f) =>
+        patch[f] !== undefined &&
+        JSON.stringify(patch[f]) !== JSON.stringify(current[f]),
     );
     let links = current.links;
     const linkEvents: string[] = [];
@@ -377,7 +520,9 @@ export async function updateWorkItem(
         linkEvents.push(`+ ${link.kind} ${link.url}${state}`);
       } else if (link.state && link.state !== existing.state) {
         // The same CI run linked again with its result: the link stays, its state moves on.
-        links = links.map((l) => (l === existing ? { ...l, state: link.state } : l));
+        links = links.map((l) =>
+          l === existing ? { ...l, state: link.state } : l,
+        );
         linkEvents.push(`~ ${existing.kind} ${link.url}${state}`);
       }
     }
@@ -389,7 +534,10 @@ export async function updateWorkItem(
     const moved = patch.status !== undefined && patch.status !== current.status;
     if (!changed.length && !linkEvents.length && !moved) return current;
 
-    const next = { ...current, ...Object.fromEntries(changed.map((f) => [f, patch[f]])) } as WorkItemRow;
+    const next = {
+      ...current,
+      ...Object.fromEntries(changed.map((f) => [f, patch[f]])),
+    } as WorkItemRow;
     const status = moved ? patch.status! : current.status;
     const { rows } = await client.query<WorkItemRow>(
       `UPDATE platform.work_item SET
@@ -414,11 +562,21 @@ export async function updateWorkItem(
         moved,
         next.assignee,
         next.due_date,
-      ]
+      ],
     );
-    if (moved) await insertEvent(client, current.id, actor, { kind: "status", from_status: current.status, to_status: status });
-    if (changed.length) await insertEvent(client, current.id, actor, { kind: "edit", body: changed.join(", ") });
-    for (const body of linkEvents) await insertEvent(client, current.id, actor, { kind: "link", body });
+    if (moved)
+      await insertEvent(client, current.id, actor, {
+        kind: "status",
+        from_status: current.status,
+        to_status: status,
+      });
+    if (changed.length)
+      await insertEvent(client, current.id, actor, {
+        kind: "edit",
+        body: changed.join(", "),
+      });
+    for (const body of linkEvents)
+      await insertEvent(client, current.id, actor, { kind: "link", body });
     return rows[0]!;
   });
 }
@@ -428,13 +586,13 @@ export async function addWorkItemComment(
   number: number,
   body: string,
   actor: WorkActor,
-  check?: (current: WorkItemRow) => void
+  check?: (current: WorkItemRow) => void,
 ): Promise<WorkItemEventRow | null> {
   return inPlatformTransaction(async (client) => {
     const current = (
       await client.query<WorkItemRow>(
         `SELECT ${ITEM_COLUMNS} FROM platform.work_item WHERE team_key = $1 AND number = $2 FOR UPDATE`,
-        [team, number]
+        [team, number],
       )
     ).rows[0];
     if (!current) return null;
@@ -443,9 +601,12 @@ export async function addWorkItemComment(
       `INSERT INTO platform.work_item_event (item_id, kind, body, actor, actor_kind)
        VALUES ($1, 'comment', $2, $3, $4)
        RETURNING id, kind, from_status, to_status, body, actor, actor_kind, created_at`,
-      [current.id, body, actor.name, actor.kind]
+      [current.id, body, actor.name, actor.kind],
     );
-    await client.query(`UPDATE platform.work_item SET updated_at = now() WHERE id = $1`, [current.id]);
+    await client.query(
+      `UPDATE platform.work_item SET updated_at = now() WHERE id = $1`,
+      [current.id],
+    );
     return rows[0]!;
   });
 }
@@ -469,6 +630,10 @@ export interface WorkGitReport {
  * one with no branch (neither the `branch` field nor a remote branch in `tidy.branches`) and
  * nothing merged after BUILDING_WITHOUT_BRANCH_DAYS returns to Backlog. Tickets labeled
  * `hold` stay. Each move leaves a status event and a comment.
+ *
+ * The same tidy (CORE-234) labels a Backlog ticket `later` when nothing touched it for
+ * BACKLOG_UNTOUCHED_DAYS, with an edit event and a comment. `updated_at` stays as it was:
+ * the board's own label is not a touch.
  */
 export async function applyWorkGitStates(
   reports: readonly WorkGitReport[],
@@ -476,9 +641,16 @@ export async function applyWorkGitStates(
     complete: boolean;
     close: { smoke_url: string } | null;
     tidy?: { branches: readonly { team: string; number: number }[] } | null;
+    /** CORE-277: queue the post-landing test run for Needs Review tickets that reached dev. */
+    verify?: boolean;
   },
-  actor: WorkActor
-): Promise<{ updated: number; closed: string[]; tidied: { to_review: string[]; to_backlog: string[] } }> {
+  actor: WorkActor,
+): Promise<{
+  updated: number;
+  closed: string[];
+  tidied: { to_review: string[]; to_backlog: string[]; to_later: string[] };
+  verifying?: string[];
+}> {
   return inPlatformTransaction(async (client) => {
     const teams = reports.map((r) => r.team);
     const numbers = reports.map((r) => r.number);
@@ -486,14 +658,14 @@ export async function applyWorkGitStates(
       `UPDATE platform.work_item w SET git_state = r.state, git_sha = r.sha, git_checked_at = now()
          FROM unnest($1::text[], $2::int[], $3::text[], $4::text[]) AS r(team, number, state, sha)
         WHERE w.team_key = r.team AND w.number = r.number`,
-      [teams, numbers, reports.map((r) => r.state), reports.map((r) => r.sha)]
+      [teams, numbers, reports.map((r) => r.state), reports.map((r) => r.sha)],
     );
     if (options.complete) {
       await client.query(
         `UPDATE platform.work_item w SET git_state = 'none', git_sha = NULL, git_checked_at = now()
           WHERE NOT EXISTS (SELECT 1 FROM unnest($1::text[], $2::int[]) AS r(team, number)
                              WHERE r.team = w.team_key AND r.number = w.number)`,
-        [teams, numbers]
+        [teams, numbers],
       );
     }
     const closed: string[] = [];
@@ -501,11 +673,16 @@ export async function applyWorkGitStates(
       const { rows } = await client.query<WorkItemRow>(
         `UPDATE platform.work_item SET status = 'done', status_changed_at = now(), completed_at = now(), updated_at = now()
           WHERE status = 'needs_review' AND git_state = 'prod' AND NOT ($1 = ANY (labels))
+            AND verify_state IS DISTINCT FROM 'fail'
           RETURNING ${ITEM_COLUMNS}`,
-        [HOLD_LABEL]
+        [HOLD_LABEL],
       );
       for (const item of rows) {
-        await insertEvent(client, item.id, actor, { kind: "status", from_status: "needs_review", to_status: "done" });
+        await insertEvent(client, item.id, actor, {
+          kind: "status",
+          from_status: "needs_review",
+          to_status: "done",
+        });
         await insertEvent(client, item.id, actor, {
           kind: "comment",
           body: `Closed automatically: commit ${(item.git_sha ?? "").slice(0, 7)} is on prod and the prod smoke test passed (${options.close.smoke_url}). Label a ticket "${HOLD_LABEL}" to keep it in Needs Review.`,
@@ -515,6 +692,7 @@ export async function applyWorkGitStates(
     }
     const toReview: string[] = [];
     const toBacklog: string[] = [];
+    const toLater: string[] = [];
     if (options.tidy) {
       const merged = await client.query<WorkItemRow>(
         `UPDATE platform.work_item SET status = 'needs_review', status_changed_at = now(), updated_at = now()
@@ -523,10 +701,14 @@ export async function applyWorkGitStates(
                                                   WHERE e.item_id = work_item.id AND e.kind = 'status'
                                                   ORDER BY e.id DESC LIMIT 1)
           RETURNING ${ITEM_COLUMNS}`,
-        [HOLD_LABEL]
+        [HOLD_LABEL],
       );
       for (const item of merged.rows) {
-        await insertEvent(client, item.id, actor, { kind: "status", from_status: "building", to_status: "needs_review" });
+        await insertEvent(client, item.id, actor, {
+          kind: "status",
+          from_status: "building",
+          to_status: "needs_review",
+        });
         await insertEvent(client, item.id, actor, {
           kind: "comment",
           body: `Moved to Needs Review automatically: commit ${(item.git_sha ?? "").slice(0, 7)} is on ${item.git_state}. Label a ticket "${HOLD_LABEL}" to keep it in Building.`,
@@ -541,19 +723,329 @@ export async function applyWorkGitStates(
             AND NOT EXISTS (SELECT 1 FROM unnest($3::text[], $4::int[]) AS b(team, number)
                              WHERE b.team = work_item.team_key AND b.number = work_item.number)
           RETURNING ${ITEM_COLUMNS}`,
-        [HOLD_LABEL, BUILDING_WITHOUT_BRANCH_DAYS, options.tidy.branches.map((b) => b.team), options.tidy.branches.map((b) => b.number)]
+        [
+          HOLD_LABEL,
+          BUILDING_WITHOUT_BRANCH_DAYS,
+          options.tidy.branches.map((b) => b.team),
+          options.tidy.branches.map((b) => b.number),
+        ],
       );
       for (const item of idle.rows) {
-        await insertEvent(client, item.id, actor, { kind: "status", from_status: "building", to_status: "backlog" });
+        await insertEvent(client, item.id, actor, {
+          kind: "status",
+          from_status: "building",
+          to_status: "backlog",
+        });
         await insertEvent(client, item.id, actor, {
           kind: "comment",
           body: `Returned to Backlog automatically: ${BUILDING_WITHOUT_BRANCH_DAYS} days in Building with no branch and nothing merged. Building is for tickets with a branch (pnpm board branch). Label a ticket "${HOLD_LABEL}" to keep it there.`,
         });
         toBacklog.push(item.key);
       }
+      const later = (await ensureWorkLabels(client, [LATER_LABEL]))[0]!;
+      const untouched = await client.query<WorkItemRow>(
+        `UPDATE platform.work_item SET labels = array_append(labels, $2)
+          WHERE status = 'backlog' AND updated_at < now() - make_interval(days => $3::int)
+            AND NOT (labels && ARRAY[$1, $2]::text[])
+          RETURNING ${ITEM_COLUMNS}`,
+        [HOLD_LABEL, later, BACKLOG_UNTOUCHED_DAYS],
+      );
+      for (const item of untouched.rows) {
+        await insertEvent(client, item.id, actor, {
+          kind: "edit",
+          body: "labels",
+        });
+        await insertEvent(client, item.id, actor, {
+          kind: "comment",
+          body: `Set aside as "${later}" automatically: nothing touched this ticket for ${BACKLOG_UNTOUCHED_DAYS} days. Remove the label to bring it back; label a ticket "${HOLD_LABEL}" to keep it out of this rule.`,
+        });
+        toLater.push(item.key);
+      }
     }
-    return { updated: rowCount ?? 0, closed: closed.sort(), tidied: { to_review: toReview.sort(), to_backlog: toBacklog.sort() } };
+    const verifying: string[] = [];
+    if (options.verify) {
+      const queued = await client.query<WorkItemRow>(
+        `UPDATE platform.work_item SET status = 'verifying', verify_state = 'pending',
+                status_changed_at = now(), updated_at = now()
+          WHERE status = 'needs_review' AND git_state = 'dev' AND verify_state IS NULL
+            AND NOT ($1 = ANY (labels))
+          RETURNING ${ITEM_COLUMNS}`,
+        [HOLD_LABEL],
+      );
+      for (const item of queued.rows) {
+        await insertEvent(client, item.id, actor, {
+          kind: "status",
+          from_status: "needs_review",
+          to_status: "verifying",
+        });
+        await insertEvent(client, item.id, actor, {
+          kind: "comment",
+          body: `Verification queued automatically: commit ${(item.git_sha ?? "").slice(0, 7)} is on dev. The full tests and the dev smoke test run next. Label a ticket "${HOLD_LABEL}" to skip it.`,
+        });
+        verifying.push(item.key);
+      }
+    }
+    return {
+      updated: rowCount ?? 0,
+      closed: closed.sort(),
+      tidied: {
+        to_review: toReview.sort(),
+        to_backlog: toBacklog.sort(),
+        to_later: toLater.sort(),
+      },
+      ...(options.verify ? { verifying: verifying.sort() } : {}),
+    };
   });
+}
+
+export class WorkVerifyConflictError extends Error {}
+
+/** Re-queues verification of a Needs Review or Verifying ticket (CORE-277 D2). */
+export async function requeueWorkVerify(
+  team: string,
+  number: number,
+  actor: WorkActor,
+): Promise<WorkItemRow | null> {
+  return inPlatformTransaction(async (client) => {
+    const current = (
+      await client.query<WorkItemRow>(
+        `SELECT ${ITEM_COLUMNS} FROM platform.work_item WHERE team_key = $1 AND number = $2 FOR UPDATE`,
+        [team, number],
+      )
+    ).rows[0];
+    if (!current) return null;
+    if (current.status !== "needs_review" && current.status !== "verifying") {
+      throw new WorkVerifyConflictError(
+        `${current.key} is in ${current.status}; only Needs Review or Verifying can be verified`,
+      );
+    }
+    const { rows } = await client.query<WorkItemRow>(
+      `UPDATE platform.work_item SET status = 'verifying', verify_state = 'pending',
+              status_changed_at = CASE WHEN status = 'verifying' THEN status_changed_at ELSE now() END, updated_at = now()
+        WHERE id = $1 RETURNING ${ITEM_COLUMNS}`,
+      [current.id],
+    );
+    if (current.status !== "verifying") {
+      await insertEvent(client, current.id, actor, {
+        kind: "status",
+        from_status: current.status,
+        to_status: "verifying",
+      });
+    }
+    await insertEvent(client, current.id, actor, {
+      kind: "comment",
+      body: "Verification re-run requested.",
+    });
+    return rows[0]!;
+  });
+}
+
+export interface WorkVerifyOutcome {
+  state: Exclude<WorkVerifyState, "pending">;
+  run_url: string;
+  results: WorkVerifyResult[];
+}
+
+/**
+ * Stores a finished verification (CORE-277): the ticket returns to Needs Review with the result,
+ * the AC -> test map and the run as a `ci` link. A red run creates one fix ticket in Approved,
+ * linked back; a repeated red run reuses it.
+ */
+export async function recordWorkVerifyResult(
+  team: string,
+  number: number,
+  outcome: WorkVerifyOutcome,
+  actor: WorkActor,
+): Promise<WorkItemRow | null> {
+  return inPlatformTransaction(async (client) => {
+    const current = (
+      await client.query<WorkItemRow>(
+        `SELECT ${ITEM_COLUMNS} FROM platform.work_item WHERE team_key = $1 AND number = $2 FOR UPDATE`,
+        [team, number],
+      )
+    ).rows[0];
+    if (!current) return null;
+    if (current.status !== "verifying") {
+      throw new WorkVerifyConflictError(
+        `${current.key} is in ${current.status}, not Verifying`,
+      );
+    }
+    const ciState = outcome.state === "pass" ? "passed" : "failed";
+    const existing = current.links.find((l) => l.url === outcome.run_url);
+    const links = existing
+      ? current.links.map((l) =>
+          l === existing ? { ...l, state: ciState } : l,
+        )
+      : [
+          ...current.links,
+          { kind: "ci" as const, url: outcome.run_url, state: ciState },
+        ];
+
+    let fixKey = current.fix_item;
+    if (outcome.state === "fail" && !fixKey) {
+      const failing = outcome.results.filter((r) => r.status === "fail");
+      const fix = await insertWorkItem(
+        client,
+        {
+          team: current.team_key,
+          title:
+            `Fix failed verification of ${current.key}: ${current.title}`.slice(
+              0,
+              200,
+            ),
+          problem: [
+            `The post-landing verification of ${current.key} failed (${outcome.run_url}).`,
+            ...failing.map((r) => `- ${r.ac}: ${r.test}`),
+          ].join("\n"),
+          change: `Make the failing checks pass without reverting ${current.key}.`,
+          done_when: `- The verification of ${current.key} passes (re-run it from the card).`,
+          status: "approved",
+          priority: VERIFY_FIX_PRIORITY,
+          links: [{ kind: "ci", url: outcome.run_url, state: "failed" }],
+          source: "agent",
+        },
+        actor,
+      );
+      fixKey = fix.key;
+    }
+
+    const { rows } = await client.query<WorkItemRow>(
+      `UPDATE platform.work_item SET status = 'needs_review', verify_state = $2, verify_run_url = $3,
+              verify_results = $4::jsonb, verify_checked_at = now(), fix_item = $5, links = $6::jsonb,
+              status_changed_at = now(), updated_at = now()
+        WHERE id = $1 RETURNING ${ITEM_COLUMNS}`,
+      [
+        current.id,
+        outcome.state,
+        outcome.run_url,
+        JSON.stringify(outcome.results),
+        fixKey,
+        JSON.stringify(links),
+      ],
+    );
+    await insertEvent(client, current.id, actor, {
+      kind: "status",
+      from_status: "verifying",
+      to_status: "needs_review",
+    });
+    await insertEvent(client, current.id, actor, {
+      kind: "comment",
+      body:
+        outcome.state === "pass"
+          ? `Verification passed (${outcome.run_url}). Ready to close.`
+          : `Verification failed (${outcome.run_url}). Fix ticket: ${fixKey}.`,
+    });
+    return rows[0]!;
+  });
+}
+
+export interface WorkReviewAnswer {
+  team: string;
+  number: number;
+  decision: WorkReviewDecision;
+}
+
+/**
+ * Applies one round of backlog-review answers (board-upkeep-r1 P3, CORE-234), all or nothing.
+ * Only a ticket that is in Backlog right now is touched; `shipped` closes it only when git
+ * sees its code on prod. A session's `cancel` waits until a second form (`confirm`) repeats it
+ * (core-234-decisions D1). Everything else comes back in `skipped` with the reason. Each applied
+ * answer leaves a comment naming the form it came from.
+ */
+export async function applyBacklogReview(
+  form: string,
+  answers: readonly WorkReviewAnswer[],
+  actor: WorkActor,
+  confirm?: string,
+): Promise<{
+  applied: { key: string; decision: WorkReviewDecision }[];
+  skipped: { key: string; reason: string }[];
+}> {
+  return inPlatformTransaction(async (client) => {
+    const applied: { key: string; decision: WorkReviewDecision }[] = [];
+    const skipped: { key: string; reason: string }[] = [];
+    const later = (await ensureWorkLabels(client, [LATER_LABEL]))[0]!;
+    const source = confirm ? `${form}, confirmed in ${confirm}` : form;
+    for (const { team, number, decision } of answers) {
+      const key = `${team}-${number}`;
+      const current = (
+        await client.query<WorkItemRow>(
+          `SELECT ${ITEM_COLUMNS} FROM platform.work_item WHERE team_key = $1 AND number = $2 FOR UPDATE`,
+          [team, number],
+        )
+      ).rows[0];
+      if (!current || current.status !== "backlog") {
+        skipped.push({ key, reason: "not in Backlog" });
+        continue;
+      }
+      if (decision === "shipped" && current.git_state !== "prod") {
+        skipped.push({ key, reason: "not on prod" });
+        continue;
+      }
+      if (decision === "cancel" && actor.kind === "session" && !confirm) {
+        skipped.push({ key, reason: "cancel waits for a confirmation form" });
+        continue;
+      }
+      let comment: string;
+      if (decision === "cancel" || decision === "shipped") {
+        const status: WorkStatus = decision === "cancel" ? "canceled" : "done";
+        await client.query(
+          `UPDATE platform.work_item SET status = $2, status_changed_at = now(), completed_at = now(), updated_at = now() WHERE id = $1`,
+          [current.id, status],
+        );
+        await insertEvent(client, current.id, actor, {
+          kind: "status",
+          from_status: "backlog",
+          to_status: status,
+        });
+        comment =
+          decision === "cancel"
+            ? "canceled."
+            : `closed, commit ${(current.git_sha ?? "").slice(0, 7)} is on prod.`;
+      } else {
+        const without = current.labels.filter(
+          (label) => label.toLowerCase() !== LATER_LABEL,
+        );
+        const labels = decision === "later" ? [...without, later] : without;
+        await client.query(
+          `UPDATE platform.work_item SET labels = $2, updated_at = now() WHERE id = $1`,
+          [current.id, labels],
+        );
+        if (JSON.stringify(labels) !== JSON.stringify(current.labels))
+          await insertEvent(client, current.id, actor, {
+            kind: "edit",
+            body: "labels",
+          });
+        comment =
+          decision === "later"
+            ? `set aside as "${later}".`
+            : "stays in Backlog.";
+      }
+      await insertEvent(client, current.id, actor, {
+        kind: "comment",
+        body: `Backlog review ${source}: ${comment}`,
+      });
+      applied.push({ key, decision });
+    }
+    return { applied, skipped };
+  });
+}
+
+/**
+ * How many tickets sessions moved to Approved in the last 7 days. Call it inside the
+ * transaction of the next move: it takes a lock, so two moves at once cannot both fit under the cap.
+ */
+export async function countSessionApprovals(
+  client: PoolClient,
+): Promise<number> {
+  await client.query(
+    "SELECT pg_advisory_xact_lock(hashtext('platform.work_item:session_approved'))",
+  );
+  const { rows } = await client.query<{ count: number }>(
+    `SELECT count(*)::int AS count FROM platform.work_item_event
+      WHERE kind = 'status' AND to_status = 'approved' AND actor_kind = 'session' AND created_at > now() - interval '7 days'`,
+  );
+  return rows[0]!.count;
 }
 
 export const WORK_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
@@ -571,28 +1063,41 @@ export interface WorkAttachmentRow {
   created_at: string;
 }
 
-const ATTACHMENT_COLUMNS = "id, item_id, event_id, path, filename, mime_type, size_bytes, uploaded_by, created_at";
+const ATTACHMENT_COLUMNS =
+  "id, item_id, event_id, path, filename, mime_type, size_bytes, uploaded_by, created_at";
 
-export async function listWorkAttachments(itemId: string): Promise<WorkAttachmentRow[]> {
+export async function listWorkAttachments(
+  itemId: string,
+): Promise<WorkAttachmentRow[]> {
   const { rows } = await getDb().query<WorkAttachmentRow>(
     `SELECT ${ATTACHMENT_COLUMNS} FROM platform.work_item_attachment WHERE item_id = $1 ORDER BY created_at, id`,
-    [itemId]
+    [itemId],
   );
   return rows;
 }
 
-export async function getWorkAttachment(itemId: string, id: string): Promise<WorkAttachmentRow | null> {
+export async function getWorkAttachment(
+  itemId: string,
+  id: string,
+): Promise<WorkAttachmentRow | null> {
   const { rows } = await getDb().query<WorkAttachmentRow>(
     `SELECT ${ATTACHMENT_COLUMNS} FROM platform.work_item_attachment WHERE item_id = $1 AND id = $2`,
-    [itemId, id]
+    [itemId, id],
   );
   return rows[0] ?? null;
 }
 
 /** Records an already-uploaded object and logs it on the item. Null when `event_id` is not a comment on this item. */
 export async function insertWorkAttachment(
-  input: { item_id: string; event_id: string | null; path: string; filename: string; mime_type: string; size_bytes: number },
-  actor: WorkActor
+  input: {
+    item_id: string;
+    event_id: string | null;
+    path: string;
+    filename: string;
+    mime_type: string;
+    size_bytes: number;
+  },
+  actor: WorkActor,
 ): Promise<WorkAttachmentRow | null> {
   return inPlatformTransaction(async (client) => {
     const { rows } = await client.query<WorkAttachmentRow>(
@@ -601,34 +1106,57 @@ export async function insertWorkAttachment(
         WHERE $2::bigint IS NULL
            OR EXISTS (SELECT 1 FROM platform.work_item_event WHERE id = $2 AND item_id = $1 AND kind = 'comment')
        RETURNING ${ATTACHMENT_COLUMNS}`,
-      [input.item_id, input.event_id, input.path, input.filename, input.mime_type, input.size_bytes, actor.name]
+      [
+        input.item_id,
+        input.event_id,
+        input.path,
+        input.filename,
+        input.mime_type,
+        input.size_bytes,
+        actor.name,
+      ],
     );
     const row = rows[0];
     if (!row) return null;
-    await insertEvent(client, input.item_id, actor, { kind: "attachment", body: `+ ${input.filename}` });
-    await client.query(`UPDATE platform.work_item SET updated_at = now() WHERE id = $1`, [input.item_id]);
+    await insertEvent(client, input.item_id, actor, {
+      kind: "attachment",
+      body: `+ ${input.filename}`,
+    });
+    await client.query(
+      `UPDATE platform.work_item SET updated_at = now() WHERE id = $1`,
+      [input.item_id],
+    );
     return row;
   });
 }
 
 /** Deletes the row and logs it; the caller removes the stored object. Null when it was not there. */
-export async function deleteWorkAttachment(itemId: string, id: string, actor: WorkActor): Promise<WorkAttachmentRow | null> {
+export async function deleteWorkAttachment(
+  itemId: string,
+  id: string,
+  actor: WorkActor,
+): Promise<WorkAttachmentRow | null> {
   return inPlatformTransaction(async (client) => {
     const { rows } = await client.query<WorkAttachmentRow>(
       `DELETE FROM platform.work_item_attachment WHERE item_id = $1 AND id = $2 RETURNING ${ATTACHMENT_COLUMNS}`,
-      [itemId, id]
+      [itemId, id],
     );
     const row = rows[0];
     if (!row) return null;
-    await insertEvent(client, itemId, actor, { kind: "attachment", body: `- ${row.filename}` });
+    await insertEvent(client, itemId, actor, {
+      kind: "attachment",
+      body: `- ${row.filename}`,
+    });
     return row;
   });
 }
 
 /** Platform staff who can be assigned work: active platform.users with a board role. */
-export async function listWorkPeople(): Promise<{ email: string; name: string }[]> {
+export async function listWorkPeople(): Promise<
+  { email: string; name: string }[]
+> {
   const { rows } = await getDb().query<{ email: string; name: string }>(
-    `SELECT email, name FROM platform.users WHERE is_active AND role IN ('owner', 'admin', 'support') ORDER BY name, email`
+    `SELECT email, name FROM platform.users WHERE is_active AND role IN ('owner', 'admin', 'support') ORDER BY name, email`,
   );
   return rows;
 }
@@ -642,48 +1170,69 @@ export interface WorkSessionTokenRow {
   revoked_at: string | null;
 }
 
-const TOKEN_COLUMNS = "id, name, created_by, created_at, last_used_at, revoked_at";
+const TOKEN_COLUMNS =
+  "id, name, created_by, created_at, last_used_at, revoked_at";
 
 /** Stores only the token's SHA-256; the caller hands the plaintext out once (CORE-187). */
 /** Issuing and revoking a token are platform-admin actions: each leaves a platform.audit row (CORE-213). */
-export async function insertSessionToken(name: string, tokenSha256: string, createdBy: string, actor: PlatformAuditActor): Promise<WorkSessionTokenRow> {
+export async function insertSessionToken(
+  name: string,
+  tokenSha256: string,
+  createdBy: string,
+  actor: PlatformAuditActor,
+): Promise<WorkSessionTokenRow> {
   return inPlatformTransaction(async (client) => {
     const { rows } = await client.query<WorkSessionTokenRow>(
       `INSERT INTO platform.work_session_token (name, token_sha256, created_by) VALUES ($1, $2, $3) RETURNING ${TOKEN_COLUMNS}`,
-      [name, tokenSha256, createdBy]
+      [name, tokenSha256, createdBy],
     );
     const row = rows[0]!;
-    await insertPlatformAudit(client, actor, { action: "board.session_token.issue", targetType: "work_session_token", targetId: row.id, after: { name } });
+    await insertPlatformAudit(client, actor, {
+      action: "board.session_token.issue",
+      targetType: "work_session_token",
+      targetId: row.id,
+      after: { name },
+    });
     return row;
   });
 }
 
 export async function listSessionTokens(): Promise<WorkSessionTokenRow[]> {
   const { rows } = await getDb().query<WorkSessionTokenRow>(
-    `SELECT ${TOKEN_COLUMNS} FROM platform.work_session_token ORDER BY revoked_at IS NOT NULL, created_at DESC`
+    `SELECT ${TOKEN_COLUMNS} FROM platform.work_session_token ORDER BY revoked_at IS NOT NULL, created_at DESC`,
   );
   return rows;
 }
 
 /** False when the token does not exist or was already revoked. */
-export async function revokeSessionToken(id: string, actor: PlatformAuditActor): Promise<boolean> {
+export async function revokeSessionToken(
+  id: string,
+  actor: PlatformAuditActor,
+): Promise<boolean> {
   return inPlatformTransaction(async (client) => {
     const { rows } = await client.query<{ name: string }>(
       `UPDATE platform.work_session_token SET revoked_at = now() WHERE id = $1 AND revoked_at IS NULL RETURNING name`,
-      [id]
+      [id],
     );
     if (!rows[0]) return false;
-    await insertPlatformAudit(client, actor, { action: "board.session_token.revoke", targetType: "work_session_token", targetId: id, before: { name: rows[0].name } });
+    await insertPlatformAudit(client, actor, {
+      action: "board.session_token.revoke",
+      targetType: "work_session_token",
+      targetId: id,
+      before: { name: rows[0].name },
+    });
     return true;
   });
 }
 
 /** The live token with this hash (touching last_used_at), or null. */
-export async function touchSessionToken(tokenSha256: string): Promise<WorkSessionTokenRow | null> {
+export async function touchSessionToken(
+  tokenSha256: string,
+): Promise<WorkSessionTokenRow | null> {
   const { rows } = await getDb().query<WorkSessionTokenRow>(
     `UPDATE platform.work_session_token SET last_used_at = now()
       WHERE token_sha256 = $1 AND revoked_at IS NULL RETURNING ${TOKEN_COLUMNS}`,
-    [tokenSha256]
+    [tokenSha256],
   );
   return rows[0] ?? null;
 }

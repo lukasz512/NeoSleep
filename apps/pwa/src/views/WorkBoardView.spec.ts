@@ -64,6 +64,7 @@ function item(overrides: Partial<WorkItem>): WorkItem {
     git_state: null,
     git_sha: null,
     git_checked_at: null,
+    verify_state: null, verify_checked_at: null, verify_run_url: null, verify_results: null, fix_item: null,
     ...overrides,
   };
 }
@@ -259,6 +260,54 @@ describe("WorkBoardView", () => {
     expect(patch[0]).toBe("/api/v1/platform/work/items/CORE-4");
     expect(JSON.parse(String((patch[1] as RequestInit).body))).toEqual({ status: "to_spec" });
     expect(wrapper.get("[data-testid='work-column-to_spec']").text()).toContain("CORE-4");
+  });
+
+  describe("Approved rule (CORE-234)", () => {
+    async function dropOn(wrapper: VueWrapper, key: string, status: string): Promise<void> {
+      const drop = new Event("drop", { bubbles: true, cancelable: true });
+      Object.defineProperty(drop, "dataTransfer", { value: { getData: () => key } });
+      wrapper.get(`[data-testid='work-column-${status}']`).element.dispatchEvent(drop);
+      await flushPromises();
+    }
+    const patches = () => apiFetch.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "PATCH");
+
+    it("keeps a card without a priority out of Approved and says why", async () => {
+      serve([item({ key: "CORE-4", status: "spec_ready", priority: 0, done_when: "- It works" })]);
+      const { wrapper } = await render();
+      await dropOn(wrapper, "CORE-4", "approved");
+      expect(patches()).toEqual([]);
+      expect(wrapper.get("[data-testid='work-column-spec_ready']").text()).toContain("CORE-4");
+      const notice = wrapper.get("[data-testid='work-board-notice']");
+      expect(notice.text()).toContain("CORE-4 stayed where it was. Approved takes a ticket only with a priority.");
+      expect(notice.attributes("role")).toBe("alert");
+    });
+
+    it("names the Done when for a card that has a priority, also when moved with ]", async () => {
+      serve([item({ key: "CORE-4", status: "spec_ready", priority: 2, done_when: null })]);
+      const { wrapper } = await render();
+      await wrapper.get("[data-testid='work-card-CORE-4'] button").trigger("keydown", { key: "]" });
+      await flushPromises();
+      expect(patches()).toEqual([]);
+      expect(wrapper.get("[data-testid='work-board-notice']").text()).toContain("Approved takes a ticket only with a Done when.");
+    });
+
+    it("moves a ready card, and the notice goes away with the next move or its close button", async () => {
+      serve([
+        item({ id: "a", key: "CORE-4", status: "spec_ready", priority: 0 }),
+        item({ id: "b", key: "CORE-5", status: "spec_ready", priority: 2, done_when: "- It works" }),
+      ]);
+      const { wrapper } = await render();
+      await dropOn(wrapper, "CORE-4", "approved");
+      expect(wrapper.find("[data-testid='work-board-notice']").exists()).toBe(true);
+      await dropOn(wrapper, "CORE-5", "approved");
+      expect(patches()).toHaveLength(1);
+      expect(wrapper.get("[data-testid='work-column-approved']").text()).toContain("CORE-5");
+      expect(wrapper.find("[data-testid='work-board-notice']").exists()).toBe(false);
+
+      await dropOn(wrapper, "CORE-4", "approved");
+      await wrapper.get("[data-testid='work-board-notice'] .v-alert__close button").trigger("click");
+      expect(wrapper.find("[data-testid='work-board-notice']").exists()).toBe(false);
+    });
   });
 
   it("n opens a new item, / focuses search, Esc-closed card clears ?item", async () => {

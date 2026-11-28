@@ -37,9 +37,12 @@
       >
         <VIcon icon="mdi-checkbox-marked-outline" size="14" aria-hidden="true" />{{ progress.done }}/{{ progress.total }}
       </span>
-      <span v-if="!dense && (git || held || noArtifact)" class="work-card__marks">
+      <span v-if="!dense && (git || held || noArtifact || verify)" class="work-card__marks">
         <span v-if="git" class="work-card__git" :class="{ 'work-card__git--alert': alert }" data-testid="work-card-git">
           <VIcon :icon="GIT_ICONS[git]" size="14" aria-hidden="true" />{{ t(`workBoard.git.${git}`) }}
+        </span>
+        <span v-if="verify" class="work-card__git" :class="{ 'work-card__git--alert': verify === 'fail' }" data-testid="work-card-verify">
+          <VIcon :icon="VERIFY_ICONS[verify]" size="14" aria-hidden="true" />{{ t(`workBoard.verify.${verify}`) }}
         </span>
         <span v-if="held" class="work-card__git" data-testid="work-card-hold">
           <VIcon icon="mdi-pause-circle-outline" size="14" aria-hidden="true" />{{ t("workBoard.hold.on") }}
@@ -72,6 +75,9 @@
           </span>
           <span v-if="git" class="work-card__git" :class="{ 'work-card__git--alert': alert }" data-testid="work-card-git">
             <VIcon :icon="GIT_ICONS[git]" size="14" aria-hidden="true" />{{ t(`workBoard.git.${git}`) }}
+          </span>
+          <span v-if="verify" class="work-card__git" :class="{ 'work-card__git--alert': verify === 'fail' }" data-testid="work-card-verify">
+            <VIcon :icon="VERIFY_ICONS[verify]" size="14" aria-hidden="true" />{{ t(`workBoard.verify.${verify}`) }}
           </span>
           <span v-if="held" class="work-card__git" data-testid="work-card-hold">
             <VIcon icon="mdi-pause-circle-outline" size="14" aria-hidden="true" />{{ t("workBoard.hold.on") }}
@@ -128,6 +134,8 @@ import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import {
   GIT_ICONS,
+  VERIFY_ICONS,
+  verifyMarker,
   HOLD_LABEL,
   SESSION_LABEL,
   cardLinks,
@@ -169,6 +177,8 @@ const dragging = ref(false);
 /** How much of "Done when" is ticked (CORE-195); null when it isn't a checklist. */
 const progress = computed(() => checklistProgress(props.item.done_when));
 const git = computed(() => gitMarker(props.item));
+/** The post-landing test result (CORE-277); null when never verified. */
+const verify = computed(() => verifyMarker(props.item));
 /** Status and git disagree; the marker turns into a warning. */
 const alert = computed(() => outOfStep(props.item));
 const held = computed(() => props.item.status === "needs_review" && props.item.labels.includes(HOLD_LABEL));
@@ -196,7 +206,7 @@ const dueText = computed(() =>
 );
 const showMeta = computed(() =>
   dense.value
-    ? labels.value.length > 0 || git.value !== null || held.value || noArtifact.value || days.value !== null
+    ? labels.value.length > 0 || git.value !== null || verify.value !== null || held.value || noArtifact.value || days.value !== null
     : !!props.item.assignee || !!props.item.due_date || days.value !== null,
 );
 

@@ -21,7 +21,7 @@ import { insertAuditLog } from "../db.js";
 import { ValidationError, ConflictError } from "../errors.js";
 import { assertTerritoryWriteAccess } from "../middleware/requireScope.js";
 import { ConvertLeadCommand } from "./lead.js";
-import { inferLanguage } from "./invitePractitioner.js";
+import { localeForCountry, SUPPORTED_LANGUAGES } from "../utils/patientEmailLocale.js";
 import { sendPartnerInviteEmail } from "../mailer.js";
 import { DEFAULT_FRONTEND_ORIGIN } from "../utils/frontendOrigin.js";
 import { hashToken } from "../utils/hashToken.js";
@@ -188,6 +188,11 @@ export async function UpdatePractitionerCommand(
     throw new ValidationError("Only an admin or manager can change a practitioner's status directly");
   }
 
+  // identities.language is NOT NULL and the one source of mail language (CORE-261).
+  if (input.language !== undefined && !(SUPPORTED_LANGUAGES as readonly string[]).includes(input.language ?? "")) {
+    throw new ValidationError("language must be one of: " + SUPPORTED_LANGUAGES.join(", "));
+  }
+
   const before = await getPractitionerById(ctx.client, id);
   if (!before) return null;
   await assertTerritoryWriteAccess(ctx, before.territory_id, input.territory_id);
@@ -218,8 +223,8 @@ export async function UpdatePractitionerCommand(
     action:        "update",
     entity_type:   "Practitioner",
     entity_id:     id,
-    entity_before: { primary_specialty: before.primary_specialty, region: before.region },
-    entity_after:  { primary_specialty: after.primary_specialty,  region: after.region },
+    entity_before: { primary_specialty: before.primary_specialty, region: before.region, language: before.language },
+    entity_after:  { primary_specialty: after.primary_specialty,  region: after.region, language: after.language },
     request_id:    ctx.requestId,
   });
 
@@ -359,7 +364,7 @@ export async function ActivatePractitionerCommand(
         title: practitioner.salutation,
         firstName: practitioner.first_name,
         lastName: practitioner.last_name,
-        language: inferLanguage(jurisdiction),
+        language: localeForCountry(jurisdiction),
         region: jurisdiction,
       },
       { name: ctx.user.name ?? "NeoSleep", email: ctx.user.email }

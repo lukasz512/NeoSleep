@@ -41,7 +41,7 @@ describe("patientFormFields", () => {
     expect(hidden()).toBe(false);
   });
 
-  it("Estado, Región and Territorio are hidden for a doctor (NEO-226), shown for admin", () => {
+  it("Estado and Territorio are hidden for a doctor (NEO-226), shown for admin; Región and Idioma stay visible to a doctor (CORE-261)", () => {
     setActivePinia(createPinia());
     type AuthUser = NonNullable<ReturnType<typeof useAuthStore>["user"]>;
     const hiddenKeys = () =>
@@ -50,7 +50,7 @@ describe("patientFormFields", () => {
         .filter((f) => (typeof f.hidden === "function" ? f.hidden({}) : !!f.hidden))
         .map((f) => f.key);
     useAuthStore().user = { role: "doctor" } as AuthUser;
-    expect(hiddenKeys()).toEqual(["status", "region", "territory_id"]);
+    expect(hiddenKeys()).toEqual(["status", "territory_id"]);
     useAuthStore().user = { role: "admin" } as AuthUser;
     expect(hiddenKeys()).toEqual([]);
   });
@@ -187,7 +187,7 @@ describe("patientFormFields", () => {
   it("carries the full existing field set (no fields dropped in the migration)", () => {
     expect(patientFormFields.map((f) => f.key)).toEqual([
       "salutation", "first_name", "last_name", "email", "phone", "gender", "date_of_birth",
-      "practitioner_id", "status", "region", "territory_id", "country_code", "ahi_baseline", "height_cm", "cpap_device", "medical_record",
+      "practitioner_id", "status", "region", "language", "territory_id", "country_code", "ahi_baseline", "height_cm", "cpap_device", "medical_record",
     ]);
   });
 

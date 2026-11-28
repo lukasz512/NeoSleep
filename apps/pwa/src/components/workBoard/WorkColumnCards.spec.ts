@@ -7,7 +7,7 @@ import * as vuetifyComponents from "vuetify/components";
 import en from "@i18n/en.json";
 import WorkColumnCards from "./WorkColumnCards.vue";
 import { WORK_BOARD_CONTEXT } from "./workBoardContext";
-import { closesByItself, missingArtifact, reviewGroups } from "../../composables/useWorkBoard";
+import { approvedBlocker, backlogGroups, closesByItself, missingArtifact, reviewGroups } from "../../composables/useWorkBoard";
 import type { WorkItem, WorkStatus } from "../../types/workBoard";
 
 const NOW = Date.parse("2026-11-17T12:00:00Z");
@@ -23,6 +23,7 @@ function item(key: string, overrides: Partial<WorkItem> = {}): WorkItem {
     status: "needs_review", priority: 0, labels: [], links: [ARTIFACT], branch: null, assignee: null, due_date: null, source: "manual",
     created_at: daysAgo(30), updated_at: daysAgo(1), status_changed_at: daysAgo(1), completed_at: null,
     git_state: "none", git_sha: null, git_checked_at: daysAgo(0),
+    verify_state: null, verify_checked_at: null, verify_run_url: null, verify_results: null, fix_item: null,
     ...overrides,
   };
 }
@@ -103,6 +104,62 @@ describe("Needs Review groups (CORE-233)", () => {
     const wrapper = render([item("CORE-1")]);
     await wrapper.get("[data-testid='work-card-CORE-1'] button").trigger("click");
     expect(wrapper.emitted("open")).toEqual([["CORE-1"]]);
+  });
+});
+
+/** Backlog folds what was set aside, so the list on top is what is still meant to be done (CORE-234). */
+describe("Backlog Later group (CORE-234)", () => {
+  const backlog = (key: string, labels: string[] = []) => item(key, { status: "backlog", labels });
+
+  it("splits the column on the later label, whatever its case, keeping the order", () => {
+    const groups = backlogGroups([backlog("CORE-1"), backlog("CORE-2", ["later"]), backlog("CORE-3", ["ux"]), backlog("CORE-4", ["Later", "ux"])]);
+    expect(groups.current.map((i) => i.key)).toEqual(["CORE-1", "CORE-3"]);
+    expect(groups.later.map((i) => i.key)).toEqual(["CORE-2", "CORE-4"]);
+  });
+
+  it("shows the current tickets and folds the later ones under a count", () => {
+    const wrapper = render([backlog("CORE-1"), backlog("CORE-2", ["later"]), backlog("CORE-3", ["later"])], "backlog");
+    const toggle = wrapper.get("[data-testid='work-backlog-later-toggle']");
+    expect(toggle.text()).toBe("Later 2");
+    expect(toggle.attributes("aria-expanded")).toBe("false");
+    expect(keys(wrapper)).toEqual(["CORE-1"]);
+  });
+
+  it("unfolds and folds the later tickets on click", async () => {
+    const wrapper = render([backlog("CORE-1"), backlog("CORE-2", ["later"])], "backlog");
+    const toggle = wrapper.get("[data-testid='work-backlog-later-toggle']");
+    await toggle.trigger("click");
+    expect(toggle.attributes("aria-expanded")).toBe("true");
+    expect(keys(wrapper)).toEqual(["CORE-1", "CORE-2"]);
+    await toggle.trigger("click");
+    expect(keys(wrapper)).toEqual(["CORE-1"]);
+  });
+
+  it("has no Later group when nothing is set aside, and none outside Backlog", () => {
+    expect(render([backlog("CORE-1")], "backlog").find("[data-testid='work-backlog-later-toggle']").exists()).toBe(false);
+    const building = render([item("CORE-2", { status: "building", labels: ["later"] })], "building");
+    expect(building.find("[data-testid='work-backlog-later-toggle']").exists()).toBe(false);
+    expect(keys(building)).toEqual(["CORE-2"]);
+  });
+});
+
+/** A ticket enters Approved only with a priority and a Done when; the board says which is missing (CORE-234). */
+describe("Approved rule (CORE-234)", () => {
+  const ready = { status: "backlog", priority: 2, done_when: "- It works" } as const;
+
+  it("names the first thing missing for a move into Approved", () => {
+    expect(approvedBlocker({ ...ready, priority: 0 }, "approved")).toBe("priority");
+    expect(approvedBlocker({ ...ready, done_when: null }, "approved")).toBe("done_when");
+    expect(approvedBlocker({ ...ready, done_when: "  " }, "approved")).toBe("done_when");
+    expect(approvedBlocker({ ...ready, priority: 0, done_when: null }, "approved")).toBe("priority");
+    expect(approvedBlocker(ready, "approved")).toBeNull();
+  });
+
+  it("leaves every other move alone, and a ticket already in Approved or given back from Building", () => {
+    const bare = { status: "backlog", priority: 0, done_when: null } as const;
+    expect(approvedBlocker(bare, "to_spec")).toBeNull();
+    expect(approvedBlocker({ ...bare, status: "approved" }, "approved")).toBeNull();
+    expect(approvedBlocker({ ...bare, status: "building" }, "approved")).toBeNull();
   });
 });
 
