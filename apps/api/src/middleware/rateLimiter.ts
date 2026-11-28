@@ -185,3 +185,13 @@ export const aiChatLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many questions, please try again later" },
 });
+
+/** POST /api/v1/search (CORE-292): 30 searches per 10 minutes per user. Mount after requireAuth. */
+export const searchLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 30,
+  keyGenerator: (req) => `search:${req.user?.sub ?? "anonymous"}`,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many searches, please try again later" },
+});
