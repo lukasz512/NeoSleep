@@ -31,7 +31,8 @@ hook() {
 OUT="$(hook '{"tool_name":"Bash","tool_input":{"command":"git push -u origin worktree-core-1-x"},"tool_response":{"stdout":"","stderr":"","interrupted":false}}')"
 case "$OUT" in *handoff*) ok "a push gets the handover steps" yes yes ;; *) ok "a push gets the handover steps" "$OUT" handoff ;; esac
 case "$OUT" in *"/clear"*) ok "it ends with the /clear line" yes yes ;; *) ok "it ends with the /clear line" no yes ;; esac
-case "$OUT" in *"--before"*) ok "it asks for before/after on the card" yes yes ;; *) ok "it asks for before/after on the card" no yes ;; esac
+# The hook reads this branch's diff: a UI branch gets the full handover (no --before flag), any other the light one.
+case "$OUT" in *"before/after"*) ok "it asks for before/after on the card" yes yes ;; *) ok "it asks for before/after on the card" no yes ;; esac
 # This test runs on any branch, so both CI answers are valid; a CI branch must get the one wait.
 if on_ci_branch "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"; then
   case "$OUT" in *"ci-wait.mjs --branch"*) ok "a CI branch is told to start one background wait" yes yes ;; *) ok "a CI branch is told to start one background wait" no yes ;; esac
