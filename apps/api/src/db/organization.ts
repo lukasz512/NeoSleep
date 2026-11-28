@@ -2,6 +2,7 @@ import type { PoolClient } from "pg";
 import { trimOrNull, trimOrEmpty } from "./helpers.js";
 import { AppError, DatabaseError, ValidationError } from "../errors.js";
 import { displayNameSql } from "../utils/personName.js";
+import { likeTerm, unaccentLike } from "./search.js";
 
 export interface Organization {
   id: string;
@@ -127,9 +128,9 @@ export async function getOrganizationPaginated(
 
   if (filters.search?.trim()) {
     conditions.push(
-      `(LOWER(o.name) LIKE $${paramIndex} OR LOWER(COALESCE(o.type,'')) LIKE $${paramIndex} OR LOWER(COALESCE(o.region,'')) LIKE $${paramIndex} OR LOWER(o.status) LIKE $${paramIndex})`
+      `(${["o.name", "COALESCE(o.type,'')", "COALESCE(o.region,'')", "o.status"].map((e) => unaccentLike(e, paramIndex)).join(" OR ")})`
     );
-    params.push(`%${filters.search.trim().toLowerCase()}%`);
+    params.push(likeTerm(filters.search));
     paramIndex++;
   }
   if (filters.type?.trim()) {

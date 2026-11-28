@@ -2,6 +2,7 @@ import type { PoolClient } from "pg";
 import { AppError, DatabaseError } from "../errors.js";
 import { formatDisplayName, formatOptionalDisplayName } from "../utils/personName.js";
 import { careTeamCondition } from "./careTeam.js";
+import { likeTerm, unaccentLike } from "./search.js";
 
 function isoDate(val: Date | string | null | undefined): string {
   if (!val) return "";
@@ -238,10 +239,10 @@ export async function getPatientsPaginated(
   const params: unknown[] = [];
 
   if (filters.search?.trim()) {
-    params.push(`%${filters.search.trim().toLowerCase()}%`);
+    params.push(likeTerm(filters.search));
     conditions.push(
-      `(LOWER(i.first_name || ' ' || i.last_name) LIKE $${params.length}
-       OR LOWER(COALESCE(i.region,'')) LIKE $${params.length})`
+      `(${unaccentLike("i.first_name || ' ' || i.last_name", params.length)}
+       OR ${unaccentLike("COALESCE(i.region,'')", params.length)})`
     );
   }
   if (filters.status?.trim()) {

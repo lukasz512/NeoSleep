@@ -2,6 +2,7 @@ import type { PoolClient } from "pg";
 import { toArray, trimOrNull, trimOrEmpty, normalizeEmail } from "./helpers.js";
 import { AppError, DatabaseError, ValidationError } from "../errors.js";
 import { assertEmailNotTaken } from "./identityEmail.js";
+import { likeTerm, unaccentLike } from "./search.js";
 
 export interface Practitioner {
   id: string;
@@ -192,9 +193,11 @@ export async function getPractitionerPaginated(
 
   if (filters.search?.trim()) {
     conditions.push(
-      `(LOWER(i.first_name) LIKE $${paramIndex} OR LOWER(i.last_name) LIKE $${paramIndex} OR LOWER(COALESCE(i.email,'')) LIKE $${paramIndex} OR LOWER(COALESCE(p.primary_specialty,'')) LIKE $${paramIndex} OR LOWER(COALESCE(o.name,'')) LIKE $${paramIndex} OR LOWER(COALESCE(i.region,'')) LIKE $${paramIndex})`
+      `(${["i.first_name", "i.last_name", "i.first_name || ' ' || i.last_name", "COALESCE(i.email,'')", "COALESCE(p.primary_specialty,'')", "COALESCE(o.name,'')", "COALESCE(i.region,'')"]
+        .map((e) => unaccentLike(e, paramIndex))
+        .join(" OR ")})`
     );
-    params.push(`%${filters.search.trim().toLowerCase()}%`);
+    params.push(likeTerm(filters.search));
     paramIndex++;
   }
   const specialtyArr = toArray(filters.specialty);
