@@ -40,7 +40,7 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { WORK_STATUS_GLYPHS, workStatusColor } from "./workGlyphs";
+import { workStatusColor, workStatusGlyph } from "./workGlyphs";
 import type { WorkStatus } from "../../types/workBoard";
 
 /**
@@ -50,7 +50,7 @@ import type { WorkStatus } from "../../types/workBoard";
 const props = withDefaults(defineProps<{ status: WorkStatus; size?: number; label?: string }>(), { size: 16, label: "" });
 
 const PIE_CIRCUMFERENCE = 2 * Math.PI * 2;
-const spec = computed(() => WORK_STATUS_GLYPHS[props.status]);
+const spec = computed(() => workStatusGlyph(props.status));
 const color = computed(() => workStatusColor(props.status));
 const pieDash = computed(() => `${((spec.value.fill ?? 0) * PIE_CIRCUMFERENCE).toFixed(2)} ${PIE_CIRCUMFERENCE.toFixed(2)}`);
 </script>

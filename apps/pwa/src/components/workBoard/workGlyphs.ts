@@ -41,8 +41,21 @@ export const WORK_GLYPH_COLORS: Readonly<Record<WorkGlyphTone, string>> = {
 
 export const WORK_URGENT_COLOR = WORK_GLYPH_COLORS.intake;
 
-export function workStatusColor(status: WorkStatus): string {
-  return WORK_GLYPH_COLORS[WORK_STATUS_GLYPHS[status].tone];
+function isKnownStatus(status: string): status is WorkStatus {
+  return Object.prototype.hasOwnProperty.call(WORK_STATUS_GLYPHS, status);
+}
+
+/**
+ * The glyph for a status, falling back to the backlog ring for a value the board does not know
+ * (CORE-287): history events keep from/to status as free text, so a legacy value can arrive at
+ * runtime and must not take the whole board down.
+ */
+export function workStatusGlyph(status: string): WorkStatusGlyphSpec {
+  return isKnownStatus(status) ? WORK_STATUS_GLYPHS[status] : WORK_STATUS_GLYPHS.backlog;
+}
+
+export function workStatusColor(status: string): string {
+  return WORK_GLYPH_COLORS[workStatusGlyph(status).tone];
 }
 
 export type WorkStatusGroup = "intake" | "spec" | "delivery" | "closed";

@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import WorkStatusGlyph from "./WorkStatusGlyph.vue";
 import WorkPriorityMark from "./WorkPriorityMark.vue";
-import { WORK_STATUS_GLYPHS, WORK_STATUS_GROUPS } from "./workGlyphs";
+import { WORK_STATUS_GLYPHS, WORK_STATUS_GROUPS, workStatusColor, workStatusGlyph } from "./workGlyphs";
+import type { WorkStatus } from "../../types/workBoard";
 import { WORK_STATUS_OPTIONS } from "../../composables/useWorkBoard";
 
 /** Status and priority read at a glance (CORE-225). */
@@ -43,5 +44,15 @@ describe("work board glyphs", () => {
     expect([2, 3, 4].map(lit)).toEqual([3, 2, 1]);
     expect(mount(WorkPriorityMark, { props: { priority: 1 } }).findAll("[data-lit]")).toHaveLength(0);
     expect(mount(WorkPriorityMark, { props: { priority: 0 } }).find("[data-none]").exists()).toBe(true);
+  });
+
+  it("draws the backlog ring for a status it does not know instead of crashing the board (CORE-287)", () => {
+    // History events store from/to status as free TEXT (migration 059), so a legacy value can
+    // reach the glyph at runtime even though the prop is typed; the cast reproduces that payload.
+    const unknown = "in_progress" as WorkStatus;
+    expect(workStatusGlyph(unknown)).toBe(WORK_STATUS_GLYPHS.backlog);
+    expect(workStatusColor(unknown)).toBe(workStatusColor("backlog"));
+    const glyph = mount(WorkStatusGlyph, { props: { status: unknown } });
+    expect(glyph.attributes("data-shape")).toBe("dashed");
   });
 });
