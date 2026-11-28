@@ -39,6 +39,11 @@ Console → service → **Logs**, or
   then re-run the deploy (the service reads `:latest` at startup).
 - **Adding a secret**: create it in Secret Manager, then add its name to `secrets.list`
   in the same PR. A name in the list without a secret makes the deploy fail.
+- **Anthropic key (`ANTHROPIC_API_KEY`, NeoSleep AI)**: secret in project `neosleep-api`,
+  read by the shared runtime account `api-runtime@neosleep-api.iam.gserviceaccount.com`
+  (`roles/secretmanager.secretAccessor`). Rotate with the `versions add` command above, then
+  redeploy. Locally put it in the gitignored root `.env`. Optional `AI_MODEL` goes in
+  `<env>.env.yaml`. Missing key means the AI endpoint returns 503, nothing else breaks.
 
 ## Scheduled jobs (GitHub Actions)
 
