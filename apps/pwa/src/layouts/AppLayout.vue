@@ -83,6 +83,7 @@
                both breakpoints — directly left of the account button. Its
                own polling lifecycle is owned by this layout (useNotificationCenter
                below), not by this component, which only renders the UI. -->
+          <GlobalSearch />
           <AppNotificationCenter />
           <!-- NEO-122 / NEO-154 / NEO-161: the avatar button turns into the
                menu — the avatar stays put and grows, the glass card springs
@@ -265,6 +266,7 @@ import {
 import AppButton from "../components/AppButton.vue";
 import AppIcon, { type AppIconName } from "../components/AppIcon.vue";
 import AppNotificationCenter from "../components/AppNotificationCenter.vue";
+import GlobalSearch from "../components/GlobalSearch.vue";
 import { loadHasReports, openReportProblem, useReportProblem } from "../composables/useReportProblem";
 
 import { useNotificationCenter } from "../composables/useNotificationCenter";
