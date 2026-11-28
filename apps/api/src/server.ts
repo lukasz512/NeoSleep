@@ -39,6 +39,7 @@ import { territoryRouter } from "./routes/territory.js";
 import { doctorPanelRouter } from "./routes/doctorPanel.js";
 import { problemReportRouter } from "./routes/problemReport.js";
 import { workBoardRouter } from "./routes/workBoard.js";
+import { aiRouter } from "./routes/ai.js";
 import { runMigrations, getDb } from "./db.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { apiLimiter, smokePdfLimiter } from "./middleware/rateLimiter.js";
@@ -217,6 +218,7 @@ app.use("/api/v1", territoryRouter);
 app.use("/api/v1", doctorPanelRouter);
 app.use("/api/v1", problemReportRouter);
 app.use("/api/v1", workBoardRouter);
+app.use("/api/v1", aiRouter);
 
 app.use(errorHandler);
 

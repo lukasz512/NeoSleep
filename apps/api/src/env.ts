@@ -130,3 +130,11 @@ export const RESEND_NOTIFY_TO: string | undefined = process.env.RESEND_NOTIFY_TO
  * docs/stories/partner-registration-legal-documents.md, 2026-09-16 addendum). Optional: unset
  * just means no cc, same degrade-gracefully shape as the other Resend vars above. */
 export const PARTNER_DOCS_CC_EMAIL: string | undefined = process.env.PARTNER_DOCS_CC_EMAIL;
+
+/**
+ * NeoSleep AI (CORE-274) — Anthropic Messages API, called only from this server
+ * (never from a frontend). Optional: without the key POST /api/v1/ai/chat answers 503.
+ * AI_MODEL picks the model; default is the Sonnet tier, set an Opus id for hard questions.
+ */
+export const ANTHROPIC_API_KEY: string | undefined = process.env.ANTHROPIC_API_KEY;
+export const AI_MODEL: string = process.env.AI_MODEL?.trim() || "claude-sonnet-5-5";
