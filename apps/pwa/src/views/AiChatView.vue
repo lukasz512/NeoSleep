@@ -2,7 +2,7 @@
   <div class="view-ai">
     <p class="view-ai__subtitle">{{ t("ai.subtitle") }}</p>
 
-    <form class="view-ai__form" data-testid="ai-form" @submit.prevent="submit">
+    <form class="view-ai__form" data-testid="ai-form" @submit.prevent="ask">
       <textarea
         v-model="question"
         class="view-ai__input"
@@ -29,42 +29,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import AppButton from "../components/AppButton.vue";
 import AppLoadingState from "../components/AppLoadingState.vue";
-import { askNeoSleepAi, MAX_AI_QUESTION_CHARS } from "../composables/useAiChat";
+import { MAX_AI_QUESTION_CHARS } from "../composables/useAiChat";
+import { useAiConversation } from "../composables/useAiConversation";
 
 const { t } = useI18n();
-
-const question = ref("");
-const asked = ref("");
-const answer = ref("");
-const errorKey = ref("");
-const loading = ref(false);
-
-const canAsk = computed(() => !loading.value && question.value.trim().length > 0);
-
-async function submit() {
-  if (!canAsk.value) return;
-  loading.value = true;
-  errorKey.value = "";
-  answer.value = "";
-  const text = question.value.trim();
-  try {
-    const result = await askNeoSleepAi(text);
-    if (result.ok) {
-      asked.value = text;
-      answer.value = result.answer;
-    } else {
-      errorKey.value = `ai.error.${result.reason}`;
-    }
-  } catch {
-    errorKey.value = "ai.error.failed";
-  } finally {
-    loading.value = false;
-  }
-}
+const { question, asked, answer, errorKey, loading, canAsk, ask } = useAiConversation();
 </script>
 
 <style scoped>
